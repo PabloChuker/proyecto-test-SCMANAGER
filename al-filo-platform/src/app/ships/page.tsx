@@ -1,0 +1,114 @@
+// =============================================================================
+// AL FILO — /ships — Página principal de naves
+//
+// Arquitectura de Data Fetching:
+//
+//   Esta página usa un patrón híbrido SSR + CSR:
+//
+//   1. El layout y shell visual se renderizan en el servidor (este archivo
+//      es un Server Component). Esto da un first paint rápido y SEO.
+//
+//   2. La grilla interactiva (búsqueda, filtros, paginación) vive en
+//      <ShipsGrid />, un Client Component que hace fetch a /api/ships
+//      con los parámetros de query del usuario.
+//
+//   3. La carga inicial también pasa por el Server Component: hacemos
+//      un fetch en el servidor para tener datos desde el primer render
+//      (no hay flash de "cargando..." en la primera visita).
+//
+//   ¿Por qué no Server Components puros con searchParams?
+//   Porque queremos búsqueda instantánea con debounce sin recargar la
+//   página. Los filtros cambian la URL con shallow routing para que
+//   el estado sea compartible por link.
+// =============================================================================
+
+import { Suspense } from "react";
+import { ShipsGrid } from "./ShipsGrid";
+
+export const metadata = {
+  title: "Naves — Al Filo",
+  description: "Base de datos completa de naves de Star Citizen. Filtrá por fabricante, rol y comparativas.",
+};
+
+export default function ShipsPage() {
+  return (
+    <main className="min-h-screen bg-zinc-950 text-zinc-100">
+      {/* ── Background atmosférico ── */}
+      <div className="fixed inset-0 -z-10">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(6,182,212,0.04),transparent_60%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(139,92,246,0.03),transparent_50%)]" />
+      </div>
+
+      {/* ── Header ── */}
+      <header className="border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-4">
+              {/* Logo placeholder */}
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-sm bg-gradient-to-br from-cyan-500 to-cyan-700
+                                flex items-center justify-center text-[10px] font-bold tracking-tighter text-zinc-950">
+                  AF
+                </div>
+                <span className="text-sm font-medium tracking-[0.2em] uppercase text-zinc-400">
+                  Al Filo
+                </span>
+              </div>
+              <div className="h-5 w-px bg-zinc-800" />
+              <span className="text-xs tracking-[0.15em] uppercase text-zinc-600">
+                Ship Database
+              </span>
+            </div>
+
+            {/* Nav links placeholder */}
+            <nav className="hidden sm:flex items-center gap-6 text-xs tracking-[0.12em] uppercase text-zinc-600">
+              <span className="text-cyan-400 border-b border-cyan-400/30 pb-0.5">Naves</span>
+              <span className="hover:text-zinc-400 cursor-not-allowed opacity-40">Minería</span>
+              <span className="hover:text-zinc-400 cursor-not-allowed opacity-40">Crafting</span>
+            </nav>
+          </div>
+        </div>
+      </header>
+
+      {/* ── Contenido ── */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Título de sección */}
+        <div className="mb-8">
+          <h1 className="text-2xl font-light tracking-wide text-zinc-100">
+            Base de Naves
+          </h1>
+          <p className="text-sm text-zinc-500 mt-1.5 max-w-xl">
+            Datos extraídos automáticamente del cliente de Star Citizen.
+            Filtrá por fabricante, buscá por nombre o explorá por rol.
+          </p>
+        </div>
+
+        {/* Grid interactiva */}
+        <Suspense fallback={<GridSkeleton />}>
+          <ShipsGrid />
+        </Suspense>
+      </div>
+    </main>
+  );
+}
+
+// ── Skeleton de carga ──
+function GridSkeleton() {
+  return (
+    <div className="space-y-6">
+      {/* Filter skeleton */}
+      <div className="flex gap-3">
+        <div className="flex-1 h-10 bg-zinc-900/60 rounded-sm animate-pulse" />
+        <div className="w-44 h-10 bg-zinc-900/60 rounded-sm animate-pulse" />
+        <div className="w-36 h-10 bg-zinc-900/60 rounded-sm animate-pulse" />
+      </div>
+      {/* Card grid skeleton */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        {Array.from({ length: 12 }).map((_, i) => (
+          <div key={i} className="h-[170px] bg-zinc-900/40 rounded-sm animate-pulse"
+               style={{ animationDelay: `${i * 60}ms` }} />
+        ))}
+      </div>
+    </div>
+  );
+}
