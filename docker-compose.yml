@@ -1,0 +1,37 @@
+# =============================================================================
+# AL FILO — Docker Compose
+# Levanta PostgreSQL + Redis para desarrollo local
+# Uso: docker compose up -d
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: alfilo-db
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: alfilo
+      POSTGRES_PASSWORD: alfilo_dev_2024
+      POSTGRES_DB: alfilo_platform
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alfilo -d alfilo_platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: alfilo-cache
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  redisdata:

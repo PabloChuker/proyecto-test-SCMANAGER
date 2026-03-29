@@ -1,0 +1,17 @@
+# =============================================================================
+# AL FILO — Datamining Pipeline Dependencies
+# Instalar: pip install -r requirements.txt
+# =============================================================================
+
+# Base de datos
+psycopg2-binary==2.9.9      # Driver PostgreSQL
+sqlalchemy==2.0.35           # ORM para inserción bulk
+
+# Utilidades
+python-dotenv==1.0.1         # Leer .env
+rich==13.9.4                 # Logging bonito en consola
+click==8.1.7                 # CLI arguments
+httpx==0.27.2                # HTTP client async (para futuras APIs)
+
+# Data processing
+orjson==3.10.11              # JSON parsing ultra-rápido (los JSON de scunpacked son grandes)
