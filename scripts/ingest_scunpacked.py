@@ -276,7 +276,8 @@ def parse_ship(raw: dict, game_version: str) -> dict:
             hp.get("defaultItem") or
             hp.get("Equipped") or
             hp.get("equipped") or
-            hp.get("ItemClassName")
+            hp.get("ItemClassName") or
+            hp.get("ClassName")
         )
         if equipped_ref:
             default_items.append({
@@ -303,6 +304,45 @@ def parse_component(raw: dict, game_version: str) -> dict:
     Transforma un JSON de componente de scunpacked a nuestro modelo.
     Retorna un dict con: item, stats
     """
+    # Soporte para formato "Raw" de los JSONs locales del repo
+    # scunpacked tiene los datos reales en Entity.Components
+    if "Raw" in raw and "Entity" in raw["Raw"]:
+        entity = raw["Raw"]["Entity"]
+        components = entity.get("Components", {})
+        
+        # Intentar obtener AttachDef para el tipo de item
+        attach_params = (
+            components.get("SAttachableComponentParams", {}) or
+            components.get("SCItemWeaponComponentParams", {}) or
+            {}
+        )
+        attach_def = attach_params.get("AttachDef", {})
+        
+        # Si no hay AttachDef, puede estar en otro lugar según la versión
+        if not attach_def:
+            # Buscar en el árbol de componentes si hay algún AttachDef
+            for c_val in components.values():
+                if isinstance(c_val, dict) and "AttachDef" in c_val:
+                    attach_def = c_val["AttachDef"]
+                    break
+
+        loc = attach_def.get("Localization", {}).get("English", {})
+        
+        # Aplanar para compatibilidad
+        raw = {
+            "reference":     entity.get("__ref"),
+            "className":     entity.get("__path", "").split("/")[-1].replace(".xml", ""),
+            "name":          loc.get("Name") or entity.get("__ref", "Unknown"),
+            "localizedName": loc.get("Name"),
+            "type":          attach_def.get("Type"),
+            "subType":       attach_def.get("SubType"),
+            "size":          attach_def.get("Size"),
+            "grade":         attach_def.get("Grade"),
+            "manufacturer":  attach_def.get("Manufacturer", {}).get("Code"),
+            # Reinyectar el raw para que extract_component_stats funcione
+            "Raw":           raw["Raw"] 
+        }
+
     raw_type = raw.get("Type") or raw.get("type") or raw.get("ItemType", "OTHER")
     item_type = SCUNPACKED_TYPE_MAP.get(raw_type, "OTHER")
 
@@ -401,30 +441,98 @@ def insert_to_database(
     """
     Inserta todos los datos parseados en PostgreSQL.
     Usa UPSERT (INSERT ON CONFLICT UPDATE) para ser idempotente.
+
+    El proceso tiene DOS FASES:
+      Fase A: Insertar todos los items (naves + componentes) y hardpoints.
+      Fase B: Vincular los default items a sus hardpoints.
+
+    La Fase B va después porque un default item podría ser un componente
+    que aún no existía en la DB cuando se insertó el hardpoint.
     """
     engine = create_engine(db_url)
 
     if dry_run:
         console.print("\n[yellow]🔍 DRY RUN — No se escribirá en la base de datos[/]")
         show_summary(ships, components)
+
+        # Mostrar también qué default items se vincularían
+        total_defaults = sum(len(s["default_items"]) for s in ships)
+        console.print(f"\n[cyan]→ Default items a vincular: {total_defaults}[/]")
+        for s in ships[:3]:
+            name = s["item"]["name"]
+            defaults = s["default_items"]
+            if defaults:
+                console.print(f"  🚀 {name}:")
+                for d in defaults[:5]:
+                    console.print(f"     └ {d['hardpointName']} ← {d['itemReference']}")
+                if len(defaults) > 5:
+                    console.print(f"     └ ... y {len(defaults) - 5} más")
         return
 
     with engine.begin() as conn:
-        # Insertar items de naves
+        # ══════════════════════════════════════════════════════════════════
+        # FASE A: Insertar todos los items, ships, hardpoints y stats
+        # ══════════════════════════════════════════════════════════════════
+
+        console.print("\n[cyan]→ Fase A: Insertando items y hardpoints...[/]")
+
+        count = 0
         for ship_data in ships:
             item_id = upsert_item(conn, ship_data["item"])
             upsert_ship(conn, item_id, ship_data["ship"])
 
             for hp in ship_data["hardpoints"]:
                 upsert_hardpoint(conn, item_id, hp)
+            
+            count += 1
+            if count % 50 == 0:
+                console.print(f"  .. {count} naves procesadas")
 
-        # Insertar componentes
+        count = 0
         for comp_data in components:
             item_id = upsert_item(conn, comp_data["item"])
             if any(v is not None for v in comp_data["stats"].values()):
                 upsert_component_stats(conn, item_id, comp_data["stats"])
+            
+            count += 1
+            if count % 500 == 0:
+                console.print(f"  .. {count} componentes procesados")
 
+        console.print(f"[green]  ✓ {len(ships)} naves + {len(components)} componentes insertados[/]")
+
+        # ══════════════════════════════════════════════════════════════════
+        # FASE B: Vincular default items a hardpoints
+        # ══════════════════════════════════════════════════════════════════
+
+        console.print("[cyan]→ Fase B: Vinculando default loadouts...[/]")
+
+        linked = 0
+        not_found = 0
+        for ship_data in ships:
+            ship_item_id = resolve_item_id(conn, ship_data["item"]["reference"])
+            if not ship_item_id:
+                continue
+
+            for default in ship_data["default_items"]:
+                success = link_default_item(
+                    conn,
+                    parent_item_id=ship_item_id,
+                    hardpoint_name=default["hardpointName"],
+                    item_reference=default["itemReference"],
+                )
+                if success:
+                    linked += 1
+                else:
+                    not_found += 1
+
+        console.print(f"[green]  ✓ {linked} hardpoints vinculados con su default item[/]")
+        if not_found > 0:
+            console.print(f"[yellow]  ⚠ {not_found} default items no encontrados en la DB (componentes no ingestados)[/]")
+
+        # ══════════════════════════════════════════════════════════════════
         # Registrar versión procesada
+        # ══════════════════════════════════════════════════════════════════
+
         conn.execute(text("""
             INSERT INTO game_versions (id, version, source, "itemCount", "processedAt")
             VALUES (:id, :version, :source, :count, :now)
@@ -534,13 +642,23 @@ def upsert_ship(conn, item_id: str, ship_data: dict):
 
 
 def upsert_hardpoint(conn, parent_item_id: str, hp_data: dict):
-    """Inserta un hardpoint (borra y recrea para simplificar)."""
+    """
+    Inserta o actualiza un hardpoint.
+    Usa un constraint natural (parentItemId + hardpointName) para UPSERT.
+    """
     conn.execute(text("""
         INSERT INTO hardpoints (id, "parentItemId", "hardpointName", category,
                                "minSize", "maxSize", "isFixed", "isManned", "isInternal")
         VALUES (:id, :parentItemId, :hardpointName, :category,
                 :minSize, :maxSize, :isFixed, :isManned, :isInternal)
-        ON CONFLICT DO NOTHING
+        ON CONFLICT ("parentItemId", "hardpointName")
+        DO UPDATE SET
+            category = EXCLUDED.category,
+            "minSize" = EXCLUDED."minSize",
+            "maxSize" = EXCLUDED."maxSize",
+            "isFixed" = EXCLUDED."isFixed",
+            "isManned" = EXCLUDED."isManned",
+            "isInternal" = EXCLUDED."isInternal"
     """), {
         "id": str(uuid.uuid4()),
         "parentItemId": parent_item_id,
@@ -611,6 +729,90 @@ def upsert_component_stats(conn, item_id: str, stats: dict):
         "emSignature": stats.get("emSignature"),
         "irSignature": stats.get("irSignature"),
     })
+
+
+def resolve_item_id(conn, item_ref: str) -> Optional[str]:
+    """
+    Resuelve una referencia de item a su UUID interno en la tabla items.
+
+    scunpacked usa indistintamente ClassName, Reference o Name para
+    identificar los default items de un hardpoint. Esta función busca
+    en los tres campos para maximizar la probabilidad de match.
+
+    Orden de búsqueda:
+      1. reference (exacto) — el UUID de CIG
+      2. className (exacto) — el nombre de clase interno
+      3. className (case-insensitive) — por si hay diferencias de casing
+      4. name (case-insensitive) — último recurso
+    """
+    if not item_ref:
+        return None
+
+    # Intento 1: Buscar por reference (match exacto, más confiable)
+    result = conn.execute(text(
+        'SELECT id FROM items WHERE reference = :ref LIMIT 1'
+    ), {"ref": item_ref})
+    row = result.fetchone()
+    if row:
+        return row[0]
+
+    # Intento 2: Buscar por className (match exacto)
+    result = conn.execute(text(
+        'SELECT id FROM items WHERE "className" = :ref LIMIT 1'
+    ), {"ref": item_ref})
+    row = result.fetchone()
+    if row:
+        return row[0]
+
+    # Intento 3: className case-insensitive
+    result = conn.execute(text(
+        'SELECT id FROM items WHERE LOWER("className") = LOWER(:ref) LIMIT 1'
+    ), {"ref": item_ref})
+    row = result.fetchone()
+    if row:
+        return row[0]
+
+    # Intento 4: name case-insensitive (último recurso)
+    result = conn.execute(text(
+        'SELECT id FROM items WHERE LOWER(name) = LOWER(:ref) LIMIT 1'
+    ), {"ref": item_ref})
+    row = result.fetchone()
+    if row:
+        return row[0]
+
+    return None
+
+
+def link_default_item(
+    conn,
+    parent_item_id: str,
+    hardpoint_name: str,
+    item_reference: str,
+) -> bool:
+    """
+    Busca el item por su reference y actualiza el equippedItemId del hardpoint.
+
+    Retorna True si se vinculó exitosamente, False si no se encontró el item
+    o el hardpoint.
+    """
+    # Resolver el ID real del componente
+    equipped_id = resolve_item_id(conn, item_reference)
+    if not equipped_id:
+        return False
+
+    # Actualizar el hardpoint
+    result = conn.execute(text("""
+        UPDATE hardpoints
+        SET "equippedItemId" = :equippedId
+        WHERE "parentItemId" = :parentId
+          AND "hardpointName" = :hpName
+    """), {
+        "equippedId": equipped_id,
+        "parentId": parent_item_id,
+        "hpName": hardpoint_name,
+    })
+
+    return result.rowcount > 0
 
 
 # =============================================================================

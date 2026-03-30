@@ -1,10 +1,23 @@
 // =============================================================================
-// AL FILO — Star Citizen Platform
-// Prisma Schema v1.0 — Fase 1: Naves, Hardpoints y Componentes
-// =============================================================================
-// Filosofía: Todo en Star Citizen es un "Item". Una nave es un item, un laser
-// repeater es un item, un escudo es un item. La tabla central evita duplicación.
-// Los UUIDs que usamos son los mismos que CIG asigna internamente (reference).
+// AL FILO — Mega Schema v2.0
+//
+// Architecture:
+//   Item (central) ──→ WeaponStats | ShieldStats | PowerStats | ...  (1:1)
+//                  ──→ Ship (1:1, if item is a ship)
+//                  ──→ ShopInventory (many, where this item is sold)
+//
+//   Ship ──→ Hardpoint[] (slots)
+//   Hardpoint ──→ equippedItem (default loadout, FK to Item)
+//
+//   Shop ──→ Location (planet/station)
+//        ──→ ShopInventory[] (what it sells)
+//
+// Design decisions:
+//   - Stats tables are 1:1 with Item, split by domain to avoid null columns.
+//   - ItemType enum is exhaustive (every equipment class in Star Citizen).
+//   - Shop/Inventory models support the full economy pipeline.
+//   - All IDs are UUIDs; CIG's internal reference is stored separately.
+//   - gameVersion on Item tracks which patch the data came from.
 // =============================================================================
 
 generator client {
@@ -17,126 +30,52 @@ datasource db {
 }
 
 // =============================================================================
-// TABLA CENTRAL: Item
-// Cada entidad del juego es un Item. El campo `type` discrimina qué es.
-// `rawData` guarda el JSON original de scunpacked para debug/auditoría.
+// ENUMS
 // =============================================================================
-model Item {
-  id            String   @id @default(uuid()) // PK interna
-  reference     String   @unique               // UUID de CIG (ej: "abc-123-def")
-  name          String                          // Nombre legible (ej: "Gladius")
-  localizedName String?                         // Nombre localizado si existe
-  className     String?                         // Nombre de clase interno de CIG
-  type          ItemType                        // Enum: SHIP, WEAPON, SHIELD, etc.
-  subType       String?                         // Sub-clasificación libre
-  size          Int?                            // Tamaño del item (S1-S12 para armas, etc.)
-  grade         String?                         // Grado (A, B, C, D) si aplica
-  manufacturer  String?                         // Fabricante (Aegis, RSI, etc.)
-  mass          Float?                          // Masa en kg
-  hitPoints     Float?                          // Puntos de vida del componente
-  gameVersion   String                          // Versión del juego (ej: "4.0.1")
-  rawData       Json?                           // JSON crudo de scunpacked para referencia
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
 
-  // -- Relaciones --
-  ship           Ship?                          // Si type=SHIP, datos extendidos
-  componentStats ComponentStats?                // Stats específicas del componente
-  hardpoints     Hardpoint[]                    // Hardpoints que TIENE este item (si es nave)
-  equippedOn     Hardpoint[]    @relation("EquippedItem") // Hardpoints donde ESTÁ equipado
-
-  @@index([type])
-  @@index([manufacturer])
-  @@index([gameVersion])
-  @@map("items")
-}
-
-// =============================================================================
-// ENUM: Tipos de Item
-// Se expande en fases futuras con MINERAL, COMMODITY, RECIPE, etc.
-// =============================================================================
 enum ItemType {
+  // Vehicles
   SHIP
   VEHICLE
+  // Weapons
   WEAPON
   MISSILE
+  TORPEDO
+  BOMB
+  // Defensive
   SHIELD
+  ARMOR
+  COUNTERMEASURE
+  // Power & Thermal
   POWER_PLANT
   COOLER
+  // Navigation
   QUANTUM_DRIVE
-  THRUSTER
-  ARMOR
   RADAR
   AVIONICS
-  MINING_LASER
-  TURRET
-  COUNTERMEASURE
+  // Propulsion
+  THRUSTER
   FUEL_TANK
   FUEL_INTAKE
+  // Utility
+  MINING_LASER
+  SALVAGE_HEAD
+  TRACTOR_BEAM
+  EMP
+  QED
+  TURRET
+  // Commodities & Crafting (Phase 3)
+  COMMODITY
+  MINERAL
+  GAS
+  RAW_MATERIAL
+  REFINED_MATERIAL
+  COMPONENT_PART
+  // Other
+  PAINT
+  PERSONAL_WEAPON
+  GADGET
   OTHER
-}
-
-// =============================================================================
-// SHIP: Datos extendidos para naves/vehículos
-// Relación 1:1 con Item. Solo existe si item.type == SHIP o VEHICLE
-// =============================================================================
-model Ship {
-  id               String  @id @default(uuid())
-  itemId           String  @unique
-  item             Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
-
-  // --- Estadísticas de vuelo ---
-  maxCrew          Int?
-  cargo            Float?    // SCU de carga
-  maxSpeed         Float?    // m/s velocidad máxima SCM
-  afterburnerSpeed Float?    // m/s con afterburner
-  pitchRate        Float?    // Grados/s
-  yawRate          Float?    // Grados/s
-  rollRate         Float?    // Grados/s
-
-  // --- Capacidades ---
-  hydrogenFuelCap  Float?    // Capacidad de hidrógeno
-  quantumFuelCap   Float?    // Capacidad de quantum fuel
-  isSpaceship      Boolean   @default(true)
-  isGravlev        Boolean   @default(false)
-
-  // --- Dimensiones ---
-  lengthMeters     Float?
-  beamMeters       Float?
-  heightMeters     Float?
-
-  // --- Clasificación ---
-  role             String?   // Fighter, Mining, Cargo, etc.
-  focus            String?   // Light Fighter, Medium Freight, etc.
-  career           String?   // Combat, Industry, Transport, etc.
-
-  @@map("ships")
-}
-
-// =============================================================================
-// HARDPOINT: Punto de montaje en una nave
-// Cada nave tiene N hardpoints. Cada hardpoint acepta items de cierto tipo/tamaño.
-// =============================================================================
-model Hardpoint {
-  id              String        @id @default(uuid())
-  parentItemId    String                        // La nave/vehículo dueña
-  parentItem      Item          @relation(fields: [parentItemId], references: [id], onDelete: Cascade)
-
-  hardpointName   String                        // Nombre interno (ej: "hardpoint_weapon_gun_class2_right")
-  category        HardpointCategory             // WEAPON, SHIELD, POWER_PLANT, etc.
-  minSize         Int           @default(0)     // Tamaño mínimo que acepta
-  maxSize         Int           @default(0)     // Tamaño máximo que acepta
-  isFixed         Boolean       @default(false) // ¿Es fijo o gimbal?
-  isManned        Boolean       @default(false) // ¿Requiere tripulante?
-  isInternal      Boolean       @default(false) // ¿Es componente interno?
-
-  // --- Item actualmente equipado (default loadout) ---
-  equippedItemId  String?
-  equippedItem    Item?         @relation("EquippedItem", fields: [equippedItemId], references: [id], onDelete: SetNull)
-
-  @@index([parentItemId])
-  @@index([category])
-  @@map("hardpoints")
 }
 
 enum HardpointCategory {
@@ -156,64 +95,343 @@ enum HardpointCategory {
   FUEL_INTAKE
   COUNTERMEASURE
   MINING
+  SALVAGE
+  TRACTOR_BEAM
   UTILITY
   OTHER
 }
 
 // =============================================================================
-// COMPONENT STATS: Estadísticas detalladas de cada componente
-// Relación 1:1 con Item. Almacena métricas de rendimiento.
-// Usamos campos nullable porque cada tipo de componente tiene stats distintas.
+// ITEM — Central table. Every game entity is an Item.
 // =============================================================================
-model ComponentStats {
-  id              String  @id @default(uuid())
-  itemId          String  @unique
-  item            Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
-  // --- Armas ---
-  dps             Float?    // Damage per second total
-  alphaDamage     Float?    // Daño por disparo
-  fireRate        Float?    // Disparos por minuto
-  range           Float?    // Alcance efectivo en metros
-  speed           Float?    // Velocidad del proyectil m/s
-  ammoCount       Int?      // Munición total (-1 = energy)
-  damageType      String?   // Physical, Energy, Distortion, etc.
+model Item {
+  id            String   @id @default(uuid())
+  reference     String   @unique              // CIG's internal UUID
+  name          String
+  localizedName String?
+  className     String?                       // CIG class name
+  type          ItemType
+  subType       String?                       // Free-text sub-classification
+  size          Int?                          // S1-S12
+  grade         String?                       // A, B, C, D
+  manufacturer  String?
+  mass          Float?
+  hitPoints     Float?
+  gameVersion   String
+  rawData       Json?                         // Full source JSON for audit
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  // --- Escudos ---
-  shieldHp        Float?    // HP del escudo
-  shieldRegen     Float?    // Regeneración por segundo
-  shieldDownDelay Float?    // Segundos para empezar a regenerar tras caer
+  // ── 1:1 extended data (only one will be non-null per item) ──
+  ship          Ship?
+  weaponStats   WeaponStats?
+  shieldStats   ShieldStats?
+  powerStats    PowerStats?
+  coolingStats  CoolingStats?
+  quantumStats  QuantumStats?
+  miningStats   MiningStats?
+  missileStats  MissileStats?
+  thrusterStats ThrusterStats?
 
-  // --- Power Plant ---
-  powerOutput     Float?    // Generación de energía
+  // ── Relations ──
+  hardpoints     Hardpoint[]                   // Hardpoints this item OWNS (ships)
+  equippedOn     Hardpoint[]  @relation("EquippedItem") // Where this item is equipped
+  shopInventory  ShopInventory[]               // Where this item is sold
 
-  // --- Cooler ---
-  coolingRate     Float?    // Tasa de enfriamiento
-
-  // --- Quantum Drive ---
-  quantumSpeed    Float?    // Velocidad quantum en m/s
-  quantumRange    Float?    // Rango máximo
-  quantumCooldown Float?    // Cooldown entre saltos
-  quantumSpoolUp  Float?    // Tiempo de spool up
-
-  // --- Consumo (universal) ---
-  powerDraw       Float?    // Consumo de energía
-  thermalOutput   Float?    // Generación de calor
-  emSignature     Float?    // Firma electromagnética
-  irSignature     Float?    // Firma infrarroja
-
-  @@map("component_stats")
+  @@index([type])
+  @@index([type, size])
+  @@index([manufacturer])
+  @@index([gameVersion])
+  @@map("items")
 }
 
 // =============================================================================
-// GAME VERSION: Registro de versiones procesadas
-// Para tracking de qué parches hemos ingestado y cuándo.
+// STATS TABLES — 1:1 with Item, split by domain
 // =============================================================================
+
+model WeaponStats {
+  id          String  @id @default(uuid())
+  itemId      String  @unique
+  item        Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  dps         Float?
+  alphaDamage Float?
+  fireRate    Float?  // rounds/min
+  range       Float?  // meters
+  speed       Float?  // projectile m/s
+  ammoCount   Int?    // -1 = energy weapon
+  damageType  String? // Physical, Energy, Distortion
+
+  // Per-damage-type breakdown
+  dmgPhysical   Float?
+  dmgEnergy     Float?
+  dmgDistortion Float?
+  dmgThermal    Float?
+
+  // Consumption
+  powerDraw     Float?
+  thermalOutput Float?
+  emSignature   Float?
+  irSignature   Float?
+
+  @@map("weapon_stats")
+}
+
+model ShieldStats {
+  id            String @id @default(uuid())
+  itemId        String @unique
+  item          Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  maxHp         Float?
+  regenRate     Float? // HP/s
+  downedDelay   Float? // seconds before regen starts after down
+  dmgAbsPhysical Float? // absorption percentages
+  dmgAbsEnergy   Float?
+  dmgAbsDistortion Float?
+
+  powerDraw     Float?
+  thermalOutput Float?
+  emSignature   Float?
+  irSignature   Float?
+
+  @@map("shield_stats")
+}
+
+model PowerStats {
+  id          String @id @default(uuid())
+  itemId      String @unique
+  item        Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  powerOutput Float? // total generation
+  powerBase   Float? // base draw of the powerplant itself
+
+  thermalOutput Float?
+  emSignature   Float?
+  irSignature   Float?
+
+  @@map("power_stats")
+}
+
+model CoolingStats {
+  id          String @id @default(uuid())
+  itemId      String @unique
+  item        Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  coolingRate     Float?
+  suppressionHeat Float?
+  suppressionIR   Float?
+
+  powerDraw     Float?
+  thermalOutput Float?
+  emSignature   Float?
+  irSignature   Float?
+
+  @@map("cooling_stats")
+}
+
+model QuantumStats {
+  id          String @id @default(uuid())
+  itemId      String @unique
+  item        Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  maxSpeed     Float? // m/s
+  maxRange     Float? // meters
+  fuelRate     Float? // fuel/s
+  spoolUpTime  Float? // seconds
+  cooldownTime Float? // seconds
+  stage1Accel  Float?
+  stage2Accel  Float?
+  quantumType  String? // VK-00, etc.
+
+  powerDraw     Float?
+  thermalOutput Float?
+  emSignature   Float?
+  irSignature   Float?
+
+  @@map("quantum_stats")
+}
+
+model MiningStats {
+  id          String @id @default(uuid())
+  itemId      String @unique
+  item        Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  miningPower   Float?
+  resistance    Float?
+  instability   Float?
+  optimalRange  Float?
+  maxRange      Float?
+  throttleRate  Float?
+
+  powerDraw     Float?
+  thermalOutput Float?
+
+  @@map("mining_stats")
+}
+
+model MissileStats {
+  id          String @id @default(uuid())
+  itemId      String @unique
+  item        Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  damage        Float?
+  lockTime      Float?  // seconds
+  lockRange     Float?  // meters
+  trackingAngle Float?  // degrees
+  speed         Float?  // m/s
+  fuelTime      Float?  // seconds of fuel
+  lockingType   String? // IR, EM, CS
+
+  @@map("missile_stats")
+}
+
+model ThrusterStats {
+  id          String @id @default(uuid())
+  itemId      String @unique
+  item        Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  thrustCapacity Float?
+  maxThrust      Float?
+  fuelBurnRate   Float?
+  thrustType     String? // main, mav, vtol, retro
+
+  powerDraw     Float?
+  thermalOutput Float?
+  emSignature   Float?
+
+  @@map("thruster_stats")
+}
+
+// =============================================================================
+// SHIP — Extended data for vehicles/ships
+// =============================================================================
+
+model Ship {
+  id               String  @id @default(uuid())
+  itemId           String  @unique
+  item             Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  // Flight
+  maxCrew          Int?
+  cargo            Float?
+  scmSpeed         Float?
+  afterburnerSpeed Float?
+  pitchRate        Float?
+  yawRate          Float?
+  rollRate         Float?
+  maxAccelMain     Float?
+  maxAccelRetro    Float?
+
+  // Fuel
+  hydrogenFuelCap  Float?
+  quantumFuelCap   Float?
+
+  // Dimensions
+  lengthMeters     Float?
+  beamMeters       Float?
+  heightMeters     Float?
+
+  // Classification
+  role             String?
+  focus            String?
+  career           String?
+  isSpaceship      Boolean @default(true)
+  isGravlev        Boolean @default(false)
+
+  // Base signatures (hull)
+  baseEmSignature  Float?
+  baseIrSignature  Float?
+  baseCsSignature  Float?
+
+  @@map("ships")
+}
+
+// =============================================================================
+// HARDPOINT — Mount point on a ship
+// =============================================================================
+
+model Hardpoint {
+  id              String            @id @default(uuid())
+  parentItemId    String
+  parentItem      Item              @relation(fields: [parentItemId], references: [id], onDelete: Cascade)
+
+  hardpointName   String
+  category        HardpointCategory
+  minSize         Int               @default(0)
+  maxSize         Int               @default(0)
+  isFixed         Boolean           @default(false)
+  isManned        Boolean           @default(false)
+  isInternal      Boolean           @default(false)
+
+  equippedItemId  String?
+  equippedItem    Item?             @relation("EquippedItem", fields: [equippedItemId], references: [id], onDelete: SetNull)
+
+  @@unique([parentItemId, hardpointName])
+  @@index([parentItemId])
+  @@index([category])
+  @@map("hardpoints")
+}
+
+// =============================================================================
+// ECONOMY — Shops, Locations, Prices
+// =============================================================================
+
+model Location {
+  id          String  @id @default(uuid())
+  name        String
+  type        String  // planet, moon, station, outpost, city
+  parentName  String? // star system or parent body
+  system      String? // Stanton, Pyro, etc.
+
+  shops       Shop[]
+
+  @@unique([name, parentName])
+  @@map("locations")
+}
+
+model Shop {
+  id          String  @id @default(uuid())
+  name        String
+  locationId  String
+  location    Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  shopType    String?  // weapons, armor, components, general, etc.
+
+  inventory   ShopInventory[]
+
+  @@unique([name, locationId])
+  @@index([locationId])
+  @@map("shops")
+}
+
+model ShopInventory {
+  id          String  @id @default(uuid())
+  shopId      String
+  shop        Shop    @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  itemId      String
+  item        Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  priceBuy    Float?  // aUEC to buy from shop
+  priceSell   Float?  // aUEC shop will pay you
+  isAvailable Boolean @default(true)
+  stock       Int?    // null = unlimited
+
+  @@unique([shopId, itemId])
+  @@index([itemId])
+  @@map("shop_inventory")
+}
+
+// =============================================================================
+// META — Version tracking
+// =============================================================================
+
 model GameVersion {
   id          String   @id @default(uuid())
-  version     String   @unique              // "4.0.1", "4.0.2", etc.
-  source      String                        // "scunpacked", "manual", "p4k"
-  itemCount   Int      @default(0)          // Cantidad de items procesados
+  version     String   @unique
+  source      String
+  itemCount   Int      @default(0)
   processedAt DateTime @default(now())
   notes       String?
 
