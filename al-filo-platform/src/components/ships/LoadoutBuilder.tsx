@@ -1,5 +1,5 @@
-// =============================================================================
-// AL FILO — LoadoutBuilder v14 (ShipSelector + Recursive Children)
+﻿// =============================================================================
+// AL FILO â€” LoadoutBuilder v14 (ShipSelector + Recursive Children)
 // =============================================================================
 
 "use client";
@@ -18,7 +18,7 @@ const WEAPON_GROUPS = new Set(["WEAPON", "TURRET"]);
 const MISSILE_GROUPS = new Set(["MISSILE_RACK"]);
 const SYSTEM_ORDER = ["SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "UTILITY"] as const;
 const CAT_LABELS: Record<string, string> = { SHIELD: "SHIELDS", POWER_PLANT: "POWER PLANTS", COOLER: "COOLERS", QUANTUM_DRIVE: "QUANTUM DRIVES", MINING: "MINING", UTILITY: "UTILITY" };
-const CAT_ICONS: Record<string, string> = { SHIELD: "◇", POWER_PLANT: "⚡", COOLER: "❄", QUANTUM_DRIVE: "◈", MINING: "⛏", UTILITY: "◎" };
+const CAT_ICONS: Record<string, string> = { SHIELD: "â—‡", POWER_PLANT: "âš¡", COOLER: "â„", QUANTUM_DRIVE: "â—ˆ", MINING: "â›", UTILITY: "â—Ž" };
 const CAT_ACCENT: Record<string, string> = { SHIELD: "#3b82f6", POWER_PLANT: "#22c55e", COOLER: "#06b6d4", QUANTUM_DRIVE: "#a855f7", MINING: "#f472b6", UTILITY: "#94a3b8" };
 
 export function LoadoutBuilder({ shipId }: { shipId: string }) {
@@ -63,12 +63,12 @@ export function LoadoutBuilder({ shipId }: { shipId: string }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_320px] gap-2">
         <div className="space-y-2">
-          <HpGroup title="WEAPONS" icon="▪" hps={weaponHps} store={store} onClickHp={setPickerHp} accent="#eab308" />
-          <HpGroup title="MISSILES & BOMBS" icon="◆" hps={missileHps} store={store} onClickHp={setPickerHp} accent="#f97316" />
+          <HpGroup title="WEAPONS" icon="â–ª" hps={weaponHps} store={store} onClickHp={setPickerHp} accent="#eab308" />
+          <HpGroup title="MISSILES & BOMBS" icon="â—†" hps={missileHps} store={store} onClickHp={setPickerHp} accent="#f97316" />
         </div>
         <div className="space-y-2">
           {systemGroups.map(({ cat, hps }) => (
-            <HpGroup key={cat} title={CAT_LABELS[cat] || cat} icon={CAT_ICONS[cat] || "▫"} hps={hps} store={store} onClickHp={setPickerHp} accent={CAT_ACCENT[cat] || "#71717a"} />
+            <HpGroup key={cat} title={CAT_LABELS[cat] || cat} icon={CAT_ICONS[cat] || "â–«"} hps={hps} store={store} onClickHp={setPickerHp} accent={CAT_ACCENT[cat] || "#71717a"} />
           ))}
         </div>
         <div className="space-y-2">
@@ -85,20 +85,20 @@ export function LoadoutBuilder({ shipId }: { shipId: string }) {
                 {shipInfo.role && <div className="text-[10px] text-yellow-500/70 font-mono uppercase tracking-wider">{shipInfo.role}</div>}
               </div>
               <div className="grid grid-cols-3 gap-px bg-zinc-800/40">
-                <SS l="CREW" v={shipInfo.crew != null ? String(shipInfo.crew) : "—"} />
-                <SS l="SCU" v={shipInfo.cargo != null && shipInfo.cargo > 0 ? String(Math.round(shipInfo.cargo)) : "—"} />
-                <SS l={stats.effectiveSpeedLabel} v={stats.effectiveSpeed ? Math.round(stats.effectiveSpeed) + "" : "—"} u="m/s" />
-                <SS l="SCM" v={shipInfo.scmSpeed ? Math.round(shipInfo.scmSpeed) + "" : "—"} u="m/s" />
-                <SS l="NAV" v={shipInfo.afterburnerSpeed ? Math.round(shipInfo.afterburnerSpeed) + "" : "—"} u="m/s" />
-                <SS l="PITCH" v={shipInfo.pitchRate ? Math.round(shipInfo.pitchRate) + "" : "—"} u="°/s" />
+                <SS l="CREW" v={shipInfo.crew != null ? String(shipInfo.crew) : "â€”"} />
+                <SS l="SCU" v={shipInfo.cargo != null && shipInfo.cargo > 0 ? String(Math.round(shipInfo.cargo)) : "â€”"} />
+                <SS l={stats.effectiveSpeedLabel} v={stats.effectiveSpeed ? Math.round(stats.effectiveSpeed) + "" : "â€”"} u="m/s" />
+                <SS l="SCM" v={shipInfo.scmSpeed ? Math.round(shipInfo.scmSpeed) + "" : "â€”"} u="m/s" />
+                <SS l="NAV" v={shipInfo.afterburnerSpeed ? Math.round(shipInfo.afterburnerSpeed) + "" : "â€”"} u="m/s" />
+                <SS l="PITCH" v={shipInfo.pitchRate ? Math.round(shipInfo.pitchRate) + "" : "â€”"} u="Â°/s" />
               </div>
             </div>
           </div>
           <PowerManagementPanel stats={stats} flightMode={flightMode} onModeChange={setFlightMode} />
           <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-1.5">
             <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase border-b border-zinc-800/40 pb-1">Combat</div>
-            <SR l="DPS" v={fmtDps(stats.totalDps)} s={flightMode === "NAV" ? "LOCKED" : "α " + fmtStat(stats.totalAlpha)} c={flightMode === "NAV" ? "#52525b" : "#ef4444"} />
-            <SR l="SHIELD" v={fmtStat(stats.shieldHp)} s={flightMode === "NAV" ? "NO REGEN" : "↑ " + fmtStat(stats.shieldRegen) + "/s"} c="#3b82f6" />
+            <SR l="DPS" v={fmtDps(stats.totalDps)} s={flightMode === "NAV" ? "LOCKED" : "Î± " + fmtStat(stats.totalAlpha)} c={flightMode === "NAV" ? "#52525b" : "#ef4444"} />
+            <SR l="SHIELD" v={fmtStat(stats.shieldHp)} s={flightMode === "NAV" ? "NO REGEN" : "â†‘ " + fmtStat(stats.shieldRegen) + "/s"} c="#3b82f6" />
             <BR l="POWER" v={stats.powerBalance} a={stats.powerOutput} b={stats.powerDraw} pc="#22c55e" nc="#ef4444" />
             <BR l="THERMAL" v={stats.thermalBalance} a={stats.coolingRate} b={stats.thermalOutput} pc="#06b6d4" nc="#ef4444" />
           </div>
@@ -147,3 +147,4 @@ function BR({ l, v, a, b, pc, nc }: { l: string; v: number; a: number; b: number
   const bs = pos ? { left: "50%", width: pct + "%", backgroundColor: color } : { left: (50 - pct) + "%", width: pct + "%", backgroundColor: color };
   return <div className="space-y-0.5"><div className="flex items-baseline justify-between"><span className="text-[8px] font-mono text-zinc-600 tracking-wider uppercase">{l}</span><span className="text-[10px] font-mono" style={{ color }}>{pos ? "+" : ""}{fmtStat(v)}</span></div><div className="relative h-1 w-full bg-zinc-800/60 rounded-full overflow-hidden"><div className="absolute left-1/2 top-0 w-px h-full bg-zinc-600/30 z-10" /><div className="absolute top-0 h-full rounded-full transition-all duration-500" style={bs} /></div><div className="flex justify-between text-[7px] font-mono text-zinc-700"><span>{fmtStat(a)} out</span><span>{fmtStat(b)} draw</span></div></div>;
 }
+
