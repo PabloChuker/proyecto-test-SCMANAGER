@@ -1,12 +1,7 @@
-// =============================================================================
-// AL FILO — /ships/[id]/page.tsx (v6)
-// Server Component shell. Passes shipId to LoadoutBuilder (Client).
-// LoadoutBuilder handles its own data fetching via Zustand loadShip().
-// =============================================================================
-
-import Link from "next/link";
-import { LoadoutBuilder } from "@/components/ships/LoadoutBuilder";
-import { ShipHero } from "@/components/ships/ShipHero";
+import { Suspense } from 'react';
+import Link from 'next/link';
+import LoadoutBuilder from '@/components/ships/LoadoutBuilder';
+import { ShipHero } from '@/components/ships/ShipHero';
 
 export default async function ShipDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -32,7 +27,9 @@ export default async function ShipDetailPage({ params }: { params: Promise<{ id:
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
         <ShipHero shipId={id} />
         <section className="py-6">
-          <LoadoutBuilder shipId={id} />
+          <Suspense fallback={<div className="text-xs font-mono text-zinc-600 animate-pulse uppercase tracking-widest py-20 text-center">Inizializing Neural Link...</div>}>
+            <LoadoutBuilder shipId={id} />
+          </Suspense>
         </section>
       </div>
     </main>
