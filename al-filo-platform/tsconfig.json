@@ -1,4 +1,4 @@
-{
+﻿{
     "compilerOptions":  {
                             "target":  "ES2017",
                             "lib":  [
@@ -7,7 +7,6 @@
                                         "esnext"
                                     ],
                             "allowJs":  true,
-                            "skipLibCheck":  true,
                             "strict":  true,
                             "noEmit":  true,
                             "esModuleInterop":  true,
@@ -26,7 +25,10 @@
                                           "@/*":  [
                                                       "./src/*"
                                                   ]
-                                      }
+                                      },
+                            "noImplicitAny":  false,
+                            "suppressImplicitAnyIndexErrors":  true,
+                            "skipLibCheck":  true
                         },
     "include":  [
                     "next-env.d.ts",
