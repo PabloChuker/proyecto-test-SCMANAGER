@@ -1,24 +1,10 @@
 // =============================================================================
-// AL FILO — useLoadoutStore (Zustand)
+// AL FILO — useLoadoutStore v6.1 (Robust Children)
 //
-// Single source of truth for the Loadout Builder.
-//
-// State:
-//   shipId          — currently selected ship
-//   shipData        — full ship data from API (cached)
-//   hardpoints      — resolved hardpoints with inferred categories
-//   overrides       — user's component swaps (Map: hardpointId → item)
-//
-// Computed (derived, not stored):
-//   stats           — totalDps, powerBalance, etc. Recalculated on every change.
-//
-// Actions:
-//   loadShip(id)    — fetch ship data and populate state
-//   equipItem(hpId, item) — swap a component
-//   clearSlot(hpId) — empty a hardpoint
-//   resetAll()      — revert to default loadout
-//   toShareableString() — serialize overrides for URL sharing
-//   fromShareableString(s) — restore overrides from URL
+// Fixes:
+//   - loadShip: parses children defensively, handles missing componentStats
+//   - computeStats: sums child DPS even when parent turret has null stats
+//   - Children initialized in componentStates for on/off toggle
 // =============================================================================
 
 import { create } from "zustand";
@@ -27,156 +13,164 @@ import { create } from "zustand";
 // Types
 // =============================================================================
 
-export interface ComponentStatsData {
-  dps?: number | null;
-  alphaDamage?: number | null;
-  fireRate?: number | null;
-  range?: number | null;
-  speed?: number | null;
-  ammoCount?: number | null;
-  damageType?: string | null;
-  shieldHp?: number | null;
-  shieldRegen?: number | null;
-  shieldDownDelay?: number | null;
-  powerOutput?: number | null;
-  coolingRate?: number | null;
-  quantumSpeed?: number | null;
-  quantumRange?: number | null;
-  quantumSpoolUp?: number | null;
-  quantumCooldown?: number | null;
-  powerDraw?: number | null;
-  thermalOutput?: number | null;
-  emSignature?: number | null;
-  irSignature?: number | null;
-  [key: string]: any;
-}
+export interface ComponentStatsData { [key: string]: any; }
 
 export interface EquippedItem {
-  id: string;
-  reference: string;
-  name: string;
-  localizedName: string | null;
-  className: string | null;
-  type: string;
-  size: number | null;
-  grade: string | null;
-  manufacturer: string | null;
+  id: string; reference: string; name: string; localizedName: string | null;
+  className: string | null; type: string; size: number | null;
+  grade: string | null; manufacturer: string | null;
   componentStats: ComponentStatsData | null;
 }
 
+export interface ResolvedChild {
+  id: string; hardpointName: string; category: string;
+  minSize: number; maxSize: number; isFixed: boolean;
+  equippedItem: EquippedItem | null;
+}
+
 export interface ResolvedHardpoint {
-  id: string;
-  hardpointName: string;
-  originalCategory: string;
-  resolvedCategory: string;
-  minSize: number;
-  maxSize: number;
-  isFixed: boolean;
-  defaultItem: EquippedItem | null;
+  id: string; hardpointName: string; originalCategory: string;
+  resolvedCategory: string; minSize: number; maxSize: number;
+  isFixed: boolean; defaultItem: EquippedItem | null;
+  children: ResolvedChild[];
 }
 
 export interface ShipInfo {
-  id: string;
-  reference: string;
-  name: string;
-  localizedName: string | null;
-  manufacturer: string | null;
-  gameVersion: string;
-  scmSpeed: number | null;
-  afterburnerSpeed: number | null;
-  pitchRate: number | null;
-  yawRate: number | null;
-  rollRate: number | null;
-  crew: number | null;
-  cargo: number | null;
-  role: string | null;
-  focus: string | null;
+  id: string; reference: string; name: string; localizedName: string | null;
+  manufacturer: string | null; gameVersion: string;
+  scmSpeed: number | null; afterburnerSpeed: number | null;
+  pitchRate: number | null; yawRate: number | null; rollRate: number | null;
+  crew: number | null; cargo: number | null;
+  role: string | null; focus: string | null;
+}
+
+export type FlightMode = "SCM" | "NAV";
+export type PowerCategory = "weapons" | "thrusters" | "shields" | "quantum" | "radar" | "coolers";
+export const POWER_CATEGORIES: PowerCategory[] = ["weapons", "thrusters", "shields", "quantum", "radar", "coolers"];
+
+const CAT_TO_POWER: Record<string, PowerCategory> = {
+  WEAPON: "weapons", TURRET: "weapons", MISSILE_RACK: "weapons",
+  SHIELD: "shields", COOLER: "coolers", QUANTUM_DRIVE: "quantum",
+  MINING: "weapons", UTILITY: "weapons",
+};
+
+export interface CategoryPowerInfo { minDraw: number; allocated: number; componentCount: number; activeCount: number; }
+export interface PowerNetworkState {
+  totalOutput: number; totalAllocated: number; totalMinDraw: number;
+  consumptionPercent: number; freePoints: number; isOverloaded: boolean;
+  categories: Record<PowerCategory, CategoryPowerInfo>;
+  activeCategories: PowerCategory[];
 }
 
 export interface ComputedStats {
-  totalDps: number;
-  totalAlpha: number;
-  shieldHp: number;
-  shieldRegen: number;
-  powerOutput: number;
-  powerDraw: number;
-  powerBalance: number;
-  coolingRate: number;
-  thermalOutput: number;
-  thermalBalance: number;
-  emSignature: number;
-  irSignature: number;
-  summary: {
-    weapons: number;
-    missiles: number;
-    shields: number;
-    coolers: number;
-    powerPlants: number;
-    quantumDrives: number;
-  };
+  totalDps: number; totalAlpha: number;
+  shieldHp: number; shieldRegen: number;
+  powerOutput: number; powerDraw: number; powerBalance: number;
+  coolingRate: number; thermalOutput: number; thermalBalance: number;
+  emSignature: number; irSignature: number;
+  effectiveSpeed: number | null; effectiveSpeedLabel: string;
+  powerNetwork: PowerNetworkState;
+  summary: { weapons: number; missiles: number; shields: number; coolers: number; powerPlants: number; quantumDrives: number; activeComponents: number; totalComponents: number; };
 }
 
 // =============================================================================
-// Category inference (same logic as LoadoutBuilder v5)
+// Category inference
 // =============================================================================
 
 const TYPE_TO_CAT: Record<string, string> = {
-  WEAPON: "WEAPON", TURRET: "TURRET", MISSILE: "MISSILE_RACK",
-  MISSILE_RACK: "MISSILE_RACK", SHIELD: "SHIELD", POWER_PLANT: "POWER_PLANT",
-  COOLER: "COOLER", QUANTUM_DRIVE: "QUANTUM_DRIVE", MINING_LASER: "MINING",
-  MINING: "MINING", TRACTOR_BEAM: "UTILITY", EMP: "UTILITY", QED: "UTILITY",
-  SALVAGE_HEAD: "UTILITY",
+  WEAPON: "WEAPON", TURRET: "TURRET", MISSILE: "MISSILE_RACK", MISSILE_RACK: "MISSILE_RACK",
+  SHIELD: "SHIELD", POWER_PLANT: "POWER_PLANT", COOLER: "COOLER", QUANTUM_DRIVE: "QUANTUM_DRIVE",
+  MINING_LASER: "MINING", MINING: "MINING", TRACTOR_BEAM: "UTILITY", EMP: "UTILITY",
 };
-
 const NAME_PATTERNS: [RegExp, string][] = [
   [/turret/i, "TURRET"], [/weapon|gun|cannon|gatling|repeater|scattergun/i, "WEAPON"],
   [/missile|rocket/i, "MISSILE_RACK"], [/shield/i, "SHIELD"],
   [/power_plant|powerplant/i, "POWER_PLANT"], [/cool/i, "COOLER"],
   [/quantum|qdrive/i, "QUANTUM_DRIVE"], [/mining/i, "MINING"],
 ];
-
-const USEFUL = new Set([
-  "WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT",
-  "COOLER", "QUANTUM_DRIVE", "MINING", "UTILITY",
-]);
+const USEFUL = new Set(["WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "UTILITY"]);
 
 function inferCategory(category: string, item: EquippedItem | null, hpName: string): string {
   if (category !== "OTHER" && USEFUL.has(category)) return category;
   if (item?.type) { const m = TYPE_TO_CAT[item.type]; if (m) return m; }
   for (const [re, cat] of NAME_PATTERNS) { if (re.test(hpName)) return cat; }
-  if (item) {
-    const combined = (item.name || "") + " " + (item.className || "");
-    for (const [re, cat] of NAME_PATTERNS) { if (re.test(combined)) return cat; }
-  }
   return "OTHER";
 }
 
 // =============================================================================
-// Pure stat computation
+// Helpers
 // =============================================================================
 
-function nn(v: any): number {
-  if (v === null || v === undefined) return 0;
-  const n = Number(v);
-  return isNaN(n) ? 0 : n;
+function toNumOrNull(v: any): number | null { if (v === null || v === undefined) return null; const n = Number(v); return isNaN(n) ? null : n; }
+function pickNum(o: any, ...k: string[]): number { if (!o) return 0; for (const key of k) { const v = o[key]; if (v != null) { const n = Number(v); if (!isNaN(n) && n !== 0) return n; } } return 0; }
+
+function mergeItemStats(eq: any): ComponentStatsData | null {
+  if (!eq) return null;
+  if (eq.componentStats && typeof eq.componentStats === "object" && Object.keys(eq.componentStats).length > 0) return eq.componentStats;
+  const tables = [eq.weaponStats, eq.shieldStats, eq.powerStats, eq.coolingStats, eq.quantumStats, eq.miningStats, eq.missileStats, eq.thrusterStats];
+  const m: Record<string, any> = {}; let has = false;
+  for (const t of tables) { if (!t) continue; has = true; for (const [k, v] of Object.entries(t)) { if (k !== "id" && k !== "itemId" && v != null) m[k] = v; } }
+  if (!has) return null;
+  if (m.maxHp && !m.shieldHp) m.shieldHp = m.maxHp;
+  if (m.regenRate && !m.shieldRegen) m.shieldRegen = m.regenRate;
+  if (m.damage && !m.alphaDamage) m.alphaDamage = m.damage;
+  if (!m.dps && m.alphaDamage && m.fireRate) { const a = Number(m.alphaDamage), fr = Number(m.fireRate); if (a > 0 && fr > 0) m.dps = Math.round(a * (fr / 60) * 100) / 100; }
+  return m;
 }
 
+function parseEquipped(eq: any): EquippedItem | null {
+  if (!eq) return null;
+  const stats = eq.componentStats ?? mergeItemStats(eq);
+  return {
+    id: eq.id ?? "", reference: eq.reference ?? "", name: eq.name ?? "",
+    localizedName: eq.localizedName ?? null, className: eq.className ?? null,
+    type: eq.type ?? "OTHER", size: eq.size ?? null, grade: eq.grade ?? null,
+    manufacturer: eq.manufacturer ?? null, componentStats: stats,
+  };
+}
+
+// =============================================================================
+// computeStats
+// =============================================================================
+
+const WEAPON_CATS = new Set(["WEAPON", "TURRET", "MISSILE_RACK"]);
+const SYSTEM_CATS = new Set(["SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "UTILITY"]);
+
+function emptyCat(): CategoryPowerInfo { return { minDraw: 0, allocated: 0, componentCount: 0, activeCount: 0 }; }
+
 function computeStats(
-  hardpoints: ResolvedHardpoint[],
-  overrides: Map<string, EquippedItem | null>
+  hardpoints: ResolvedHardpoint[], overrides: Map<string, EquippedItem | null>,
+  componentStates: Record<string, boolean>, flightMode: FlightMode,
+  allocatedPower: Record<PowerCategory, number>, shipInfo: ShipInfo | null,
 ): ComputedStats {
   let totalDps = 0, totalAlpha = 0, shieldHp = 0, shieldRegen = 0;
-  let powerOutput = 0, powerDraw = 0, coolingRate = 0, thermalOutput = 0;
-  let emSignature = 0, irSignature = 0;
-  const summary = { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0 };
+  let powerOutput = 0, coolingRate = 0, thermalOutput = 0, emSig = 0, irSig = 0;
+  let activeComponents = 0, totalComponents = 0;
+  const summary = { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0, activeComponents: 0, totalComponents: 0 };
+  const cats: Record<PowerCategory, CategoryPowerInfo> = {} as any;
+  for (const c of POWER_CATEGORIES) cats[c] = emptyCat();
+
+  const accumDps = (s: ComponentStatsData | null | undefined) => {
+    if (!s) return;
+    let dps = pickNum(s, "dps");
+    if (dps === 0) { const a = pickNum(s, "alphaDamage", "damage"), fr = pickNum(s, "fireRate"); if (a > 0 && fr > 0) dps = a * (fr / 60); }
+    totalDps += dps;
+    totalAlpha += pickNum(s, "alphaDamage", "damage");
+  };
+
+  const accumBase = (s: ComponentStatsData | null | undefined) => {
+    if (!s) return;
+    thermalOutput += pickNum(s, "thermalOutput");
+    emSig += pickNum(s, "emSignature");
+    irSig += pickNum(s, "irSignature");
+  };
 
   for (const hp of hardpoints) {
     const cat = hp.resolvedCategory;
     if (!USEFUL.has(cat)) continue;
-
-    const item = overrides.has(hp.id) ? overrides.get(hp.id)! : hp.defaultItem;
-    const s = item?.componentStats;
-
+    const item = overrides.has(hp.id) ? (overrides.get(hp.id) ?? null) : hp.defaultItem;
+    if (!item) continue;
+    totalComponents++;
     switch (cat) {
       case "WEAPON": case "TURRET": summary.weapons++; break;
       case "MISSILE_RACK": summary.missiles++; break;
@@ -185,30 +179,62 @@ function computeStats(
       case "POWER_PLANT": summary.powerPlants++; break;
       case "QUANTUM_DRIVE": summary.quantumDrives++; break;
     }
+    const s = item.componentStats;
+    const isOn = componentStates[hp.hardpointName] !== false;
 
-    if (!s || typeof s !== "object") continue;
+    // Power plants: always output
+    if (cat === "POWER_PLANT") {
+      powerOutput += pickNum(s, "powerOutput");
+      if (isOn) { activeComponents++; accumBase(s); }
+      continue;
+    }
 
-    totalDps += nn(s.dps);
-    totalAlpha += nn(s.alphaDamage);
-    shieldHp += nn(s.shieldHp);
-    shieldRegen += nn(s.shieldRegen);
-    powerOutput += nn(s.powerOutput);
-    powerDraw += nn(s.powerDraw);
-    coolingRate += nn(s.coolingRate);
-    thermalOutput += nn(s.thermalOutput);
-    emSignature += nn(s.emSignature);
-    irSignature += nn(s.irSignature);
+    const pCat = CAT_TO_POWER[cat];
+    if (pCat) { cats[pCat].componentCount++; if (isOn) { cats[pCat].activeCount++; cats[pCat].minDraw += pickNum(s, "powerDraw", "powerBase"); } }
+    if (!isOn) continue;
+    activeComponents++;
+
+    // TURRET/RACK with children: DPS comes from children, base stats from parent
+    if ((cat === "TURRET" || cat === "MISSILE_RACK") && hp.children.length > 0) {
+      accumBase(s); // Parent turret body: thermal, EM, IR
+      // Children: actual weapons/missiles that deal damage
+      for (const child of hp.children) {
+        const childOn = componentStates[child.hardpointName] !== false;
+        if (!childOn) continue;
+        const cItem = child.equippedItem;
+        if (!cItem) continue;
+        accumDps(cItem.componentStats);
+        accumBase(cItem.componentStats);
+      }
+    } else {
+      // Normal component OR turret/rack with NO children (fallback: use parent stats)
+      if (cat === "WEAPON" || cat === "TURRET") { accumDps(s); }
+      if (cat === "MISSILE_RACK") { totalAlpha += pickNum(s, "alphaDamage", "damage"); }
+      if (cat === "SHIELD") { shieldHp += pickNum(s, "shieldHp", "maxHp"); shieldRegen += pickNum(s, "shieldRegen", "regenRate"); }
+      if (cat === "COOLER") { coolingRate += pickNum(s, "coolingRate"); }
+      accumBase(s);
+    }
   }
 
+  let totalAllocated = 0, totalMinDraw = 0;
+  for (const c of POWER_CATEGORIES) { cats[c].allocated = allocatedPower[c] || 0; totalAllocated += cats[c].allocated; totalMinDraw += Math.ceil(cats[c].minDraw); }
+  const totalPO = Math.round(powerOutput);
+  const consumptionPercent = totalPO > 0 ? Math.round((totalMinDraw / totalPO) * 100) : 0;
+  const activeCategories = POWER_CATEGORIES.filter(c => cats[c].componentCount > 0);
+
+  if (flightMode === "NAV") { totalDps = 0; totalAlpha = 0; shieldRegen = 0; }
+
+  let effectiveSpeed: number | null; let effectiveSpeedLabel: string;
+  if (flightMode === "NAV") { effectiveSpeed = shipInfo?.afterburnerSpeed ?? null; effectiveSpeedLabel = "NAV"; } else { effectiveSpeed = shipInfo?.scmSpeed ?? null; effectiveSpeedLabel = "SCM"; }
+
+  summary.activeComponents = activeComponents; summary.totalComponents = totalComponents;
   const r = (v: number) => Math.round(v * 100) / 100;
   return {
-    totalDps: r(totalDps), totalAlpha: r(totalAlpha),
-    shieldHp: r(shieldHp), shieldRegen: r(shieldRegen),
-    powerOutput: r(powerOutput), powerDraw: r(powerDraw),
-    powerBalance: r(powerOutput - powerDraw),
-    coolingRate: r(coolingRate), thermalOutput: r(thermalOutput),
-    thermalBalance: r(coolingRate - thermalOutput),
-    emSignature: r(emSignature), irSignature: r(irSignature),
+    totalDps: r(totalDps), totalAlpha: r(totalAlpha), shieldHp: r(shieldHp), shieldRegen: r(shieldRegen),
+    powerOutput: r(powerOutput), powerDraw: r(totalMinDraw), powerBalance: r(powerOutput - totalMinDraw),
+    coolingRate: r(coolingRate), thermalOutput: r(thermalOutput), thermalBalance: r(coolingRate - thermalOutput),
+    emSignature: r(emSig), irSignature: r(irSig), effectiveSpeed, effectiveSpeedLabel,
+    powerNetwork: { totalOutput: totalPO, totalAllocated, totalMinDraw: Math.round(totalMinDraw), consumptionPercent, freePoints: totalPO - totalAllocated, isOverloaded: consumptionPercent > 100, categories: cats, activeCategories },
     summary,
   };
 }
@@ -217,195 +243,131 @@ function computeStats(
 // Store
 // =============================================================================
 
-interface LoadoutState {
-  // Data
-  shipId: string | null;
-  shipInfo: ShipInfo | null;
-  hardpoints: ResolvedHardpoint[];
-  overrides: Map<string, EquippedItem | null>;
-  isLoading: boolean;
-  error: string | null;
+const ZERO_ALLOC: Record<PowerCategory, number> = { weapons: 0, thrusters: 0, shields: 0, quantum: 0, radar: 0, coolers: 0 };
+const EMPTY_NET: PowerNetworkState = { totalOutput: 0, totalAllocated: 0, totalMinDraw: 0, consumptionPercent: 0, freePoints: 0, isOverloaded: false, categories: (() => { const c = {} as any; for (const k of POWER_CATEGORIES) c[k] = emptyCat(); return c; })(), activeCategories: [] };
+const EMPTY_STATS: ComputedStats = { totalDps: 0, totalAlpha: 0, shieldHp: 0, shieldRegen: 0, powerOutput: 0, powerDraw: 0, powerBalance: 0, coolingRate: 0, thermalOutput: 0, thermalBalance: 0, emSignature: 0, irSignature: 0, effectiveSpeed: null, effectiveSpeedLabel: "SCM", powerNetwork: EMPTY_NET, summary: { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0, activeComponents: 0, totalComponents: 0 } };
 
-  // Computed (recalculated by getStats)
+interface LoadoutState {
+  shipId: string | null; shipInfo: ShipInfo | null;
+  hardpoints: ResolvedHardpoint[]; overrides: Map<string, EquippedItem | null>;
+  componentStates: Record<string, boolean>; flightMode: FlightMode;
+  allocatedPower: Record<PowerCategory, number>;
+  isLoading: boolean; error: string | null;
+
   getStats: () => ComputedStats;
   getEffectiveItem: (hpId: string) => EquippedItem | null;
+  isComponentOn: (hpName: string) => boolean;
   hasChanges: () => boolean;
   getWeaponHardpoints: () => ResolvedHardpoint[];
   getSystemHardpoints: () => ResolvedHardpoint[];
-
-  // Actions
-  loadShip: (id: string) => Promise<void>;
+  loadShip: (id: string, buildParam?: string | null) => Promise<void>;
   equipItem: (hardpointId: string, item: EquippedItem) => void;
   clearSlot: (hardpointId: string) => void;
   resetAll: () => void;
-  toShareableString: () => string;
-  fromShareableString: (encoded: string) => void;
+  encodeBuild: () => string;
+  toggleComponent: (hpName: string) => void;
+  setFlightMode: (mode: FlightMode) => void;
+  setAllocatedPower: (cat: PowerCategory, points: number) => void;
+  autoAllocatePower: () => void;
 }
 
-const WEAPON_CATS = new Set(["WEAPON", "TURRET", "MISSILE_RACK"]);
-const SYSTEM_CATS = new Set(["SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "UTILITY"]);
-
-const EMPTY_STATS: ComputedStats = {
-  totalDps: 0, totalAlpha: 0, shieldHp: 0, shieldRegen: 0,
-  powerOutput: 0, powerDraw: 0, powerBalance: 0,
-  coolingRate: 0, thermalOutput: 0, thermalBalance: 0,
-  emSignature: 0, irSignature: 0,
-  summary: { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0 },
-};
-
 export const useLoadoutStore = create<LoadoutState>((set, get) => ({
-  shipId: null,
-  shipInfo: null,
-  hardpoints: [],
-  overrides: new Map(),
-  isLoading: false,
-  error: null,
+  shipId: null, shipInfo: null, hardpoints: [], overrides: new Map(),
+  componentStates: {}, flightMode: "SCM" as FlightMode,
+  allocatedPower: { ...ZERO_ALLOC }, isLoading: false, error: null,
 
-  // ── Computed ──
-
-  getStats: () => {
-    const { hardpoints, overrides } = get();
-    if (hardpoints.length === 0) return EMPTY_STATS;
-    return computeStats(hardpoints, overrides);
-  },
-
-  getEffectiveItem: (hpId: string) => {
-    const { hardpoints, overrides } = get();
-    if (overrides.has(hpId)) return overrides.get(hpId) ?? null;
-    const hp = hardpoints.find((h) => h.id === hpId);
-    return hp?.defaultItem ?? null;
-  },
-
+  getStats: () => { const s = get(); return s.hardpoints.length === 0 ? EMPTY_STATS : computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, s.allocatedPower, s.shipInfo); },
+  getEffectiveItem: (hpId) => { const { hardpoints, overrides } = get(); if (overrides.has(hpId)) return overrides.get(hpId) ?? null; return hardpoints.find(h => h.id === hpId)?.defaultItem ?? null; },
+  isComponentOn: (hpName) => get().componentStates[hpName] !== false,
   hasChanges: () => get().overrides.size > 0,
+  getWeaponHardpoints: () => get().hardpoints.filter(hp => WEAPON_CATS.has(hp.resolvedCategory)),
+  getSystemHardpoints: () => get().hardpoints.filter(hp => SYSTEM_CATS.has(hp.resolvedCategory)),
 
-  getWeaponHardpoints: () => get().hardpoints.filter((hp) => WEAPON_CATS.has(hp.resolvedCategory)),
-
-  getSystemHardpoints: () => get().hardpoints.filter((hp) => SYSTEM_CATS.has(hp.resolvedCategory)),
-
-  // ── Actions ──
-
-  loadShip: async (id: string) => {
+  loadShip: async (id, buildParam) => {
     set({ isLoading: true, error: null });
     try {
-      const res = await fetch(`/api/ships/${encodeURIComponent(id)}`);
-      if (!res.ok) throw new Error("Failed to load ship");
+      const res = await fetch("/api/ships/" + encodeURIComponent(id));
+      if (!res.ok) throw new Error("HTTP " + res.status);
       const json = await res.json();
-      const data = json.data;
-      const shipData = data.ship;
+      const data = json.data; const sd = data?.ship;
 
       const shipInfo: ShipInfo = {
-        id: data.id, reference: data.reference,
-        name: data.name, localizedName: data.localizedName,
-        manufacturer: data.manufacturer, gameVersion: data.gameVersion,
-        scmSpeed: shipData?.scmSpeed ?? shipData?.maxSpeed ?? null,
-        afterburnerSpeed: shipData?.afterburnerSpeed ?? null,
-        pitchRate: shipData?.pitchRate ?? null,
-        yawRate: shipData?.yawRate ?? null,
-        rollRate: shipData?.rollRate ?? null,
-        crew: shipData?.maxCrew ?? null,
-        cargo: shipData?.cargo ?? null,
-        role: shipData?.role ?? null,
-        focus: shipData?.focus ?? null,
+        id: data.id ?? "", reference: data.reference ?? "", name: data.name ?? "",
+        localizedName: data.localizedName ?? null, manufacturer: data.manufacturer ?? null,
+        gameVersion: data.gameVersion ?? "",
+        scmSpeed: toNumOrNull(sd?.scmSpeed ?? sd?.maxSpeed),
+        afterburnerSpeed: toNumOrNull(sd?.afterburnerSpeed),
+        pitchRate: toNumOrNull(sd?.pitchRate), yawRate: toNumOrNull(sd?.yawRate),
+        rollRate: toNumOrNull(sd?.rollRate),
+        crew: sd?.maxCrew ?? null, cargo: sd?.cargo ?? null,
+        role: sd?.role ?? null, focus: sd?.focus ?? null,
       };
 
-      // Resolve hardpoints from API data (supports both flat and raw)
-      const rawHps: any[] = json.flatHardpoints
-        ?? data.hardpoints
-        ?? [];
+      // Parse flatHardpoints with children
+      const rawHps: any[] = json.flatHardpoints ?? [];
+      const resolved: ResolvedHardpoint[] = rawHps.map((hp: any) => {
+        const item = parseEquipped(hp.equippedItem);
 
-      const resolved: ResolvedHardpoint[] = rawHps
-        .map((hp: any) => {
-          const eq = hp.equippedItem;
-          const item: EquippedItem | null = eq ? {
-            id: eq.id ?? "", reference: eq.reference ?? "",
-            name: eq.name ?? "", localizedName: eq.localizedName ?? null,
-            className: eq.className ?? null, type: eq.type ?? "OTHER",
-            size: eq.size ?? null, grade: eq.grade ?? null,
-            manufacturer: eq.manufacturer ?? null,
-            componentStats: eq.componentStats ?? null,
-          } : null;
+        // Parse children (turret guns, rack missiles)
+        const rawChildren: any[] = hp.children ?? [];
+        const children: ResolvedChild[] = rawChildren.map((ch: any) => ({
+          id: ch.id ?? "",
+          hardpointName: ch.hardpointName ?? "",
+          category: ch.category ?? "WEAPON",
+          minSize: ch.minSize ?? 0,
+          maxSize: ch.maxSize ?? 0,
+          isFixed: ch.isFixed ?? false,
+          equippedItem: parseEquipped(ch.equippedItem),
+        })).filter((ch: ResolvedChild) => ch.hardpointName); // Skip empty
 
-          const cat = inferCategory(
-            hp.category ?? hp.resolvedCategory ?? "OTHER",
-            item,
-            hp.hardpointName ?? ""
-          );
+        return {
+          id: hp.id ?? "", hardpointName: hp.hardpointName ?? "",
+          originalCategory: hp.category ?? "OTHER",
+          resolvedCategory: inferCategory(hp.category ?? "OTHER", item, hp.hardpointName ?? ""),
+          minSize: hp.minSize ?? 0, maxSize: hp.maxSize ?? 0,
+          isFixed: hp.isFixed ?? false, defaultItem: item, children,
+        };
+      }).filter((hp: ResolvedHardpoint) => USEFUL.has(hp.resolvedCategory));
 
-          return {
-            id: hp.id ?? "",
-            hardpointName: hp.hardpointName ?? "",
-            originalCategory: hp.category ?? "OTHER",
-            resolvedCategory: cat,
-            minSize: hp.minSize ?? 0,
-            maxSize: hp.maxSize ?? 0,
-            isFixed: hp.isFixed ?? false,
-            defaultItem: item,
-          };
-        })
-        .filter((hp: ResolvedHardpoint) => USEFUL.has(hp.resolvedCategory));
-
-      set({
-        shipId: id,
-        shipInfo,
-        hardpoints: resolved,
-        overrides: new Map(),
-        isLoading: false,
-        error: null,
-      });
-    } catch (err) {
-      set({
-        isLoading: false,
-        error: err instanceof Error ? err.message : "Unknown error",
-      });
-    }
-  },
-
-  equipItem: (hardpointId: string, item: EquippedItem) => {
-    set((state) => {
-      const next = new Map(state.overrides);
-      next.set(hardpointId, item);
-      return { overrides: next };
-    });
-  },
-
-  clearSlot: (hardpointId: string) => {
-    set((state) => {
-      const next = new Map(state.overrides);
-      next.set(hardpointId, null);
-      return { overrides: next };
-    });
-  },
-
-  resetAll: () => set({ overrides: new Map() }),
-
-  // ── Serialization for URL sharing ──
-
-  toShareableString: () => {
-    const { overrides } = get();
-    if (overrides.size === 0) return "";
-    const entries: Record<string, string | null> = {};
-    overrides.forEach((item, hpId) => {
-      entries[hpId] = item?.reference ?? null;
-    });
-    return btoa(JSON.stringify(entries));
-  },
-
-  fromShareableString: (encoded: string) => {
-    if (!encoded) return;
-    try {
-      const entries: Record<string, string | null> = JSON.parse(atob(encoded));
-      // We'd need to resolve references to full items via API
-      // For now, store as placeholder — the UI can resolve on mount
-      const next = new Map<string, EquippedItem | null>();
-      for (const [hpId, ref] of Object.entries(entries)) {
-        if (ref === null) {
-          next.set(hpId, null);
-        }
-        // Items with references need async resolution — handled by the UI
+      // Build param overrides
+      let restored = new Map<string, EquippedItem | null>();
+      if (buildParam) {
+        try {
+          const d = JSON.parse(atob(buildParam));
+          if (typeof d === "object" && d) {
+            for (const hp of resolved) {
+              const ref = (d as any)[hp.hardpointName];
+              if (ref === undefined) continue;
+              if (ref === null) { restored.set(hp.id, null); continue; }
+              const f = resolved.map(h => h.defaultItem).filter((i): i is EquippedItem => !!i).find(i => i.reference === ref || i.className === ref);
+              if (f) restored.set(hp.id, f);
+            }
+          }
+        } catch {}
       }
-      set({ overrides: next });
-    } catch {
-      console.error("Failed to parse shareable loadout string");
+
+      // Initialize componentStates: all ON, including children
+      const states: Record<string, boolean> = {};
+      for (const hp of resolved) {
+        states[hp.hardpointName] = true;
+        for (const ch of hp.children) {
+          states[ch.hardpointName] = true;
+        }
+      }
+
+      set({ shipId: id, shipInfo, hardpoints: resolved, overrides: restored, componentStates: states, flightMode: "SCM", allocatedPower: { ...ZERO_ALLOC }, isLoading: false, error: null });
+      setTimeout(() => get().autoAllocatePower(), 0);
+    } catch (err) {
+      set({ isLoading: false, error: err instanceof Error ? err.message : "Unknown error" });
     }
   },
+
+  equipItem: (hpId, item) => { set(s => { const n = new Map(s.overrides); n.set(hpId, item); return { overrides: n }; }); setTimeout(() => get().autoAllocatePower(), 0); },
+  clearSlot: (hpId) => { set(s => { const n = new Map(s.overrides); n.set(hpId, null); return { overrides: n }; }); setTimeout(() => get().autoAllocatePower(), 0); },
+  toggleComponent: (hpName) => { set(s => ({ componentStates: { ...s.componentStates, [hpName]: s.componentStates[hpName] === false } })); setTimeout(() => get().autoAllocatePower(), 0); },
+  resetAll: () => { const fresh: Record<string, boolean> = {}; for (const hp of get().hardpoints) { fresh[hp.hardpointName] = true; for (const ch of hp.children) fresh[ch.hardpointName] = true; } set({ overrides: new Map(), componentStates: fresh, flightMode: "SCM" as FlightMode, allocatedPower: { ...ZERO_ALLOC } }); setTimeout(() => get().autoAllocatePower(), 0); },
+  setFlightMode: (mode) => set({ flightMode: mode }),
+  setAllocatedPower: (cat, points) => { const s = get(); const st = s.getStats(); const alloc = { ...s.allocatedPower }; const cl = Math.max(0, points); const d = cl - alloc[cat]; const tot = Object.values(alloc).reduce((a, b) => a + b, 0); if (d > 0 && tot + d > st.powerNetwork.totalOutput) return; alloc[cat] = cl; set({ allocatedPower: alloc }); },
+  autoAllocatePower: () => { const s = get(); const probe = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, ZERO_ALLOC, s.shipInfo); const total = probe.powerNetwork.totalOutput; const alloc: Record<PowerCategory, number> = { ...ZERO_ALLOC }; let rem = total; for (const c of POWER_CATEGORIES) { if (probe.powerNetwork.categories[c].activeCount === 0) continue; const need = Math.ceil(probe.powerNetwork.categories[c].minDraw); const give = Math.min(need, rem); alloc[c] = give; rem -= give; } if (rem > 0) { const act = POWER_CATEGORIES.filter(c => alloc[c] > 0 || probe.powerNetwork.categories[c].activeCount > 0); let i = 0; while (rem > 0 && act.length > 0) { alloc[act[i % act.length]]++; rem--; i++; } } set({ allocatedPower: alloc }); },
+  encodeBuild: () => { const { hardpoints, overrides } = get(); if (overrides.size === 0) return ""; const e: Record<string, string | null> = {}; for (const [hpId, item] of overrides.entries()) { const hp = hardpoints.find(h => h.id === hpId); if (hp) e[hp.hardpointName] = item?.reference ?? null; } return btoa(JSON.stringify(e)); },
 }));

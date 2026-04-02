@@ -1,6 +1,6 @@
 // =============================================================================
-// AL FILO — Loadout UI constants
-// Shared across LoadoutBuilder, HardpointSlot, ComponentPicker
+// AL FILO — Loadout UI constants v2
+// Fixed: getKeyStat reads both v1 and v2 stat field names
 // =============================================================================
 
 export const CAT_COLORS: Record<string, string> = {
@@ -30,15 +30,53 @@ export function fmtPrice(v: number): string {
   return v.toString();
 }
 
+/** Try multiple field names, return first non-null number */
+function tryNum(stats: Record<string, any>, ...keys: string[]): number | null {
+  for (const k of keys) {
+    const v = stats[k];
+    if (v !== null && v !== undefined) {
+      const n = Number(v);
+      if (!isNaN(n) && n !== 0) return n;
+    }
+  }
+  return null;
+}
+
 export function getKeyStat(category: string, stats: Record<string, any> | null | undefined): { v: string; l: string } | null {
   if (!stats || typeof stats !== "object") return null;
+
   switch (category) {
-    case "WEAPON": case "TURRET": return stats.dps ? { v: Number(stats.dps).toFixed(1), l: "DPS" } : (stats.alphaDamage ? { v: fmtStat(Number(stats.alphaDamage)), l: "Alpha" } : null);
-    case "MISSILE_RACK": return stats.alphaDamage ? { v: fmtStat(Number(stats.alphaDamage)), l: "DMG" } : (stats.damage ? { v: fmtStat(Number(stats.damage)), l: "DMG" } : null);
-    case "SHIELD": return stats.shieldHp ? { v: fmtStat(Number(stats.shieldHp)), l: "HP" } : (stats.maxHp ? { v: fmtStat(Number(stats.maxHp)), l: "HP" } : null);
-    case "POWER_PLANT": return stats.powerOutput ? { v: fmtStat(Number(stats.powerOutput)), l: "OUT" } : null;
-    case "COOLER": return stats.coolingRate ? { v: fmtStat(Number(stats.coolingRate)), l: "RATE" } : null;
-    case "QUANTUM_DRIVE": return stats.quantumSpoolUp ? { v: Number(stats.quantumSpoolUp).toFixed(1) + "s", l: "SPOOL" } : (stats.spoolUpTime ? { v: Number(stats.spoolUpTime).toFixed(1) + "s", l: "SPOOL" } : null);
-    default: return stats.powerDraw ? { v: fmtStat(Number(stats.powerDraw)), l: "PWR" } : null;
+    case "WEAPON":
+    case "TURRET": {
+      const dps = tryNum(stats, "dps");
+      if (dps !== null) return { v: dps.toFixed(1), l: "DPS" };
+      const alpha = tryNum(stats, "alphaDamage", "damage");
+      if (alpha !== null) return { v: fmtStat(alpha), l: "Alpha" };
+      return null;
+    }
+    case "MISSILE_RACK": {
+      const dmg = tryNum(stats, "alphaDamage", "damage");
+      return dmg !== null ? { v: fmtStat(dmg), l: "DMG" } : null;
+    }
+    case "SHIELD": {
+      const hp = tryNum(stats, "shieldHp", "maxHp");
+      return hp !== null ? { v: fmtStat(hp), l: "HP" } : null;
+    }
+    case "POWER_PLANT": {
+      const out = tryNum(stats, "powerOutput");
+      return out !== null ? { v: fmtStat(out), l: "OUT" } : null;
+    }
+    case "COOLER": {
+      const rate = tryNum(stats, "coolingRate");
+      return rate !== null ? { v: fmtStat(rate), l: "RATE" } : null;
+    }
+    case "QUANTUM_DRIVE": {
+      const spool = tryNum(stats, "quantumSpoolUp", "spoolUpTime");
+      return spool !== null ? { v: spool.toFixed(1) + "s", l: "SPOOL" } : null;
+    }
+    default: {
+      const pwr = tryNum(stats, "powerDraw");
+      return pwr !== null ? { v: fmtStat(pwr), l: "PWR" } : null;
+    }
   }
 }
