@@ -1,12 +1,13 @@
+﻿export const dynamic = 'force-dynamic';
 // =============================================================================
-// AL FILO — GET /api/components
+// AL FILO â€” GET /api/components
 //
 // Busca componentes compatibles para un hardpoint.
-// Parámetros:
-//   ?type=WEAPON&maxSize=3              → armas de tamaño ≤ 3
-//   ?type=SHIELD&maxSize=2&search=shimm → escudos S2 que matcheen "shimm"
+// ParÃ¡metros:
+//   ?type=WEAPON&maxSize=3              â†’ armas de tamaÃ±o â‰¤ 3
+//   ?type=SHIELD&maxSize=2&search=shimm â†’ escudos S2 que matcheen "shimm"
 //   ?type=POWER_PLANT&minSize=1&maxSize=2&manufacturer=AEG
-//   ?limit=50                           → máximo de resultados
+//   ?limit=50                           â†’ mÃ¡ximo de resultados
 //
 // Devuelve items con sus componentStats para mostrar en el selector.
 // =============================================================================
@@ -17,7 +18,7 @@ import { Prisma } from "@prisma/client";
 
 export const revalidate = 300;
 
-// Mapeo de categoría de hardpoint → tipos de item compatibles.
+// Mapeo de categorÃ­a de hardpoint â†’ tipos de item compatibles.
 // Un hardpoint WEAPON acepta items de tipo WEAPON.
 // Un hardpoint TURRET acepta items de tipo TURRET.
 // Esto permite que el selector muestre solo items que realmente caben.
@@ -47,11 +48,11 @@ export async function GET(request: NextRequest) {
     const grade        = searchParams.get("grade")?.trim() || undefined;
     const limit        = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
 
-    // ── Determinar qué tipos de item buscar ──
+    // â”€â”€ Determinar quÃ© tipos de item buscar â”€â”€
     let itemTypes: string[] = [];
 
     if (type) {
-      // Tipo explícito pasado por el frontend
+      // Tipo explÃ­cito pasado por el frontend
       itemTypes = [type];
     } else if (category) {
       // Derivar del tipo de hardpoint
@@ -60,18 +61,18 @@ export async function GET(request: NextRequest) {
 
     if (itemTypes.length === 0) {
       return NextResponse.json(
-        { error: "Se requiere 'type' o 'category' como parámetro" },
+        { error: "Se requiere 'type' o 'category' como parÃ¡metro" },
         { status: 400 }
       );
     }
 
-    // ── Construir WHERE ──
+    // â”€â”€ Construir WHERE â”€â”€
     const where: Prisma.ItemWhereInput = {
       type: { in: itemTypes as any },
     };
 
-    // Filtro de tamaño: el item debe caber en el hardpoint
-    // Un hardpoint S3 acepta items de tamaño ≤ 3
+    // Filtro de tamaÃ±o: el item debe caber en el hardpoint
+    // Un hardpoint S3 acepta items de tamaÃ±o â‰¤ 3
     if (maxSize < 99) {
       where.size = { lte: maxSize, gte: minSize > 0 ? minSize : undefined };
     }
@@ -93,7 +94,7 @@ export async function GET(request: NextRequest) {
       where.grade = { equals: grade, mode: "insensitive" };
     }
 
-    // ── Query ──
+    // â”€â”€ Query â”€â”€
     const [components, total] = await Promise.all([
       prisma.item.findMany({
         where,
@@ -161,3 +162,4 @@ export async function GET(request: NextRequest) {
     );
   }
 }
+

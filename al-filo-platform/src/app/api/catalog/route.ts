@@ -1,25 +1,26 @@
+﻿export const dynamic = 'force-dynamic';
 // =============================================================================
-// AL FILO — GET /api/catalog
+// AL FILO â€” GET /api/catalog
 //
 // Universal item catalog endpoint. One route to query everything.
 //
 // Query params:
-//   type       — ItemType filter (WEAPON, SHIELD, SHIP, etc.)
-//   types      — comma-separated list of types (type=WEAPON,TURRET)
-//   size       — exact size match
-//   minSize    — minimum size
-//   maxSize    — maximum size
-//   grade      — grade filter (A, B, C, D)
-//   manufacturer — manufacturer name (case-insensitive)
-//   search     — text search across name, localizedName, className, manufacturer
-//   shopId     — only items sold at this shop
-//   minPrice   — minimum buy price
-//   maxPrice   — maximum buy price
-//   sortBy     — field to sort (name, size, manufacturer, dps, shieldHp, powerOutput, price)
-//   sortOrder  — asc or desc
-//   page       — page number (default 1)
-//   limit      — items per page (default 50, max 200)
-//   include    — comma-separated: stats,shops,ship (controls what's included)
+//   type       â€” ItemType filter (WEAPON, SHIELD, SHIP, etc.)
+//   types      â€” comma-separated list of types (type=WEAPON,TURRET)
+//   size       â€” exact size match
+//   minSize    â€” minimum size
+//   maxSize    â€” maximum size
+//   grade      â€” grade filter (A, B, C, D)
+//   manufacturer â€” manufacturer name (case-insensitive)
+//   search     â€” text search across name, localizedName, className, manufacturer
+//   shopId     â€” only items sold at this shop
+//   minPrice   â€” minimum buy price
+//   maxPrice   â€” maximum buy price
+//   sortBy     â€” field to sort (name, size, manufacturer, dps, shieldHp, powerOutput, price)
+//   sortOrder  â€” asc or desc
+//   page       â€” page number (default 1)
+//   limit      â€” items per page (default 50, max 200)
+//   include    â€” comma-separated: stats,shops,ship (controls what's included)
 //
 // The `include` param controls which Prisma relations are fetched.
 // By default, it includes the type-appropriate stats table.
@@ -39,7 +40,7 @@ import { Prisma, ItemType } from "@prisma/client";
 
 export const revalidate = 300;
 
-// Map ItemType → which stats relation to include
+// Map ItemType â†’ which stats relation to include
 const TYPE_STATS_MAP: Record<string, string> = {
   WEAPON: "weaponStats",
   TURRET: "weaponStats",
@@ -80,7 +81,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
-    // ── Parse params ──
+    // â”€â”€ Parse params â”€â”€
     const typeParam = searchParams.get("type")?.trim();
     const typesParam = searchParams.get("types")?.trim();
     const size = searchParams.get("size") ? parseInt(searchParams.get("size")!, 10) : undefined;
@@ -99,12 +100,12 @@ export async function GET(request: NextRequest) {
     const includeParam = searchParams.get("include")?.trim() || "stats";
     const includeSet = new Set(includeParam.split(",").map((s) => s.trim()));
 
-    // ── Resolve types ──
+    // â”€â”€ Resolve types â”€â”€
     let types: string[] = [];
     if (typeParam) types = [typeParam];
     else if (typesParam) types = typesParam.split(",").map((t) => t.trim());
 
-    // ── Build WHERE ──
+    // â”€â”€ Build WHERE â”€â”€
     const where: Prisma.ItemWhereInput = {};
 
     if (types.length === 1) {
@@ -148,7 +149,7 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // ── Build INCLUDE (dynamic based on type and include param) ──
+    // â”€â”€ Build INCLUDE (dynamic based on type and include param) â”€â”€
     const include: Record<string, any> = {};
 
     if (includeSet.has("stats")) {
@@ -200,7 +201,7 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // ── Build ORDER BY ──
+    // â”€â”€ Build ORDER BY â”€â”€
     let orderBy: any;
 
     if (sortBy === "price") {
@@ -215,7 +216,7 @@ export async function GET(request: NextRequest) {
       orderBy = { name: "asc" };
     }
 
-    // ── Execute queries ──
+    // â”€â”€ Execute queries â”€â”€
     const [items, total] = await Promise.all([
       prisma.item.findMany({
         where,
@@ -227,7 +228,7 @@ export async function GET(request: NextRequest) {
       prisma.item.count({ where }),
     ]);
 
-    // ── Strip rawData from response ──
+    // â”€â”€ Strip rawData from response â”€â”€
     const cleaned = items.map((item: any) => {
       const { rawData, ...rest } = item;
       return rest;
@@ -253,7 +254,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("[API /catalog] Error:", error);
     return NextResponse.json(
-      { error: "Error en el catálogo" },
+      { error: "Error en el catÃ¡logo" },
       { status: 500 }
     );
   }
@@ -283,3 +284,4 @@ function buildStatsInclude(types: string[]): Record<string, boolean> {
   }
   return include;
 }
+

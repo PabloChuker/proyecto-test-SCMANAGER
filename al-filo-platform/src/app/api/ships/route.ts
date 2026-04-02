@@ -1,8 +1,9 @@
+﻿export const dynamic = 'force-dynamic';
 // =============================================================================
-// AL FILO — GET /api/ships (v2 — schema v2 compatible)
+// AL FILO â€” GET /api/ships (v2 â€” schema v2 compatible)
 //
 // Changes from v1:
-//   - ship.maxSpeed → ship.scmSpeed
+//   - ship.maxSpeed â†’ ship.scmSpeed
 //   - ship.afterburnerSpeed added to select
 //   - sortBy "maxSpeed" renamed to "scmSpeed" internally
 // =============================================================================
@@ -130,3 +131,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Error al obtener las naves" }, { status: 500 });
   }
 }
+

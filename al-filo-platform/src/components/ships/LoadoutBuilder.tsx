@@ -21,7 +21,7 @@ const CAT_LABELS: Record<string, string> = { SHIELD: "SHIELDS", POWER_PLANT: "PO
 const CAT_ICONS: Record<string, string> = { SHIELD: "â—‡", POWER_PLANT: "âš¡", COOLER: "â„", QUANTUM_DRIVE: "â—ˆ", MINING: "â›", UTILITY: "â—Ž" };
 const CAT_ACCENT: Record<string, string> = { SHIELD: "#3b82f6", POWER_PLANT: "#22c55e", COOLER: "#06b6d4", QUANTUM_DRIVE: "#a855f7", MINING: "#f472b6", UTILITY: "#94a3b8" };
 
-export function LoadoutBuilder({ shipId }: { shipId: string }) {
+export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }) {
   const searchParams = useSearchParams();
   const store = useLoadoutStore();
   const { shipInfo, isLoading, error, loadShip, getStats, getEffectiveItem, hasChanges, hardpoints, equipItem, clearSlot, resetAll, overrides, encodeBuild, toggleComponent, isComponentOn, flightMode, setFlightMode } = store;
@@ -147,4 +147,5 @@ function BR({ l, v, a, b, pc, nc }: { l: string; v: number; a: number; b: number
   const bs = pos ? { left: "50%", width: pct + "%", backgroundColor: color } : { left: (50 - pct) + "%", width: pct + "%", backgroundColor: color };
   return <div className="space-y-0.5"><div className="flex items-baseline justify-between"><span className="text-[8px] font-mono text-zinc-600 tracking-wider uppercase">{l}</span><span className="text-[10px] font-mono" style={{ color }}>{pos ? "+" : ""}{fmtStat(v)}</span></div><div className="relative h-1 w-full bg-zinc-800/60 rounded-full overflow-hidden"><div className="absolute left-1/2 top-0 w-px h-full bg-zinc-600/30 z-10" /><div className="absolute top-0 h-full rounded-full transition-all duration-500" style={bs} /></div><div className="flex justify-between text-[7px] font-mono text-zinc-700"><span>{fmtStat(a)} out</span><span>{fmtStat(b)} draw</span></div></div>;
 }
+
 
