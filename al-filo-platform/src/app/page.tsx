@@ -1,4 +1,4 @@
-﻿import LoadoutBuilder from "@/components/ships/LoadoutBuilder";
+import LoadoutBuilder from '../components/ships/LoadoutBuilder';
 
 export default function Home() {
   return (
