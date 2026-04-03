@@ -23,10 +23,12 @@
 // =============================================================================
 
 import { Suspense } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import { ShipsGrid } from "./ShipsGrid";
 
 export const metadata = {
-  title: "Naves — Al Filo",
+  title: "Ship Database — SC LABS",
   description: "Base de datos completa de naves de Star Citizen. Filtrá por fabricante, rol y comparativas.",
 };
 
@@ -35,8 +37,8 @@ export default function ShipsPage() {
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
       {/* ── Background atmosférico ── */}
       <div className="fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(6,182,212,0.04),transparent_60%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(139,92,246,0.03),transparent_50%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(232,137,12,0.04),transparent_60%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(93,160,7,0.03),transparent_50%)]" />
       </div>
 
       {/* ── Header ── */}
@@ -44,16 +46,18 @@ export default function ShipsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
-              {/* Logo placeholder */}
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-sm bg-gradient-to-br from-cyan-500 to-cyan-700
-                                flex items-center justify-center text-[10px] font-bold tracking-tighter text-zinc-950">
-                  AF
-                </div>
+              <Link href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+                <Image
+                  src="/sclabs-logo.png"
+                  alt="SC LABS"
+                  width={32}
+                  height={32}
+                  className="rounded-sm"
+                />
                 <span className="text-sm font-medium tracking-[0.2em] uppercase text-zinc-400">
-                  Al Filo
+                  SC Labs
                 </span>
-              </div>
+              </Link>
               <div className="h-5 w-px bg-zinc-800" />
               <span className="text-xs tracking-[0.15em] uppercase text-zinc-600">
                 Ship Database
@@ -62,7 +66,8 @@ export default function ShipsPage() {
 
             {/* Nav links placeholder */}
             <nav className="hidden sm:flex items-center gap-6 text-xs tracking-[0.12em] uppercase text-zinc-600">
-              <span className="text-cyan-400 border-b border-cyan-400/30 pb-0.5">Naves</span>
+              <span className="text-amber-500 border-b border-amber-500/30 pb-0.5">Naves</span>
+              <Link href="/compare" className="hover:text-zinc-400 transition-colors">Comparar</Link>
               <span className="hover:text-zinc-400 cursor-not-allowed opacity-40">Minería</span>
               <span className="hover:text-zinc-400 cursor-not-allowed opacity-40">Crafting</span>
             </nav>
