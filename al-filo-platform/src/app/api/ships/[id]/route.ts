@@ -1,9 +1,10 @@
 // =============================================================================
-// AL FILO — GET /api/ships/[id] v8 (Raw SQL — actual DB schema)
+// AL FILO — GET /api/ships/[id] v9 (Resilient Raw SQL)
 //
-// Queries ships + ship_hardpoints + ship_flight_stats directly.
-// Component tables may be empty (Xolii populating them), so equippedItem
-// is resolved only when the corresponding component row exists.
+// Queries ships + ship_hardpoints directly. Satellite tables (flight_stats,
+// fuel, etc.) loaded separately with try/catch to handle column name
+// mismatches (camelCase from Prisma vs snake_case).
+// Component tables may be empty (Xolii populating them).
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -46,6 +47,15 @@ function inferCategory(name: string, hp: any): string {
   return "OTHER";
 }
 
+// ─── Safe column accessor (handles camelCase and snake_case) ────────────────
+
+function col(row: any, ...keys: string[]): any {
+  for (const k of keys) {
+    if (row[k] !== undefined && row[k] !== null) return row[k];
+  }
+  return null;
+}
+
 // ─── Main handler ───────────────────────────────────────────────────────────
 
 export async function GET(
@@ -55,24 +65,14 @@ export async function GET(
   try {
     const { id } = await params;
 
-    // ── 1. Find the ship (flexible matching: exact, case-insensitive, partial) ──
+    // ── 1. Find the ship (just the ships table, no JOINs) ──
     const shipRows: any[] = await prisma.$queryRawUnsafe(
-      `SELECT s.*,
-              sfs.pitch as flight_pitch, sfs.yaw as flight_yaw, sfs.roll as flight_roll,
-              sfs.scm_speed as flight_scm, sfs.max_speed as flight_max,
-              sfs.boost_speed_forward, sfs.mass_total, sfs.mass_loadout,
-              sfs.accel_forward, sfs.accel_backward, sfs.accel_up, sfs.accel_down, sfs.accel_strafe,
-              sf.hydrogen_capacity, sf.quantum_capacity, sf.quantum_range, sf.quantum_speed,
-              sf.quantum_spool_time, sf.shield_hp_total, sf.shield_regen_total,
-              sf.power_generation, sf.cooling_generation
-       FROM ships s
-       LEFT JOIN ship_flight_stats sfs ON sfs.ship_id = s.id
-       LEFT JOIN ship_fuel sf ON sf.ship_id = s.id
-       WHERE s.reference = $1
-          OR s.reference ILIKE $1
-          OR s.name ILIKE $1
-          OR s.id::text = $1
-          OR s.reference ILIKE '%' || $1 || '%'
+      `SELECT * FROM ships
+       WHERE reference = $1
+          OR reference ILIKE $1
+          OR name ILIKE $1
+          OR id::text = $1
+          OR reference ILIKE '%' || $1 || '%'
        LIMIT 1`,
       id,
     );
@@ -83,34 +83,59 @@ export async function GET(
 
     const ship = shipRows[0];
 
-    // ── 2. Get hardpoints ──
+    // ── 2. Load satellite data separately (resilient to column name issues) ──
+    let flightStats: any = null;
+    let fuelStats: any = null;
+
+    try {
+      const fsRows: any[] = await prisma.$queryRawUnsafe(
+        `SELECT * FROM ship_flight_stats WHERE ship_id = $1 LIMIT 1`,
+        ship.id,
+      );
+      if (fsRows.length > 0) flightStats = fsRows[0];
+    } catch (e) {
+      console.warn("[ships/[id]] Could not load flight stats:", e);
+    }
+
+    try {
+      const fRows: any[] = await prisma.$queryRawUnsafe(
+        `SELECT * FROM ship_fuel WHERE ship_id = $1 LIMIT 1`,
+        ship.id,
+      );
+      if (fRows.length > 0) fuelStats = fRows[0];
+    } catch (e) {
+      console.warn("[ships/[id]] Could not load fuel stats:", e);
+    }
+
+    // ── 3. Get hardpoints ──
     const hardpointRows: any[] = await prisma.$queryRawUnsafe(
       `SELECT * FROM ship_hardpoints WHERE ship_id = $1 ORDER BY max_size DESC, hardpoint_name ASC`,
       ship.id,
     );
 
-    // ── 3. Try to resolve equipped components (may be empty tables) ──
+    // ── 4. Try to resolve equipped components (may be empty tables) ──
     const weaponIds = hardpointRows.map(h => h.default_weapon_id).filter(Boolean);
     const shieldIds = hardpointRows.map(h => h.default_shield_id).filter(Boolean);
     const powerIds = hardpointRows.map(h => h.default_power_id).filter(Boolean);
     const coolerIds = hardpointRows.map(h => h.default_cooler_id).filter(Boolean);
     const quantumIds = hardpointRows.map(h => h.default_quantum_id).filter(Boolean);
 
-    // Batch-load components that exist
     const components = new Map<string, any>();
 
     const loadComponents = async (ids: string[], table: string, type: string) => {
       if (ids.length === 0) return;
       try {
+        // Use IN clause with individual params for safety
+        const placeholders = ids.map((_, i) => `$${i + 1}`).join(",");
         const rows: any[] = await prisma.$queryRawUnsafe(
-          `SELECT * FROM ${table} WHERE id = ANY($1::uuid[])`,
-          ids,
+          `SELECT * FROM ${table} WHERE id IN (${placeholders})`,
+          ...ids,
         );
         for (const row of rows) {
           components.set(row.id, { ...row, _type: type });
         }
       } catch {
-        // Table might not have data or might have different columns — skip gracefully
+        // Table might not have data — skip gracefully
       }
     };
 
@@ -122,11 +147,10 @@ export async function GET(
       loadComponents(quantumIds, "component_quantum_drives", "QUANTUM_DRIVE"),
     ]);
 
-    // ── 4. Build flat hardpoints ──
+    // ── 5. Build flat hardpoints ──
     const flatHardpoints = hardpointRows.map((hp) => {
       const category = inferCategory(hp.hardpoint_name, hp);
 
-      // Resolve equipped item from default FKs
       const defaultId =
         hp.default_weapon_id ||
         hp.default_shield_id ||
@@ -150,31 +174,44 @@ export async function GET(
         isManned: false,
         isInternal: category !== "WEAPON" && category !== "TURRET" && category !== "MISSILE_RACK",
         equippedItem,
-        children: [] as any[], // Children will be populated when turret/rack component data is available
+        children: [] as any[],
       };
     });
 
-    // ── 5. Build response ──
+    // ── 6. Build response (handle both camelCase and snake_case columns) ──
+    const scmSpeed = numOrNull(col(ship, "scm_speed", "scmSpeed"))
+      ?? numOrNull(col(flightStats, "scm_speed", "scmSpeed"));
+    const afterburnerSpeed = numOrNull(col(ship, "afterburner_speed", "afterburnerSpeed"))
+      ?? numOrNull(col(flightStats, "max_speed", "maxSpeed"));
+
     const data = {
       id: ship.id,
       reference: ship.reference,
       name: ship.name,
       localizedName: null,
       manufacturer: ship.manufacturer,
-      gameVersion: ship.game_version,
+      gameVersion: col(ship, "game_version", "gameVersion") ?? "",
       type: "SHIP",
       ship: {
-        scmSpeed: numOrNull(ship.scm_speed) ?? numOrNull(ship.flight_scm),
-        afterburnerSpeed: numOrNull(ship.afterburner_speed) ?? numOrNull(ship.flight_max),
-        pitchRate: numOrNull(ship.flight_pitch),
-        yawRate: numOrNull(ship.flight_yaw),
-        rollRate: numOrNull(ship.flight_roll),
-        maxCrew: ship.max_crew ?? null,
-        cargo: numOrNull(ship.cargo_capacity),
+        scmSpeed,
+        afterburnerSpeed,
+        pitchRate: numOrNull(col(flightStats, "pitch", "pitchRate")),
+        yawRate: numOrNull(col(flightStats, "yaw", "yawRate")),
+        rollRate: numOrNull(col(flightStats, "roll", "rollRate")),
+        maxCrew: col(ship, "max_crew", "maxCrew"),
+        cargo: numOrNull(col(ship, "cargo_capacity", "cargoCapacity", "cargo")),
         role: ship.role ?? null,
         focus: null,
         career: null,
         mass: numOrNull(ship.mass),
+        // Extra flight data
+        boostSpeedForward: numOrNull(col(flightStats, "boost_speed_forward", "boostSpeedForward")),
+        accelForward: numOrNull(col(flightStats, "accel_forward", "accelForward")),
+        // Fuel/power data
+        hydrogenCapacity: numOrNull(col(fuelStats, "hydrogen_capacity", "hydrogenCapacity")),
+        quantumRange: numOrNull(col(fuelStats, "quantum_range", "quantumRange")),
+        shieldHpTotal: numOrNull(col(fuelStats, "shield_hp_total", "shieldHpTotal")),
+        powerGeneration: numOrNull(col(fuelStats, "power_generation", "powerGeneration")),
       },
     };
 
@@ -182,9 +219,12 @@ export async function GET(
       { data, flatHardpoints },
       { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" } },
     );
-  } catch (error) {
-    console.error("[API /ships/[id]] Error:", error);
-    return NextResponse.json({ error: "Error interno" }, { status: 500 });
+  } catch (error: any) {
+    console.error("[API /ships/[id]] Error:", error?.message || error);
+    return NextResponse.json(
+      { error: "Error interno", detail: error?.message || "Unknown" },
+      { status: 500 },
+    );
   }
 }
 
@@ -198,40 +238,52 @@ function numOrNull(v: any): number | null {
 
 function buildEquippedItem(comp: any): any {
   const type = comp._type || "OTHER";
-
-  // Build componentStats from the component's columns
   const stats: Record<string, any> = {};
 
-  // Weapon stats
-  if (comp.alpha_damage != null) stats.alphaDamage = Number(comp.alpha_damage);
-  if (comp.fire_rate != null) stats.fireRate = Number(comp.fire_rate);
-  if (comp.dps != null) stats.dps = Number(comp.dps);
-  if (comp.damage_type != null) stats.damageType = comp.damage_type;
+  // Weapon stats (try both snake_case and camelCase)
+  const alphaDmg = col(comp, "alpha_damage", "alphaDamage");
+  if (alphaDmg != null) stats.alphaDamage = Number(alphaDmg);
+  const fr = col(comp, "fire_rate", "fireRate");
+  if (fr != null) stats.fireRate = Number(fr);
+  const dps = col(comp, "dps");
+  if (dps != null) stats.dps = Number(dps);
+  const dmgType = col(comp, "damage_type", "damageType");
+  if (dmgType != null) stats.damageType = dmgType;
 
   // Shield stats
-  if (comp.max_hp != null) { stats.shieldHp = Number(comp.max_hp); stats.maxHp = Number(comp.max_hp); }
-  if (comp.regen_rate != null) { stats.shieldRegen = Number(comp.regen_rate); stats.regenRate = Number(comp.regen_rate); }
+  const maxHp = col(comp, "max_hp", "maxHp");
+  if (maxHp != null) { stats.shieldHp = Number(maxHp); stats.maxHp = Number(maxHp); }
+  const regen = col(comp, "regen_rate", "regenRate");
+  if (regen != null) { stats.shieldRegen = Number(regen); stats.regenRate = Number(regen); }
 
   // Power stats
-  if (comp.power_output != null) stats.powerOutput = Number(comp.power_output);
+  const po = col(comp, "power_output", "powerOutput");
+  if (po != null) stats.powerOutput = Number(po);
 
   // Cooler stats
-  if (comp.cooling_rate != null) stats.coolingRate = Number(comp.cooling_rate);
+  const cr = col(comp, "cooling_rate", "coolingRate");
+  if (cr != null) stats.coolingRate = Number(cr);
 
   // Quantum stats
-  if (comp.max_speed != null) stats.maxSpeed = Number(comp.max_speed);
-  if (comp.fuel_rate != null) stats.fuelRate = Number(comp.fuel_rate);
+  const ms = col(comp, "max_speed", "maxSpeed");
+  if (ms != null) stats.maxSpeed = Number(ms);
+  const frt = col(comp, "fuel_rate", "fuelRate");
+  if (frt != null) stats.fuelRate = Number(frt);
 
-  // Common stats
-  if (comp.power_draw != null) stats.powerDraw = Number(comp.power_draw);
-  if (comp.thermal_output != null) stats.thermalOutput = Number(comp.thermal_output);
-  if (comp.em_signature != null) stats.emSignature = Number(comp.em_signature);
-  if (comp.ir_signature != null) stats.irSignature = Number(comp.ir_signature);
+  // Common
+  const pd = col(comp, "power_draw", "powerDraw");
+  if (pd != null) stats.powerDraw = Number(pd);
+  const to = col(comp, "thermal_output", "thermalOutput");
+  if (to != null) stats.thermalOutput = Number(to);
+  const em = col(comp, "em_signature", "emSignature");
+  if (em != null) stats.emSignature = Number(em);
+  const ir = col(comp, "ir_signature", "irSignature");
+  if (ir != null) stats.irSignature = Number(ir);
 
   // Compute DPS if missing
   if (!stats.dps && stats.alphaDamage && stats.fireRate) {
-    const a = stats.alphaDamage, fr = stats.fireRate;
-    if (a > 0 && fr > 0) stats.dps = Math.round(a * (fr / 60) * 100) / 100;
+    const a = stats.alphaDamage, f = stats.fireRate;
+    if (a > 0 && f > 0) stats.dps = Math.round(a * (f / 60) * 100) / 100;
   }
 
   return {
