@@ -239,36 +239,53 @@ function computeStats(
     const pn = item.powerNetwork;
     const isOn = componentStates[hp.hardpointName] !== false;
 
-    // Build power instance for interactive components
+    // Build power instance for ALL components with power interaction
     const pCat = CAT_TO_POWER[cat];
-    if (pCat && pn) {
-      const totalPips = pn.pips ?? 0;
+    if (pCat) {
+      // Derive pips: use RegisterRange if available, otherwise derive from pMax
+      let totalPips = pn?.pips ?? 0;
+      if (totalPips === 0 && pn && pn.pMax > 0) {
+        // Components without interactive pips but with power draw
+        // Derive display pips from power max, capped at 6
+        totalPips = Math.min(6, Math.max(1, Math.ceil(pn.pMax)));
+      }
+      // Fallback: if no powerNetwork at all, use componentStats powerDraw
+      if (totalPips === 0 && !pn) {
+        const pd = pickNum(s, "powerDraw", "powerBase");
+        if (pd > 0) totalPips = Math.min(6, Math.max(1, Math.ceil(pd)));
+      }
+
       const allocPips = instancePower[hp.hardpointName] ?? 0;
 
       cats[pCat].componentCount++;
       if (isOn) {
         cats[pCat].activeCount++;
-        cats[pCat].minDraw += pn.pMin;
+        cats[pCat].minDraw += pn?.pMin ?? pickNum(s, "powerDraw", "powerBase");
       }
       cats[pCat].allocated += allocPips;
 
-      // Only add to instances if component has interactive pips
+      // Add to instances if component has any displayable pips
       if (totalPips > 0) {
+        const ranges = (pn?.ranges ?? []).map(r => ({ start: r.s, modifier: r.m, range: r.r }));
+        // If no ranges but we derived pips, create a single tier-3 range
+        const displayRanges = ranges.length > 0 ? ranges
+          : [{ start: 0, modifier: 1, range: totalPips }];
+
         instances.push({
           hardpointId: hp.id,
           hardpointName: hp.hardpointName,
           componentName: item.name,
           category: pCat,
-          type: pn.type || cat,
+          type: pn?.type || cat,
           totalPips,
-          allocatedPips: allocPips,
-          ranges: (pn.ranges ?? []).map(r => ({ start: r.s, modifier: r.m, range: r.r })),
-          powerMin: pn.pMin,
-          powerMax: pn.pMax,
-          genPower: pn.genP ?? 0,
-          genCoolant: pn.genC ?? 0,
-          emMax: pn.em ?? 0,
-          irMax: pn.ir ?? 0,
+          allocatedPips: Math.min(allocPips, totalPips),
+          ranges: displayRanges,
+          powerMin: pn?.pMin ?? 0,
+          powerMax: pn?.pMax ?? 0,
+          genPower: pn?.genP ?? 0,
+          genCoolant: pn?.genC ?? 0,
+          emMax: pn?.em ?? 0,
+          irMax: pn?.ir ?? 0,
           isOn,
         });
       }
