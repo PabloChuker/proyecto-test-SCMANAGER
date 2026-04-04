@@ -1,21 +1,22 @@
 // =============================================================================
-// AL FILO — PowerManagementPanel v8 (In-Game Cockpit Faithful)
+// AL FILO — PowerManagementPanel v9 (In-Game Cockpit Exact)
 //
-// EXACT REPLICA of the Star Citizen cockpit Power Management MFD:
+// Star Citizen cockpit Power Management MFD:
 //   - ALWAYS 6 columns: WPN, THR, SHD, QDR, RAD, CLR
-//   - Each column has totalOutput segments (e.g. 16 for Gladius)
+//   - Each column has EXACTLY 6 segments tall (fixed)
 //   - Segments bottom-to-top:
-//       BLACK (#111) = locked/unavailable (beyond total capacity)
-//       GRAY  (#444) = available to assign but not yet assigned
-//       CYAN  (#22d3ee) = assigned/allocated
+//       CYAN  = assigned power points for this category
+//       GRAY  = available (can be assigned)
+//       BLACK = locked (no room / no components)
 //   - OUTPUT shows "allocated / total" (e.g., "3 / 16")
-//   - Category labels below columns: ⬡ △ ◇ ◈ ◎ ❄
-//   - Click a gray segment to allocate, click cyan to deallocate
+//   - Total pool = totalOutput (e.g., 16). Distributed among 6 categories.
+//   - Each segment in a column = 1 power point assigned to that category.
+//   - Max per column = 6 (visual cap), but actual allocation can be higher.
 // =============================================================================
 
 "use client";
 
-import React, { useMemo } from "react";
+import React from "react";
 import { useLoadoutStore } from "@/store/useLoadoutStore";
 import type {
   FlightMode,
@@ -23,7 +24,7 @@ import type {
   ComputedStats,
 } from "@/store/useLoadoutStore";
 
-// ── The 6 fixed power categories (always shown, same order as in-game) ──
+// ── 6 fixed categories, same order as in-game MFD ──
 const CATEGORY_ORDER: PowerCategory[] = [
   "weapons",
   "thrusters",
@@ -33,10 +34,7 @@ const CATEGORY_ORDER: PowerCategory[] = [
   "coolers",
 ];
 
-interface CatMeta {
-  label: string;
-  icon: string;
-}
+interface CatMeta { label: string; icon: string; }
 
 const CAT_META: Record<PowerCategory, CatMeta> = {
   weapons:   { label: "WPN", icon: "⬡" },
@@ -47,9 +45,10 @@ const CAT_META: Record<PowerCategory, CatMeta> = {
   coolers:   { label: "CLR", icon: "❄" },
 };
 
-// ── Segment height in px ──
-const SEG_H = 10;
-const SEG_GAP = 1;
+// FIXED: 6 segments per column, just like the in-game cockpit
+const SEGS_PER_COL = 6;
+const SEG_H = 14;
+const SEG_GAP = 2;
 
 // =============================================================================
 // Main Component
@@ -71,24 +70,10 @@ export function PowerManagementPanel({
   } = useLoadoutStore();
 
   const pn = stats.powerNetwork;
-  const totalOutput = pn.totalOutput; // e.g., 16
+  const totalOutput = pn.totalOutput;
   const totalAllocated = pn.totalAllocated;
 
-  // How many segments each column can show = totalOutput
-  // (In-game each column has the full height = total power pool)
-  // But that would be too tall for 16+ segments. So we normalize:
-  // Each column gets the same height. Segments represent "points assigned
-  // to this category" out of the total pool.
-  //
-  // In-game model: the total pool is divided among 6 categories.
-  // Each column's height = the max ANY single category could hold.
-  // In practice, the max is totalOutput itself (you could put all in one).
-  // But visually we cap at a reasonable number of segments.
-
-  // Use totalOutput as the max segment count, but cap at 16 for visual clarity
-  const maxSegs = Math.min(totalOutput, 16);
-
-  // Colors
+  // OUTPUT color
   const outputColor =
     totalAllocated > totalOutput
       ? "#ef4444"
@@ -96,15 +81,15 @@ export function PowerManagementPanel({
         ? "#f97316"
         : "#22d3ee";
 
-  // Handle click on a segment in a category column
+  // Click handler: assign/deallocate power to a category
   const handleSegClick = (cat: PowerCategory, segIdx: number) => {
     const currentAlloc = allocatedPower[cat] || 0;
 
     if (segIdx < currentAlloc) {
-      // Click on an allocated (cyan) segment → deallocate down to segIdx
+      // Clicking an assigned (cyan) segment → deallocate down to segIdx
       setAllocatedPower(cat, segIdx);
     } else {
-      // Click on an available (gray) segment → allocate up to segIdx+1
+      // Clicking a gray segment → allocate up to segIdx+1
       const desired = segIdx + 1;
       const increase = desired - currentAlloc;
       const freePoints = totalOutput - totalAllocated;
@@ -119,14 +104,14 @@ export function PowerManagementPanel({
 
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-sm overflow-hidden">
-      {/* ── Signatures Row (EM / IR / TH) ── */}
+      {/* ── Signatures Row ── */}
       <div className="flex items-center justify-center gap-4 px-3 py-1.5 border-b border-zinc-800/50 bg-zinc-950/40">
         <SigBadge icon="IR" value={stats.emSignature} color="#a855f7" />
         <SigBadge icon="⚡" value={stats.irSignature} color="#f97316" />
         <SigBadge icon="◈" value={stats.thermalOutput} color="#22c55e" />
       </div>
 
-      <div className="p-2.5 space-y-2">
+      <div className="p-3 space-y-3">
         {/* ── OUTPUT: allocated / total ── */}
         <div className="flex items-center justify-between">
           <span className="text-[9px] font-mono text-zinc-500 tracking-[0.15em] uppercase">
@@ -145,96 +130,67 @@ export function PowerManagementPanel({
           </div>
         </div>
 
-        {/* ── POWER GRID: 6 fixed columns ── */}
-        <div className="py-1">
-          <div
-            className="flex justify-center items-end gap-[3px]"
-            style={{ minHeight: maxSegs * (SEG_H + SEG_GAP) + "px" }}
-          >
-            {CATEGORY_ORDER.map((cat) => (
-              <PowerColumn
-                key={cat}
-                cat={cat}
-                allocated={allocatedPower[cat] || 0}
-                maxSegs={maxSegs}
-                hasComponents={pn.categories[cat].componentCount > 0}
-                isActive={pn.categories[cat].activeCount > 0}
-                onSegClick={(segIdx) => handleSegClick(cat, segIdx)}
-              />
-            ))}
-          </div>
+        {/* ── POWER GRID: 6 columns × 6 segments ── */}
+        <div
+          className="flex justify-between items-end gap-1 px-1"
+          style={{ height: SEGS_PER_COL * (SEG_H + SEG_GAP) + 30 + "px" }}
+        >
+          {CATEGORY_ORDER.map((cat) => (
+            <PowerColumn
+              key={cat}
+              cat={cat}
+              allocated={Math.min(allocatedPower[cat] || 0, SEGS_PER_COL)}
+              hasComponents={pn.categories[cat].componentCount > 0}
+              isActive={pn.categories[cat].activeCount > 0}
+              onSegClick={(segIdx) => handleSegClick(cat, segIdx)}
+            />
+          ))}
         </div>
 
         {/* ── Auto Balance ── */}
         <button
           onClick={autoAllocatePower}
-          className="w-full py-1 text-[8px] font-mono text-zinc-600 tracking-widest uppercase border border-zinc-800/40 hover:border-cyan-800/40 hover:text-cyan-400/70 transition-colors rounded-sm"
+          className="w-full py-1.5 text-[8px] font-mono text-zinc-600 tracking-widest uppercase border border-zinc-800/40 hover:border-cyan-800/40 hover:text-cyan-400/70 transition-colors rounded-sm"
         >
           AUTO-BALANCE
         </button>
 
         {/* ── SCM / NAV Mode ── */}
         <div className="flex gap-px">
-          <ModeBtn
-            label="SCM MODE"
-            active={flightMode === "SCM"}
-            c="#eab308"
-            onClick={() => onModeChange("SCM")}
-          />
-          <ModeBtn
-            label="NAV MODE"
-            active={flightMode === "NAV"}
-            c="#8b5cf6"
-            onClick={() => onModeChange("NAV")}
-          />
+          <ModeBtn label="SCM MODE" active={flightMode === "SCM"} c="#eab308" onClick={() => onModeChange("SCM")} />
+          <ModeBtn label="NAV MODE" active={flightMode === "NAV"} c="#8b5cf6" onClick={() => onModeChange("NAV")} />
         </div>
       </div>
 
       {/* ── SIGNATURES DETAIL ── */}
       <div className="border-t border-zinc-800/50 p-2.5 space-y-2">
-        <span className="text-[8px] font-mono text-zinc-600 tracking-[0.2em] uppercase">
-          Signatures
-        </span>
+        <span className="text-[8px] font-mono text-zinc-600 tracking-[0.2em] uppercase">Signatures</span>
         <SignatureBar label="EM SIG" value={stats.emSignature} color="#a855f7" />
         <SignatureBar label="IR SIG" value={stats.irSignature} color="#f97316" />
       </div>
 
       {/* ── POWER & THERMAL ── */}
       <div className="border-t border-zinc-800/50 p-2.5 space-y-2">
-        <PowerThermalBar
-          label="POWER"
-          value={stats.powerBalance}
-          outLabel={`${Math.round(stats.powerOutput)} out`}
-          drawLabel={`${Math.round(stats.powerDraw)} draw`}
-          color={stats.powerBalance >= 0 ? "#22c55e" : "#ef4444"}
-        />
-        <PowerThermalBar
-          label="THERMAL"
-          value={stats.thermalBalance}
-          outLabel={`${Math.round(stats.coolingRate)} out`}
-          drawLabel={`${Math.round(stats.thermalOutput)} draw`}
-          color={stats.thermalBalance >= 0 ? "#06b6d4" : "#ef4444"}
-        />
+        <PowerThermalBar label="POWER" value={stats.powerBalance} outLabel={`${Math.round(stats.powerOutput)} out`} drawLabel={`${Math.round(stats.powerDraw)} draw`} color={stats.powerBalance >= 0 ? "#22c55e" : "#ef4444"} />
+        <PowerThermalBar label="THERMAL" value={stats.thermalBalance} outLabel={`${Math.round(stats.coolingRate)} out`} drawLabel={`${Math.round(stats.thermalOutput)} draw`} color={stats.thermalBalance >= 0 ? "#06b6d4" : "#ef4444"} />
       </div>
     </div>
   );
 }
 
 // =============================================================================
-// PowerColumn — one of the 6 fixed category columns
+// PowerColumn — one of the 6 category bars, exactly 6 segments tall
 // =============================================================================
 
 function PowerColumn({
   cat,
   allocated,
-  maxSegs,
   hasComponents,
   isActive,
   onSegClick,
 }: {
   cat: PowerCategory;
   allocated: number;
-  maxSegs: number;
   hasComponents: boolean;
   isActive: boolean;
   onSegClick: (segIdx: number) => void;
@@ -242,41 +198,36 @@ function PowerColumn({
   const meta = CAT_META[cat];
 
   return (
-    <div
-      className="flex flex-col items-center"
-      style={{ width: "28px", minWidth: "24px", flex: "1 1 28px", maxWidth: "36px" }}
-    >
-      {/* Segments: flex-col-reverse so index 0 is at the bottom */}
+    <div className="flex flex-col items-center" style={{ flex: "1 1 0", maxWidth: "42px" }}>
+      {/* Segments: flex-col-reverse so index 0 = bottom */}
       <div className="w-full flex flex-col-reverse" style={{ gap: SEG_GAP + "px" }}>
-        {Array.from({ length: maxSegs }).map((_, i) => {
-          // Segment states (bottom to top):
-          //   i < allocated → CYAN (assigned)
-          //   i >= allocated && hasComponents → GRAY (available)
-          //   !hasComponents → BLACK (locked / no components in this category)
+        {Array.from({ length: SEGS_PER_COL }).map((_, i) => {
+          // i=0 bottom, i=5 top
+          // Bottom segments fill first (cyan), then gray, then black at top
 
           let bgColor: string;
           let borderColor: string;
           let opacity: number;
           let cursor: string;
 
-          if (i < allocated) {
-            // ASSIGNED — cyan/green glow
-            bgColor = "#22d3ee";
-            borderColor = "rgba(34,211,238,0.4)";
-            opacity = isActive ? 0.9 : 0.4;
-            cursor = "pointer";
-          } else if (hasComponents) {
-            // AVAILABLE — dark gray, clickable
-            bgColor = "#3f3f46";
-            borderColor = "#27272a";
-            opacity = 0.8;
-            cursor = "pointer";
-          } else {
-            // LOCKED — black, no components in this category
+          if (!hasComponents) {
+            // No components in this category → all BLACK (locked)
             bgColor = "#18181b";
             borderColor = "#18181b";
-            opacity = 0.5;
+            opacity = 0.4;
             cursor = "default";
+          } else if (i < allocated) {
+            // ASSIGNED → CYAN
+            bgColor = "#22d3ee";
+            borderColor = "rgba(34,211,238,0.5)";
+            opacity = isActive ? 0.9 : 0.4;
+            cursor = "pointer";
+          } else {
+            // AVAILABLE → GRAY
+            bgColor = "#3f3f46";
+            borderColor = "#2a2a2e";
+            opacity = 0.7;
+            cursor = "pointer";
           }
 
           return (
@@ -288,34 +239,28 @@ function PowerColumn({
                 height: SEG_H + "px",
                 backgroundColor: bgColor,
                 border: `1px solid ${borderColor}`,
-                borderRadius: "1px",
+                borderRadius: "2px",
                 opacity,
                 cursor,
                 transition: "all 150ms ease",
               }}
-              title={
-                hasComponents
-                  ? `${meta.label} — ${i + 1}/${maxSegs}`
-                  : `${meta.label} — no components`
-              }
             />
           );
         })}
       </div>
 
-      {/* Category icon + label */}
+      {/* Category icon */}
       <div
-        className="mt-1.5 text-center select-none"
+        className="mt-2 text-center select-none"
         style={{
-          fontSize: "10px",
+          fontSize: "11px",
           color: allocated > 0 ? "#22d3ee" : hasComponents ? "#71717a" : "#27272a",
-          opacity: hasComponents ? 1 : 0.4,
           lineHeight: 1,
         }}
-        title={meta.label}
       >
         {meta.icon}
       </div>
+      {/* Category label */}
       <div
         className="text-center select-none"
         style={{
@@ -323,7 +268,8 @@ function PowerColumn({
           fontFamily: "monospace",
           color: allocated > 0 ? "#22d3ee" : "#52525b",
           opacity: hasComponents ? 0.8 : 0.3,
-          letterSpacing: "0.05em",
+          letterSpacing: "0.08em",
+          marginTop: "1px",
         }}
       >
         {meta.label}
@@ -336,113 +282,42 @@ function PowerColumn({
 // Sub-components
 // =============================================================================
 
-function SigBadge({
-  icon,
-  value,
-  color,
-}: {
-  icon: string;
-  value: number;
-  color: string;
-}) {
-  const fmt = (v: number) => {
-    if (v >= 10000) return (v / 1000).toFixed(1) + "K";
-    if (v >= 1000) return (v / 1000).toFixed(1) + "K";
-    return Math.round(v).toString();
-  };
-
+function SigBadge({ icon, value, color }: { icon: string; value: number; color: string }) {
+  const fmt = (v: number) => v >= 1000 ? (v / 1000).toFixed(1) + "K" : Math.round(v).toString();
   return (
     <div className="flex items-center gap-1">
-      <span className="text-[10px]" style={{ color, opacity: 0.6 }}>
-        {icon}
-      </span>
-      <span
-        className="text-[10px] font-mono font-bold tabular-nums"
-        style={{ color }}
-      >
-        {fmt(value)}
-      </span>
+      <span className="text-[10px]" style={{ color, opacity: 0.6 }}>{icon}</span>
+      <span className="text-[10px] font-mono font-bold tabular-nums" style={{ color }}>{fmt(value)}</span>
     </div>
   );
 }
 
-function SignatureBar({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: number;
-  color: string;
-}) {
-  const fmt = (v: number) => {
-    if (v >= 10000) return (v / 1000).toFixed(1) + "K";
-    if (v >= 1000) return (v / 1000).toFixed(1) + "K";
-    return Math.round(v).toString();
-  };
-  const maxRef = 10000;
-  const pct = Math.min(100, (value / maxRef) * 100);
-
+function SignatureBar({ label, value, color }: { label: string; value: number; color: string }) {
+  const fmt = (v: number) => v >= 1000 ? (v / 1000).toFixed(1) + "K" : Math.round(v).toString();
+  const pct = Math.min(100, (value / 10000) * 100);
   return (
     <div className="space-y-0.5">
       <div className="flex items-center justify-between">
-        <span className="text-[8px] font-mono text-zinc-500 tracking-wider uppercase">
-          {label}
-        </span>
-        <span
-          className="text-[11px] font-mono font-bold tabular-nums"
-          style={{ color }}
-        >
-          {fmt(value)}
-        </span>
+        <span className="text-[8px] font-mono text-zinc-500 tracking-wider uppercase">{label}</span>
+        <span className="text-[11px] font-mono font-bold tabular-nums" style={{ color }}>{fmt(value)}</span>
       </div>
       <div className="h-1 bg-zinc-800/60 rounded-sm overflow-hidden">
-        <div
-          className="h-full rounded-sm transition-all duration-300"
-          style={{ width: pct + "%", backgroundColor: color, opacity: 0.7 }}
-        />
+        <div className="h-full rounded-sm transition-all duration-300" style={{ width: pct + "%", backgroundColor: color, opacity: 0.7 }} />
       </div>
     </div>
   );
 }
 
-function PowerThermalBar({
-  label,
-  value,
-  outLabel,
-  drawLabel,
-  color,
-}: {
-  label: string;
-  value: number;
-  outLabel: string;
-  drawLabel: string;
-  color: string;
-}) {
+function PowerThermalBar({ label, value, outLabel, drawLabel, color }: { label: string; value: number; outLabel: string; drawLabel: string; color: string }) {
   const sign = value >= 0 ? "+" : "";
   return (
     <div className="space-y-0.5">
       <div className="flex items-center justify-between">
-        <span className="text-[8px] font-mono text-zinc-500 tracking-wider uppercase">
-          {label}
-        </span>
-        <span
-          className="text-[11px] font-mono font-bold tabular-nums"
-          style={{ color }}
-        >
-          {sign}
-          {Math.round(value)}
-        </span>
+        <span className="text-[8px] font-mono text-zinc-500 tracking-wider uppercase">{label}</span>
+        <span className="text-[11px] font-mono font-bold tabular-nums" style={{ color }}>{sign}{Math.round(value)}</span>
       </div>
       <div className="h-1 bg-zinc-800/60 rounded-sm overflow-hidden">
-        <div
-          className="h-full rounded-sm transition-all duration-300"
-          style={{
-            width: Math.min(100, Math.abs(value) * 3) + "%",
-            backgroundColor: color,
-            opacity: 0.6,
-          }}
-        />
+        <div className="h-full rounded-sm transition-all duration-300" style={{ width: Math.min(100, Math.abs(value) * 3) + "%", backgroundColor: color, opacity: 0.6 }} />
       </div>
       <div className="flex justify-between">
         <span className="text-[7px] font-mono text-zinc-600">{outLabel}</span>
@@ -452,30 +327,15 @@ function PowerThermalBar({
   );
 }
 
-function ModeBtn({
-  label,
-  active,
-  c,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  c: string;
-  onClick: () => void;
-}) {
+function ModeBtn({ label, active, c, onClick }: { label: string; active: boolean; c: string; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className={
-        active
-          ? "flex-1 py-1.5 text-[9px] font-mono font-bold tracking-[0.12em] uppercase text-center border rounded-sm"
-          : "flex-1 py-1.5 text-[9px] font-mono tracking-[0.12em] uppercase text-center text-zinc-600 border border-zinc-800/50 hover:text-zinc-400 transition-colors rounded-sm"
+      className={active
+        ? "flex-1 py-1.5 text-[9px] font-mono font-bold tracking-[0.12em] uppercase text-center border rounded-sm"
+        : "flex-1 py-1.5 text-[9px] font-mono tracking-[0.12em] uppercase text-center text-zinc-600 border border-zinc-800/50 hover:text-zinc-400 transition-colors rounded-sm"
       }
-      style={
-        active
-          ? { backgroundColor: c + "20", color: c, borderColor: c + "60" }
-          : undefined
-      }
+      style={active ? { backgroundColor: c + "20", color: c, borderColor: c + "60" } : undefined}
     >
       {label}
     </button>
