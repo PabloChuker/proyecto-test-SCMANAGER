@@ -1,16 +1,13 @@
-﻿export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 // =============================================================================
-// AL FILO â€” GET /api/ships (v2 â€” schema v2 compatible)
+// AL FILO — GET /api/ships v3 (Raw SQL — actual DB schema)
 //
-// Changes from v1:
-//   - ship.maxSpeed â†’ ship.scmSpeed
-//   - ship.afterburnerSpeed added to select
-//   - sortBy "maxSpeed" renamed to "scmSpeed" internally
+// Lists all ships from the ships table directly.
+// Supports search, manufacturer filter, role filter, sorting, pagination.
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
 
 export const revalidate = 300;
 
@@ -18,117 +15,121 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
-    const search       = searchParams.get("search")?.trim() || undefined;
-    const manufacturer = searchParams.get("manufacturer")?.trim() || undefined;
-    const role         = searchParams.get("role")?.trim() || undefined;
-    const career       = searchParams.get("career")?.trim() || undefined;
+    const search       = searchParams.get("search")?.trim() || "";
+    const manufacturer = searchParams.get("manufacturer")?.trim() || "";
+    const role         = searchParams.get("role")?.trim() || "";
     const page         = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-    const limit        = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "24", 10)));
+    const limit        = Math.min(500, Math.max(1, parseInt(searchParams.get("limit") || "24", 10)));
     const sortByRaw    = searchParams.get("sortBy") || "name";
-    const sortOrder    = searchParams.get("sortOrder") === "desc" ? "desc" : "asc";
+    const sortOrder    = searchParams.get("sortOrder") === "desc" ? "DESC" : "ASC";
 
-    // Map frontend sort keys to actual schema fields
-    const SORT_ALIAS: Record<string, string> = {
-      maxSpeed: "scmSpeed",
-      scmSpeed: "scmSpeed",
-      cargo: "cargo",
-      maxCrew: "maxCrew",
+    // Map sort keys to actual columns
+    const SORT_MAP: Record<string, string> = {
+      name: "s.name",
+      scmSpeed: "s.scm_speed",
+      maxSpeed: "s.scm_speed",
+      cargo: "s.cargo_capacity",
+      maxCrew: "s.max_crew",
+      afterburnerSpeed: "s.afterburner_speed",
+      manufacturer: "s.manufacturer",
+      size: "s.size",
+      role: "s.role",
     };
-    const sortBy = SORT_ALIAS[sortByRaw] || sortByRaw;
+    const sortCol = SORT_MAP[sortByRaw] || "s.name";
 
-    // WHERE
-    const where: Prisma.ItemWhereInput = {
-      type: { in: ["SHIP", "VEHICLE"] },
-    };
+    // Build WHERE conditions
+    const conditions: string[] = [];
+    const params: any[] = [];
+    let paramIdx = 1;
 
     if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { localizedName: { contains: search, mode: "insensitive" } },
-        { className: { contains: search, mode: "insensitive" } },
-        { manufacturer: { contains: search, mode: "insensitive" } },
-      ];
+      conditions.push(
+        `(s.name ILIKE $${paramIdx} OR s.reference ILIKE $${paramIdx} OR s.manufacturer ILIKE $${paramIdx})`,
+      );
+      params.push(`%${search}%`);
+      paramIdx++;
     }
 
     if (manufacturer) {
-      where.manufacturer = { equals: manufacturer, mode: "insensitive" };
+      conditions.push(`s.manufacturer ILIKE $${paramIdx}`);
+      params.push(`%${manufacturer}%`);
+      paramIdx++;
     }
 
-    if (role || career) {
-      where.ship = {};
-      if (role) (where.ship as Prisma.ShipWhereInput).role = { contains: role, mode: "insensitive" };
-      if (career) (where.ship as Prisma.ShipWhereInput).career = { contains: career, mode: "insensitive" };
+    if (role) {
+      conditions.push(`s.role ILIKE $${paramIdx}`);
+      params.push(`%${role}%`);
+      paramIdx++;
     }
 
-    // ORDER BY
-    const shipSortFields = ["scmSpeed", "cargo", "maxCrew", "afterburnerSpeed"];
-    let orderBy: Prisma.ItemOrderByWithRelationInput;
+    const whereClause = conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
 
-    if (shipSortFields.includes(sortBy)) {
-      orderBy = { ship: { [sortBy]: { sort: sortOrder, nulls: "last" } } };
-    } else {
-      orderBy = { [sortBy]: sortOrder };
-    }
+    // Count total
+    const countResult: any[] = await prisma.$queryRawUnsafe(
+      `SELECT COUNT(*)::int as total FROM ships s ${whereClause}`,
+      ...params,
+    );
+    const total = countResult[0]?.total ?? 0;
 
-    // QUERIES
-    const [total, ships, manufacturerList] = await Promise.all([
-      prisma.item.count({ where }),
+    // Fetch ships
+    const offset = (page - 1) * limit;
+    const ships: any[] = await prisma.$queryRawUnsafe(
+      `SELECT s.id, s.reference, s.name, s.manufacturer, s.role, s.size,
+              s.max_crew, s.scm_speed, s.afterburner_speed, s.cargo_capacity,
+              s.game_version
+       FROM ships s
+       ${whereClause}
+       ORDER BY ${sortCol} ${sortOrder} NULLS LAST
+       LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+      ...params,
+      limit,
+      offset,
+    );
 
-      prisma.item.findMany({
-        where,
-        select: {
-          id: true,
-          reference: true,
-          name: true,
-          localizedName: true,
-          type: true,
-          size: true,
-          manufacturer: true,
-          gameVersion: true,
-          ship: {
-            select: {
-              maxCrew: true,
-              cargo: true,
-              scmSpeed: true,
-              afterburnerSpeed: true,
-              role: true,
-              focus: true,
-              career: true,
-              lengthMeters: true,
-              beamMeters: true,
-              heightMeters: true,
-            },
-          },
-        },
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
+    // Get manufacturer list for filter dropdown
+    const mfrs: any[] = await prisma.$queryRawUnsafe(
+      `SELECT DISTINCT manufacturer FROM ships WHERE manufacturer IS NOT NULL ORDER BY manufacturer ASC`,
+    );
 
-      prisma.item.findMany({
-        where: { type: { in: ["SHIP", "VEHICLE"] }, manufacturer: { not: null } },
-        select: { manufacturer: true },
-        distinct: ["manufacturer"],
-        orderBy: { manufacturer: "asc" },
-      }),
-    ]);
+    // Map to expected format
+    const data = ships.map((s) => ({
+      id: s.id,
+      reference: s.reference,
+      name: s.name,
+      localizedName: null,
+      type: "SHIP",
+      size: s.size,
+      manufacturer: s.manufacturer,
+      gameVersion: s.game_version,
+      ship: {
+        maxCrew: s.max_crew,
+        cargo: s.cargo_capacity != null ? Number(s.cargo_capacity) : null,
+        scmSpeed: s.scm_speed != null ? Number(s.scm_speed) : null,
+        afterburnerSpeed: s.afterburner_speed != null ? Number(s.afterburner_speed) : null,
+        role: s.role,
+        focus: null,
+        career: null,
+        lengthMeters: null,
+        beamMeters: null,
+        heightMeters: null,
+      },
+    }));
 
     return NextResponse.json(
       {
-        data: ships,
+        data,
         meta: {
           total,
           page,
           limit,
           totalPages: Math.ceil(total / limit),
-          manufacturers: manufacturerList.map((m) => m.manufacturer).filter((m): m is string => m !== null),
+          manufacturers: mfrs.map((m) => m.manufacturer).filter(Boolean),
         },
       },
-      { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" } }
+      { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" } },
     );
   } catch (error) {
     console.error("[API /ships] Error:", error);
     return NextResponse.json({ error: "Error al obtener las naves" }, { status: 500 });
   }
 }
-

@@ -1,287 +1,202 @@
-﻿export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 // =============================================================================
-// AL FILO â€” GET /api/catalog
+// AL FILO — GET /api/catalog v2 (Raw SQL — actual DB schema)
 //
-// Universal item catalog endpoint. One route to query everything.
+// Universal item catalog endpoint. Queries component_weapons,
+// component_shields, component_power_plants, component_coolers,
+// component_quantum_drives based on the requested type(s).
 //
 // Query params:
-//   type       â€” ItemType filter (WEAPON, SHIELD, SHIP, etc.)
-//   types      â€” comma-separated list of types (type=WEAPON,TURRET)
-//   size       â€” exact size match
-//   minSize    â€” minimum size
-//   maxSize    â€” maximum size
-//   grade      â€” grade filter (A, B, C, D)
-//   manufacturer â€” manufacturer name (case-insensitive)
-//   search     â€” text search across name, localizedName, className, manufacturer
-//   shopId     â€” only items sold at this shop
-//   minPrice   â€” minimum buy price
-//   maxPrice   â€” maximum buy price
-//   sortBy     â€” field to sort (name, size, manufacturer, dps, shieldHp, powerOutput, price)
-//   sortOrder  â€” asc or desc
-//   page       â€” page number (default 1)
-//   limit      â€” items per page (default 50, max 200)
-//   include    â€” comma-separated: stats,shops,ship (controls what's included)
-//
-// The `include` param controls which Prisma relations are fetched.
-// By default, it includes the type-appropriate stats table.
-// Pass include=stats,shops to also get shop prices.
-//
-// Examples:
-//   /api/catalog?type=WEAPON&maxSize=3&sortBy=dps&sortOrder=desc
-//   /api/catalog?type=SHIELD&grade=A&include=stats,shops
-//   /api/catalog?types=POWER_PLANT,COOLER&search=aegis
-//   /api/catalog?type=SHIP&include=ship&sortBy=name
-//   /api/catalog?shopId=abc-123&type=WEAPON
+//   types      — comma-separated: WEAPON, TURRET, SHIELD, POWER_PLANT, etc.
+//   type       — single type (alias for types)
+//   maxSize    — max component size
+//   minSize    — min component size
+//   search     — text search across name, reference
+//   sortBy     — name, size, dps, shieldHp, powerOutput, coolingRate
+//   sortOrder  — asc or desc
+//   limit      — max results (default 50, max 200)
+//   include    — ignored for now (compatibility with old frontend)
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { Prisma, ItemType } from "@prisma/client";
 
 export const revalidate = 300;
 
-// Map ItemType â†’ which stats relation to include
-const TYPE_STATS_MAP: Record<string, string> = {
-  WEAPON: "weaponStats",
-  TURRET: "weaponStats",
-  MISSILE: "missileStats",
-  TORPEDO: "missileStats",
-  SHIELD: "shieldStats",
-  POWER_PLANT: "powerStats",
-  COOLER: "coolingStats",
-  QUANTUM_DRIVE: "quantumStats",
-  MINING_LASER: "miningStats",
-  THRUSTER: "thrusterStats",
-};
-
-// Valid sort fields and their Prisma paths
-const SORT_MAP: Record<string, any> = {
-  name: { name: "placeholder" },
-  size: { size: "placeholder" },
-  manufacturer: { manufacturer: "placeholder" },
-  grade: { grade: "placeholder" },
-};
-
-// Stats-based sort fields require knowing the stats table
-const STATS_SORT_MAP: Record<string, { table: string; field: string }> = {
-  dps: { table: "weaponStats", field: "dps" },
-  alpha: { table: "weaponStats", field: "alphaDamage" },
-  fireRate: { table: "weaponStats", field: "fireRate" },
-  range: { table: "weaponStats", field: "range" },
-  shieldHp: { table: "shieldStats", field: "maxHp" },
-  shieldRegen: { table: "shieldStats", field: "regenRate" },
-  powerOutput: { table: "powerStats", field: "powerOutput" },
-  coolingRate: { table: "coolingStats", field: "coolingRate" },
-  quantumSpeed: { table: "quantumStats", field: "maxSpeed" },
-  spoolUp: { table: "quantumStats", field: "spoolUpTime" },
-  miningPower: { table: "miningStats", field: "miningPower" },
+// Map item types → actual DB table + component type label
+const TYPE_TABLE_MAP: Record<string, { table: string; type: string }> = {
+  WEAPON:        { table: "component_weapons",        type: "WEAPON" },
+  TURRET:        { table: "component_weapons",        type: "WEAPON" },
+  MISSILE:       { table: "component_weapons",        type: "MISSILE" },
+  SHIELD:        { table: "component_shields",        type: "SHIELD" },
+  POWER_PLANT:   { table: "component_power_plants",   type: "POWER_PLANT" },
+  COOLER:        { table: "component_coolers",         type: "COOLER" },
+  QUANTUM_DRIVE: { table: "component_quantum_drives", type: "QUANTUM_DRIVE" },
 };
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
-    // â”€â”€ Parse params â”€â”€
-    const typeParam = searchParams.get("type")?.trim();
-    const typesParam = searchParams.get("types")?.trim();
-    const size = searchParams.get("size") ? parseInt(searchParams.get("size")!, 10) : undefined;
-    const minSize = searchParams.get("minSize") ? parseInt(searchParams.get("minSize")!, 10) : undefined;
-    const maxSize = searchParams.get("maxSize") ? parseInt(searchParams.get("maxSize")!, 10) : undefined;
-    const grade = searchParams.get("grade")?.trim() || undefined;
-    const manufacturer = searchParams.get("manufacturer")?.trim() || undefined;
-    const search = searchParams.get("search")?.trim() || undefined;
-    const shopId = searchParams.get("shopId")?.trim() || undefined;
-    const minPrice = searchParams.get("minPrice") ? parseFloat(searchParams.get("minPrice")!) : undefined;
-    const maxPrice = searchParams.get("maxPrice") ? parseFloat(searchParams.get("maxPrice")!) : undefined;
-    const sortBy = searchParams.get("sortBy")?.trim() || "name";
-    const sortOrder = searchParams.get("sortOrder") === "desc" ? "desc" : "asc";
-    const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-    const limit = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
-    const includeParam = searchParams.get("include")?.trim() || "stats";
-    const includeSet = new Set(includeParam.split(",").map((s) => s.trim()));
+    const typeParam  = searchParams.get("type")?.trim() || "";
+    const typesParam = searchParams.get("types")?.trim() || "";
+    const minSize    = parseInt(searchParams.get("minSize") || "0", 10);
+    const maxSize    = parseInt(searchParams.get("maxSize") || "99", 10);
+    const search     = searchParams.get("search")?.trim() || "";
+    const sortOrder  = searchParams.get("sortOrder") === "asc" ? "ASC" : "DESC";
+    const limit      = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
 
-    // â”€â”€ Resolve types â”€â”€
+    // Resolve which types to query
     let types: string[] = [];
     if (typeParam) types = [typeParam];
-    else if (typesParam) types = typesParam.split(",").map((t) => t.trim());
+    else if (typesParam) types = typesParam.split(",").map((t) => t.trim()).filter(Boolean);
 
-    // â”€â”€ Build WHERE â”€â”€
-    const where: Prisma.ItemWhereInput = {};
-
-    if (types.length === 1) {
-      where.type = types[0] as ItemType;
-    } else if (types.length > 1) {
-      where.type = { in: types as ItemType[] };
+    if (types.length === 0) {
+      return NextResponse.json({ data: [], meta: { total: 0, limit } });
     }
 
-    if (size !== undefined) where.size = size;
-    else if (minSize !== undefined || maxSize !== undefined) {
-      where.size = {};
-      if (minSize !== undefined) (where.size as any).gte = minSize;
-      if (maxSize !== undefined) (where.size as any).lte = maxSize;
-    }
-
-    if (grade) where.grade = { equals: grade, mode: "insensitive" };
-    if (manufacturer) where.manufacturer = { contains: manufacturer, mode: "insensitive" };
-
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: "insensitive" } },
-        { localizedName: { contains: search, mode: "insensitive" } },
-        { className: { contains: search, mode: "insensitive" } },
-        { manufacturer: { contains: search, mode: "insensitive" } },
-      ];
-    }
-
-    if (shopId) {
-      where.shopInventory = { some: { shopId } };
-    }
-    if (minPrice !== undefined || maxPrice !== undefined) {
-      const priceFilter: any = {};
-      if (minPrice !== undefined) priceFilter.gte = minPrice;
-      if (maxPrice !== undefined) priceFilter.lte = maxPrice;
-      where.shopInventory = {
-        ...((where.shopInventory as any) || {}),
-        some: {
-          ...((where.shopInventory as any)?.some || {}),
-          priceBuy: priceFilter,
-        },
-      };
-    }
-
-    // â”€â”€ Build INCLUDE (dynamic based on type and include param) â”€â”€
-    const include: Record<string, any> = {};
-
-    if (includeSet.has("stats")) {
-      // Include the appropriate stats table for the queried type(s)
-      const statsToInclude = new Set<string>();
-
-      if (types.length > 0) {
-        for (const t of types) {
-          const statsTable = TYPE_STATS_MAP[t];
-          if (statsTable) statsToInclude.add(statsTable);
-        }
-      } else {
-        // No type filter: include all stats tables (expensive but complete)
-        for (const table of Object.values(TYPE_STATS_MAP)) {
-          statsToInclude.add(table);
-        }
-      }
-
-      for (const table of statsToInclude) {
-        include[table] = true;
+    // Find unique tables to query
+    const tablesToQuery = new Map<string, { table: string; type: string }>();
+    for (const t of types) {
+      const mapping = TYPE_TABLE_MAP[t];
+      if (mapping && !tablesToQuery.has(mapping.table)) {
+        tablesToQuery.set(mapping.table, mapping);
       }
     }
 
-    if (includeSet.has("shops")) {
-      include.shopInventory = {
-        include: {
-          shop: {
-            include: { location: true },
-          },
-        },
-      };
+    if (tablesToQuery.size === 0) {
+      return NextResponse.json({ data: [], meta: { total: 0, limit } });
     }
 
-    if (includeSet.has("ship")) {
-      include.ship = true;
+    // Query each table and combine results
+    const allItems: any[] = [];
+    let totalCount = 0;
+
+    for (const [, { table, type }] of tablesToQuery) {
+      try {
+        const conditions: string[] = [];
+        const params: any[] = [];
+        let idx = 1;
+
+        if (maxSize < 99) {
+          conditions.push(`size <= $${idx}`);
+          params.push(maxSize);
+          idx++;
+        }
+        if (minSize > 0) {
+          conditions.push(`size >= $${idx}`);
+          params.push(minSize);
+          idx++;
+        }
+        if (search) {
+          conditions.push(`(name ILIKE $${idx} OR reference ILIKE $${idx})`);
+          params.push(`%${search}%`);
+          idx++;
+        }
+
+        const whereClause = conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
+
+        // Count
+        const countResult: any[] = await prisma.$queryRawUnsafe(
+          `SELECT COUNT(*)::int as total FROM ${table} ${whereClause}`,
+          ...params,
+        );
+        const count = countResult[0]?.total ?? 0;
+        totalCount += count;
+
+        // Fetch
+        if (count > 0) {
+          const rows: any[] = await prisma.$queryRawUnsafe(
+            `SELECT * FROM ${table} ${whereClause} ORDER BY size DESC NULLS LAST, name ASC LIMIT $${idx}`,
+            ...params,
+            limit,
+          );
+
+          for (const row of rows) {
+            allItems.push(mapToCatalogItem(row, type));
+          }
+        }
+      } catch {
+        // Table might be empty or inaccessible — skip gracefully
+      }
     }
-
-    if (includeSet.has("hardpoints")) {
-      include.hardpoints = {
-        include: {
-          equippedItem: {
-            include: buildStatsInclude(types),
-          },
-        },
-        orderBy: [
-          { category: "asc" as const },
-          { maxSize: "desc" as const },
-        ],
-      };
-    }
-
-    // â”€â”€ Build ORDER BY â”€â”€
-    let orderBy: any;
-
-    if (sortBy === "price") {
-      // Sort by price requires a special approach
-      orderBy = { name: sortOrder };
-    } else if (SORT_MAP[sortBy]) {
-      orderBy = { [sortBy]: sortOrder };
-    } else if (STATS_SORT_MAP[sortBy]) {
-      const { table, field } = STATS_SORT_MAP[sortBy];
-      orderBy = { [table]: { [field]: { sort: sortOrder, nulls: "last" } } };
-    } else {
-      orderBy = { name: "asc" };
-    }
-
-    // â”€â”€ Execute queries â”€â”€
-    const [items, total] = await Promise.all([
-      prisma.item.findMany({
-        where,
-        include: Object.keys(include).length > 0 ? include : undefined,
-        orderBy,
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.item.count({ where }),
-    ]);
-
-    // â”€â”€ Strip rawData from response â”€â”€
-    const cleaned = items.map((item: any) => {
-      const { rawData, ...rest } = item;
-      return rest;
-    });
 
     return NextResponse.json(
       {
-        data: cleaned,
-        meta: {
-          total,
-          page,
-          limit,
-          totalPages: Math.ceil(total / limit),
-          types: types.length > 0 ? types : undefined,
-        },
+        data: allItems,
+        meta: { total: totalCount, limit, types },
       },
-      {
-        headers: {
-          "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600",
-        },
-      }
+      { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" } },
     );
   } catch (error) {
     console.error("[API /catalog] Error:", error);
-    return NextResponse.json(
-      { error: "Error en el catÃ¡logo" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: "Error en el catálogo" }, { status: 500 });
   }
 }
 
-// Helper: build stats include for equipped items based on queried types
-function buildStatsInclude(types: string[]): Record<string, boolean> {
-  const include: Record<string, boolean> = {};
-  if (types.length === 0) {
-    // Include all stats tables
-    for (const table of new Set(Object.values(TYPE_STATS_MAP))) {
-      include[table] = true;
-    }
-  } else {
-    for (const t of types) {
-      const table = TYPE_STATS_MAP[t];
-      if (table) include[table] = true;
-    }
-    // For ships, always include weapon/shield/power stats for equipped items
-    if (types.includes("SHIP") || types.includes("VEHICLE")) {
-      include.weaponStats = true;
-      include.shieldStats = true;
-      include.powerStats = true;
-      include.coolingStats = true;
-      include.quantumStats = true;
-    }
-  }
-  return include;
+// ─── Map raw component row to the CatalogItem format the frontend expects ───
+
+function mapToCatalogItem(comp: any, type: string): any {
+  const stats = buildStats(comp, type);
+
+  return {
+    id: comp.id,
+    reference: comp.reference || "",
+    name: comp.name || "",
+    localizedName: null,
+    className: null,
+    type,
+    size: comp.size ?? null,
+    grade: comp.grade ?? null,
+    manufacturer: comp.manufacturer ?? null,
+    // Old-style stats fields (for ComponentPicker compatibility)
+    weaponStats: type === "WEAPON" || type === "MISSILE" ? stats : null,
+    shieldStats: type === "SHIELD" ? stats : null,
+    powerStats: type === "POWER_PLANT" ? stats : null,
+    coolingStats: type === "COOLER" ? stats : null,
+    quantumStats: type === "QUANTUM_DRIVE" ? stats : null,
+    miningStats: null,
+    missileStats: type === "MISSILE" ? stats : null,
+    thrusterStats: null,
+    shopInventory: [], // Shop data not yet available
+  };
 }
 
+function buildStats(comp: any, type: string): Record<string, any> | null {
+  const s: Record<string, any> = {};
+
+  // Weapon fields
+  if (comp.alpha_damage != null) s.alphaDamage = Number(comp.alpha_damage);
+  if (comp.fire_rate != null) s.fireRate = Number(comp.fire_rate);
+  if (comp.dps != null) s.dps = Number(comp.dps);
+  if (comp.damage_type != null) s.damageType = comp.damage_type;
+  if (comp.range != null) s.range = Number(comp.range);
+
+  // Shield fields
+  if (comp.max_hp != null) { s.maxHp = Number(comp.max_hp); s.shieldHp = Number(comp.max_hp); }
+  if (comp.regen_rate != null) { s.regenRate = Number(comp.regen_rate); s.shieldRegen = Number(comp.regen_rate); }
+
+  // Power plant fields
+  if (comp.power_output != null) s.powerOutput = Number(comp.power_output);
+
+  // Cooler fields
+  if (comp.cooling_rate != null) s.coolingRate = Number(comp.cooling_rate);
+
+  // Quantum drive fields
+  if (comp.max_speed != null) s.maxSpeed = Number(comp.max_speed);
+  if (comp.fuel_rate != null) s.fuelRate = Number(comp.fuel_rate);
+
+  // Common fields
+  if (comp.power_draw != null) s.powerDraw = Number(comp.power_draw);
+  if (comp.thermal_output != null) s.thermalOutput = Number(comp.thermal_output);
+  if (comp.em_signature != null) s.emSignature = Number(comp.em_signature);
+  if (comp.ir_signature != null) s.irSignature = Number(comp.ir_signature);
+
+  // Compute DPS if missing
+  if (!s.dps && s.alphaDamage && s.fireRate) {
+    const a = s.alphaDamage, fr = s.fireRate;
+    if (a > 0 && fr > 0) s.dps = Math.round(a * (fr / 60) * 100) / 100;
+  }
+
+  return Object.keys(s).length > 0 ? s : null;
+}

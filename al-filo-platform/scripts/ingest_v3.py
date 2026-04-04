@@ -2010,7 +2010,8 @@ def sync_repo(local: Path, url: str) -> bool:
 @click.option("--dry-run", is_flag=True)
 @click.option("--skip-clone", is_flag=True)
 @click.option("--no-shops", is_flag=True, help="Skip shop ingestion")
-def main(game_version, local_path, dry_run, skip_clone, no_shops):
+@click.option("--create-tables", is_flag=True, help="Create database tables if they don't exist")
+def main(game_version, local_path, dry_run, skip_clone, no_shops, create_tables):
     console.print("\n[bold blue]═══════════════════════════════════════════════[/]")
     console.print("[bold blue]  AL FILO — Datamining Pipeline v3.0 (Index)  [/]")
     console.print("[bold blue]═══════════════════════════════════════════════[/]\n")
@@ -2018,6 +2019,130 @@ def main(game_version, local_path, dry_run, skip_clone, no_shops):
     db_url = os.getenv("DATABASE_URL")
     if not db_url and not dry_run:
         console.print("[red]✗ DATABASE_URL not set[/]"); sys.exit(1)
+
+    if create_tables and not dry_run:
+        from sqlalchemy_utils import database_exists, create_database
+        engine = create_engine(db_url)
+        if not database_exists(engine.url):
+            create_database(engine.url)
+            console.print("[green]✓ Database created[/]")
+        
+        with engine.begin() as conn:
+            console.print("[cyan]-> Creating tables...[/]")
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS items (
+                    id UUID PRIMARY KEY,
+                    reference TEXT UNIQUE NOT NULL,
+                    name TEXT NOT NULL,
+                    "localizedName" TEXT,
+                    "className" TEXT,
+                    type TEXT NOT NULL,
+                    "subType" TEXT,
+                    size INTEGER,
+                    grade TEXT,
+                    manufacturer TEXT,
+                    mass DOUBLE PRECISION,
+                    "hitPoints" DOUBLE PRECISION,
+                    "gameVersion" TEXT NOT NULL,
+                    "rawData" JSONB,
+                    "createdAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    "updatedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                );
+                CREATE TABLE IF NOT EXISTS weapon_stats (
+                    id UUID PRIMARY KEY,
+                    "itemId" UUID UNIQUE REFERENCES items(id) ON DELETE CASCADE,
+                    dps DOUBLE PRECISION, "alphaDamage" DOUBLE PRECISION, "fireRate" DOUBLE PRECISION,
+                    range DOUBLE PRECISION, speed DOUBLE PRECISION, "ammoCount" INTEGER,
+                    "damageType" TEXT, "dmgPhysical" DOUBLE PRECISION, "dmgEnergy" DOUBLE PRECISION,
+                    "dmgDistortion" DOUBLE PRECISION, "dmgThermal" DOUBLE PRECISION,
+                    "powerDraw" DOUBLE PRECISION, "thermalOutput" DOUBLE PRECISION,
+                    "emSignature" DOUBLE PRECISION, "irSignature" DOUBLE PRECISION
+                );
+                CREATE TABLE IF NOT EXISTS shield_stats (
+                    id UUID PRIMARY KEY, "itemId" UUID UNIQUE REFERENCES items(id) ON DELETE CASCADE,
+                    "maxHp" DOUBLE PRECISION, "regenRate" DOUBLE PRECISION, "downedDelay" DOUBLE PRECISION,
+                    "dmgAbsPhysical" DOUBLE PRECISION, "dmgAbsEnergy" DOUBLE PRECISION, "dmgAbsDistortion" DOUBLE PRECISION,
+                    "powerDraw" DOUBLE PRECISION, "thermalOutput" DOUBLE PRECISION,
+                    "emSignature" DOUBLE PRECISION, "irSignature" DOUBLE PRECISION
+                );
+                CREATE TABLE IF NOT EXISTS power_stats (
+                    id UUID PRIMARY KEY, "itemId" UUID UNIQUE REFERENCES items(id) ON DELETE CASCADE,
+                    "powerOutput" DOUBLE PRECISION, "powerBase" DOUBLE PRECISION,
+                    "thermalOutput" DOUBLE PRECISION, "emSignature" DOUBLE PRECISION, "irSignature" DOUBLE PRECISION
+                );
+                CREATE TABLE IF NOT EXISTS cooling_stats (
+                    id UUID PRIMARY KEY, "itemId" UUID UNIQUE REFERENCES items(id) ON DELETE CASCADE,
+                    "coolingRate" DOUBLE PRECISION, "suppressionHeat" DOUBLE PRECISION, "suppressionIR" DOUBLE PRECISION,
+                    "powerDraw" DOUBLE PRECISION, "thermalOutput" DOUBLE PRECISION,
+                    "emSignature" DOUBLE PRECISION, "irSignature" DOUBLE PRECISION
+                );
+                CREATE TABLE IF NOT EXISTS quantum_stats (
+                    id UUID PRIMARY KEY, "itemId" UUID UNIQUE REFERENCES items(id) ON DELETE CASCADE,
+                    "maxSpeed" DOUBLE PRECISION, "maxRange" DOUBLE PRECISION, "fuelRate" DOUBLE PRECISION,
+                    "spoolUpTime" DOUBLE PRECISION, "cooldownTime" DOUBLE PRECISION,
+                    "stage1Accel" DOUBLE PRECISION, "stage2Accel" DOUBLE PRECISION,
+                    "quantumType" TEXT, "powerDraw" DOUBLE PRECISION, "thermalOutput" DOUBLE PRECISION,
+                    "emSignature" DOUBLE PRECISION, "irSignature" DOUBLE PRECISION
+                );
+                CREATE TABLE IF NOT EXISTS mining_stats (
+                    id UUID PRIMARY KEY, "itemId" UUID UNIQUE REFERENCES items(id) ON DELETE CASCADE,
+                    "miningPower" DOUBLE PRECISION, resistance DOUBLE PRECISION, instability DOUBLE PRECISION,
+                    "optimalRange" DOUBLE PRECISION, "maxRange" DOUBLE PRECISION, "throttleRate" DOUBLE PRECISION,
+                    "powerDraw" DOUBLE PRECISION, "thermalOutput" DOUBLE PRECISION
+                );
+                CREATE TABLE IF NOT EXISTS missile_stats (
+                    id UUID PRIMARY KEY, "itemId" UUID UNIQUE REFERENCES items(id) ON DELETE CASCADE,
+                    damage DOUBLE PRECISION, "lockTime" DOUBLE PRECISION, "lockRange" DOUBLE PRECISION,
+                    "trackingAngle" DOUBLE PRECISION, speed DOUBLE PRECISION, "fuelTime" DOUBLE PRECISION,
+                    "lockingType" TEXT
+                );
+                CREATE TABLE IF NOT EXISTS thruster_stats (
+                    id UUID PRIMARY KEY, "itemId" UUID UNIQUE REFERENCES items(id) ON DELETE CASCADE,
+                    "thrustCapacity" DOUBLE PRECISION, "maxThrust" DOUBLE PRECISION, "fuelBurnRate" DOUBLE PRECISION,
+                    "thrustType" TEXT, "powerDraw" DOUBLE PRECISION, "thermalOutput" DOUBLE PRECISION, "emSignature" DOUBLE PRECISION
+                );
+                CREATE TABLE IF NOT EXISTS ships (
+                    id UUID PRIMARY KEY, "itemId" UUID UNIQUE REFERENCES items(id) ON DELETE CASCADE,
+                    "maxCrew" INTEGER, cargo DOUBLE PRECISION, "scmSpeed" DOUBLE PRECISION, "afterburnerSpeed" DOUBLE PRECISION,
+                    "pitchRate" DOUBLE PRECISION, "yawRate" DOUBLE PRECISION, "rollRate" DOUBLE PRECISION,
+                    "maxAccelMain" DOUBLE PRECISION, "maxAccelRetro" DOUBLE PRECISION,
+                    "hydrogenFuelCap" DOUBLE PRECISION, "quantumFuelCap" DOUBLE PRECISION,
+                    "lengthMeters" DOUBLE PRECISION, "beamMeters" DOUBLE PRECISION, "heightMeters" DOUBLE PRECISION,
+                    role TEXT, focus TEXT, career TEXT, "isSpaceship" BOOLEAN DEFAULT TRUE, "isGravlev" BOOLEAN DEFAULT FALSE,
+                    "baseEmSignature" DOUBLE PRECISION, "baseIrSignature" DOUBLE PRECISION, "baseCsSignature" DOUBLE PRECISION
+                );
+                CREATE TABLE IF NOT EXISTS hardpoints (
+                    id UUID PRIMARY KEY, "parentItemId" UUID REFERENCES items(id) ON DELETE CASCADE,
+                    "hardpointName" TEXT NOT NULL, category TEXT NOT NULL,
+                    "minSize" INTEGER DEFAULT 0, "maxSize" INTEGER DEFAULT 0,
+                    "isFixed" BOOLEAN DEFAULT FALSE, "isManned" BOOLEAN DEFAULT FALSE, "isInternal" BOOLEAN DEFAULT FALSE,
+                    "equippedItemId" UUID REFERENCES items(id) ON DELETE SET NULL,
+                    UNIQUE("parentItemId", "hardpointName")
+                );
+                CREATE TABLE IF NOT EXISTS locations (
+                    id UUID PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL,
+                    "parentName" TEXT, system TEXT,
+                    UNIQUE(name, "parentName")
+                );
+                CREATE TABLE IF NOT EXISTS shops (
+                    id UUID PRIMARY KEY, name TEXT NOT NULL, "locationId" UUID REFERENCES locations(id) ON DELETE CASCADE,
+                    "shopType" TEXT,
+                    UNIQUE(name, "locationId")
+                );
+                CREATE TABLE IF NOT EXISTS shop_inventory (
+                    id UUID PRIMARY KEY, "shopId" UUID REFERENCES shops(id) ON DELETE CASCADE,
+                    "itemId" UUID REFERENCES items(id) ON DELETE CASCADE,
+                    "priceBuy" DOUBLE PRECISION, "priceSell" DOUBLE PRECISION,
+                    "isAvailable" BOOLEAN DEFAULT TRUE, stock INTEGER,
+                    UNIQUE("shopId", "itemId")
+                );
+                CREATE TABLE IF NOT EXISTS game_versions (
+                    id UUID PRIMARY KEY, version TEXT UNIQUE NOT NULL, source TEXT NOT NULL,
+                    "itemCount" INTEGER DEFAULT 0, "processedAt" TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    notes TEXT
+                );
+            """))
+            console.print("[green]✓ Tables created or verified[/]")
 
     repo_url = os.getenv("SCUNPACKED_REPO_URL", REPO_URL_DEFAULT)
     data_path = Path(local_path) if local_path else Path(os.getenv("SCUNPACKED_LOCAL_PATH", "./data/scunpacked-data"))
@@ -2237,69 +2362,70 @@ def main(game_version, local_path, dry_run, skip_clone, no_shops):
 
     # Execute
     engine = create_engine(db_url)
-    with engine.begin() as conn:
+    with engine.connect() as conn:
+        # Phase A: Items + Stats
         console.print("\n[cyan]-> Phase A: Inserting items + stats...[/]")
         turret_hp_count = 0
-        for parsed in all_items:
-            iid = upsert_item(conn, parsed["item"])
-            if parsed["statsTable"] and parsed["stats"]:
-                upsert_stats(conn, parsed["statsTable"], iid, parsed["stats"])
-            # Insert child hardpoints for turrets/weapons
-            for hp in parsed.get("hardpoints", []):
-                upsert_hardpoint(conn, iid, hp)
-                turret_hp_count += 1
+        batch_size = 100
+        for i, parsed in enumerate(all_items):
+            with conn.begin():
+                iid = upsert_item(conn, parsed["item"])
+                if parsed["statsTable"] and parsed["stats"]:
+                    upsert_stats(conn, parsed["statsTable"], iid, parsed["stats"])
+                for hp in parsed.get("hardpoints", []):
+                    upsert_hardpoint(conn, iid, hp)
+                    turret_hp_count += 1
+            if i % batch_size == 0:
+                console.print(f"    -> Progress: {i}/{len(all_items)} items...")
 
+        # Phase B: Ships + Hardpoints
         console.print("[cyan]-> Phase B: Inserting ships + hardpoints...[/]")
-        for s in ships:
-            iid = upsert_item(conn, s["item"])
-            upsert_ship(conn, iid, s["ship"])
-            for hp in s["hardpoints"]:
-                upsert_hardpoint(conn, iid, hp)
-        console.print(f"[green]  -> {len(all_items)} items ({turret_hp_count} child ports) + {len(ships)} ships inserted[/]")
+        for i, s in enumerate(ships):
+            with conn.begin():
+                iid = upsert_item(conn, s["item"])
+                upsert_ship(conn, iid, s["ship"])
+                for hp in s["hardpoints"]:
+                    upsert_hardpoint(conn, iid, hp)
+            if i % 25 == 0:
+                console.print(f"    -> Progress: {i}/{len(ships)} ships...")
 
+        console.print(f"[green]  -> {len(all_items)} items + {len(ships)} ships inserted[/]")
+
+        # Phase C: Linking
         console.print("[cyan]-> Phase C: Linking default loadouts...[/]")
-        linked, missed = 0, 0
-        missed_samples = []
-        # Link hierarchical loadouts: each entry has parentRef -> portName -> itemRef
-        for s in ships:
-            for d in s["default_items"]:
-                parent_ref = d.get("parentRef", s["item"]["reference"])
-                port_name = d.get("portName") or d.get("hardpointName", "")
-                item_ref = d.get("itemRef") or d.get("itemReference", "")
-                if not port_name or not item_ref:
-                    continue
-                pid = resolve_item_id(conn, parent_ref)
-                if pid and link_default_item(conn, pid, port_name, item_ref):
-                    linked += 1
-                else:
-                    missed += 1
-                    if len(missed_samples) < 5:
-                        missed_samples.append(f"{parent_ref}/{port_name} -> {item_ref}")
-        # Link turret/item child default loadouts
-        for parsed in all_items:
-            for d in parsed.get("default_items", []):
-                pid = resolve_item_id(conn, parsed["item"]["reference"])
-                port_name = d.get("portName") or d.get("hardpointName", "")
-                item_ref = d.get("itemRef") or d.get("itemReference", "")
-                if pid and port_name and item_ref and link_default_item(conn, pid, port_name, item_ref):
-                    linked += 1
+        with conn.begin():
+            linked, missed = 0, 0
+            missed_samples = []
+            for s in ships:
+                for d in s["default_items"]:
+                    parent_ref = d.get("parentRef", s["item"]["reference"])
+                    port_name = d.get("portName") or d.get("hardpointName", "")
+                    item_ref = d.get("itemRef") or d.get("itemReference", "")
+                    if not port_name or not item_ref: continue
+                    pid = resolve_item_id(conn, parent_ref)
+                    if pid and link_default_item(conn, pid, port_name, item_ref): linked += 1
+                    else:
+                        missed += 1
+                        if len(missed_samples) < 5: missed_samples.append(f"{parent_ref}/{port_name} -> {item_ref}")
+            for parsed in all_items:
+                for d in parsed.get("default_items", []):
+                    pid = resolve_item_id(conn, parsed["item"]["reference"])
+                    port_name = d.get("portName") or d.get("hardpointName", "")
+                    item_ref = d.get("itemRef") or d.get("itemReference", "")
+                    if pid and port_name and item_ref and link_default_item(conn, pid, port_name, item_ref): linked += 1
         console.print(f"[green]  -> {linked} hardpoints linked[/]")
-        if missed:
-            console.print(f"[yellow]  ! {missed} default items not found in DB[/]")
-            if missed_samples:
-                console.print("[yellow]  Sample unresolved refs:[/]")
-                for ref in missed_samples:
-                    console.print(f"    ? {ref[:60]}")
 
         if not no_shops:
-            ingest_shops_from_index(conn, idx)
+            with conn.begin():
+                ingest_shops_from_index(conn, idx)
 
-        conn.execute(text("""
-            INSERT INTO game_versions (id, version, source, "itemCount", "processedAt")
-            VALUES (:id, :v, 'scunpacked-data/v3', :c, :now)
-            ON CONFLICT (version) DO UPDATE SET "itemCount"=:c, "processedAt"=:now
-        """), {"id": str(uuid.uuid4()), "v": game_version,
-               "c": len(all_items) + len(ships), "now": datetime.utcnow()})
+        with conn.begin():
+            conn.execute(text("""
+                INSERT INTO game_versions (id, version, source, "itemCount", "processedAt")
+                VALUES (:id, :v, 'scunpacked-data/v3', :c, :now)
+                ON CONFLICT (version) DO UPDATE SET "itemCount"=:c, "processedAt"=:now
+            """), {"id": str(uuid.uuid4()), "v": game_version,
+                   "c": len(all_items) + len(ships), "now": datetime.utcnow()})
 
     console.print(f"\n[bold green]✅ Pipeline v3 complete — {game_version}[/]\n")
 

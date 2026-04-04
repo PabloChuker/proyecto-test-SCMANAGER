@@ -181,8 +181,8 @@ model ThrusterStats {
 }
 
 model Ship {
-  id               String  @id @default(uuid())
-  itemId           String  @unique
+  id               String           @id @default(uuid())
+  itemId           String           @unique
   maxCrew          Int?
   cargo            Float?
   scmSpeed         Float?
@@ -200,14 +200,173 @@ model Ship {
   role             String?
   focus            String?
   career           String?
-  isSpaceship      Boolean @default(true)
-  isGravlev        Boolean @default(false)
+  isSpaceship      Boolean          @default(true)
+  isGravlev        Boolean          @default(false)
   baseEmSignature  Float?
   baseIrSignature  Float?
   baseCsSignature  Float?
-  item             Item    @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  item             Item             @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  flightStats      ShipFlightStats?
+  resistances      ShipResistances?
+  fuel             ShipFuel?
+  insurance        ShipInsurance?
 
   @@map("ships")
+}
+
+// ── Satellite: Flight & Performance (SPViewer Level) ──
+model ShipFlightStats {
+  id                    String @id @default(uuid())
+  shipId                String @unique
+  // Speeds
+  scmSpeed              Float?
+  maxSpeed              Float?
+  boostSpeedForward     Float?
+  boostSpeedBackward    Float?
+  // Angular rates (deg/s)
+  pitch                 Float?
+  yaw                   Float?
+  roll                  Float?
+  pitchBoosted          Float?
+  yawBoosted            Float?
+  rollBoosted           Float?
+  // Acceleration (m/s²)
+  accelForward          Float?
+  accelBackward         Float?
+  accelUp               Float?
+  accelDown             Float?
+  accelStrafe           Float?
+  // Acceleration in G
+  accelForwardG         Float?
+  accelBackwardG        Float?
+  accelUpG              Float?
+  accelDownG            Float?
+  accelStrafeG          Float?
+  // Boost multipliers
+  boostMultForward      Float?
+  boostMultBackward     Float?
+  boostMultUp           Float?
+  boostMultStrafe       Float?
+  // Boost capacitor
+  boostCapacitorMax     Float?
+  boostRegenPerSec      Float?
+  boostRegenTime        Float?
+  // Timing (seconds)
+  zeroToScm             Float?
+  zeroToMax             Float?
+  scmToZero             Float?
+  // Mass
+  massEmpty             Float?
+  massLoadout           Float?
+  massTotal             Float?
+  ship                  Ship   @relation(fields: [shipId], references: [id], onDelete: Cascade)
+
+  @@map("ship_flight_stats")
+}
+
+// ── Satellite: Armor, Resistances & Signatures ──
+model ShipResistances {
+  id                    String @id @default(uuid())
+  shipId                String @unique
+  // Hull armor HP
+  armorHp               Float?
+  // Damage multipliers (lower = more resistant)
+  dmgMultPhysical       Float?
+  dmgMultEnergy         Float?
+  dmgMultDistortion     Float?
+  dmgMultThermal        Float?
+  dmgMultBiochemical    Float?
+  dmgMultStun           Float?
+  // Signal multipliers
+  sigMultCrossSection   Float?
+  sigMultInfrared       Float?
+  sigMultElectromagnetic Float?
+  // Penetration resistance
+  penResistBase         Float?
+  penResistPhysical     Float?
+  penResistEnergy       Float?
+  penResistDistortion   Float?
+  // Base signatures (ship-level)
+  baseEmSignature       Float?
+  baseIrSignature       Float?
+  baseCsSignature       Float?
+  // Cross-section axes
+  crossSectionX         Float?
+  crossSectionY         Float?
+  crossSectionZ         Float?
+  // Emission totals
+  emTotalShields        Float?
+  emTotalQuantum        Float?
+  irTotalShields        Float?
+  irTotalQuantum        Float?
+  ship                  Ship   @relation(fields: [shipId], references: [id], onDelete: Cascade)
+
+  @@map("ship_resistances")
+}
+
+// ── Satellite: Fuel & Propulsion Economy ──
+model ShipFuel {
+  id                    String @id @default(uuid())
+  shipId                String @unique
+  // Hydrogen fuel
+  hydrogenCapacity      Float?
+  fuelIntakeRate        Float?
+  fuelUsageMain         Float?
+  fuelUsageRetro        Float?
+  fuelUsageManeuvering  Float?
+  maneuveringTimeTillEmpty Float?
+  intakeToMainRatio     Float?
+  // Quantum fuel
+  quantumCapacity       Float?
+  quantumRange          Float?
+  quantumSpeed          Float?
+  quantumSpoolTime      Float?
+  quantumTravelTimePO   Float?
+  quantumFuelUsagePO    Float?
+  // Thrust capacities
+  thrustMain            Float?
+  thrustRetro           Float?
+  thrustManeuvering     Float?
+  // Power budget (segments)
+  powerGeneration       Float?
+  powerUsedShields      Float?
+  powerUsedQuantum      Float?
+  // Cooling budget (segments)
+  coolingGeneration     Float?
+  coolingUsedShields    Float?
+  coolingUsedQuantum    Float?
+  // Shield totals
+  shieldHpTotal         Float?
+  shieldRegenTotal      Float?
+  ship                  Ship   @relation(fields: [shipId], references: [id], onDelete: Cascade)
+
+  @@map("ship_fuel")
+}
+
+// ── Satellite: Insurance ──
+model ShipInsurance {
+  id                    String @id @default(uuid())
+  shipId                String @unique
+  expeditedCost         Float?
+  expeditedClaimTime    Float?
+  standardClaimTime     Float?
+  ship                  Ship   @relation(fields: [shipId], references: [id], onDelete: Cascade)
+
+  @@map("ship_insurance")
+}
+
+// ── Localization (Multi-language) ──
+model Translation {
+  id        String @id @default(uuid())
+  key       String
+  locale    String
+  value     String
+  category  String?
+
+  @@unique([key, locale])
+  @@index([key])
+  @@index([locale])
+  @@map("translations")
 }
 
 model Hardpoint {

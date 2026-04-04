@@ -57,7 +57,7 @@ export default function DpsPage() {
             </div>
           }
         >
-          <LoadoutBuilder shipId="AEGS_Avenger_Titan" />
+          <LoadoutBuilder shipId="Avenger_Titan" />
         </Suspense>
 
         {/* ── Stats graphs section ── */}

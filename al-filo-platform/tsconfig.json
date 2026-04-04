@@ -10,7 +10,6 @@
     "skipLibCheck": true,
     "strict": false,
     "noImplicitAny": false,
-    "suppressImplicitAnyIndexErrors": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
     "esModuleInterop": true,
