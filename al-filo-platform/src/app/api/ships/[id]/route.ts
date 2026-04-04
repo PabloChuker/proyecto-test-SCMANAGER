@@ -1,10 +1,10 @@
 // =============================================================================
-// AL FILO — GET /api/ships/[id] v9 (Resilient Raw SQL)
+// AL FILO — GET /api/ships/[id] v10 (New ship_hardpoints schema)
 //
-// Queries ships + ship_hardpoints directly. Satellite tables (flight_stats,
-// fuel, etc.) loaded separately with try/catch to handle column name
-// mismatches (camelCase from Prisma vs snake_case).
-// Component tables may be empty (Xolii populating them).
+// Uses the new ship_hardpoints table populated from sc-unpacked JSON.
+// Hardpoints JOIN with component tables (weapon_guns, shields, power_plants,
+// coolers, quantum_drives) via default_item_class = class_name.
+// Nested loadout (gimbals→weapons, racks→missiles) stored in loadout_json.
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -12,90 +12,260 @@ import { prisma } from "@/lib/prisma";
 
 export const revalidate = 300;
 
-// ─── Category inference from hardpoint_name ─────────────────────────────────
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
-// Known Star Citizen component names → category mapping
-const KNOWN_COMPONENTS: Record<string, string> = {
-  // Power plants
-  "endurance": "POWER_PLANT", "maelstrom": "POWER_PLANT", "regulus": "POWER_PLANT",
-  "zenith": "POWER_PLANT", "fierell cascade": "POWER_PLANT", "genoa": "POWER_PLANT",
-  "drassik": "POWER_PLANT", "lotus": "POWER_PLANT", "quadracell": "POWER_PLANT",
-  "js-300": "POWER_PLANT", "js-400": "POWER_PLANT", "siren": "POWER_PLANT",
-  // Coolers
-  "bracer": "COOLER", "ultraflow": "COOLER", "snowpack": "COOLER",
-  "thermasync": "COOLER", "wen/caeli": "COOLER", "rapidcool": "COOLER",
-  "heatpipe": "COOLER", "zero-rush": "COOLER", "blizzard": "COOLER",
-  "arctic storm": "COOLER", "chill max": "COOLER",
-  // Quantum drives
-  "expedition": "QUANTUM_DRIVE", "beacon": "QUANTUM_DRIVE", "yeager": "QUANTUM_DRIVE",
-  "hemera": "QUANTUM_DRIVE", "eos": "QUANTUM_DRIVE", "pontus": "QUANTUM_DRIVE",
-  "atlas": "QUANTUM_DRIVE", "rush": "QUANTUM_DRIVE", "vk-00": "QUANTUM_DRIVE",
-  "voyage": "QUANTUM_DRIVE",
-  // Shields
-  "bulwark": "SHIELD", "shimmer": "SHIELD", "fr-66": "SHIELD", "mirage": "SHIELD",
-  "palisade": "SHIELD", "rampart": "SHIELD", "guardian": "SHIELD",
-  "stop-net": "SHIELD", "aspis": "SHIELD",
-  // Radars
-  "ecouter": "RADAR", "tracker": "RADAR", "observer": "RADAR", "surveyor": "RADAR",
-  // Countermeasures
-  "decoy launcher": "COUNTERMEASURE", "noise launcher": "COUNTERMEASURE",
-};
-
-function inferCategory(name: string, hp: any): string {
-  const n = name.toLowerCase().trim();
-
-  // Check which default component FK is populated
-  if (hp.default_weapon_id) return "WEAPON";
-  if (hp.default_shield_id) return "SHIELD";
-  if (hp.default_power_id) return "POWER_PLANT";
-  if (hp.default_cooler_id) return "COOLER";
-  if (hp.default_quantum_id) return "QUANTUM_DRIVE";
-
-  // Exact match group names from DB (e.g., "POWER", "HEAT", "SHIELDS", "WEAPONS")
-  const EXACT_GROUPS: Record<string, string> = {
-    "power": "POWER_PLANT", "heat": "COOLER", "shields": "SHIELD",
-    "weapons": "WEAPON", "missiles": "MISSILE_RACK", "comms": "AVIONICS",
-    "lights": "OTHER", "security": "OTHER", "door": "OTHER", "access": "OTHER",
-  };
-  if (EXACT_GROUPS[n]) return EXACT_GROUPS[n];
-
-  // Known component names (checks if n starts with or equals a known component)
-  for (const [cName, cat] of Object.entries(KNOWN_COMPONENTS)) {
-    if (n === cName || n.includes(cName)) return cat;
-  }
-
-  // Infer from name patterns (Star Citizen hardpoint naming conventions)
-  if (n.includes("turret")) return "TURRET";
-  if (n.includes("weapon") || n.includes("gun") || n.includes("cannon") || n.includes("gimbal") || n.includes("nose_mount")) return "WEAPON";
-  if (n.includes("missile") || n.includes("pylon") || n.includes("bomb") || n.includes("msd-")) return "MISSILE_RACK";
-  if (n.includes("shield")) return "SHIELD";
-  if (n.includes("power_plant") || n.includes("powerplant") || n.includes("power plant")) return "POWER_PLANT";
-  if (n.includes("cooler") || n.includes("cooling")) return "COOLER";
-  if (n.includes("quantum") || n.includes("qdrive") || n.includes("quantum_drive")) return "QUANTUM_DRIVE";
-  if (n.includes("main_thruster") || n.includes("thruster_main")) return "THRUSTER_MAIN";
-  if (n.includes("thruster") || n.includes("mav")) return "THRUSTER_MANEUVERING";
-  if (n.includes("radar") || n.includes("scanner")) return "RADAR";
-  if (n.includes("armor")) return "ARMOR";
-  if (n.includes("fuel_tank") || n.includes("internal tank")) return "FUEL_TANK";
-  if (n.includes("fuel_intake") || n.includes("intake")) return "FUEL_INTAKE";
-  if (n.includes("mining")) return "MINING";
-  if (n.includes("salvage")) return "SALVAGE";
-  if (n.includes("tractor")) return "TRACTOR_BEAM";
-  if (n.includes("countermeasure") || n.includes("cm_launcher") || n.includes("flare") || n.includes("chaff") || n.includes("noise")) return "COUNTERMEASURE";
-  if (n.includes("avionics")) return "AVIONICS";
-  if (n.includes("self destruct")) return "OTHER";
-  if (n.includes("flight blade") || n.includes("blade")) return "OTHER";
-
-  return "OTHER";
+function numOrNull(v: any): number | null {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return isNaN(n) ? null : n;
 }
-
-// ─── Safe column accessor (handles camelCase and snake_case) ────────────────
 
 function col(row: any, ...keys: string[]): any {
   for (const k of keys) {
     if (row[k] !== undefined && row[k] !== null) return row[k];
   }
   return null;
+}
+
+// ─── Hardpoint type → store category mapping ────────────────────────────────
+
+const HP_TYPE_TO_CATEGORY: Record<string, string> = {
+  Weapon: "WEAPON",
+  Shield: "SHIELD",
+  PowerPlant: "POWER_PLANT",
+  Cooler: "COOLER",
+  QuantumDrive: "QUANTUM_DRIVE",
+  Radar: "RADAR",
+  Countermeasure: "COUNTERMEASURE",
+  ManneuverThruster: "THRUSTER_MANEUVERING",
+  MainThruster: "THRUSTER_MAIN",
+  Armor: "ARMOR",
+  FuelTank: "FUEL_TANK",
+  FuelIntake: "FUEL_INTAKE",
+};
+
+function hpCategory(hpType: string, hpName: string): string {
+  if (HP_TYPE_TO_CATEGORY[hpType]) return HP_TYPE_TO_CATEGORY[hpType];
+  // Fallback: infer from name
+  const n = hpName.toLowerCase();
+  if (n.includes("turret")) return "TURRET";
+  if (n.includes("weapon") || n.includes("gun")) return "WEAPON";
+  if (n.includes("missile")) return "MISSILE_RACK";
+  if (n.includes("shield")) return "SHIELD";
+  if (n.includes("power_plant")) return "POWER_PLANT";
+  if (n.includes("cooler")) return "COOLER";
+  if (n.includes("quantum")) return "QUANTUM_DRIVE";
+  if (n.includes("radar")) return "RADAR";
+  if (n.includes("countermeasure")) return "COUNTERMEASURE";
+  return "OTHER";
+}
+
+// ─── Build equippedItem from component row ──────────────────────────────────
+
+function buildWeaponItem(row: any): any {
+  const dps_total =
+    (numOrNull(row.dps_physical) ?? 0) +
+    (numOrNull(row.dps_energy) ?? 0) +
+    (numOrNull(row.dps_distortion) ?? 0) +
+    (numOrNull(row.dps_thermal) ?? 0) +
+    (numOrNull(row.dps_biochemical) ?? 0) +
+    (numOrNull(row.dps_stun) ?? 0);
+
+  const alpha_total =
+    (numOrNull(row.alpha_physical) ?? 0) +
+    (numOrNull(row.alpha_energy) ?? 0) +
+    (numOrNull(row.alpha_distortion) ?? 0) +
+    (numOrNull(row.alpha_thermal) ?? 0) +
+    (numOrNull(row.alpha_biochemical) ?? 0) +
+    (numOrNull(row.alpha_stun) ?? 0);
+
+  return {
+    id: row.id || row.class_name,
+    reference: row.class_name || "",
+    name: row.name || row.item_name || "",
+    localizedName: null,
+    className: row.class_name,
+    type: "WEAPON",
+    size: numOrNull(row.size),
+    grade: row.grade ?? null,
+    manufacturer: row.manufacturer_id ?? null,
+    componentStats: {
+      alphaDamage: alpha_total,
+      dps: dps_total,
+      fireRate: numOrNull(row.rate_of_fire),
+      damagePerShot: numOrNull(row.damage_per_shot),
+      alphaPhysical: numOrNull(row.alpha_physical),
+      alphaEnergy: numOrNull(row.alpha_energy),
+      alphaDistortion: numOrNull(row.alpha_distortion),
+      effectiveRange: numOrNull(row.effective_range),
+      ammoSpeed: numOrNull(row.ammo_speed),
+      ammoCapacity: numOrNull(row.ammo_capacity),
+      fireMode: row.fire_mode ?? null,
+    },
+  };
+}
+
+function buildShieldItem(row: any): any {
+  return {
+    id: row.id || row.class_name,
+    reference: row.class_name || "",
+    name: row.name || row.item_name || "",
+    localizedName: null,
+    className: row.class_name,
+    type: "SHIELD",
+    size: numOrNull(row.size),
+    grade: row.grade ?? null,
+    manufacturer: row.manufacturer_id ?? null,
+    componentStats: {
+      shieldHp: numOrNull(row.max_shield_health),
+      maxHp: numOrNull(row.max_shield_health),
+      shieldRegen: numOrNull(row.max_shield_regen),
+      regenRate: numOrNull(row.max_shield_regen),
+      downedDelay: numOrNull(row.downed_delay),
+      damagedDelay: numOrNull(row.damaged_delay),
+    },
+  };
+}
+
+function buildPowerPlantItem(row: any): any {
+  return {
+    id: row.uuid || row.class_name,
+    reference: row.class_name || "",
+    name: row.name || "",
+    localizedName: null,
+    className: row.class_name,
+    type: "POWER_PLANT",
+    size: numOrNull(row.size),
+    grade: row.grade ?? null,
+    manufacturer: row.manufacturer_id ?? null,
+    componentStats: {
+      powerOutput: numOrNull(row.power_generation),
+      powerDraw: numOrNull(row.power_draw_max),
+    },
+  };
+}
+
+function buildCoolerItem(row: any): any {
+  return {
+    id: row.id || row.class_name,
+    reference: row.class_name || "",
+    name: row.name || "",
+    localizedName: null,
+    className: row.class_name,
+    type: "COOLER",
+    size: numOrNull(row.size),
+    grade: row.grade ?? null,
+    manufacturer: row.manufacturer_id ?? null,
+    componentStats: {
+      coolingRate: numOrNull(row.cooling_rate),
+      powerDraw: numOrNull(row.power_draw_max),
+    },
+  };
+}
+
+function buildQuantumItem(row: any): any {
+  return {
+    id: row.uuid || row.class_name,
+    reference: row.class_name || "",
+    name: row.name || "",
+    localizedName: null,
+    className: row.class_name,
+    type: "QUANTUM_DRIVE",
+    size: numOrNull(row.size),
+    grade: row.grade ?? null,
+    manufacturer: row.manufacturer_id ?? null,
+    componentStats: {
+      maxSpeed: numOrNull(row.drive_speed),
+      fuelRate: numOrNull(row.fuel_rate),
+      cooldownTime: numOrNull(row.cooldown_time),
+      spoolUpTime: numOrNull(row.spool_up_time),
+    },
+  };
+}
+
+// Build a generic item from ship_hardpoints data (no component table match)
+function buildGenericItem(hp: any): any {
+  if (!hp.default_item_name || hp.default_item_name === "") return null;
+  return {
+    id: hp.default_item_uuid || hp.id,
+    reference: hp.default_item_class || "",
+    name: hp.default_item_name || "",
+    localizedName: null,
+    className: hp.default_item_class,
+    type: hp.hardpoint_type || "OTHER",
+    size: numOrNull(hp.max_size),
+    grade: hp.default_item_grade ?? null,
+    manufacturer: hp.default_item_manufacturer ?? null,
+    componentStats: null,
+  };
+}
+
+// ─── Build children from loadout_json ───────────────────────────────────────
+
+function buildChildren(
+  loadoutJson: any[] | null,
+  weaponMap: Map<string, any>,
+  missileMap: Map<string, any>,
+): any[] {
+  if (!loadoutJson || !Array.isArray(loadoutJson)) return [];
+
+  return loadoutJson
+    .map((entry, idx) => {
+      const className = entry.ClassName || entry.className || "";
+      let equippedItem: any = null;
+
+      // Try to find the weapon in weapon_guns
+      if (weaponMap.has(className)) {
+        equippedItem = buildWeaponItem(weaponMap.get(className));
+      }
+
+      // If not found and it's a weapon type, build from loadout entry data
+      if (!equippedItem && entry.Type?.includes("WeaponGun")) {
+        equippedItem = {
+          id: entry.UUID || `child-${idx}`,
+          reference: className,
+          name: entry.Name || className,
+          localizedName: null,
+          className,
+          type: "WEAPON",
+          size: entry.Size ?? null,
+          grade: entry.Grade ?? null,
+          manufacturer: null,
+          componentStats: null,
+        };
+      }
+
+      // Missile
+      if (!equippedItem && entry.Type?.includes("Missile")) {
+        equippedItem = {
+          id: entry.UUID || `child-${idx}`,
+          reference: className,
+          name: entry.Name || className,
+          localizedName: null,
+          className,
+          type: "MISSILE_RACK",
+          size: entry.Size ?? null,
+          grade: entry.Grade ?? null,
+          manufacturer: null,
+          componentStats: entry.DamageTotal
+            ? { alphaDamage: Number(entry.DamageTotal), damage: Number(entry.DamageTotal) }
+            : null,
+        };
+      }
+
+      if (!equippedItem) return null;
+
+      return {
+        id: entry.UUID || `child-${idx}`,
+        hardpointName: entry.HardpointName || `sub_${idx}`,
+        category: equippedItem.type === "MISSILE_RACK" ? "MISSILE_RACK" : "WEAPON",
+        minSize: 0,
+        maxSize: entry.MaxSize ?? equippedItem.size ?? 0,
+        isFixed: false,
+        equippedItem,
+      };
+    })
+    .filter(Boolean);
 }
 
 // ─── Main handler ───────────────────────────────────────────────────────────
@@ -107,8 +277,7 @@ export async function GET(
   try {
     const { id } = await params;
 
-    // ── 1. Find the ship (just the ships table, no JOINs) ──
-    // Cast all uuid columns to text for comparison with text parameter
+    // ── 1. Find the ship ──
     const shipRows: any[] = await prisma.$queryRawUnsafe(
       `SELECT * FROM ships
        WHERE reference = $1
@@ -126,7 +295,7 @@ export async function GET(
 
     const ship = shipRows[0];
 
-    // ── 2. Load satellite data separately (resilient to column name issues) ──
+    // ── 2. Load satellite data ──
     let flightStats: any = null;
     let fuelStats: any = null;
 
@@ -150,82 +319,149 @@ export async function GET(
       console.warn("[ships/[id]] Could not load fuel stats:", e);
     }
 
-    // ── 3. Get hardpoints ──
+    // ── 3. Get hardpoints from NEW schema (match by ship reference) ──
     const hardpointRows: any[] = await prisma.$queryRawUnsafe(
-      `SELECT * FROM ship_hardpoints WHERE ship_id::text = $1 ORDER BY max_size DESC, hardpoint_name ASC`,
-      String(ship.id),
+      `SELECT * FROM ship_hardpoints
+       WHERE ship_reference = $1
+       ORDER BY hardpoint_type, max_size DESC, hardpoint_name ASC`,
+      String(ship.reference),
     );
 
-    // ── 4. Try to resolve equipped components (may be empty tables) ──
-    const weaponIds = hardpointRows.map(h => h.default_weapon_id).filter(Boolean);
-    const shieldIds = hardpointRows.map(h => h.default_shield_id).filter(Boolean);
-    const powerIds = hardpointRows.map(h => h.default_power_id).filter(Boolean);
-    const coolerIds = hardpointRows.map(h => h.default_cooler_id).filter(Boolean);
-    const quantumIds = hardpointRows.map(h => h.default_quantum_id).filter(Boolean);
+    // ── 4. Collect all default_item_class values for batch lookup ──
+    const allClasses = hardpointRows
+      .map((hp) => hp.default_item_class)
+      .filter((c) => c && c !== "");
 
-    const components = new Map<string, any>();
+    // Also collect class names from loadout_json children
+    const childClasses: string[] = [];
+    for (const hp of hardpointRows) {
+      const loadout = hp.loadout_json;
+      if (Array.isArray(loadout)) {
+        for (const entry of loadout) {
+          if (entry.ClassName) childClasses.push(entry.ClassName);
+          if (entry.className) childClasses.push(entry.className);
+        }
+      }
+    }
 
-    const loadComponents = async (ids: string[], table: string, type: string) => {
-      if (ids.length === 0) return;
+    const uniqueClasses = [...new Set([...allClasses, ...childClasses])];
+
+    // ── 5. Batch-fetch components from all tables ──
+    const componentMap = new Map<string, { table: string; row: any }>();
+
+    const batchFetch = async (
+      table: string,
+      classCol: string,
+      classes: string[],
+    ) => {
+      if (classes.length === 0) return;
       try {
-        // Use IN clause with explicit text cast for uuid comparison
-        const placeholders = ids.map((_, i) => `$${i + 1}`).join(",");
+        const placeholders = classes.map((_, i) => `$${i + 1}`).join(",");
         const rows: any[] = await prisma.$queryRawUnsafe(
-          `SELECT * FROM ${table} WHERE id::text IN (${placeholders})`,
-          ...ids.map(String),
+          `SELECT * FROM ${table} WHERE ${classCol} IN (${placeholders})`,
+          ...classes,
         );
         for (const row of rows) {
-          components.set(row.id, { ...row, _type: type });
+          componentMap.set(row[classCol], { table, row });
         }
       } catch {
-        // Table might not have data — skip gracefully
+        // Table might not exist or have issues — skip
       }
     };
 
     await Promise.all([
-      loadComponents(weaponIds, "component_weapons", "WEAPON"),
-      loadComponents(shieldIds, "component_shields", "SHIELD"),
-      loadComponents(powerIds, "component_power_plants", "POWER_PLANT"),
-      loadComponents(coolerIds, "component_coolers", "COOLER"),
-      loadComponents(quantumIds, "component_quantum_drives", "QUANTUM_DRIVE"),
+      batchFetch("weapon_guns", "class_name", uniqueClasses),
+      batchFetch("shields", "class_name", uniqueClasses),
+      batchFetch("power_plants", "class_name", uniqueClasses),
+      batchFetch("coolers", "class_name", uniqueClasses),
+      batchFetch("quantum_drives", "class_name", uniqueClasses),
     ]);
 
-    // ── 5. Build flat hardpoints ──
-    const flatHardpoints = hardpointRows.map((hp) => {
-      const category = inferCategory(hp.hardpoint_name, hp);
+    // Build weapon map for child resolution
+    const weaponMap = new Map<string, any>();
+    for (const [cls, { table, row }] of componentMap) {
+      if (table === "weapon_guns") weaponMap.set(cls, row);
+    }
+    // Missile map (missiles use 'name' not 'class_name', so we skip batch for now)
+    const missileMap = new Map<string, any>();
 
-      const defaultId =
-        hp.default_weapon_id ||
-        hp.default_shield_id ||
-        hp.default_power_id ||
-        hp.default_cooler_id ||
-        hp.default_quantum_id;
+    // ── 6. Build flatHardpoints ──
+    const flatHardpoints = hardpointRows
+      .map((hp) => {
+        const category = hpCategory(hp.hardpoint_type, hp.hardpoint_name);
 
-      let equippedItem = null;
-      if (defaultId && components.has(defaultId)) {
-        const comp = components.get(defaultId)!;
-        equippedItem = buildEquippedItem(comp);
-      }
+        // Skip non-useful hardpoints (thrusters, armor, fuel, etc. - info only)
+        // Keep: WEAPON, TURRET, MISSILE_RACK, SHIELD, POWER_PLANT, COOLER, QUANTUM_DRIVE, RADAR, COUNTERMEASURE
+        const USEFUL = new Set([
+          "WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT",
+          "COOLER", "QUANTUM_DRIVE", "RADAR", "COUNTERMEASURE",
+        ]);
+        if (!USEFUL.has(category)) return null;
 
-      return {
-        id: hp.id,
-        hardpointName: hp.hardpoint_name,
-        category,
-        minSize: 0,
-        maxSize: hp.max_size ?? 0,
-        isFixed: false,
-        isManned: false,
-        isInternal: category !== "WEAPON" && category !== "TURRET" && category !== "MISSILE_RACK",
-        equippedItem,
-        children: [] as any[],
-      };
-    });
+        // Build equippedItem from component table match
+        let equippedItem: any = null;
+        const cls = hp.default_item_class;
+        if (cls && componentMap.has(cls)) {
+          const { table, row } = componentMap.get(cls)!;
+          switch (table) {
+            case "weapon_guns":
+              equippedItem = buildWeaponItem(row);
+              break;
+            case "shields":
+              equippedItem = buildShieldItem(row);
+              break;
+            case "power_plants":
+              equippedItem = buildPowerPlantItem(row);
+              break;
+            case "coolers":
+              equippedItem = buildCoolerItem(row);
+              break;
+            case "quantum_drives":
+              equippedItem = buildQuantumItem(row);
+              break;
+          }
+        }
 
-    // ── 6. Build response (handle both camelCase and snake_case columns) ──
-    const scmSpeed = numOrNull(col(ship, "scm_speed", "scmSpeed"))
-      ?? numOrNull(col(flightStats, "scm_speed", "scmSpeed"));
-    const afterburnerSpeed = numOrNull(col(ship, "afterburner_speed", "afterburnerSpeed"))
-      ?? numOrNull(col(flightStats, "max_speed", "maxSpeed"));
+        // If no component match, build generic item from hardpoint data
+        if (!equippedItem) {
+          equippedItem = buildGenericItem(hp);
+        }
+
+        // For weapons: check if this is a gimbal/turret with nested weapons
+        // The loadout_json contains the actual weapons inside gimbals
+        const children = buildChildren(hp.loadout_json, weaponMap, missileMap);
+
+        // If we have children (gimbal → weapon), this is actually a TURRET
+        let finalCategory = category;
+        if (category === "WEAPON" && children.length > 0) {
+          finalCategory = "TURRET";
+        }
+
+        return {
+          id: hp.id,
+          hardpointName: hp.hardpoint_name,
+          category: finalCategory,
+          minSize: hp.min_size ?? 0,
+          maxSize: hp.max_size ?? 0,
+          isFixed: !hp.editable,
+          isManned: false,
+          isInternal:
+            finalCategory !== "WEAPON" &&
+            finalCategory !== "TURRET" &&
+            finalCategory !== "MISSILE_RACK",
+          equippedItem,
+          children,
+        };
+      })
+      .filter(Boolean);
+
+    // ── 7. Build response ──
+    const scmSpeed =
+      numOrNull(col(ship, "scm_speed", "scmSpeed")) ??
+      numOrNull(col(flightStats, "scm_speed", "scmSpeed"));
+    const afterburnerSpeed =
+      numOrNull(col(ship, "afterburner_speed", "afterburnerSpeed")) ??
+      numOrNull(col(flightStats, "max_speed", "maxSpeed"));
 
     const data = {
       id: ship.id,
@@ -242,38 +478,65 @@ export async function GET(
         yawRate: numOrNull(col(flightStats, "yaw", "yawRate")),
         rollRate: numOrNull(col(flightStats, "roll", "rollRate")),
         maxCrew: col(ship, "max_crew", "maxCrew"),
-        cargo: numOrNull(col(ship, "cargo_capacity", "cargoCapacity", "cargo")),
+        cargo: numOrNull(
+          col(ship, "cargo_capacity", "cargoCapacity", "cargo"),
+        ),
         role: ship.role ?? null,
         focus: null,
         career: null,
         size: ship.size ?? null,
         mass: numOrNull(ship.mass),
-        // Extra flight data
-        boostSpeedForward: numOrNull(col(flightStats, "boost_speed_forward", "boostSpeedForward")),
-        accelForward: numOrNull(col(flightStats, "accel_forward", "accelForward")),
-        accelBackward: numOrNull(col(flightStats, "accel_backward", "accelBackward")),
+        boostSpeedForward: numOrNull(
+          col(flightStats, "boost_speed_forward", "boostSpeedForward"),
+        ),
+        accelForward: numOrNull(
+          col(flightStats, "accel_forward", "accelForward"),
+        ),
+        accelBackward: numOrNull(
+          col(flightStats, "accel_backward", "accelBackward"),
+        ),
         accelUp: numOrNull(col(flightStats, "accel_up", "accelUp")),
         accelDown: numOrNull(col(flightStats, "accel_down", "accelDown")),
-        accelStrafe: numOrNull(col(flightStats, "accel_strafe", "accelStrafe")),
-        // Boosted flight data
-        boostSpeedBackward: numOrNull(col(flightStats, "boost_speed_backward", "boostSpeedBackward")),
-        boostedPitch: numOrNull(col(flightStats, "boosted_pitch", "boostedPitch")),
-        boostedYaw: numOrNull(col(flightStats, "boosted_yaw", "boostedYaw")),
-        boostedRoll: numOrNull(col(flightStats, "boosted_roll", "boostedRoll")),
-        // Fuel/power data
-        hydrogenCapacity: numOrNull(col(fuelStats, "hydrogen_capacity", "hydrogenCapacity")),
-        quantumFuelCapacity: numOrNull(col(fuelStats, "quantum_fuel_capacity", "quantumFuelCapacity")),
-        quantumRange: numOrNull(col(fuelStats, "quantum_range", "quantumRange")),
-        shieldHpTotal: numOrNull(col(fuelStats, "shield_hp_total", "shieldHpTotal")),
-        powerGeneration: numOrNull(col(fuelStats, "power_generation", "powerGeneration")),
-        // Hull HP from fuel/resistances tables
+        accelStrafe: numOrNull(
+          col(flightStats, "accel_strafe", "accelStrafe"),
+        ),
+        boostSpeedBackward: numOrNull(
+          col(flightStats, "boost_speed_backward", "boostSpeedBackward"),
+        ),
+        boostedPitch: numOrNull(
+          col(flightStats, "pitch_boosted", "boosted_pitch", "boostedPitch"),
+        ),
+        boostedYaw: numOrNull(col(flightStats, "yaw_boosted", "boosted_yaw", "boostedYaw")),
+        boostedRoll: numOrNull(
+          col(flightStats, "roll_boosted", "boosted_roll", "boostedRoll"),
+        ),
+        hydrogenCapacity: numOrNull(
+          col(fuelStats, "hydrogen_capacity", "hydrogenCapacity"),
+        ),
+        quantumFuelCapacity: numOrNull(
+          col(fuelStats, "quantum_fuel_capacity", "quantumFuelCapacity"),
+        ),
+        quantumRange: numOrNull(
+          col(fuelStats, "quantum_range", "quantumRange"),
+        ),
+        shieldHpTotal: numOrNull(
+          col(fuelStats, "shield_hp_total", "shieldHpTotal"),
+        ),
+        powerGeneration: numOrNull(
+          col(fuelStats, "power_generation", "powerGeneration"),
+        ),
         hullHp: numOrNull(col(fuelStats, "hull_hp", "hullHp")),
       },
     };
 
     return NextResponse.json(
       { data, flatHardpoints },
-      { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" } },
+      {
+        headers: {
+          "Cache-Control":
+            "public, s-maxage=300, stale-while-revalidate=600",
+        },
+      },
     );
   } catch (error: any) {
     console.error("[API /ships/[id]] Error:", error?.message || error);
@@ -282,76 +545,4 @@ export async function GET(
       { status: 500 },
     );
   }
-}
-
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-function numOrNull(v: any): number | null {
-  if (v === null || v === undefined) return null;
-  const n = Number(v);
-  return isNaN(n) ? null : n;
-}
-
-function buildEquippedItem(comp: any): any {
-  const type = comp._type || "OTHER";
-  const stats: Record<string, any> = {};
-
-  // Weapon stats (try both snake_case and camelCase)
-  const alphaDmg = col(comp, "alpha_damage", "alphaDamage");
-  if (alphaDmg != null) stats.alphaDamage = Number(alphaDmg);
-  const fr = col(comp, "fire_rate", "fireRate");
-  if (fr != null) stats.fireRate = Number(fr);
-  const dps = col(comp, "dps");
-  if (dps != null) stats.dps = Number(dps);
-  const dmgType = col(comp, "damage_type", "damageType");
-  if (dmgType != null) stats.damageType = dmgType;
-
-  // Shield stats
-  const maxHp = col(comp, "max_hp", "maxHp");
-  if (maxHp != null) { stats.shieldHp = Number(maxHp); stats.maxHp = Number(maxHp); }
-  const regen = col(comp, "regen_rate", "regenRate");
-  if (regen != null) { stats.shieldRegen = Number(regen); stats.regenRate = Number(regen); }
-
-  // Power stats
-  const po = col(comp, "power_output", "powerOutput");
-  if (po != null) stats.powerOutput = Number(po);
-
-  // Cooler stats
-  const cr = col(comp, "cooling_rate", "coolingRate");
-  if (cr != null) stats.coolingRate = Number(cr);
-
-  // Quantum stats
-  const ms = col(comp, "max_speed", "maxSpeed");
-  if (ms != null) stats.maxSpeed = Number(ms);
-  const frt = col(comp, "fuel_rate", "fuelRate");
-  if (frt != null) stats.fuelRate = Number(frt);
-
-  // Common
-  const pd = col(comp, "power_draw", "powerDraw");
-  if (pd != null) stats.powerDraw = Number(pd);
-  const to = col(comp, "thermal_output", "thermalOutput");
-  if (to != null) stats.thermalOutput = Number(to);
-  const em = col(comp, "em_signature", "emSignature");
-  if (em != null) stats.emSignature = Number(em);
-  const ir = col(comp, "ir_signature", "irSignature");
-  if (ir != null) stats.irSignature = Number(ir);
-
-  // Compute DPS if missing
-  if (!stats.dps && stats.alphaDamage && stats.fireRate) {
-    const a = stats.alphaDamage, f = stats.fireRate;
-    if (a > 0 && f > 0) stats.dps = Math.round(a * (f / 60) * 100) / 100;
-  }
-
-  return {
-    id: comp.id,
-    reference: comp.reference || "",
-    name: comp.name || "",
-    localizedName: null,
-    className: null,
-    type,
-    size: comp.size ?? null,
-    grade: comp.grade ?? null,
-    manufacturer: comp.manufacturer ?? null,
-    componentStats: Object.keys(stats).length > 0 ? stats : null,
-  };
 }
