@@ -398,6 +398,35 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   resetAll: () => { const fresh: Record<string, boolean> = {}; for (const hp of get().hardpoints) { fresh[hp.hardpointName] = true; for (const ch of hp.children) fresh[ch.hardpointName] = true; } set({ overrides: new Map(), componentStates: fresh, flightMode: "SCM" as FlightMode, allocatedPower: { ...ZERO_ALLOC } }); setTimeout(() => get().autoAllocatePower(), 0); },
   setFlightMode: (mode) => set({ flightMode: mode }),
   setAllocatedPower: (cat, points) => { const s = get(); const st = s.getStats(); const alloc = { ...s.allocatedPower }; const cl = Math.max(0, points); const d = cl - alloc[cat]; const tot = Object.values(alloc).reduce((a, b) => a + b, 0); if (d > 0 && tot + d > st.powerNetwork.totalOutput) return; alloc[cat] = cl; set({ allocatedPower: alloc }); },
-  autoAllocatePower: () => { const s = get(); const probe = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, ZERO_ALLOC, s.shipInfo); const total = probe.powerNetwork.totalOutput; const alloc: Record<PowerCategory, number> = { ...ZERO_ALLOC }; let rem = total; for (const c of POWER_CATEGORIES) { if (probe.powerNetwork.categories[c].activeCount === 0) continue; const need = Math.ceil(probe.powerNetwork.categories[c].minDraw); const give = Math.min(need, rem); alloc[c] = give; rem -= give; } if (rem > 0) { const act = POWER_CATEGORIES.filter(c => alloc[c] > 0 || probe.powerNetwork.categories[c].activeCount > 0); let i = 0; while (rem > 0 && act.length > 0) { alloc[act[i % act.length]]++; rem--; i++; } } set({ allocatedPower: alloc }); },
+  autoAllocatePower: () => {
+    const s = get();
+    const probe = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, ZERO_ALLOC, s.shipInfo);
+    const total = probe.powerNetwork.totalOutput;
+    const alloc: Record<PowerCategory, number> = { ...ZERO_ALLOC };
+    let rem = total;
+
+    // Phase 1: Allocate minimum draw for each active category
+    for (const c of POWER_CATEGORIES) {
+      if (probe.powerNetwork.categories[c].activeCount === 0) continue;
+      const need = Math.ceil(probe.powerNetwork.categories[c].minDraw);
+      // Guarantee at least 1 point for each active category (even if minDraw is 0)
+      const give = Math.min(Math.max(need, 1), rem);
+      alloc[c] = give;
+      rem -= give;
+    }
+
+    // Phase 2: Distribute remaining power evenly across active categories
+    if (rem > 0) {
+      const act = POWER_CATEGORIES.filter(c => probe.powerNetwork.categories[c].activeCount > 0);
+      let i = 0;
+      while (rem > 0 && act.length > 0) {
+        alloc[act[i % act.length]]++;
+        rem--;
+        i++;
+      }
+    }
+
+    set({ allocatedPower: alloc });
+  },
   encodeBuild: () => { const { hardpoints, overrides } = get(); if (overrides.size === 0) return ""; const e: Record<string, string | null> = {}; for (const [hpId, item] of overrides.entries()) { const hp = hardpoints.find(h => h.id === hpId); if (hp) e[hp.hardpointName] = item?.reference ?? null; } return btoa(JSON.stringify(e)); },
 }));
