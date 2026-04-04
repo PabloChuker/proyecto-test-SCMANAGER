@@ -66,6 +66,7 @@ export async function GET(
     const { id } = await params;
 
     // ── 1. Find the ship (just the ships table, no JOINs) ──
+    // Cast all uuid columns to text for comparison with text parameter
     const shipRows: any[] = await prisma.$queryRawUnsafe(
       `SELECT * FROM ships
        WHERE reference = $1
@@ -74,7 +75,7 @@ export async function GET(
           OR id::text = $1
           OR reference ILIKE '%' || $1 || '%'
        LIMIT 1`,
-      id,
+      String(id),
     );
 
     if (shipRows.length === 0) {
@@ -89,8 +90,8 @@ export async function GET(
 
     try {
       const fsRows: any[] = await prisma.$queryRawUnsafe(
-        `SELECT * FROM ship_flight_stats WHERE ship_id = $1 LIMIT 1`,
-        ship.id,
+        `SELECT * FROM ship_flight_stats WHERE ship_id::text = $1 LIMIT 1`,
+        String(ship.id),
       );
       if (fsRows.length > 0) flightStats = fsRows[0];
     } catch (e) {
@@ -99,8 +100,8 @@ export async function GET(
 
     try {
       const fRows: any[] = await prisma.$queryRawUnsafe(
-        `SELECT * FROM ship_fuel WHERE ship_id = $1 LIMIT 1`,
-        ship.id,
+        `SELECT * FROM ship_fuel WHERE ship_id::text = $1 LIMIT 1`,
+        String(ship.id),
       );
       if (fRows.length > 0) fuelStats = fRows[0];
     } catch (e) {
@@ -109,8 +110,8 @@ export async function GET(
 
     // ── 3. Get hardpoints ──
     const hardpointRows: any[] = await prisma.$queryRawUnsafe(
-      `SELECT * FROM ship_hardpoints WHERE ship_id = $1 ORDER BY max_size DESC, hardpoint_name ASC`,
-      ship.id,
+      `SELECT * FROM ship_hardpoints WHERE ship_id::text = $1 ORDER BY max_size DESC, hardpoint_name ASC`,
+      String(ship.id),
     );
 
     // ── 4. Try to resolve equipped components (may be empty tables) ──
@@ -125,11 +126,11 @@ export async function GET(
     const loadComponents = async (ids: string[], table: string, type: string) => {
       if (ids.length === 0) return;
       try {
-        // Use IN clause with individual params for safety
+        // Use IN clause with explicit text cast for uuid comparison
         const placeholders = ids.map((_, i) => `$${i + 1}`).join(",");
         const rows: any[] = await prisma.$queryRawUnsafe(
-          `SELECT * FROM ${table} WHERE id IN (${placeholders})`,
-          ...ids,
+          `SELECT * FROM ${table} WHERE id::text IN (${placeholders})`,
+          ...ids.map(String),
         );
         for (const row of rows) {
           components.set(row.id, { ...row, _type: type });
