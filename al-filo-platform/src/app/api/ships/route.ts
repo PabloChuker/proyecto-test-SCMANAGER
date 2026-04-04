@@ -24,18 +24,21 @@ export async function GET(request: NextRequest) {
     const sortOrder    = searchParams.get("sortOrder") === "desc" ? "DESC" : "ASC";
 
     // Map sort keys to actual columns
+    // Note: scm_speed and afterburner_speed are in ship_flight_stats, not ships
     const SORT_MAP: Record<string, string> = {
       name: "s.name",
-      scmSpeed: "s.scm_speed",
-      maxSpeed: "s.scm_speed",
+      scmSpeed: "fs.scm_speed",
+      maxSpeed: "fs.max_speed",
       cargo: "s.cargo_capacity",
       maxCrew: "s.max_crew",
-      afterburnerSpeed: "s.afterburner_speed",
+      afterburnerSpeed: "fs.max_speed",
       manufacturer: "s.manufacturer",
       size: "s.size",
       role: "s.role",
+      mass: "s.mass",
     };
     const sortCol = SORT_MAP[sortByRaw] || "s.name";
+    const needsJoin = sortCol.startsWith("fs.");
 
     // Build WHERE conditions
     const conditions: string[] = [];
@@ -71,13 +74,15 @@ export async function GET(request: NextRequest) {
     );
     const total = countResult[0]?.total ?? 0;
 
-    // Fetch ships
+    // Fetch ships with optional LEFT JOIN to flight_stats for speed data
     const offset = (page - 1) * limit;
+    const joinClause = `LEFT JOIN ship_flight_stats fs ON fs.ship_id = s.id`;
     const ships: any[] = await prisma.$queryRawUnsafe(
       `SELECT s.id, s.reference, s.name, s.manufacturer, s.role, s.size,
-              s.max_crew, s.scm_speed, s.afterburner_speed, s.cargo_capacity,
-              s.game_version
+              s.max_crew, s.mass, s.cargo_capacity, s.game_version,
+              fs.scm_speed, fs.max_speed as afterburner_speed
        FROM ships s
+       ${joinClause}
        ${whereClause}
        ORDER BY ${sortCol} ${sortOrder} NULLS LAST
        LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
@@ -103,15 +108,13 @@ export async function GET(request: NextRequest) {
       gameVersion: s.game_version,
       ship: {
         maxCrew: s.max_crew,
+        mass: s.mass != null ? Number(s.mass) : null,
         cargo: s.cargo_capacity != null ? Number(s.cargo_capacity) : null,
         scmSpeed: s.scm_speed != null ? Number(s.scm_speed) : null,
         afterburnerSpeed: s.afterburner_speed != null ? Number(s.afterburner_speed) : null,
         role: s.role,
         focus: null,
         career: null,
-        lengthMeters: null,
-        beamMeters: null,
-        heightMeters: null,
       },
     }));
 
