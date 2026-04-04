@@ -8,10 +8,10 @@ export default function Home() {
   const [phase, setPhase] = useState<"logo" | "reveal" | "ready">("logo");
 
   useEffect(() => {
-    // Logo centrado por 1.8s, luego transiciona
-    const t1 = setTimeout(() => setPhase("reveal"), 1800);
+    // Logo centrado por 2.7s, luego transiciona (50% más lento)
+    const t1 = setTimeout(() => setPhase("reveal"), 2700);
     // Contenido aparece después de la transición del logo
-    const t2 = setTimeout(() => setPhase("ready"), 2600);
+    const t2 = setTimeout(() => setPhase("ready"), 3900);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
@@ -50,8 +50,8 @@ export default function Home() {
                 top: "50%",
                 left: "50%",
                 transform: "translate(-50%, -50%) scale(1)",
-                width: "280px",
-                height: "280px",
+                width: "420px",
+                height: "420px",
                 transitionDuration: "0ms",
               }
             : {
@@ -60,7 +60,7 @@ export default function Home() {
                 transform: "translate(0, 0) scale(1)",
                 width: "48px",
                 height: "48px",
-                transitionDuration: "800ms",
+                transitionDuration: "1200ms",
               }),
         }}
       >
