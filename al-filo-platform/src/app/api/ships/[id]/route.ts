@@ -9,6 +9,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import powerNetworkLookup from "@/data/power-network-lookup.json";
+import shipPowerData from "@/data/ship-power-data.json";
 
 export const revalidate = 300;
 
@@ -35,6 +37,16 @@ function gradeToLetter(g: any): string | null {
   if (!isNaN(n) && GRADE_MAP[n]) return GRADE_MAP[n];
   if (typeof g === "string" && g.length === 1) return g.toUpperCase();
   return String(g);
+}
+
+// ─── Power network lookup helper ─────────────────────────────────────────────
+
+const pnLookup = powerNetworkLookup as Record<string, any>;
+const spLookup = shipPowerData as Record<string, any>;
+
+function getPowerNetworkInfo(className: string | null): any | null {
+  if (!className) return null;
+  return pnLookup[className] ?? null;
 }
 
 // ─── Hardpoint type → store category mapping ────────────────────────────────
@@ -114,6 +126,7 @@ function buildWeaponItem(row: any): any {
       heatPerShot: numOrNull(row.heat_per_shot),
       emSignature: numOrNull(row.emission_em_max),
     },
+    powerNetwork: getPowerNetworkInfo(row.class_name),
   };
 }
 
@@ -136,6 +149,7 @@ function buildShieldItem(row: any): any {
       downedDelay: numOrNull(row.downed_delay),
       damagedDelay: numOrNull(row.damaged_delay),
     },
+    powerNetwork: getPowerNetworkInfo(row.class_name),
   };
 }
 
@@ -162,9 +176,10 @@ function buildPowerPlantItem(row: any): any {
     manufacturer: row.manufacturer_id ?? null,
     componentStats: {
       powerOutput: powerGen,
-      powerDraw: 0, // Power plants don't consume power, they generate it
+      powerDraw: 0,
       emSignature: emSig,
     },
+    powerNetwork: getPowerNetworkInfo(row.class_name),
   };
 }
 
@@ -183,6 +198,7 @@ function buildCoolerItem(row: any): any {
       coolingRate: numOrNull(row.cooling_rate),
       powerDraw: numOrNull(row.power_draw_max),
     },
+    powerNetwork: getPowerNetworkInfo(row.class_name),
   };
 }
 
@@ -203,6 +219,7 @@ function buildQuantumItem(row: any): any {
       cooldownTime: numOrNull(row.cooldown_time),
       spoolUpTime: numOrNull(row.spool_up_time),
     },
+    powerNetwork: getPowerNetworkInfo(row.class_name),
   };
 }
 
@@ -220,6 +237,7 @@ function buildGenericItem(hp: any): any {
     grade: gradeToLetter(hp.default_item_grade),
     manufacturer: hp.default_item_manufacturer ?? null,
     componentStats: null,
+    powerNetwork: getPowerNetworkInfo(hp.default_item_class),
   };
 }
 
@@ -552,8 +570,12 @@ export async function GET(
       },
     };
 
+    // Ship-level power data from sc-unpacked
+    const shipClassName = ship.reference || ship.class_name || "";
+    const shipPower = spLookup[shipClassName] ?? null;
+
     return NextResponse.json(
-      { data, flatHardpoints },
+      { data, flatHardpoints, shipPower },
       {
         headers: {
           "Cache-Control":

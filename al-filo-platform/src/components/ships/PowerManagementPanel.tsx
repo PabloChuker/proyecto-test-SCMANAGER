@@ -1,17 +1,19 @@
 // =============================================================================
-// AL FILO — PowerManagementPanel v9 (In-Game Cockpit Exact)
+// AL FILO — PowerManagementPanel v10 (Per-Instance Columns)
 //
 // Star Citizen cockpit Power Management MFD:
-//   - ALWAYS 6 columns: WPN, THR, SHD, QDR, RAD, CLR
-//   - Each column has EXACTLY 6 segments tall (fixed)
+//   - 1 column per component INSTANCE (2 coolers = 2 columns)
+//   - Segments per column = sum of PowerRanges RegisterRange values
 //   - Segments bottom-to-top:
-//       CYAN  = assigned power points for this category
+//       CYAN  = allocated power pips
 //       GRAY  = available (can be assigned)
-//       BLACK = locked (no room / no components)
-//   - OUTPUT shows "allocated / total" (e.g., "3 / 16")
-//   - Total pool = totalOutput (e.g., 16). Distributed among 6 categories.
-//   - Each segment in a column = 1 power point assigned to that category.
-//   - Max per column = 6 (visual cap), but actual allocation can be higher.
+//       BLACK = locked (component off or no pips)
+//   - PowerRanges tiers color the segments:
+//       Tier 0: 70% performance (dim cyan)
+//       Tier 1: 85% performance (medium cyan)
+//       Tier 2: 100% performance (bright cyan)
+//   - OUTPUT shows "allocated / total" (e.g., "8 / 16")
+//   - Grouped by category with category headers
 // =============================================================================
 
 "use client";
@@ -22,33 +24,33 @@ import type {
   FlightMode,
   PowerCategory,
   ComputedStats,
+  ComponentPowerInstance,
 } from "@/store/useLoadoutStore";
 
-// ── 6 fixed categories, same order as in-game MFD ──
+// ── Category display order & metadata ──
 const CATEGORY_ORDER: PowerCategory[] = [
   "weapons",
-  "thrusters",
   "shields",
+  "coolers",
   "quantum",
   "radar",
-  "coolers",
+  "thrusters",
 ];
 
-interface CatMeta { label: string; icon: string; }
+interface CatMeta { label: string; icon: string; color: string; }
 
 const CAT_META: Record<PowerCategory, CatMeta> = {
-  weapons:   { label: "WPN", icon: "⬡" },
-  thrusters: { label: "THR", icon: "△" },
-  shields:   { label: "SHD", icon: "◇" },
-  quantum:   { label: "QDR", icon: "◈" },
-  radar:     { label: "RAD", icon: "◎" },
-  coolers:   { label: "CLR", icon: "❄" },
+  weapons:   { label: "WPN", icon: "⬡", color: "#ef4444" },
+  shields:   { label: "SHD", icon: "◇", color: "#3b82f6" },
+  coolers:   { label: "CLR", icon: "❄", color: "#06b6d4" },
+  quantum:   { label: "QDR", icon: "◈", color: "#8b5cf6" },
+  radar:     { label: "RAD", icon: "◎", color: "#eab308" },
+  thrusters: { label: "THR", icon: "△", color: "#22c55e" },
 };
 
-// FIXED: 6 segments per column, just like the in-game cockpit
-const SEGS_PER_COL = 6;
-const SEG_H = 14;
+const SEG_H = 12;
 const SEG_GAP = 2;
+const MAX_SEGS = 6; // Visual cap per column
 
 // =============================================================================
 // Main Component
@@ -64,9 +66,8 @@ export function PowerManagementPanel({
   onModeChange: (m: FlightMode) => void;
 }) {
   const {
-    allocatedPower,
-    setAllocatedPower,
     autoAllocatePower,
+    setInstancePower,
   } = useLoadoutStore();
 
   const pn = stats.powerNetwork;
@@ -81,24 +82,26 @@ export function PowerManagementPanel({
         ? "#f97316"
         : "#22d3ee";
 
-  // Click handler: assign/deallocate power to a category
-  const handleSegClick = (cat: PowerCategory, segIdx: number) => {
-    const currentAlloc = allocatedPower[cat] || 0;
+  // Group instances by category
+  const grouped = new Map<PowerCategory, ComponentPowerInstance[]>();
+  for (const cat of CATEGORY_ORDER) {
+    grouped.set(cat, []);
+  }
+  for (const inst of pn.instances) {
+    const arr = grouped.get(inst.category);
+    if (arr) arr.push(inst);
+  }
 
-    if (segIdx < currentAlloc) {
-      // Clicking an assigned (cyan) segment → deallocate down to segIdx
-      setAllocatedPower(cat, segIdx);
+  // Click handler for a segment in an instance column
+  const handleSegClick = (inst: ComponentPowerInstance, segIdx: number) => {
+    if (!inst.isOn) return;
+    const current = inst.allocatedPips;
+    if (segIdx < current) {
+      // Click below current → deallocate down
+      setInstancePower(inst.hardpointName, segIdx);
     } else {
-      // Clicking a gray segment → allocate up to segIdx+1
-      const desired = segIdx + 1;
-      const increase = desired - currentAlloc;
-      const freePoints = totalOutput - totalAllocated;
-
-      if (increase <= freePoints) {
-        setAllocatedPower(cat, desired);
-      } else if (freePoints > 0) {
-        setAllocatedPower(cat, currentAlloc + freePoints);
-      }
+      // Click above current → allocate up
+      setInstancePower(inst.hardpointName, segIdx + 1);
     }
   };
 
@@ -130,21 +133,46 @@ export function PowerManagementPanel({
           </div>
         </div>
 
-        {/* ── POWER GRID: 6 columns × 6 segments ── */}
-        <div
-          className="flex justify-between items-end gap-1 px-1"
-          style={{ height: SEGS_PER_COL * (SEG_H + SEG_GAP) + 30 + "px" }}
-        >
-          {CATEGORY_ORDER.map((cat) => (
-            <PowerColumn
-              key={cat}
-              cat={cat}
-              allocated={Math.min(allocatedPower[cat] || 0, SEGS_PER_COL)}
-              hasComponents={pn.categories[cat].componentCount > 0}
-              isActive={pn.categories[cat].activeCount > 0}
-              onSegClick={(segIdx) => handleSegClick(cat, segIdx)}
-            />
-          ))}
+        {/* ── POWER GRID: grouped by category ── */}
+        <div className="space-y-2">
+          {CATEGORY_ORDER.map((cat) => {
+            const instances = grouped.get(cat) ?? [];
+            if (instances.length === 0) return null;
+            const meta = CAT_META[cat];
+
+            return (
+              <div key={cat}>
+                {/* Category header */}
+                <div className="flex items-center gap-1.5 mb-1">
+                  <span
+                    className="text-[9px] font-mono"
+                    style={{ color: meta.color, opacity: 0.7 }}
+                  >
+                    {meta.icon}
+                  </span>
+                  <span
+                    className="text-[7px] font-mono tracking-[0.15em] uppercase"
+                    style={{ color: meta.color, opacity: 0.6 }}
+                  >
+                    {meta.label}
+                  </span>
+                  <div className="flex-1 h-px bg-zinc-800/50" />
+                </div>
+
+                {/* Instance columns */}
+                <div className="flex gap-1 px-1">
+                  {instances.map((inst) => (
+                    <InstanceColumn
+                      key={inst.hardpointName}
+                      inst={inst}
+                      catColor={meta.color}
+                      onSegClick={(segIdx) => handleSegClick(inst, segIdx)}
+                    />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         {/* ── Auto Balance ── */}
@@ -179,100 +207,123 @@ export function PowerManagementPanel({
 }
 
 // =============================================================================
-// PowerColumn — one of the 6 category bars, exactly 6 segments tall
+// InstanceColumn — one column per component instance
 // =============================================================================
 
-function PowerColumn({
-  cat,
-  allocated,
-  hasComponents,
-  isActive,
+function InstanceColumn({
+  inst,
+  catColor,
   onSegClick,
 }: {
-  cat: PowerCategory;
-  allocated: number;
-  hasComponents: boolean;
-  isActive: boolean;
+  inst: ComponentPowerInstance;
+  catColor: string;
   onSegClick: (segIdx: number) => void;
 }) {
-  const meta = CAT_META[cat];
+  const totalSegs = Math.min(inst.totalPips, MAX_SEGS);
+  const allocated = Math.min(inst.allocatedPips, totalSegs);
+
+  // Build segment tier colors based on PowerRanges
+  // Each range has: start (cumulative pip), modifier (performance), range (# pips)
+  const segTiers: number[] = []; // modifier for each segment
+  for (const r of inst.ranges) {
+    for (let i = 0; i < r.range; i++) {
+      segTiers.push(r.modifier);
+    }
+  }
+  // Fill remaining with 1.0 if needed
+  while (segTiers.length < totalSegs) segTiers.push(1.0);
+
+  // Modifier → brightness
+  const modToOpacity = (mod: number): number => {
+    if (mod >= 1.0) return 0.95;
+    if (mod >= 0.85) return 0.7;
+    return 0.5;
+  };
+
+  // Short name for label
+  const shortName = inst.componentName.length > 8
+    ? inst.componentName.slice(0, 7) + "…"
+    : inst.componentName;
 
   return (
-    <div className="flex flex-col items-center" style={{ flex: "1 1 0", maxWidth: "42px" }}>
+    <div
+      className="flex flex-col items-center"
+      style={{ flex: "1 1 0", maxWidth: "40px", minWidth: "28px" }}
+      title={`${inst.componentName}\nPower: ${inst.allocatedPips}/${inst.totalPips} pips\nPerformance: ${allocated > 0 ? Math.round((segTiers[allocated - 1] ?? 1) * 100) : 0}%`}
+    >
       {/* Segments: flex-col-reverse so index 0 = bottom */}
       <div className="w-full flex flex-col-reverse" style={{ gap: SEG_GAP + "px" }}>
-        {Array.from({ length: SEGS_PER_COL }).map((_, i) => {
-          // i=0 bottom, i=5 top
-          // Bottom segments fill first (cyan), then gray, then black at top
+        {totalSegs === 0 ? (
+          // No interactive pips — show single locked segment
+          <div
+            style={{
+              width: "100%",
+              height: SEG_H + "px",
+              backgroundColor: "#18181b",
+              border: "1px solid #18181b",
+              borderRadius: "2px",
+              opacity: 0.4,
+            }}
+          />
+        ) : (
+          Array.from({ length: totalSegs }).map((_, i) => {
+            let bgColor: string;
+            let borderColor: string;
+            let opacity: number;
+            let cursor: string;
 
-          let bgColor: string;
-          let borderColor: string;
-          let opacity: number;
-          let cursor: string;
+            if (!inst.isOn) {
+              // Component off → all BLACK (locked)
+              bgColor = "#18181b";
+              borderColor = "#18181b";
+              opacity = 0.4;
+              cursor = "default";
+            } else if (i < allocated) {
+              // ASSIGNED → CYAN with tier brightness
+              bgColor = "#22d3ee";
+              borderColor = "rgba(34,211,238,0.5)";
+              opacity = modToOpacity(segTiers[i] ?? 1);
+              cursor = "pointer";
+            } else {
+              // AVAILABLE → GRAY
+              bgColor = "#3f3f46";
+              borderColor = "#2a2a2e";
+              opacity = 0.5;
+              cursor = "pointer";
+            }
 
-          if (!hasComponents) {
-            // No components in this category → all BLACK (locked)
-            bgColor = "#18181b";
-            borderColor = "#18181b";
-            opacity = 0.4;
-            cursor = "default";
-          } else if (i < allocated) {
-            // ASSIGNED → CYAN
-            bgColor = "#22d3ee";
-            borderColor = "rgba(34,211,238,0.5)";
-            opacity = isActive ? 0.9 : 0.4;
-            cursor = "pointer";
-          } else {
-            // AVAILABLE → GRAY
-            bgColor = "#3f3f46";
-            borderColor = "#2a2a2e";
-            opacity = 0.7;
-            cursor = "pointer";
-          }
-
-          return (
-            <div
-              key={i}
-              onClick={() => hasComponents && onSegClick(i)}
-              style={{
-                width: "100%",
-                height: SEG_H + "px",
-                backgroundColor: bgColor,
-                border: `1px solid ${borderColor}`,
-                borderRadius: "2px",
-                opacity,
-                cursor,
-                transition: "all 150ms ease",
-              }}
-            />
-          );
-        })}
+            return (
+              <div
+                key={i}
+                onClick={() => inst.isOn && onSegClick(i)}
+                style={{
+                  width: "100%",
+                  height: SEG_H + "px",
+                  backgroundColor: bgColor,
+                  border: `1px solid ${borderColor}`,
+                  borderRadius: "2px",
+                  opacity,
+                  cursor,
+                  transition: "all 150ms ease",
+                }}
+              />
+            );
+          })
+        )}
       </div>
 
-      {/* Category icon */}
+      {/* Component name */}
       <div
-        className="mt-2 text-center select-none"
+        className="mt-1.5 text-center select-none truncate w-full"
         style={{
-          fontSize: "11px",
-          color: allocated > 0 ? "#22d3ee" : hasComponents ? "#71717a" : "#27272a",
-          lineHeight: 1,
-        }}
-      >
-        {meta.icon}
-      </div>
-      {/* Category label */}
-      <div
-        className="text-center select-none"
-        style={{
-          fontSize: "7px",
+          fontSize: "6px",
           fontFamily: "monospace",
-          color: allocated > 0 ? "#22d3ee" : "#52525b",
-          opacity: hasComponents ? 0.8 : 0.3,
-          letterSpacing: "0.08em",
-          marginTop: "1px",
+          color: allocated > 0 ? "#22d3ee" : inst.isOn ? "#52525b" : "#27272a",
+          letterSpacing: "0.05em",
+          lineHeight: 1.2,
         }}
       >
-        {meta.label}
+        {shortName}
       </div>
     </div>
   );

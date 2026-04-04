@@ -1,10 +1,13 @@
 // =============================================================================
-// AL FILO — useLoadoutStore v6.1 (Robust Children)
+// AL FILO — useLoadoutStore v7 (Per-Instance Power Grid)
 //
-// Fixes:
-//   - loadShip: parses children defensively, handles missing componentStats
-//   - computeStats: sums child DPS even when parent turret has null stats
-//   - Children initialized in componentStates for on/off toggle
+// Power model redesign:
+//   - Each component INSTANCE gets its own power pip allocation
+//   - PowerRanges from sc-unpacked data define segments per component
+//   - PowerPlant generates the total power pool
+//   - Coolers CONVERT power to coolant
+//   - FlightController consumes power for thrusters (no interactive pips)
+//   - Thrusters consume fuel, not power pips
 // =============================================================================
 
 import { create } from "zustand";
@@ -15,11 +18,27 @@ import { create } from "zustand";
 
 export interface ComponentStatsData { [key: string]: any; }
 
+/** Power network data from sc-unpacked (attached to each component by API) */
+export interface PowerNetworkInfo {
+  type: string;
+  pMin: number;  // Usage.Power.Minimum
+  pMax: number;  // Usage.Power.Maximum
+  cMin: number;  // Usage.Coolant.Minimum
+  cMax: number;  // Usage.Coolant.Maximum
+  genP?: number; // Generation.Power (PowerPlants only)
+  genC?: number; // Generation.Coolant (Coolers)
+  pips?: number; // Total interactive pips (sum of RegisterRange)
+  ranges?: { s: number; m: number; r: number }[]; // PowerRanges tiers
+  em?: number;   // EM signature max
+  ir?: number;   // IR signature max
+}
+
 export interface EquippedItem {
   id: string; reference: string; name: string; localizedName: string | null;
   className: string | null; type: string; size: number | null;
   grade: string | null; manufacturer: string | null;
   componentStats: ComponentStatsData | null;
+  powerNetwork?: PowerNetworkInfo | null;
 }
 
 export interface ResolvedChild {
@@ -42,26 +61,44 @@ export interface ShipInfo {
   pitchRate: number | null; yawRate: number | null; rollRate: number | null;
   crew: number | null; cargo: number | null;
   role: string | null; focus: string | null; size: number | null;
-  // Acceleration data for radar charts
   accelForward: number | null; accelBackward: number | null;
   accelUp: number | null; accelDown: number | null; accelStrafe: number | null;
   boostSpeedForward: number | null; boostSpeedBackward: number | null;
-  // Boosted rates
   boostedPitch: number | null; boostedYaw: number | null; boostedRoll: number | null;
-  // Extra
   mass: number | null; hydrogenCapacity: number | null; quantumFuelCapacity: number | null;
   shieldHpTotal: number | null; powerGeneration: number | null; hullHp: number | null;
 }
 
 export type FlightMode = "SCM" | "NAV";
+
+/** Power categories for UI grouping */
 export type PowerCategory = "weapons" | "thrusters" | "shields" | "quantum" | "radar" | "coolers";
 export const POWER_CATEGORIES: PowerCategory[] = ["weapons", "thrusters", "shields", "quantum", "radar", "coolers"];
 
 const CAT_TO_POWER: Record<string, PowerCategory> = {
   WEAPON: "weapons", TURRET: "weapons", MISSILE_RACK: "weapons",
   SHIELD: "shields", COOLER: "coolers", QUANTUM_DRIVE: "quantum",
-  MINING: "weapons", UTILITY: "weapons",
+  MINING: "weapons", UTILITY: "weapons", RADAR: "radar",
 };
+
+/** Per-instance power allocation info for the power grid UI */
+export interface ComponentPowerInstance {
+  hardpointId: string;
+  hardpointName: string;
+  componentName: string;
+  category: PowerCategory;
+  type: string;           // component type (Cooler, Shield, etc.)
+  totalPips: number;      // total interactive pips (from RegisterRange sum)
+  allocatedPips: number;  // currently allocated pips (0..totalPips)
+  ranges: { start: number; modifier: number; range: number }[];
+  powerMin: number;       // Usage.Power.Minimum
+  powerMax: number;       // Usage.Power.Maximum
+  genPower: number;       // Generation.Power
+  genCoolant: number;     // Generation.Coolant
+  emMax: number;
+  irMax: number;
+  isOn: boolean;
+}
 
 export interface CategoryPowerInfo { minDraw: number; allocated: number; componentCount: number; activeCount: number; }
 export interface PowerNetworkState {
@@ -69,6 +106,8 @@ export interface PowerNetworkState {
   consumptionPercent: number; freePoints: number; isOverloaded: boolean;
   categories: Record<PowerCategory, CategoryPowerInfo>;
   activeCategories: PowerCategory[];
+  /** Per-instance power data for the grid UI */
+  instances: ComponentPowerInstance[];
 }
 
 export interface ComputedStats {
@@ -102,13 +141,10 @@ const NAME_PATTERNS: [RegExp, string][] = [
 const USEFUL = new Set(["WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "UTILITY", "RADAR", "COUNTERMEASURE"]);
 
 function inferCategory(category: string, item: EquippedItem | null, hpName: string): string {
-  // Already classified by API
   if (category !== "OTHER" && USEFUL.has(category)) return category;
-  // Try item type
   if (item?.type) { const m = TYPE_TO_CAT[item.type]; if (m) return m; }
-  // Try name patterns
   for (const [re, cat] of NAME_PATTERNS) { if (re.test(hpName)) return cat; }
-  return category; // preserve API classification like COUNTERMEASURE, ARMOR, etc.
+  return category;
 }
 
 // =============================================================================
@@ -140,6 +176,7 @@ function parseEquipped(eq: any): EquippedItem | null {
     localizedName: eq.localizedName ?? null, className: eq.className ?? null,
     type: eq.type ?? "OTHER", size: eq.size ?? null, grade: eq.grade ?? null,
     manufacturer: eq.manufacturer ?? null, componentStats: stats,
+    powerNetwork: eq.powerNetwork ?? null,
   };
 }
 
@@ -155,7 +192,9 @@ function emptyCat(): CategoryPowerInfo { return { minDraw: 0, allocated: 0, comp
 function computeStats(
   hardpoints: ResolvedHardpoint[], overrides: Map<string, EquippedItem | null>,
   componentStates: Record<string, boolean>, flightMode: FlightMode,
-  allocatedPower: Record<PowerCategory, number>, shipInfo: ShipInfo | null,
+  instancePower: Record<string, number>,  // hardpointName -> allocated pips
+  shipInfo: ShipInfo | null,
+  shipPowerGen: number,  // from ship-power-data.json
 ): ComputedStats {
   let totalDps = 0, totalAlpha = 0, shieldHp = 0, shieldRegen = 0;
   let powerOutput = 0, coolingRate = 0, thermalOutput = 0, emSig = 0, irSig = 0;
@@ -163,6 +202,9 @@ function computeStats(
   const summary = { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0, activeComponents: 0, totalComponents: 0 };
   const cats: Record<PowerCategory, CategoryPowerInfo> = {} as any;
   for (const c of POWER_CATEGORIES) cats[c] = emptyCat();
+
+  // Per-instance power data for the grid UI
+  const instances: ComponentPowerInstance[] = [];
 
   const accumDps = (s: ComponentStatsData | null | undefined) => {
     if (!s) return;
@@ -194,45 +236,91 @@ function computeStats(
       case "QUANTUM_DRIVE": summary.quantumDrives++; break;
     }
     const s = item.componentStats;
+    const pn = item.powerNetwork;
     const isOn = componentStates[hp.hardpointName] !== false;
 
-    // Power plants: always output
+    // Build power instance for interactive components
+    const pCat = CAT_TO_POWER[cat];
+    if (pCat && pn) {
+      const totalPips = pn.pips ?? 0;
+      const allocPips = instancePower[hp.hardpointName] ?? 0;
+
+      cats[pCat].componentCount++;
+      if (isOn) {
+        cats[pCat].activeCount++;
+        cats[pCat].minDraw += pn.pMin;
+      }
+      cats[pCat].allocated += allocPips;
+
+      // Only add to instances if component has interactive pips
+      if (totalPips > 0) {
+        instances.push({
+          hardpointId: hp.id,
+          hardpointName: hp.hardpointName,
+          componentName: item.name,
+          category: pCat,
+          type: pn.type || cat,
+          totalPips,
+          allocatedPips: allocPips,
+          ranges: (pn.ranges ?? []).map(r => ({ start: r.s, modifier: r.m, range: r.r })),
+          powerMin: pn.pMin,
+          powerMax: pn.pMax,
+          genPower: pn.genP ?? 0,
+          genCoolant: pn.genC ?? 0,
+          emMax: pn.em ?? 0,
+          irMax: pn.ir ?? 0,
+          isOn,
+        });
+      }
+    }
+
+    // Power plants: always output (use shipPowerGen from sc-unpacked)
     if (cat === "POWER_PLANT") {
-      powerOutput += pickNum(s, "powerOutput");
-      if (isOn) { activeComponents++; accumBase(s); }
+      // Use real power output from powerNetwork data if available
+      const ppOutput = pn?.genP ?? pickNum(s, "powerOutput");
+      powerOutput += ppOutput;
+      if (isOn) { activeComponents++; }
+      // EM from power network data
+      if (pn?.em) emSig += pn.em;
+      else accumBase(s);
       continue;
     }
 
-    const pCat = CAT_TO_POWER[cat];
-    if (pCat) { cats[pCat].componentCount++; if (isOn) { cats[pCat].activeCount++; cats[pCat].minDraw += pickNum(s, "powerDraw", "powerBase"); } }
     if (!isOn) continue;
     activeComponents++;
 
+    // EM/IR from power network data when available
+    if (pn?.em) emSig += pn.em;
+    if (pn?.ir) irSig += pn.ir;
+
     // TURRET/RACK with children: DPS comes from children, base stats from parent
     if ((cat === "TURRET" || cat === "MISSILE_RACK") && hp.children.length > 0) {
-      accumBase(s); // Parent turret body: thermal, EM, IR
-      // Children: actual weapons/missiles that deal damage
+      if (!pn) accumBase(s);
       for (const child of hp.children) {
         const childOn = componentStates[child.hardpointName] !== false;
         if (!childOn) continue;
         const cItem = child.equippedItem;
         if (!cItem) continue;
         accumDps(cItem.componentStats);
-        accumBase(cItem.componentStats);
+        if (!cItem.powerNetwork) accumBase(cItem.componentStats);
       }
     } else {
-      // Normal component OR turret/rack with NO children (fallback: use parent stats)
       if (cat === "WEAPON" || cat === "TURRET") { accumDps(s); }
       if (cat === "MISSILE_RACK") { totalAlpha += pickNum(s, "alphaDamage", "damage"); }
       if (cat === "SHIELD") { shieldHp += pickNum(s, "shieldHp", "maxHp"); shieldRegen += pickNum(s, "shieldRegen", "regenRate"); }
       if (cat === "COOLER") { coolingRate += pickNum(s, "coolingRate"); }
-      accumBase(s);
+      if (!pn) accumBase(s);
     }
   }
 
+  // Use ship-level power generation if we didn't get it from components
+  const totalPO = shipPowerGen > 0 ? shipPowerGen : Math.round(powerOutput);
+
   let totalAllocated = 0, totalMinDraw = 0;
-  for (const c of POWER_CATEGORIES) { cats[c].allocated = allocatedPower[c] || 0; totalAllocated += cats[c].allocated; totalMinDraw += Math.ceil(cats[c].minDraw); }
-  const totalPO = Math.round(powerOutput);
+  for (const c of POWER_CATEGORIES) {
+    totalAllocated += cats[c].allocated;
+    totalMinDraw += Math.ceil(cats[c].minDraw);
+  }
   const consumptionPercent = totalPO > 0 ? Math.round((totalMinDraw / totalPO) * 100) : 0;
   const activeCategories = POWER_CATEGORIES.filter(c => cats[c].componentCount > 0);
 
@@ -245,10 +333,10 @@ function computeStats(
   const r = (v: number) => Math.round(v * 100) / 100;
   return {
     totalDps: r(totalDps), totalAlpha: r(totalAlpha), shieldHp: r(shieldHp), shieldRegen: r(shieldRegen),
-    powerOutput: r(powerOutput), powerDraw: r(totalMinDraw), powerBalance: r(powerOutput - totalMinDraw),
+    powerOutput: r(totalPO), powerDraw: r(totalMinDraw), powerBalance: r(totalPO - totalMinDraw),
     coolingRate: r(coolingRate), thermalOutput: r(thermalOutput), thermalBalance: r(coolingRate - thermalOutput),
     emSignature: r(emSig), irSignature: r(irSig), effectiveSpeed, effectiveSpeedLabel,
-    powerNetwork: { totalOutput: totalPO, totalAllocated, totalMinDraw: Math.round(totalMinDraw), consumptionPercent, freePoints: totalPO - totalAllocated, isOverloaded: consumptionPercent > 100, categories: cats, activeCategories },
+    powerNetwork: { totalOutput: totalPO, totalAllocated, totalMinDraw: Math.round(totalMinDraw), consumptionPercent, freePoints: totalPO - totalAllocated, isOverloaded: consumptionPercent > 100, categories: cats, activeCategories, instances },
     summary,
   };
 }
@@ -258,13 +346,18 @@ function computeStats(
 // =============================================================================
 
 const ZERO_ALLOC: Record<PowerCategory, number> = { weapons: 0, thrusters: 0, shields: 0, quantum: 0, radar: 0, coolers: 0 };
-const EMPTY_NET: PowerNetworkState = { totalOutput: 0, totalAllocated: 0, totalMinDraw: 0, consumptionPercent: 0, freePoints: 0, isOverloaded: false, categories: (() => { const c = {} as any; for (const k of POWER_CATEGORIES) c[k] = emptyCat(); return c; })(), activeCategories: [] };
+const EMPTY_NET: PowerNetworkState = { totalOutput: 0, totalAllocated: 0, totalMinDraw: 0, consumptionPercent: 0, freePoints: 0, isOverloaded: false, categories: (() => { const c = {} as any; for (const k of POWER_CATEGORIES) c[k] = emptyCat(); return c; })(), activeCategories: [], instances: [] };
 const EMPTY_STATS: ComputedStats = { totalDps: 0, totalAlpha: 0, shieldHp: 0, shieldRegen: 0, powerOutput: 0, powerDraw: 0, powerBalance: 0, coolingRate: 0, thermalOutput: 0, thermalBalance: 0, emSignature: 0, irSignature: 0, effectiveSpeed: null, effectiveSpeedLabel: "SCM", powerNetwork: EMPTY_NET, summary: { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0, activeComponents: 0, totalComponents: 0 } };
 
 interface LoadoutState {
   shipId: string | null; shipInfo: ShipInfo | null;
   hardpoints: ResolvedHardpoint[]; overrides: Map<string, EquippedItem | null>;
   componentStates: Record<string, boolean>; flightMode: FlightMode;
+  /** Per-instance power allocation: hardpointName -> allocated pips */
+  instancePower: Record<string, number>;
+  /** Ship-level power generation from sc-unpacked */
+  shipPowerGen: number;
+  // Legacy: keep for backward compat but internally maps to instancePower
   allocatedPower: Record<PowerCategory, number>;
   isLoading: boolean; error: string | null;
 
@@ -281,6 +374,9 @@ interface LoadoutState {
   encodeBuild: () => string;
   toggleComponent: (hpName: string) => void;
   setFlightMode: (mode: FlightMode) => void;
+  /** Set per-instance power allocation */
+  setInstancePower: (hardpointName: string, pips: number) => void;
+  /** Legacy: set power by category (updates all instances in that category) */
   setAllocatedPower: (cat: PowerCategory, points: number) => void;
   autoAllocatePower: () => void;
 }
@@ -288,9 +384,15 @@ interface LoadoutState {
 export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   shipId: null, shipInfo: null, hardpoints: [], overrides: new Map(),
   componentStates: {}, flightMode: "SCM" as FlightMode,
+  instancePower: {}, shipPowerGen: 0,
   allocatedPower: { ...ZERO_ALLOC }, isLoading: false, error: null,
 
-  getStats: () => { const s = get(); return s.hardpoints.length === 0 ? EMPTY_STATS : computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, s.allocatedPower, s.shipInfo); },
+  getStats: () => {
+    const s = get();
+    return s.hardpoints.length === 0
+      ? EMPTY_STATS
+      : computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, s.instancePower, s.shipInfo, s.shipPowerGen);
+  },
   getEffectiveItem: (hpId) => { const { hardpoints, overrides } = get(); if (overrides.has(hpId)) return overrides.get(hpId) ?? null; return hardpoints.find(h => h.id === hpId)?.defaultItem ?? null; },
   isComponentOn: (hpName) => get().componentStates[hpName] !== false,
   hasChanges: () => get().overrides.size > 0,
@@ -304,6 +406,10 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
       if (!res.ok) throw new Error("HTTP " + res.status);
       const json = await res.json();
       const data = json.data; const sd = data?.ship;
+
+      // Ship-level power from sc-unpacked
+      const shipPower = json.shipPower;
+      const shipPowerGen = shipPower?.gen ?? 0;
 
       const shipInfo: ShipInfo = {
         id: data.id ?? "", reference: data.reference ?? "", name: data.name ?? "",
@@ -338,7 +444,6 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
       const resolved: ResolvedHardpoint[] = rawHps.map((hp: any) => {
         const item = parseEquipped(hp.equippedItem);
 
-        // Parse children (turret guns, rack missiles)
         const rawChildren: any[] = hp.children ?? [];
         const children: ResolvedChild[] = rawChildren.map((ch: any) => ({
           id: ch.id ?? "",
@@ -348,7 +453,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
           maxSize: ch.maxSize ?? 0,
           isFixed: ch.isFixed ?? false,
           equippedItem: parseEquipped(ch.equippedItem),
-        })).filter((ch: ResolvedChild) => ch.hardpointName); // Skip empty
+        })).filter((ch: ResolvedChild) => ch.hardpointName);
 
         return {
           id: hp.id ?? "", hardpointName: hp.hardpointName ?? "",
@@ -376,7 +481,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
         } catch {}
       }
 
-      // Initialize componentStates: all ON, including children
+      // Initialize componentStates: all ON
       const states: Record<string, boolean> = {};
       for (const hp of resolved) {
         states[hp.hardpointName] = true;
@@ -385,7 +490,13 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
         }
       }
 
-      set({ shipId: id, shipInfo, hardpoints: resolved, overrides: restored, componentStates: states, flightMode: "SCM", allocatedPower: { ...ZERO_ALLOC }, isLoading: false, error: null });
+      set({
+        shipId: id, shipInfo, hardpoints: resolved, overrides: restored,
+        componentStates: states, flightMode: "SCM",
+        instancePower: {}, shipPowerGen,
+        allocatedPower: { ...ZERO_ALLOC },
+        isLoading: false, error: null,
+      });
       setTimeout(() => get().autoAllocatePower(), 0);
     } catch (err) {
       set({ isLoading: false, error: err instanceof Error ? err.message : "Unknown error" });
@@ -395,38 +506,64 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   equipItem: (hpId, item) => { set(s => { const n = new Map(s.overrides); n.set(hpId, item); return { overrides: n }; }); setTimeout(() => get().autoAllocatePower(), 0); },
   clearSlot: (hpId) => { set(s => { const n = new Map(s.overrides); n.set(hpId, null); return { overrides: n }; }); setTimeout(() => get().autoAllocatePower(), 0); },
   toggleComponent: (hpName) => { set(s => ({ componentStates: { ...s.componentStates, [hpName]: s.componentStates[hpName] === false } })); setTimeout(() => get().autoAllocatePower(), 0); },
-  resetAll: () => { const fresh: Record<string, boolean> = {}; for (const hp of get().hardpoints) { fresh[hp.hardpointName] = true; for (const ch of hp.children) fresh[ch.hardpointName] = true; } set({ overrides: new Map(), componentStates: fresh, flightMode: "SCM" as FlightMode, allocatedPower: { ...ZERO_ALLOC } }); setTimeout(() => get().autoAllocatePower(), 0); },
+  resetAll: () => { const fresh: Record<string, boolean> = {}; for (const hp of get().hardpoints) { fresh[hp.hardpointName] = true; for (const ch of hp.children) fresh[ch.hardpointName] = true; } set({ overrides: new Map(), componentStates: fresh, flightMode: "SCM" as FlightMode, instancePower: {}, allocatedPower: { ...ZERO_ALLOC } }); setTimeout(() => get().autoAllocatePower(), 0); },
   setFlightMode: (mode) => set({ flightMode: mode }),
-  setAllocatedPower: (cat, points) => { const s = get(); const st = s.getStats(); const alloc = { ...s.allocatedPower }; const cl = Math.max(0, Math.min(6, points)); const d = cl - alloc[cat]; const tot = Object.values(alloc).reduce((a, b) => a + b, 0); if (d > 0 && tot + d > st.powerNetwork.totalOutput) return; alloc[cat] = cl; set({ allocatedPower: alloc }); },
+
+  setInstancePower: (hardpointName, pips) => {
+    const s = get();
+    const st = s.getStats();
+    const inst = st.powerNetwork.instances.find(i => i.hardpointName === hardpointName);
+    if (!inst) return;
+
+    const clamped = Math.max(0, Math.min(inst.totalPips, pips));
+    const diff = clamped - (s.instancePower[hardpointName] ?? 0);
+
+    // Check if we have enough free power
+    if (diff > 0 && diff > st.powerNetwork.freePoints) return;
+
+    set({ instancePower: { ...s.instancePower, [hardpointName]: clamped } });
+  },
+
+  // Legacy compatibility
+  setAllocatedPower: (cat, points) => {
+    // No-op in the new model — use setInstancePower instead
+  },
+
   autoAllocatePower: () => {
     const s = get();
-    const probe = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, ZERO_ALLOC, s.shipInfo);
+    // Compute stats with zero allocation to get instance list
+    const probe = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, {}, s.shipInfo, s.shipPowerGen);
     const total = probe.powerNetwork.totalOutput;
-    const alloc: Record<PowerCategory, number> = { ...ZERO_ALLOC };
+    const newAlloc: Record<string, number> = {};
     let rem = total;
 
-    // Max 6 points per category (matches in-game cockpit MFD: 6 segments per bar)
-    const MAX_PER_CAT = 6;
-
-    // Phase 1: Allocate minimum draw for each active category
-    for (const c of POWER_CATEGORIES) {
-      if (probe.powerNetwork.categories[c].activeCount === 0) continue;
-      const need = Math.ceil(probe.powerNetwork.categories[c].minDraw);
-      // Guarantee at least 1 point for each active category (even if minDraw is 0)
-      const give = Math.min(Math.max(need, 1), rem, MAX_PER_CAT);
-      alloc[c] = give;
-      rem -= give;
+    // Phase 1: Give each active component its minimum (at least 1 pip if it has pips)
+    for (const inst of probe.powerNetwork.instances) {
+      if (!inst.isOn) continue;
+      if (inst.totalPips === 0) continue;
+      // Find the minimum pips needed: first range with range > 0
+      let minPips = 1; // At least 1 pip for active components
+      for (const r of inst.ranges) {
+        if (r.range > 0) {
+          minPips = Math.max(1, r.start > 0 ? r.start : 1);
+          break;
+        }
+      }
+      minPips = Math.min(minPips, inst.totalPips, rem);
+      newAlloc[inst.hardpointName] = minPips;
+      rem -= minPips;
     }
 
-    // Phase 2: Distribute remaining power evenly across active categories (cap at 6 each)
+    // Phase 2: Distribute remaining pips evenly across active instances
     if (rem > 0) {
-      const act = POWER_CATEGORIES.filter(c => probe.powerNetwork.categories[c].activeCount > 0);
-      let i = 0;
+      const active = probe.powerNetwork.instances.filter(i => i.isOn && i.totalPips > 0);
       let stuck = 0;
-      while (rem > 0 && stuck < act.length) {
-        const cat = act[i % act.length];
-        if (alloc[cat] < MAX_PER_CAT) {
-          alloc[cat]++;
+      let i = 0;
+      while (rem > 0 && stuck < active.length) {
+        const inst = active[i % active.length];
+        const current = newAlloc[inst.hardpointName] ?? 0;
+        if (current < inst.totalPips) {
+          newAlloc[inst.hardpointName] = current + 1;
           rem--;
           stuck = 0;
         } else {
@@ -436,7 +573,15 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
       }
     }
 
-    set({ allocatedPower: alloc });
+    // Also compute category-level allocatedPower for backward compat
+    const catAlloc: Record<PowerCategory, number> = { ...ZERO_ALLOC };
+    for (const inst of probe.powerNetwork.instances) {
+      const pips = newAlloc[inst.hardpointName] ?? 0;
+      catAlloc[inst.category] += pips;
+    }
+
+    set({ instancePower: newAlloc, allocatedPower: catAlloc });
   },
+
   encodeBuild: () => { const { hardpoints, overrides } = get(); if (overrides.size === 0) return ""; const e: Record<string, string | null> = {}; for (const [hpId, item] of overrides.entries()) { const hp = hardpoints.find(h => h.id === hpId); if (hp) e[hp.hardpointName] = item?.reference ?? null; } return btoa(JSON.stringify(e)); },
 }));
