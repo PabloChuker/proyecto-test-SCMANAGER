@@ -4,7 +4,6 @@ import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import LoadoutBuilder from "@/components/ships/LoadoutBuilder";
-import { StatsPanel } from "@/components/dps/StatsPanel";
 
 export default function DpsPage() {
   return (
@@ -23,7 +22,7 @@ export default function DpsPage() {
 
       {/* ── Header ── */}
       <header className="sticky top-0 z-40 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl">
-        <div className="max-w-[1600px] mx-auto px-4">
+        <div className="max-w-[1800px] mx-auto px-4">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-3">
               <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
@@ -46,7 +45,7 @@ export default function DpsPage() {
       </header>
 
       {/* ── Content ── */}
-      <div className="relative z-10 max-w-[1600px] mx-auto px-4 py-4">
+      <div className="relative z-10 max-w-[1800px] mx-auto px-4 py-3">
         <Suspense
           fallback={
             <div className="flex items-center justify-center py-20">
@@ -57,15 +56,8 @@ export default function DpsPage() {
             </div>
           }
         >
-          <LoadoutBuilder shipId="Avenger_Titan" />
+          <LoadoutBuilder shipId="AEGS_Avenger_Titan" />
         </Suspense>
-
-        {/* ── Stats + Radar Charts (integrated below loadout) ── */}
-        <div className="mt-3">
-          <Suspense fallback={null}>
-            <StatsPanel />
-          </Suspense>
-        </div>
       </div>
     </main>
   );

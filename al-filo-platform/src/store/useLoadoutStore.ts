@@ -42,6 +42,10 @@ export interface ShipInfo {
   pitchRate: number | null; yawRate: number | null; rollRate: number | null;
   crew: number | null; cargo: number | null;
   role: string | null; focus: string | null;
+  // Acceleration data for radar charts
+  accelForward: number | null; accelBackward: number | null;
+  accelUp: number | null; accelDown: number | null; accelStrafe: number | null;
+  boostSpeedForward: number | null;
 }
 
 export type FlightMode = "SCM" | "NAV";
@@ -81,20 +85,25 @@ const TYPE_TO_CAT: Record<string, string> = {
   WEAPON: "WEAPON", TURRET: "TURRET", MISSILE: "MISSILE_RACK", MISSILE_RACK: "MISSILE_RACK",
   SHIELD: "SHIELD", POWER_PLANT: "POWER_PLANT", COOLER: "COOLER", QUANTUM_DRIVE: "QUANTUM_DRIVE",
   MINING_LASER: "MINING", MINING: "MINING", TRACTOR_BEAM: "UTILITY", EMP: "UTILITY",
+  RADAR: "RADAR", COUNTERMEASURE: "COUNTERMEASURE",
 };
 const NAME_PATTERNS: [RegExp, string][] = [
-  [/turret/i, "TURRET"], [/weapon|gun|cannon|gatling|repeater|scattergun/i, "WEAPON"],
-  [/missile|rocket/i, "MISSILE_RACK"], [/shield/i, "SHIELD"],
-  [/power_plant|powerplant/i, "POWER_PLANT"], [/cool/i, "COOLER"],
+  [/turret/i, "TURRET"], [/weapon|gun|cannon|gatling|repeater|scattergun|gimbal/i, "WEAPON"],
+  [/missile|rocket|msd-/i, "MISSILE_RACK"], [/shield/i, "SHIELD"],
+  [/power_plant|powerplant|power plant/i, "POWER_PLANT"], [/cool/i, "COOLER"],
   [/quantum|qdrive/i, "QUANTUM_DRIVE"], [/mining/i, "MINING"],
+  [/radar|scanner/i, "RADAR"],
 ];
-const USEFUL = new Set(["WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "UTILITY"]);
+const USEFUL = new Set(["WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "UTILITY", "RADAR", "COUNTERMEASURE"]);
 
 function inferCategory(category: string, item: EquippedItem | null, hpName: string): string {
+  // Already classified by API
   if (category !== "OTHER" && USEFUL.has(category)) return category;
+  // Try item type
   if (item?.type) { const m = TYPE_TO_CAT[item.type]; if (m) return m; }
+  // Try name patterns
   for (const [re, cat] of NAME_PATTERNS) { if (re.test(hpName)) return cat; }
-  return "OTHER";
+  return category; // preserve API classification like COUNTERMEASURE, ARMOR, etc.
 }
 
 // =============================================================================
@@ -301,6 +310,12 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
         rollRate: toNumOrNull(sd?.rollRate),
         crew: sd?.maxCrew ?? null, cargo: sd?.cargo ?? null,
         role: sd?.role ?? null, focus: sd?.focus ?? null,
+        accelForward: toNumOrNull(sd?.accelForward),
+        accelBackward: toNumOrNull(sd?.accelBackward),
+        accelUp: toNumOrNull(sd?.accelUp),
+        accelDown: toNumOrNull(sd?.accelDown),
+        accelStrafe: toNumOrNull(sd?.accelStrafe),
+        boostSpeedForward: toNumOrNull(sd?.boostSpeedForward),
       };
 
       // Parse flatHardpoints with children

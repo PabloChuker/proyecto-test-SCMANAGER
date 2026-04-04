@@ -14,8 +14,35 @@ export const revalidate = 300;
 
 // ─── Category inference from hardpoint_name ─────────────────────────────────
 
+// Known Star Citizen component names → category mapping
+const KNOWN_COMPONENTS: Record<string, string> = {
+  // Power plants
+  "endurance": "POWER_PLANT", "maelstrom": "POWER_PLANT", "regulus": "POWER_PLANT",
+  "zenith": "POWER_PLANT", "fierell cascade": "POWER_PLANT", "genoa": "POWER_PLANT",
+  "drassik": "POWER_PLANT", "lotus": "POWER_PLANT", "quadracell": "POWER_PLANT",
+  "js-300": "POWER_PLANT", "js-400": "POWER_PLANT", "siren": "POWER_PLANT",
+  // Coolers
+  "bracer": "COOLER", "ultraflow": "COOLER", "snowpack": "COOLER",
+  "thermasync": "COOLER", "wen/caeli": "COOLER", "rapidcool": "COOLER",
+  "heatpipe": "COOLER", "zero-rush": "COOLER", "blizzard": "COOLER",
+  "arctic storm": "COOLER", "chill max": "COOLER",
+  // Quantum drives
+  "expedition": "QUANTUM_DRIVE", "beacon": "QUANTUM_DRIVE", "yeager": "QUANTUM_DRIVE",
+  "hemera": "QUANTUM_DRIVE", "eos": "QUANTUM_DRIVE", "pontus": "QUANTUM_DRIVE",
+  "atlas": "QUANTUM_DRIVE", "rush": "QUANTUM_DRIVE", "vk-00": "QUANTUM_DRIVE",
+  "voyage": "QUANTUM_DRIVE",
+  // Shields
+  "bulwark": "SHIELD", "shimmer": "SHIELD", "fr-66": "SHIELD", "mirage": "SHIELD",
+  "palisade": "SHIELD", "rampart": "SHIELD", "guardian": "SHIELD",
+  "stop-net": "SHIELD", "aspis": "SHIELD",
+  // Radars
+  "ecouter": "RADAR", "tracker": "RADAR", "observer": "RADAR", "surveyor": "RADAR",
+  // Countermeasures
+  "decoy launcher": "COUNTERMEASURE", "noise launcher": "COUNTERMEASURE",
+};
+
 function inferCategory(name: string, hp: any): string {
-  const n = name.toLowerCase();
+  const n = name.toLowerCase().trim();
 
   // Check which default component FK is populated
   if (hp.default_weapon_id) return "WEAPON";
@@ -24,25 +51,40 @@ function inferCategory(name: string, hp: any): string {
   if (hp.default_cooler_id) return "COOLER";
   if (hp.default_quantum_id) return "QUANTUM_DRIVE";
 
+  // Exact match group names from DB (e.g., "POWER", "HEAT", "SHIELDS", "WEAPONS")
+  const EXACT_GROUPS: Record<string, string> = {
+    "power": "POWER_PLANT", "heat": "COOLER", "shields": "SHIELD",
+    "weapons": "WEAPON", "missiles": "MISSILE_RACK", "comms": "AVIONICS",
+    "lights": "OTHER", "security": "OTHER", "door": "OTHER", "access": "OTHER",
+  };
+  if (EXACT_GROUPS[n]) return EXACT_GROUPS[n];
+
+  // Known component names (checks if n starts with or equals a known component)
+  for (const [cName, cat] of Object.entries(KNOWN_COMPONENTS)) {
+    if (n === cName || n.includes(cName)) return cat;
+  }
+
   // Infer from name patterns (Star Citizen hardpoint naming conventions)
   if (n.includes("turret")) return "TURRET";
   if (n.includes("weapon") || n.includes("gun") || n.includes("cannon") || n.includes("gimbal") || n.includes("nose_mount")) return "WEAPON";
-  if (n.includes("missile") || n.includes("pylon") || n.includes("bomb")) return "MISSILE_RACK";
+  if (n.includes("missile") || n.includes("pylon") || n.includes("bomb") || n.includes("msd-")) return "MISSILE_RACK";
   if (n.includes("shield")) return "SHIELD";
-  if (n.includes("power_plant") || n.includes("powerplant")) return "POWER_PLANT";
+  if (n.includes("power_plant") || n.includes("powerplant") || n.includes("power plant")) return "POWER_PLANT";
   if (n.includes("cooler") || n.includes("cooling")) return "COOLER";
   if (n.includes("quantum") || n.includes("qdrive") || n.includes("quantum_drive")) return "QUANTUM_DRIVE";
   if (n.includes("main_thruster") || n.includes("thruster_main")) return "THRUSTER_MAIN";
   if (n.includes("thruster") || n.includes("mav")) return "THRUSTER_MANEUVERING";
-  if (n.includes("radar")) return "RADAR";
+  if (n.includes("radar") || n.includes("scanner")) return "RADAR";
   if (n.includes("armor")) return "ARMOR";
-  if (n.includes("fuel_tank")) return "FUEL_TANK";
+  if (n.includes("fuel_tank") || n.includes("internal tank")) return "FUEL_TANK";
   if (n.includes("fuel_intake") || n.includes("intake")) return "FUEL_INTAKE";
   if (n.includes("mining")) return "MINING";
   if (n.includes("salvage")) return "SALVAGE";
   if (n.includes("tractor")) return "TRACTOR_BEAM";
   if (n.includes("countermeasure") || n.includes("cm_launcher") || n.includes("flare") || n.includes("chaff") || n.includes("noise")) return "COUNTERMEASURE";
   if (n.includes("avionics")) return "AVIONICS";
+  if (n.includes("self destruct")) return "OTHER";
+  if (n.includes("flight blade") || n.includes("blade")) return "OTHER";
 
   return "OTHER";
 }
@@ -208,6 +250,10 @@ export async function GET(
         // Extra flight data
         boostSpeedForward: numOrNull(col(flightStats, "boost_speed_forward", "boostSpeedForward")),
         accelForward: numOrNull(col(flightStats, "accel_forward", "accelForward")),
+        accelBackward: numOrNull(col(flightStats, "accel_backward", "accelBackward")),
+        accelUp: numOrNull(col(flightStats, "accel_up", "accelUp")),
+        accelDown: numOrNull(col(flightStats, "accel_down", "accelDown")),
+        accelStrafe: numOrNull(col(flightStats, "accel_strafe", "accelStrafe")),
         // Fuel/power data
         hydrogenCapacity: numOrNull(col(fuelStats, "hydrogen_capacity", "hydrogenCapacity")),
         quantumRange: numOrNull(col(fuelStats, "quantum_range", "quantumRange")),
