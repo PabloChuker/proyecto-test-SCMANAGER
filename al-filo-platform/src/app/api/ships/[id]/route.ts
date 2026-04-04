@@ -101,6 +101,8 @@ function buildWeaponItem(row: any): any {
       ammoSpeed: numOrNull(row.ammo_speed),
       ammoCapacity: numOrNull(row.ammo_capacity),
       fireMode: row.fire_mode ?? null,
+      heatPerShot: numOrNull(row.heat_per_shot),
+      emSignature: numOrNull(row.emission_em_max),
     },
   };
 }
@@ -128,6 +130,16 @@ function buildShieldItem(row: any): any {
 }
 
 function buildPowerPlantItem(row: any): any {
+  // power_generation column is 0 for all rows — extract from raw_data
+  let powerGen = numOrNull(row.power_generation);
+  if (!powerGen || powerGen === 0) {
+    // Try raw_data -> stdItem -> ResourceNetwork -> Usage -> Power -> Maximum
+    powerGen = numOrNull(row.raw_data?.stdItem?.ResourceNetwork?.Usage?.Power?.Maximum) ?? 0;
+  }
+
+  // Also extract EM signature from raw_data
+  const emSig = numOrNull(row.raw_data?.stdItem?.Emission?.Em?.Maximum) ?? 0;
+
   return {
     id: row.uuid || row.class_name,
     reference: row.class_name || "",
@@ -139,8 +151,9 @@ function buildPowerPlantItem(row: any): any {
     grade: row.grade ?? null,
     manufacturer: row.manufacturer_id ?? null,
     componentStats: {
-      powerOutput: numOrNull(row.power_generation),
-      powerDraw: numOrNull(row.power_draw_max),
+      powerOutput: powerGen,
+      powerDraw: 0, // Power plants don't consume power, they generate it
+      emSignature: emSig,
     },
   };
 }
