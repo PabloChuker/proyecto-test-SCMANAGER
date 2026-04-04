@@ -9,7 +9,7 @@ const PANELS = [
     id: "dps",
     label: "DPS Calculator & Stats",
     video: "/videos/dps.mp4",
-    href: "/ships",
+    href: "/dps",
   },
   {
     id: "compare",
