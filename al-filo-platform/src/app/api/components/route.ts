@@ -34,6 +34,16 @@ function numOrNull(v: any): number | null {
   return isNaN(n) ? null : n;
 }
 
+/** Convert numeric grade (1,2,3) to letter (A,B,C,D) */
+function gradeToLetter(g: any): string | null {
+  if (g === null || g === undefined) return null;
+  const GRADE_MAP: Record<number, string> = { 1: "A", 2: "B", 3: "C", 4: "D" };
+  const n = Number(g);
+  if (!isNaN(n) && GRADE_MAP[n]) return GRADE_MAP[n];
+  if (typeof g === "string" && g.length === 1) return g.toUpperCase();
+  return String(g);
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -109,7 +119,7 @@ export async function GET(request: NextRequest) {
       className: row.class_name || row[classCol] || null,
       type,
       size: numOrNull(row[sizeCol || "size"]),
-      grade: row.grade ?? null,
+      grade: gradeToLetter(row.grade),
       manufacturer: row.manufacturer_id ?? row.manufacturer ?? null,
       componentStats: buildStats(row, type),
     }));

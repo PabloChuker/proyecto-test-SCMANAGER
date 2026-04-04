@@ -27,6 +27,16 @@ function col(row: any, ...keys: string[]): any {
   return null;
 }
 
+/** Convert numeric grade (1,2,3) to letter (A,B,C,D) */
+function gradeToLetter(g: any): string | null {
+  if (g === null || g === undefined) return null;
+  const GRADE_MAP: Record<number, string> = { 1: "A", 2: "B", 3: "C", 4: "D" };
+  const n = Number(g);
+  if (!isNaN(n) && GRADE_MAP[n]) return GRADE_MAP[n];
+  if (typeof g === "string" && g.length === 1) return g.toUpperCase();
+  return String(g);
+}
+
 // ─── Hardpoint type → store category mapping ────────────────────────────────
 
 const HP_TYPE_TO_CATEGORY: Record<string, string> = {
@@ -87,7 +97,7 @@ function buildWeaponItem(row: any): any {
     className: row.class_name,
     type: "WEAPON",
     size: numOrNull(row.size),
-    grade: row.grade ?? null,
+    grade: gradeToLetter(row.grade),
     manufacturer: row.manufacturer_id ?? null,
     componentStats: {
       alphaDamage: alpha_total,
@@ -116,7 +126,7 @@ function buildShieldItem(row: any): any {
     className: row.class_name,
     type: "SHIELD",
     size: numOrNull(row.size),
-    grade: row.grade ?? null,
+    grade: gradeToLetter(row.grade),
     manufacturer: row.manufacturer_id ?? null,
     componentStats: {
       shieldHp: numOrNull(row.max_shield_health),
@@ -148,7 +158,7 @@ function buildPowerPlantItem(row: any): any {
     className: row.class_name,
     type: "POWER_PLANT",
     size: numOrNull(row.size),
-    grade: row.grade ?? null,
+    grade: gradeToLetter(row.grade),
     manufacturer: row.manufacturer_id ?? null,
     componentStats: {
       powerOutput: powerGen,
@@ -167,7 +177,7 @@ function buildCoolerItem(row: any): any {
     className: row.class_name,
     type: "COOLER",
     size: numOrNull(row.size),
-    grade: row.grade ?? null,
+    grade: gradeToLetter(row.grade),
     manufacturer: row.manufacturer_id ?? null,
     componentStats: {
       coolingRate: numOrNull(row.cooling_rate),
@@ -185,7 +195,7 @@ function buildQuantumItem(row: any): any {
     className: row.class_name,
     type: "QUANTUM_DRIVE",
     size: numOrNull(row.size),
-    grade: row.grade ?? null,
+    grade: gradeToLetter(row.grade),
     manufacturer: row.manufacturer_id ?? null,
     componentStats: {
       maxSpeed: numOrNull(row.drive_speed),
@@ -207,7 +217,7 @@ function buildGenericItem(hp: any): any {
     className: hp.default_item_class,
     type: hp.hardpoint_type || "OTHER",
     size: numOrNull(hp.max_size),
-    grade: hp.default_item_grade ?? null,
+    grade: gradeToLetter(hp.default_item_grade),
     manufacturer: hp.default_item_manufacturer ?? null,
     componentStats: null,
   };
@@ -242,7 +252,7 @@ function buildChildren(
           className,
           type: "WEAPON",
           size: entry.Size ?? null,
-          grade: entry.Grade ?? null,
+          grade: gradeToLetter(entry.Grade),
           manufacturer: null,
           componentStats: null,
         };
@@ -258,7 +268,7 @@ function buildChildren(
           className,
           type: "MISSILE_RACK",
           size: entry.Size ?? null,
-          grade: entry.Grade ?? null,
+          grade: gradeToLetter(entry.Grade),
           manufacturer: null,
           componentStats: entry.DamageTotal
             ? { alphaDamage: Number(entry.DamageTotal), damage: Number(entry.DamageTotal) }

@@ -79,6 +79,17 @@ function numOrNull(v: any): number | null {
   return isNaN(n) ? null : n;
 }
 
+/** Convert numeric grade (1,2,3) to letter (A,B,C,D) */
+function gradeToLetter(g: any): string | null {
+  if (g === null || g === undefined) return null;
+  const GRADE_MAP: Record<number, string> = { 1: "A", 2: "B", 3: "C", 4: "D" };
+  const n = Number(g);
+  if (!isNaN(n) && GRADE_MAP[n]) return GRADE_MAP[n];
+  // Already a letter
+  if (typeof g === "string" && g.length === 1) return g.toUpperCase();
+  return String(g);
+}
+
 // ─── GET handler ────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
@@ -196,7 +207,7 @@ function mapRow(row: any, def: TableDef): any {
     className,
     type,
     size: numOrNull(row[def.sizeCol || "size"]),
-    grade: def.gradeCol ? (row[def.gradeCol] ?? null) : null,
+    grade: def.gradeCol ? gradeToLetter(row[def.gradeCol]) : null,
     manufacturer: def.mfrCol ? (row[def.mfrCol] ?? null) : null,
     // Per-type stat objects (ComponentPicker reads these)
     weaponStats: type === "WEAPON" ? stats : null,

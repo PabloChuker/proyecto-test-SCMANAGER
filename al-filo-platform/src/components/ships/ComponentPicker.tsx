@@ -120,7 +120,7 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50" onClick={onClose} />
+      <div className="fixed inset-0 bg-black/80 z-50" onClick={onClose} />
       <div className="fixed inset-4 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[720px] sm:max-h-[75vh] bg-zinc-950 border border-zinc-800/70 rounded-sm flex flex-col z-50 shadow-2xl shadow-black/60">
         <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800/50 flex-shrink-0">
           <div className="w-1 h-5 rounded-full opacity-60" style={{ backgroundColor: catColor }} />
@@ -193,6 +193,7 @@ function getSortStatVal(stats: Record<string, any> | null, cat: string): number 
   switch (cat) { case "WEAPON": case "TURRET": return stats.dps ?? 0; case "SHIELD": return stats.maxHp ?? stats.shieldHp ?? 0; case "POWER_PLANT": return stats.powerOutput ?? 0; case "COOLER": return stats.coolingRate ?? 0; case "QUANTUM_DRIVE": return stats.spoolUpTime ?? stats.quantumSpoolUp ?? 999; case "MISSILE_RACK": return stats.damage ?? stats.alphaDamage ?? 0; default: return stats.powerDraw ?? 0; }
 }
 
-function gradeClass(g: string): string {
-  switch (g.toUpperCase()) { case "A": return "text-[10px] font-mono font-bold text-amber-400"; case "B": return "text-[10px] font-mono font-bold text-cyan-400"; case "C": return "text-[10px] font-mono font-bold text-zinc-400"; default: return "text-[10px] font-mono font-bold text-zinc-600"; }
+function gradeClass(g: string | number): string {
+  const s = String(g).toUpperCase();
+  switch (s) { case "A": case "1": return "text-[10px] font-mono font-bold text-amber-400"; case "B": case "2": return "text-[10px] font-mono font-bold text-cyan-400"; case "C": case "3": return "text-[10px] font-mono font-bold text-zinc-400"; default: return "text-[10px] font-mono font-bold text-zinc-600"; }
 }
