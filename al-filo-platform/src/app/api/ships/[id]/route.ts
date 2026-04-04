@@ -246,6 +246,7 @@ export async function GET(
         role: ship.role ?? null,
         focus: null,
         career: null,
+        size: ship.size ?? null,
         mass: numOrNull(ship.mass),
         // Extra flight data
         boostSpeedForward: numOrNull(col(flightStats, "boost_speed_forward", "boostSpeedForward")),
@@ -254,11 +255,19 @@ export async function GET(
         accelUp: numOrNull(col(flightStats, "accel_up", "accelUp")),
         accelDown: numOrNull(col(flightStats, "accel_down", "accelDown")),
         accelStrafe: numOrNull(col(flightStats, "accel_strafe", "accelStrafe")),
+        // Boosted flight data
+        boostSpeedBackward: numOrNull(col(flightStats, "boost_speed_backward", "boostSpeedBackward")),
+        boostedPitch: numOrNull(col(flightStats, "boosted_pitch", "boostedPitch")),
+        boostedYaw: numOrNull(col(flightStats, "boosted_yaw", "boostedYaw")),
+        boostedRoll: numOrNull(col(flightStats, "boosted_roll", "boostedRoll")),
         // Fuel/power data
         hydrogenCapacity: numOrNull(col(fuelStats, "hydrogen_capacity", "hydrogenCapacity")),
+        quantumFuelCapacity: numOrNull(col(fuelStats, "quantum_fuel_capacity", "quantumFuelCapacity")),
         quantumRange: numOrNull(col(fuelStats, "quantum_range", "quantumRange")),
         shieldHpTotal: numOrNull(col(fuelStats, "shield_hp_total", "shieldHpTotal")),
         powerGeneration: numOrNull(col(fuelStats, "power_generation", "powerGeneration")),
+        // Hull HP from fuel/resistances tables
+        hullHp: numOrNull(col(fuelStats, "hull_hp", "hullHp")),
       },
     };
 

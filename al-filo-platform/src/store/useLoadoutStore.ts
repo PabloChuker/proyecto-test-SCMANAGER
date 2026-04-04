@@ -41,11 +41,16 @@ export interface ShipInfo {
   scmSpeed: number | null; afterburnerSpeed: number | null;
   pitchRate: number | null; yawRate: number | null; rollRate: number | null;
   crew: number | null; cargo: number | null;
-  role: string | null; focus: string | null;
+  role: string | null; focus: string | null; size: number | null;
   // Acceleration data for radar charts
   accelForward: number | null; accelBackward: number | null;
   accelUp: number | null; accelDown: number | null; accelStrafe: number | null;
-  boostSpeedForward: number | null;
+  boostSpeedForward: number | null; boostSpeedBackward: number | null;
+  // Boosted rates
+  boostedPitch: number | null; boostedYaw: number | null; boostedRoll: number | null;
+  // Extra
+  mass: number | null; hydrogenCapacity: number | null; quantumFuelCapacity: number | null;
+  shieldHpTotal: number | null; powerGeneration: number | null; hullHp: number | null;
 }
 
 export type FlightMode = "SCM" | "NAV";
@@ -309,13 +314,23 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
         pitchRate: toNumOrNull(sd?.pitchRate), yawRate: toNumOrNull(sd?.yawRate),
         rollRate: toNumOrNull(sd?.rollRate),
         crew: sd?.maxCrew ?? null, cargo: sd?.cargo ?? null,
-        role: sd?.role ?? null, focus: sd?.focus ?? null,
+        role: sd?.role ?? null, focus: sd?.focus ?? null, size: sd?.size ?? null,
         accelForward: toNumOrNull(sd?.accelForward),
         accelBackward: toNumOrNull(sd?.accelBackward),
         accelUp: toNumOrNull(sd?.accelUp),
         accelDown: toNumOrNull(sd?.accelDown),
         accelStrafe: toNumOrNull(sd?.accelStrafe),
         boostSpeedForward: toNumOrNull(sd?.boostSpeedForward),
+        boostSpeedBackward: toNumOrNull(sd?.boostSpeedBackward),
+        boostedPitch: toNumOrNull(sd?.boostedPitch),
+        boostedYaw: toNumOrNull(sd?.boostedYaw),
+        boostedRoll: toNumOrNull(sd?.boostedRoll),
+        mass: toNumOrNull(sd?.mass),
+        hydrogenCapacity: toNumOrNull(sd?.hydrogenCapacity),
+        quantumFuelCapacity: toNumOrNull(sd?.quantumFuelCapacity),
+        shieldHpTotal: toNumOrNull(sd?.shieldHpTotal),
+        powerGeneration: toNumOrNull(sd?.powerGeneration),
+        hullHp: toNumOrNull(sd?.hullHp),
       };
 
       // Parse flatHardpoints with children
@@ -342,7 +357,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
           minSize: hp.minSize ?? 0, maxSize: hp.maxSize ?? 0,
           isFixed: hp.isFixed ?? false, defaultItem: item, children,
         };
-      }).filter((hp: ResolvedHardpoint) => USEFUL.has(hp.resolvedCategory));
+      }).filter((hp: ResolvedHardpoint) => USEFUL.has(hp.resolvedCategory) || hp.resolvedCategory === "COUNTERMEASURE");
 
       // Build param overrides
       let restored = new Map<string, EquippedItem | null>();
