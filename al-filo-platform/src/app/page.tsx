@@ -1,16 +1,43 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+
+const PANELS = [
+  {
+    id: "dps",
+    label: "DPS Calculator & Stats",
+    video: "/videos/dps.mp4",
+    href: "/ships",
+  },
+  {
+    id: "compare",
+    label: "Ship Comparator",
+    video: "/videos/comparador.mp4",
+    href: "/compare",
+  },
+  {
+    id: "mining",
+    label: "Mining & Industry",
+    video: "/videos/mineria.mp4",
+    href: "#",
+  },
+  {
+    id: "crafting",
+    label: "Crafting",
+    video: "/videos/crafting.mp4",
+    href: "#",
+  },
+];
 
 export default function Home() {
   const [phase, setPhase] = useState<"logo" | "reveal" | "ready">("logo");
+  const [hoveredPanel, setHoveredPanel] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
-    // Logo centrado por 2.7s, luego transiciona (50% más lento)
     const t1 = setTimeout(() => setPhase("reveal"), 2700);
-    // Contenido aparece después de la transición del logo
     const t2 = setTimeout(() => setPhase("ready"), 3900);
     return () => {
       clearTimeout(t1);
@@ -19,27 +46,20 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="relative min-h-screen bg-zinc-950 text-zinc-100 overflow-hidden">
-      {/* ── Background provisorio con gradientes ── */}
-      <div className="fixed inset-0 -z-10">
-        {/* Base oscura */}
-        <div className="absolute inset-0 bg-zinc-950" />
-        {/* Glow ambar sutil arriba */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(232,137,12,0.06),transparent_50%)]" />
-        {/* Glow verde sutil abajo-derecha */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(93,160,7,0.04),transparent_50%)]" />
-        {/* Grid lines sutiles */}
-        <div
-          className="absolute inset-0 opacity-[0.03]"
-          style={{
-            backgroundImage:
-              "linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)",
-            backgroundSize: "80px 80px",
-          }}
-        />
-        {/* Vignette */}
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,rgba(0,0,0,0.7)_100%)]" />
-      </div>
+    <main className="relative h-screen w-screen overflow-hidden bg-black text-white">
+      {/* ── Background video ── */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none"
+      >
+        <source src="/videos/bg.mp4" type="video/mp4" />
+      </video>
+
+      {/* Overlay oscuro sobre el video */}
+      <div className="absolute inset-0 bg-black/40 pointer-events-none" />
 
       {/* ── Logo animado ── */}
       <div
@@ -55,11 +75,11 @@ export default function Home() {
                 transitionDuration: "0ms",
               }
             : {
-                top: "12px",
-                left: "20px",
+                top: "16px",
+                left: "24px",
                 transform: "translate(0, 0) scale(1)",
-                width: "48px",
-                height: "48px",
+                width: "52px",
+                height: "52px",
                 transitionDuration: "1200ms",
               }),
         }}
@@ -68,231 +88,175 @@ export default function Home() {
           src="/sclabs-logo.png"
           alt="SC LABS"
           fill
-          className="object-contain drop-shadow-[0_0_30px_rgba(232,137,12,0.3)]"
+          className="object-contain drop-shadow-[0_0_40px_rgba(232,137,12,0.35)]"
           priority
         />
       </div>
 
-      {/* ── Glow detrás del logo (solo en fase centrada) ── */}
+      {/* Glow detrás del logo centrado */}
       <div
-        className="fixed z-40 pointer-events-none transition-opacity duration-500"
+        className="fixed z-40 pointer-events-none transition-opacity duration-700"
         style={{
           top: "50%",
           left: "50%",
           transform: "translate(-50%, -50%)",
-          width: "500px",
-          height: "500px",
+          width: "600px",
+          height: "600px",
           background:
-            "radial-gradient(circle, rgba(232,137,12,0.12) 0%, transparent 70%)",
+            "radial-gradient(circle, rgba(232,137,12,0.15) 0%, transparent 70%)",
           opacity: phase === "logo" ? 1 : 0,
         }}
       />
 
-      {/* ── Header (aparece cuando logo llega arriba) ── */}
-      <header
-        className="sticky top-0 z-40 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl transition-all duration-700"
-        style={{
-          opacity: phase === "logo" ? 0 : 1,
-          transform: phase === "logo" ? "translateY(-100%)" : "translateY(0)",
-        }}
-      >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              {/* Espacio para el logo fijo */}
-              <div className="w-12" />
-              <span className="text-sm font-medium tracking-[0.2em] uppercase text-zinc-400">
-                SC Labs
-              </span>
-              <div className="h-5 w-px bg-zinc-800" />
-              <span className="text-xs tracking-[0.15em] uppercase text-amber-500/60">
-                Intelligence Platform
-              </span>
-            </div>
-
-            <nav className="hidden sm:flex items-center gap-6 text-xs tracking-[0.12em] uppercase text-zinc-600">
-              <Link
-                href="/ships"
-                className="hover:text-zinc-300 transition-colors"
-              >
-                Naves
-              </Link>
-              <Link
-                href="/compare"
-                className="hover:text-zinc-300 transition-colors"
-              >
-                Comparar
-              </Link>
-              <span className="cursor-not-allowed opacity-40">Mineria</span>
-              <span className="cursor-not-allowed opacity-40">Crafting</span>
-            </nav>
-          </div>
-        </div>
-      </header>
-
-      {/* ── Contenido principal ── */}
+      {/* ── Contenido: 4 paneles verticales ── */}
       <div
-        className="relative z-10 transition-all duration-700 ease-out"
+        className="relative z-10 h-full w-full flex transition-all duration-700 ease-out"
         style={{
           opacity: phase === "ready" ? 1 : 0,
-          transform:
-            phase === "ready" ? "translateY(0)" : "translateY(30px)",
         }}
       >
-        {/* Hero section */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-16">
-          <div className="text-center max-w-3xl mx-auto">
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-light tracking-wide text-zinc-100 leading-tight">
-              Star Citizen
-              <span className="block text-amber-500/90 font-normal mt-1">
-                Intelligence Platform
-              </span>
-            </h1>
-            <p className="mt-6 text-lg text-zinc-500 leading-relaxed max-w-xl mx-auto">
-              Datos en tiempo real extraidos del cliente del juego. Base de
-              naves, comparador, herramientas de mineria y crafting.
-            </p>
-            <p className="mt-2 text-xs tracking-[0.2em] uppercase text-zinc-700">
-              Game Version 4.0.2 &mdash; 293 ships indexed
-            </p>
-          </div>
+        {PANELS.map((panel) => {
+          const isHovered = hoveredPanel === panel.id;
+          const hasHover = hoveredPanel !== null;
+          const isOther = hasHover && !isHovered;
 
-          {/* CTA buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-12">
-            <Link
-              href="/ships"
-              className="group relative px-8 py-3 bg-amber-600/10 border border-amber-600/30 text-amber-500 text-sm tracking-[0.15em] uppercase hover:bg-amber-600/20 hover:border-amber-500/50 transition-all duration-300"
+          return (
+            <div
+              key={panel.id}
+              className="relative h-full cursor-pointer overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)]"
+              style={{
+                flex: isHovered ? 2.5 : isOther ? 0.7 : 1,
+              }}
+              onMouseEnter={() => setHoveredPanel(panel.id)}
+              onMouseLeave={() => setHoveredPanel(null)}
+              onClick={() => {
+                if (panel.href !== "#") router.push(panel.href);
+              }}
             >
-              <span className="relative z-10">Explorar Naves</span>
-              <div className="absolute inset-0 bg-gradient-to-r from-amber-600/0 via-amber-600/5 to-amber-600/0 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </Link>
-            <Link
-              href="/compare"
-              className="px-8 py-3 border border-zinc-800 text-zinc-500 text-sm tracking-[0.15em] uppercase hover:border-zinc-700 hover:text-zinc-400 transition-all duration-300"
-            >
-              Comparador
-            </Link>
-          </div>
-        </section>
+              {/* Video del panel */}
+              <VideoPanel src={panel.video} isHovered={isHovered} />
 
-        {/* Stats bar */}
-        <section className="border-t border-zinc-800/40 bg-zinc-950/50 backdrop-blur">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-              <StatBlock value="293" label="Naves" />
-              <StatBlock value="7,724" label="Hardpoints" />
-              <StatBlock value="137" label="Fabricantes" />
-              <StatBlock value="4.0.2" label="Game Version" />
+              {/* Overlay gradiente */}
+              <div
+                className="absolute inset-0 transition-all duration-500"
+                style={{
+                  background: isHovered
+                    ? "linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.1) 40%, transparent 100%)"
+                    : "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.5) 50%, rgba(0,0,0,0.3) 100%)",
+                }}
+              />
+
+              {/* Bordes verticales */}
+              <div className="absolute top-0 bottom-0 left-0 w-px bg-white/[0.06]" />
+              <div className="absolute top-0 bottom-0 right-0 w-px bg-white/[0.06]" />
+
+              {/* Label */}
+              <div className="absolute inset-0 flex items-end justify-center pb-16 px-4">
+                <div
+                  className="text-center transition-all duration-500"
+                  style={{
+                    transform: isHovered
+                      ? "translateY(0)"
+                      : "translateY(8px)",
+                  }}
+                >
+                  <span
+                    className="block text-xs tracking-[0.3em] uppercase transition-all duration-500"
+                    style={{
+                      color: isHovered
+                        ? "rgba(232,137,12,0.9)"
+                        : "rgba(255,255,255,0.4)",
+                    }}
+                  >
+                    {panel.label}
+                  </span>
+
+                  {/* Línea decorativa */}
+                  <div
+                    className="mx-auto mt-3 h-px transition-all duration-500"
+                    style={{
+                      width: isHovered ? "60px" : "20px",
+                      background: isHovered
+                        ? "rgba(232,137,12,0.5)"
+                        : "rgba(255,255,255,0.15)",
+                    }}
+                  />
+
+                  {/* Enter hint */}
+                  <span
+                    className="block text-[10px] tracking-[0.2em] uppercase mt-3 transition-all duration-400"
+                    style={{
+                      opacity: isHovered ? 0.6 : 0,
+                      color: "rgba(255,255,255,0.5)",
+                    }}
+                  >
+                    {panel.href !== "#" ? "Click to enter" : "Coming soon"}
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
-        </section>
+          );
+        })}
+      </div>
 
-        {/* Module cards */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <ModuleCard
-              href="/ships"
-              title="Ship Database"
-              description="Base completa de naves con stats de vuelo, armamento, resistencias, combustible y seguros."
-              status="online"
-              icon="&#9670;"
-            />
-            <ModuleCard
-              href="/compare"
-              title="Ship Comparator"
-              description="Compara hasta 3 naves lado a lado. Flight stats, DPS, resistencias y mas."
-              status="online"
-              icon="&#9674;"
-            />
-            <ModuleCard
-              href="#"
-              title="Mining Solver"
-              description="Calculadora de mineria con gadgets, resistencias de roca y profit estimado."
-              status="coming soon"
-              icon="&#9699;"
-            />
-          </div>
-        </section>
+      {/* ── Header minimalista (aparece con el contenido) ── */}
+      <div
+        className="fixed top-0 left-0 right-0 z-30 flex items-center justify-between px-6 h-20 transition-all duration-700"
+        style={{
+          opacity: phase === "ready" ? 1 : 0,
+          background:
+            "linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 100%)",
+        }}
+      >
+        {/* Espacio para el logo fijo */}
+        <div className="flex items-center gap-3 pl-14">
+          <span className="text-[11px] font-medium tracking-[0.25em] uppercase text-white/50">
+            SC Labs
+          </span>
+        </div>
 
-        {/* Footer */}
-        <footer className="border-t border-zinc-800/30 py-8">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <p className="text-xs text-zinc-700 tracking-wide">
-                SC LABS &mdash; Fan-made project. Not affiliated with CIG or
-                RSI.
-              </p>
-              <p className="text-xs text-zinc-800 font-mono">
-                sclabs.vercel.app
-              </p>
-            </div>
-          </div>
-        </footer>
+        <span className="text-[10px] tracking-[0.2em] uppercase text-white/20">
+          v4.0.2
+        </span>
       </div>
     </main>
   );
 }
 
-/* ── Componentes auxiliares ── */
-
-function StatBlock({ value, label }: { value: string; label: string }) {
-  return (
-    <div className="text-center">
-      <div className="text-2xl sm:text-3xl font-light text-zinc-200 tracking-wide font-mono">
-        {value}
-      </div>
-      <div className="text-xs text-zinc-600 tracking-[0.15em] uppercase mt-1">
-        {label}
-      </div>
-    </div>
-  );
-}
-
-function ModuleCard({
-  href,
-  title,
-  description,
-  status,
-  icon,
+/* ── Video panel component ── */
+function VideoPanel({
+  src,
+  isHovered,
 }: {
-  href: string;
-  title: string;
-  description: string;
-  status: "online" | "coming soon";
-  icon: string;
+  src: string;
+  isHovered: boolean;
 }) {
-  const isOnline = status === "online";
+  const videoRef = useRef<HTMLVideoElement>(null);
 
-  const content = (
-    <div
-      className={`group relative p-6 border rounded-sm transition-all duration-300 h-full ${
-        isOnline
-          ? "border-zinc-800/60 bg-zinc-900/30 hover:border-zinc-700/60 hover:bg-zinc-900/50 cursor-pointer"
-          : "border-zinc-800/30 bg-zinc-900/10 opacity-50 cursor-not-allowed"
-      }`}
+  useEffect(() => {
+    if (!videoRef.current) return;
+    if (isHovered) {
+      videoRef.current.play().catch(() => {});
+    } else {
+      videoRef.current.pause();
+    }
+  }, [isHovered]);
+
+  return (
+    <video
+      ref={videoRef}
+      loop
+      muted
+      playsInline
+      className="absolute inset-0 w-full h-full object-cover transition-all duration-500"
+      style={{
+        filter: isHovered
+          ? "brightness(1) saturate(1.1)"
+          : "brightness(0.3) saturate(0.5)",
+        transform: isHovered ? "scale(1.05)" : "scale(1)",
+      }}
     >
-      {/* Status indicator */}
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-xl opacity-40">{icon}</span>
-        <span
-          className={`text-[10px] tracking-[0.2em] uppercase px-2 py-0.5 rounded-sm ${
-            isOnline
-              ? "text-emerald-500/80 bg-emerald-500/10 border border-emerald-500/20"
-              : "text-zinc-600 bg-zinc-800/30 border border-zinc-800/40"
-          }`}
-        >
-          {status}
-        </span>
-      </div>
-      <h3 className="text-base font-medium text-zinc-200 tracking-wide mb-2">
-        {title}
-      </h3>
-      <p className="text-sm text-zinc-500 leading-relaxed">{description}</p>
-      {isOnline && (
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-amber-600/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-      )}
-    </div>
+      <source src={src} type="video/mp4" />
+    </video>
   );
-
-  return isOnline ? <Link href={href}>{content}</Link> : <div>{content}</div>;
 }
