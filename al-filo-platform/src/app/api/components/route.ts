@@ -1,9 +1,9 @@
 export const dynamic = "force-dynamic";
 // =============================================================================
-// AL FILO — GET /api/components v2 (Raw SQL — actual DB schema)
+// AL FILO — GET /api/components v3 (Correct DB tables)
 //
-// Searches component tables (component_weapons, component_shields, etc.)
-// for compatible items given a hardpoint category and size.
+// Searches real component tables (weapon_guns, shields, power_plants,
+// coolers, quantum_drives, missiles) for compatible items.
 //
 // Parameters:
 //   ?category=WEAPON&maxSize=3
@@ -17,16 +17,22 @@ import { prisma } from "@/lib/prisma";
 
 export const revalidate = 300;
 
-// Map hardpoint category → component table + type label
-const CATEGORY_TABLE: Record<string, { table: string; type: string }> = {
-  WEAPON:        { table: "component_weapons",        type: "WEAPON" },
-  TURRET:        { table: "component_weapons",        type: "WEAPON" },
-  MISSILE_RACK:  { table: "component_weapons",        type: "MISSILE" },
-  SHIELD:        { table: "component_shields",        type: "SHIELD" },
-  POWER_PLANT:   { table: "component_power_plants",   type: "POWER_PLANT" },
-  COOLER:        { table: "component_coolers",         type: "COOLER" },
-  QUANTUM_DRIVE: { table: "component_quantum_drives", type: "QUANTUM_DRIVE" },
+// Map hardpoint category → actual DB table + type label
+const CATEGORY_TABLE: Record<string, { table: string; type: string; nameCol: string; classCol: string; sizeCol: string | null }> = {
+  WEAPON:        { table: "weapon_guns",    type: "WEAPON",        nameCol: "name", classCol: "class_name", sizeCol: "size" },
+  TURRET:        { table: "weapon_guns",    type: "WEAPON",        nameCol: "name", classCol: "class_name", sizeCol: "size" },
+  MISSILE_RACK:  { table: "missiles",       type: "MISSILE",       nameCol: "name", classCol: "name",       sizeCol: "size" },
+  SHIELD:        { table: "shields",        type: "SHIELD",        nameCol: "name", classCol: "class_name", sizeCol: "size" },
+  POWER_PLANT:   { table: "power_plants",   type: "POWER_PLANT",   nameCol: "name", classCol: "class_name", sizeCol: "size" },
+  COOLER:        { table: "coolers",        type: "COOLER",        nameCol: "name", classCol: "class_name", sizeCol: "size" },
+  QUANTUM_DRIVE: { table: "quantum_drives", type: "QUANTUM_DRIVE", nameCol: "name", classCol: "class_name", sizeCol: "size" },
 };
+
+function numOrNull(v: any): number | null {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return isNaN(n) ? null : n;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -34,8 +40,9 @@ export async function GET(request: NextRequest) {
 
     const category = searchParams.get("category")?.trim() || searchParams.get("type")?.trim() || "";
     const maxSize  = parseInt(searchParams.get("maxSize") || "99", 10);
+    const minSize  = parseInt(searchParams.get("minSize") || "0", 10);
     const search   = searchParams.get("search")?.trim() || "";
-    const limit    = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
+    const limit    = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
 
     const mapping = CATEGORY_TABLE[category];
     if (!mapping) {
@@ -45,28 +52,34 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const { table, type } = mapping;
+    const { table, type, nameCol, classCol, sizeCol } = mapping;
 
     // Build query
     const conditions: string[] = [];
     const params: any[] = [];
     let idx = 1;
 
-    // Size filter (if the table has a size column)
-    if (maxSize < 99) {
-      conditions.push(`size <= $${idx}`);
-      params.push(maxSize);
-      idx++;
+    if (sizeCol) {
+      if (maxSize < 99) {
+        conditions.push(`${sizeCol} <= $${idx}`);
+        params.push(maxSize);
+        idx++;
+      }
+      if (minSize > 0) {
+        conditions.push(`${sizeCol} >= $${idx}`);
+        params.push(minSize);
+        idx++;
+      }
     }
 
-    // Search filter
     if (search) {
-      conditions.push(`(name ILIKE $${idx} OR reference ILIKE $${idx})`);
+      conditions.push(`(${nameCol} ILIKE $${idx} OR ${classCol} ILIKE $${idx})`);
       params.push(`%${search}%`);
       idx++;
     }
 
     const whereClause = conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
+    const orderCol = sizeCol ? `${sizeCol} DESC NULLS LAST, ` : "";
 
     let rows: any[] = [];
     let total = 0;
@@ -79,28 +92,26 @@ export async function GET(request: NextRequest) {
       total = countResult[0]?.total ?? 0;
 
       rows = await prisma.$queryRawUnsafe(
-        `SELECT * FROM ${table} ${whereClause} ORDER BY size DESC NULLS LAST, name ASC LIMIT $${idx}`,
+        `SELECT * FROM ${table} ${whereClause} ORDER BY ${orderCol}${nameCol} ASC LIMIT $${idx}`,
         ...params,
         limit,
       );
     } catch {
-      // Table might be empty or not fully set up yet — return empty gracefully
       rows = [];
       total = 0;
     }
 
-    // Map to expected format
-    const data = rows.map((comp) => ({
-      id: comp.id,
-      reference: comp.reference || "",
-      name: comp.name || "",
+    const data = rows.map((row) => ({
+      id: row.id || row.uuid || "",
+      reference: row[classCol] || row.class_name || "",
+      name: row[nameCol] || row.name || "",
       localizedName: null,
-      className: null,
+      className: row.class_name || row[classCol] || null,
       type,
-      size: comp.size ?? null,
-      grade: comp.grade ?? null,
-      manufacturer: comp.manufacturer ?? null,
-      componentStats: buildStats(comp, type),
+      size: numOrNull(row[sizeCol || "size"]),
+      grade: row.grade ?? null,
+      manufacturer: row.manufacturer_id ?? row.manufacturer ?? null,
+      componentStats: buildStats(row, type),
     }));
 
     return NextResponse.json(
@@ -113,44 +124,75 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// ─── Build componentStats from raw component columns ────────────────────────
+// ─── Build componentStats from real DB columns ─────────────────────────────
 
-function buildStats(comp: any, type: string): Record<string, any> | null {
+function buildStats(row: any, type: string): Record<string, any> | null {
   const s: Record<string, any> = {};
 
-  // Weapon fields
-  if (comp.alpha_damage != null) s.alphaDamage = Number(comp.alpha_damage);
-  if (comp.fire_rate != null) s.fireRate = Number(comp.fire_rate);
-  if (comp.dps != null) s.dps = Number(comp.dps);
-  if (comp.damage_type != null) s.damageType = comp.damage_type;
-  if (comp.range != null) s.range = Number(comp.range);
-  if (comp.speed != null) s.speed = Number(comp.speed);
-  if (comp.ammo_count != null) s.ammoCount = Number(comp.ammo_count);
-
-  // Shield fields
-  if (comp.max_hp != null) { s.shieldHp = Number(comp.max_hp); s.maxHp = Number(comp.max_hp); }
-  if (comp.regen_rate != null) { s.shieldRegen = Number(comp.regen_rate); s.regenRate = Number(comp.regen_rate); }
-
-  // Power plant fields
-  if (comp.power_output != null) s.powerOutput = Number(comp.power_output);
-
-  // Cooler fields
-  if (comp.cooling_rate != null) s.coolingRate = Number(comp.cooling_rate);
-
-  // Quantum drive fields
-  if (comp.max_speed != null) s.maxSpeed = Number(comp.max_speed);
-  if (comp.fuel_rate != null) s.fuelRate = Number(comp.fuel_rate);
-
-  // Common fields
-  if (comp.power_draw != null) s.powerDraw = Number(comp.power_draw);
-  if (comp.thermal_output != null) s.thermalOutput = Number(comp.thermal_output);
-  if (comp.em_signature != null) s.emSignature = Number(comp.em_signature);
-  if (comp.ir_signature != null) s.irSignature = Number(comp.ir_signature);
-
-  // Compute DPS if missing
-  if (!s.dps && s.alphaDamage && s.fireRate) {
-    const a = s.alphaDamage, fr = s.fireRate;
-    if (a > 0 && fr > 0) s.dps = Math.round(a * (fr / 60) * 100) / 100;
+  switch (type) {
+    case "WEAPON": {
+      const dpsP = numOrNull(row.dps_physical) ?? 0;
+      const dpsE = numOrNull(row.dps_energy) ?? 0;
+      const dpsD = numOrNull(row.dps_distortion) ?? 0;
+      const dpsT = numOrNull(row.dps_thermal) ?? 0;
+      const dpsB = numOrNull(row.dps_biochemical) ?? 0;
+      const dpsS = numOrNull(row.dps_stun) ?? 0;
+      s.dps = Math.round(((dpsP) + (dpsE) + (dpsD) + (dpsT) + (dpsB) + (dpsS)) * 100) / 100;
+      const aP = numOrNull(row.alpha_physical) ?? 0;
+      const aE = numOrNull(row.alpha_energy) ?? 0;
+      const aD = numOrNull(row.alpha_distortion) ?? 0;
+      const aT = numOrNull(row.alpha_thermal) ?? 0;
+      const aB = numOrNull(row.alpha_biochemical) ?? 0;
+      const aS = numOrNull(row.alpha_stun) ?? 0;
+      s.alphaDamage = Math.round(((aP) + (aE) + (aD) + (aT) + (aB) + (aS)) * 100) / 100;
+      s.damagePerShot = numOrNull(row.damage_per_shot);
+      s.fireRate = numOrNull(row.rate_of_fire);
+      s.effectiveRange = numOrNull(row.effective_range);
+      s.ammoSpeed = numOrNull(row.ammo_speed);
+      s.heatPerShot = numOrNull(row.heat_per_shot);
+      s.emSignature = numOrNull(row.emission_em_max);
+      if (s.dps === 0 && s.alphaDamage > 0 && s.fireRate > 0) {
+        s.dps = Math.round(s.alphaDamage * (s.fireRate / 60) * 100) / 100;
+      }
+      break;
+    }
+    case "SHIELD": {
+      s.shieldHp = numOrNull(row.max_shield_health);
+      s.maxHp = numOrNull(row.max_shield_health);
+      s.shieldRegen = numOrNull(row.max_shield_regen);
+      s.regenRate = numOrNull(row.max_shield_regen);
+      s.downedDelay = numOrNull(row.downed_delay);
+      s.damagedDelay = numOrNull(row.damaged_delay);
+      break;
+    }
+    case "POWER_PLANT": {
+      let powerGen = numOrNull(row.power_generation);
+      if (!powerGen || powerGen === 0) {
+        powerGen = numOrNull(row.raw_data?.stdItem?.ResourceNetwork?.Usage?.Power?.Maximum) ?? 0;
+      }
+      s.powerOutput = powerGen;
+      s.emSignature = numOrNull(row.raw_data?.stdItem?.Emission?.Em?.Maximum) ?? 0;
+      break;
+    }
+    case "COOLER": {
+      s.coolingRate = numOrNull(row.cooling_rate);
+      s.powerDraw = numOrNull(row.power_draw_max);
+      break;
+    }
+    case "QUANTUM_DRIVE": {
+      s.maxSpeed = numOrNull(row.drive_speed);
+      s.fuelRate = numOrNull(row.fuel_rate);
+      s.cooldownTime = numOrNull(row.cooldown_time);
+      s.spoolUpTime = numOrNull(row.spool_up_time);
+      break;
+    }
+    case "MISSILE": {
+      s.damage = numOrNull(row.damage_total);
+      s.alphaDamage = numOrNull(row.damage_total);
+      s.trackingSignal = row.tracking_signal_type ?? null;
+      s.speed = numOrNull(row.linear_speed);
+      break;
+    }
   }
 
   return Object.keys(s).length > 0 ? s : null;
