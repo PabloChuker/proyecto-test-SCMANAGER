@@ -1,8 +1,18 @@
 "use client";
 
-import { useLoadoutStore } from "@/store/useLoadoutStore";
+// =============================================================================
+// SC LABS — StatsPanel v2 (Erkul-inspired with Radar Charts)
+//
+// Replaces bar charts with SVG radar/spider charts for:
+//   - Acceleration profile (8-axis)
+//   - Angular rates / maneuverability (3-axis triangle)
+// Plus compact combat stats and signatures.
+// =============================================================================
 
-/* ── Helpers ── */
+import { useLoadoutStore } from "@/store/useLoadoutStore";
+import { RadarChart } from "./RadarChart";
+import { PowerStatusGrid } from "./PowerStatusGrid";
+
 const fmt = (v: number) => {
   if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + "M";
   if (v >= 10_000) return (v / 1_000).toFixed(1) + "K";
@@ -16,236 +26,165 @@ export function StatsPanel() {
 
   if (!shipInfo) return null;
 
+  // Ship extended data from the API (may include extra fields)
+  const shipData = (shipInfo as any);
+
+  // ── Acceleration radar axes ──
+  const accelAxes = [
+    { label: "Forward", value: shipData.accelForward ?? 0, max: 30, displayValue: fmtAccel(shipData.accelForward) },
+    { label: "Up", value: shipData.accelUp ?? 0, max: 25 },
+    { label: "Strafe", value: shipData.accelStrafe ?? 0, max: 25 },
+    { label: "Down", value: shipData.accelDown ?? 0, max: 25 },
+    { label: "Backward", value: shipData.accelBackward ?? 0, max: 30 },
+    { label: "Roll Accel.", value: shipData.rollAccel ?? (shipInfo.rollRate ? shipInfo.rollRate * 0.5 : 0), max: 150 },
+    { label: "Yaw Accel.", value: shipData.yawAccel ?? (shipInfo.yawRate ? shipInfo.yawRate * 0.3 : 0), max: 50 },
+    { label: "Pitch Accel.", value: shipData.pitchAccel ?? (shipInfo.pitchRate ? shipInfo.pitchRate * 0.3 : 0), max: 50 },
+  ];
+
+  // ── Angular rates radar axes (triangle) ──
+  const angularAxes = [
+    { label: "Pitch", value: shipInfo.pitchRate ?? 0, max: 120, displayValue: `${Math.round(shipInfo.pitchRate ?? 0)}` },
+    { label: "Yaw", value: shipInfo.yawRate ?? 0, max: 120, displayValue: `${Math.round(shipInfo.yawRate ?? 0)}` },
+    { label: "Roll", value: shipInfo.rollRate ?? 0, max: 250, displayValue: `${Math.round(shipInfo.rollRate ?? 0)}` },
+  ];
+
+  // ── Combat stats for compact display ──
+  const combatStats = [
+    { label: "DPS", value: stats.totalDps, color: "#ef4444", locked: flightMode === "NAV" },
+    { label: "ALPHA", value: stats.totalAlpha, color: "#f97316", locked: flightMode === "NAV" },
+    { label: "SHIELD HP", value: stats.shieldHp, color: "#3b82f6" },
+    { label: "SH REGEN", value: stats.shieldRegen, color: "#60a5fa" },
+  ];
+
   return (
     <div className="space-y-3">
-      {/* ── Title ── */}
-      <div className="flex items-center gap-2 px-1">
-        <span className="text-[9px] font-mono text-zinc-600 tracking-[0.2em] uppercase">
-          Live Stats
-        </span>
-        <div className="flex-1 h-px bg-zinc-800/40" />
-        <span className="text-[9px] font-mono text-amber-500/50 tracking-wider">
-          {shipInfo.name}
-        </span>
-      </div>
+      {/* ── Power Status Grid (Erkul-style) ── */}
+      <PowerStatusGrid stats={stats} />
 
-      {/* ── Stat cards grid ── */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-        <StatCard
-          label="Total DPS"
-          value={fmt(stats.totalDps)}
-          sub={`Alpha: ${fmt(stats.totalAlpha)}`}
-          color="#ef4444"
-          pct={Math.min(100, (stats.totalDps / 2000) * 100)}
-          locked={flightMode === "NAV"}
-        />
-        <StatCard
-          label="Shield HP"
-          value={fmt(stats.shieldHp)}
-          sub={`Regen: ${fmt(stats.shieldRegen)}/s`}
-          color="#3b82f6"
-          pct={Math.min(100, (stats.shieldHp / 50000) * 100)}
-        />
-        <StatCard
-          label="Power Balance"
-          value={(stats.powerBalance >= 0 ? "+" : "") + fmt(stats.powerBalance)}
-          sub={`${fmt(stats.powerOutput)} out / ${fmt(stats.powerDraw)} draw`}
-          color={stats.powerBalance >= 0 ? "#22c55e" : "#ef4444"}
-          pct={stats.powerOutput > 0 ? Math.min(100, (stats.powerDraw / stats.powerOutput) * 100) : 0}
-          inverted
-        />
-        <StatCard
-          label="Thermal"
-          value={(stats.thermalBalance >= 0 ? "+" : "") + fmt(stats.thermalBalance)}
-          sub={`${fmt(stats.coolingRate)} cool / ${fmt(stats.thermalOutput)} heat`}
-          color={stats.thermalBalance >= 0 ? "#06b6d4" : "#ef4444"}
-          pct={stats.coolingRate > 0 ? Math.min(100, (stats.thermalOutput / stats.coolingRate) * 100) : 0}
-          inverted
-        />
-        <StatCard
-          label="EM Signature"
-          value={fmt(stats.emSignature)}
-          sub="Electromagnetic"
-          color="#a855f7"
-          pct={Math.min(100, (stats.emSignature / 15000) * 100)}
-        />
-        <StatCard
-          label="IR Signature"
-          value={fmt(stats.irSignature)}
-          sub="Infrared"
-          color="#f97316"
-          pct={Math.min(100, (stats.irSignature / 15000) * 100)}
-        />
-      </div>
-
-      {/* ── Bar graphs ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-        {/* Combat output breakdown */}
-        <div className="bg-zinc-900/60 border border-zinc-800/50 p-3">
-          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-3">
-            Combat Output
+      {/* ── Radar Charts Row ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {/* Acceleration Profile */}
+        <div className="bg-zinc-900/80 border border-zinc-800/60 p-4">
+          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-2 text-center">
+            Acceleration Profile
           </div>
-          <div className="space-y-2">
-            <HBar label="DPS" value={stats.totalDps} max={2000} color="#ef4444" />
-            <HBar label="Alpha" value={stats.totalAlpha} max={5000} color="#f97316" />
-            <HBar label="Shield HP" value={stats.shieldHp} max={100000} color="#3b82f6" />
-            <HBar label="Shield Regen" value={stats.shieldRegen} max={3000} color="#60a5fa" />
+          <div className="flex justify-center">
+            <RadarChart
+              axes={accelAxes}
+              size={240}
+              color="#f59e0b"
+              fillOpacity={0.12}
+              gridLevels={5}
+            />
           </div>
         </div>
 
-        {/* Power & Thermal */}
-        <div className="bg-zinc-900/60 border border-zinc-800/50 p-3">
-          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-3">
-            Power & Thermal
+        {/* Angular Rates (Maneuverability Triangle) */}
+        <div className="bg-zinc-900/80 border border-zinc-800/60 p-4">
+          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-2 text-center">
+            Maneuverability
           </div>
-          <div className="space-y-2">
-            <DualBar label="Power" pos={stats.powerOutput} neg={stats.powerDraw} posColor="#22c55e" negColor="#ef4444" />
-            <DualBar label="Thermal" pos={stats.coolingRate} neg={stats.thermalOutput} posColor="#06b6d4" negColor="#ef4444" />
-            <HBar label="EM Signature" value={stats.emSignature} max={20000} color="#a855f7" />
-            <HBar label="IR Signature" value={stats.irSignature} max={20000} color="#f97316" />
+          <div className="flex justify-center">
+            <RadarChart
+              axes={angularAxes}
+              size={240}
+              color="#3b82f6"
+              fillOpacity={0.15}
+              strokeWidth={2.5}
+              gridLevels={4}
+            />
           </div>
         </div>
       </div>
 
-      {/* ── Component summary ── */}
-      <div className="bg-zinc-900/60 border border-zinc-800/50 p-3">
-        <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-3">
-          Component Summary
-        </div>
-        <div className="flex flex-wrap gap-3">
-          <CompBadge label="Weapons" count={stats.summary.weapons} color="#eab308" />
-          <CompBadge label="Missiles" count={stats.summary.missiles} color="#f97316" />
-          <CompBadge label="Shields" count={stats.summary.shields} color="#3b82f6" />
-          <CompBadge label="Power Plants" count={stats.summary.powerPlants} color="#22c55e" />
-          <CompBadge label="Coolers" count={stats.summary.coolers} color="#06b6d4" />
-          <CompBadge label="QT Drives" count={stats.summary.quantumDrives} color="#a855f7" />
-          <div className="ml-auto flex items-center gap-1.5">
-            <span className="text-[9px] font-mono text-zinc-600">
-              {stats.summary.activeComponents}/{stats.summary.totalComponents}
-            </span>
-            <span className="text-[8px] font-mono text-zinc-700 uppercase tracking-wider">active</span>
-          </div>
-        </div>
+      {/* ── Compact Combat + Signature Stats ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        {combatStats.map((s) => (
+          <CompactStat
+            key={s.label}
+            label={s.label}
+            value={fmt(s.value)}
+            color={s.locked ? "#52525b" : s.color}
+            locked={s.locked}
+          />
+        ))}
       </div>
 
-      {/* ── Speed & Flight ── */}
-      {shipInfo && (
-        <div className="bg-zinc-900/60 border border-zinc-800/50 p-3">
-          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-3">
-            Flight Characteristics
-          </div>
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-            <FlightStat label="SCM" value={shipInfo.scmSpeed} unit="m/s" />
-            <FlightStat label="NAV" value={shipInfo.afterburnerSpeed} unit="m/s" />
-            <FlightStat label="Pitch" value={shipInfo.pitchRate} unit="deg/s" />
-            <FlightStat label="Yaw" value={shipInfo.yawRate} unit="deg/s" />
-            <FlightStat label="Roll" value={shipInfo.rollRate} unit="deg/s" />
-            <FlightStat label="Cargo" value={shipInfo.cargo} unit="SCU" />
-          </div>
-        </div>
-      )}
+      {/* ── Signatures & Flight ── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <SignatureStat label="EM" value={stats.emSignature} max={20000} color="#a855f7" />
+        <SignatureStat label="IR" value={stats.irSignature} max={20000} color="#f97316" />
+        <FlightStat label="SCM" value={shipInfo.scmSpeed} unit="m/s" />
+        <FlightStat label="NAV" value={shipInfo.afterburnerSpeed} unit="m/s" />
+      </div>
     </div>
   );
 }
 
-/* ── Sub-components ── */
+// ─── Helpers ────────────────────────────────────────────────────────────────
 
-function StatCard({
-  label, value, sub, color, pct, inverted, locked,
-}: {
-  label: string; value: string; sub: string; color: string;
-  pct: number; inverted?: boolean; locked?: boolean;
-}) {
+function fmtAccel(v: number | null | undefined): string {
+  if (v == null || v === 0) return "—";
+  return v.toFixed(1) + "g";
+}
+
+// ─── Sub-components ─────────────────────────────────────────────────────────
+
+function CompactStat({ label, value, color, locked }: { label: string; value: string; color: string; locked?: boolean }) {
   return (
-    <div className="bg-zinc-900/60 border border-zinc-800/50 p-3 relative overflow-hidden">
+    <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 relative overflow-hidden">
       {locked && (
-        <div className="absolute inset-0 bg-zinc-950/60 z-10 flex items-center justify-center">
-          <span className="text-[8px] font-mono text-zinc-600 tracking-wider uppercase">NAV MODE</span>
+        <div className="absolute inset-0 bg-zinc-950/50 z-10 flex items-center justify-center">
+          <span className="text-[7px] font-mono text-zinc-600 tracking-wider uppercase">NAV</span>
         </div>
       )}
-      <div className="text-[8px] font-mono text-zinc-600 tracking-[0.15em] uppercase mb-1">{label}</div>
-      <div className="text-xl font-mono font-medium tabular-nums" style={{ color }}>{value}</div>
-      <div className="text-[9px] font-mono text-zinc-600 mt-0.5">{sub}</div>
-      {/* Mini bar */}
-      <div className="mt-2 h-1 w-full bg-zinc-800/60 rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-500"
-          style={{
-            width: `${pct}%`,
-            backgroundColor: inverted
-              ? (pct > 90 ? "#ef4444" : pct > 70 ? "#eab308" : color)
-              : color,
-            opacity: 0.7,
-          }}
-        />
-      </div>
+      <div className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</div>
+      <div className="text-lg font-mono font-bold tabular-nums mt-0.5" style={{ color }}>{value}</div>
     </div>
   );
 }
 
-function HBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
+function SignatureStat({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
   const pct = Math.min(100, (value / max) * 100);
-  return (
-    <div>
-      <div className="flex items-baseline justify-between mb-0.5">
-        <span className="text-[8px] font-mono text-zinc-600 tracking-wider uppercase">{label}</span>
-        <span className="text-[10px] font-mono tabular-nums" style={{ color }}>{fmt(value)}</span>
-      </div>
-      <div className="h-1.5 w-full bg-zinc-800/60 rounded-full overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.7 }} />
-      </div>
-    </div>
-  );
-}
+  const segments = 12;
+  const filled = Math.round((pct / 100) * segments);
 
-function DualBar({ label, pos, neg, posColor, negColor }: { label: string; pos: number; neg: number; posColor: string; negColor: string }) {
-  const max = Math.max(pos, neg, 1);
-  const posPct = (pos / max) * 100;
-  const negPct = (neg / max) * 100;
-  const balance = pos - neg;
   return (
-    <div>
-      <div className="flex items-baseline justify-between mb-0.5">
-        <span className="text-[8px] font-mono text-zinc-600 tracking-wider uppercase">{label}</span>
-        <span className="text-[10px] font-mono tabular-nums" style={{ color: balance >= 0 ? posColor : negColor }}>
-          {balance >= 0 ? "+" : ""}{fmt(balance)}
-        </span>
+    <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5">
+      <div className="flex items-baseline justify-between mb-1">
+        <span className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label} SIG</span>
+        <span className="text-[11px] font-mono font-bold tabular-nums" style={{ color }}>{fmt(value)}</span>
       </div>
-      <div className="flex gap-0.5">
-        <div className="flex-1 h-1.5 bg-zinc-800/60 rounded-full overflow-hidden">
-          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${posPct}%`, backgroundColor: posColor, opacity: 0.6 }} />
-        </div>
-        <div className="flex-1 h-1.5 bg-zinc-800/60 rounded-full overflow-hidden">
-          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${negPct}%`, backgroundColor: negColor, opacity: 0.6 }} />
-        </div>
+      <div className="flex gap-px">
+        {Array.from({ length: segments }, (_, i) => (
+          <div
+            key={i}
+            className="flex-1 h-1 rounded-[1px] transition-all duration-300"
+            style={{
+              backgroundColor: i < filled ? color : "#27272a",
+              opacity: i < filled ? 0.6 : 0.3,
+            }}
+          />
+        ))}
       </div>
-      <div className="flex justify-between text-[7px] font-mono text-zinc-700 mt-0.5">
-        <span>{fmt(pos)} out</span>
-        <span>{fmt(neg)} draw</span>
-      </div>
-    </div>
-  );
-}
-
-function CompBadge({ label, count, color }: { label: string; count: number; color: string }) {
-  if (count === 0) return null;
-  return (
-    <div className="flex items-center gap-1.5 px-2 py-1 bg-zinc-800/30 border border-zinc-800/50 rounded-sm">
-      <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color, opacity: 0.7 }} />
-      <span className="text-[9px] font-mono text-zinc-400">{count}x</span>
-      <span className="text-[8px] font-mono text-zinc-600 uppercase tracking-wider">{label}</span>
     </div>
   );
 }
 
 function FlightStat({ label, value, unit }: { label: string; value: number | null; unit: string }) {
   return (
-    <div className="text-center py-1.5 bg-zinc-800/20 rounded-sm">
-      <div className="text-[7px] font-mono text-zinc-600 tracking-wider uppercase">{label}</div>
-      <div className="text-[12px] font-mono text-zinc-300 tabular-nums">
-        {value != null ? Math.round(value) : "—"}
-        <span className="text-[8px] text-zinc-600"> {unit}</span>
+    <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5">
+      <div className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</div>
+      <div className="text-lg font-mono font-bold tabular-nums text-zinc-300 mt-0.5">
+        {value != null && value > 0 ? Math.round(value) : "—"}
+        <span className="text-[9px] text-zinc-600 font-normal"> {unit}</span>
       </div>
     </div>
   );
 }
+
+const fmt2 = (v: number) => {
+  if (v === 0) return "0";
+  if (v >= 1000) return (v / 1000).toFixed(1) + "k";
+  return v.toFixed(1);
+};

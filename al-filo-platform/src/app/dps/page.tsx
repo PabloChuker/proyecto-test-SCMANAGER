@@ -60,8 +60,8 @@ export default function DpsPage() {
           <LoadoutBuilder shipId="Avenger_Titan" />
         </Suspense>
 
-        {/* ── Stats graphs section ── */}
-        <div className="mt-4">
+        {/* ── Stats + Radar Charts (integrated below loadout) ── */}
+        <div className="mt-3">
           <Suspense fallback={null}>
             <StatsPanel />
           </Suspense>

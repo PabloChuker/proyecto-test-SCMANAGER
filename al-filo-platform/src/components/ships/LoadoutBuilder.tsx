@@ -95,16 +95,13 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
             </div>
           </div>
           <PowerManagementPanel stats={stats} flightMode={flightMode} onModeChange={setFlightMode} />
+          {/* Compact combat stats */}
           <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-1.5">
             <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase border-b border-zinc-800/40 pb-1">Combat</div>
-            <SR l="DPS" v={fmtDps(stats.totalDps)} s={flightMode === "NAV" ? "LOCKED" : "Î± " + fmtStat(stats.totalAlpha)} c={flightMode === "NAV" ? "#52525b" : "#ef4444"} />
-            <SR l="SHIELD" v={fmtStat(stats.shieldHp)} s={flightMode === "NAV" ? "NO REGEN" : "â†‘ " + fmtStat(stats.shieldRegen) + "/s"} c="#3b82f6" />
+            <SR l="DPS" v={fmtDps(stats.totalDps)} s={flightMode === "NAV" ? "LOCKED" : "\u03B1 " + fmtStat(stats.totalAlpha)} c={flightMode === "NAV" ? "#52525b" : "#ef4444"} />
+            <SR l="SHIELD" v={fmtStat(stats.shieldHp)} s={flightMode === "NAV" ? "NO REGEN" : "\u2192 " + fmtStat(stats.shieldRegen) + "/s"} c="#3b82f6" />
             <BR l="POWER" v={stats.powerBalance} a={stats.powerOutput} b={stats.powerDraw} pc="#22c55e" nc="#ef4444" />
             <BR l="THERMAL" v={stats.thermalBalance} a={stats.coolingRate} b={stats.thermalOutput} pc="#06b6d4" nc="#ef4444" />
-          </div>
-          <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5">
-            <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase border-b border-zinc-800/40 pb-1 mb-2">Blades</div>
-            <div className="py-3 text-center text-[10px] text-zinc-700 font-mono italic">Coming in Phase 3</div>
           </div>
         </div>
       </div>
