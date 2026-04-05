@@ -41,80 +41,84 @@ function catColor(cat: PowerCategory): string {
 }
 
 // ── SVG Icons per component type (inline, 14×14) ──
-// Designed to match Erkul / spviewer visual style
+// Faithfully replicating spviewer icon set:
+//   icon_common_weapon_gun, Engineering_Icon_ItemThrusters,
+//   icon_common_generator_shield, icon_common_quantum,
+//   icon_common_radar, icon_common_life_support, icon_common_coolant
 function ComponentIcon({ cat, color }: { cat: PowerCategory; color: string }) {
   const s = { width: 14, height: 14, display: "block" };
   const f = color;
 
   switch (cat) {
-    // Weapons: ammunition rounds (3 vertical bars like |||)
+    // Weapons: 4 bullet/ammo bars with pointed tips (spvicon-icon_common_weapon_gun)
     case "weapons":
       return (
         <svg style={s} viewBox="0 0 14 14" fill="none">
-          <rect x="2.5" y="3" width="2" height="8" rx="1" fill={f} />
-          <rect x="6" y="3" width="2" height="8" rx="1" fill={f} />
-          <rect x="9.5" y="3" width="2" height="8" rx="1" fill={f} />
+          <path d="M1.5 12V5L2.5 3L3.5 5V12Z" fill={f} />
+          <path d="M4.5 12V5L5.5 3L6.5 5V12Z" fill={f} />
+          <path d="M7.5 12V5L8.5 3L9.5 5V12Z" fill={f} />
+          <path d="M10.5 12V5L11.5 3L12.5 5V12Z" fill={f} />
         </svg>
       );
 
-    // Thrusters: double chevron >> (Erkul style)
+    // Thrusters: double chevron >> (spvicon-Engineering_Icon_ItemThrusters)
     case "thrusters":
       return (
         <svg style={s} viewBox="0 0 14 14" fill="none">
-          <polyline points="1.5,3 6,7 1.5,11" stroke={f} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-          <polyline points="7,3 11.5,7 7,11" stroke={f} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <polyline points="1,3.5 5.5,7 1,10.5" stroke={f} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <polyline points="7,3.5 11.5,7 7,10.5" stroke={f} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
         </svg>
       );
 
-    // Quantum Drive: atom orbits
-    case "quantum":
-      return (
-        <svg style={s} viewBox="0 0 14 14" fill="none">
-          <circle cx="7" cy="7" r="1.5" fill={f} />
-          <ellipse cx="7" cy="7" rx="5.5" ry="2.5" stroke={f} strokeWidth="0.8" fill="none" />
-          <ellipse cx="7" cy="7" rx="5.5" ry="2.5" stroke={f} strokeWidth="0.8" fill="none" transform="rotate(60 7 7)" />
-          <ellipse cx="7" cy="7" rx="5.5" ry="2.5" stroke={f} strokeWidth="0.8" fill="none" transform="rotate(120 7 7)" />
-        </svg>
-      );
-
-    // Radar: concentric arcs with antenna
-    case "radar":
-      return (
-        <svg style={s} viewBox="0 0 14 14" fill="none">
-          <path d="M4.5 9.5A3.5 3.5 0 0 1 7 6" stroke={f} strokeWidth="1.2" strokeLinecap="round" fill="none" />
-          <path d="M2.5 11.5A6.5 6.5 0 0 1 7 3.5" stroke={f} strokeWidth="1.2" strokeLinecap="round" fill="none" />
-          <circle cx="7" cy="12" r="1" fill={f} />
-          <line x1="7" y1="11" x2="10.5" y2="3" stroke={f} strokeWidth="1" strokeLinecap="round" />
-        </svg>
-      );
-
-    // Shields: shield outline
+    // Shields: shield shape with + cross inside (spvicon-icon_common_generator_shield)
     case "shields":
       return (
         <svg style={s} viewBox="0 0 14 14" fill="none">
-          <path d="M7 1L2.5 3.5V7C2.5 10 7 13 7 13S11.5 10 11.5 7V3.5L7 1Z" stroke={f} strokeWidth="1.3" fill="none" />
+          <path d="M7 1L2 3.5V6.5C2 9.5 7 13 7 13S12 9.5 12 6.5V3.5L7 1Z" stroke={f} strokeWidth="1.2" fill="none" />
+          <line x1="7" y1="4.5" x2="7" y2="9.5" stroke={f} strokeWidth="1.2" strokeLinecap="round" />
+          <line x1="4.5" y1="7" x2="9.5" y2="7" stroke={f} strokeWidth="1.2" strokeLinecap="round" />
         </svg>
       );
 
-    // Coolers: fan/ventilator (4 curved blades) like spviewer
+    // Quantum Drive: atom with 3 orbital rings (spvicon-icon_common_quantum)
+    case "quantum":
+      return (
+        <svg style={s} viewBox="0 0 14 14" fill="none">
+          <circle cx="7" cy="7" r="1.3" fill={f} />
+          <ellipse cx="7" cy="7" rx="6" ry="2.2" stroke={f} strokeWidth="0.7" fill="none" />
+          <ellipse cx="7" cy="7" rx="6" ry="2.2" stroke={f} strokeWidth="0.7" fill="none" transform="rotate(60 7 7)" />
+          <ellipse cx="7" cy="7" rx="6" ry="2.2" stroke={f} strokeWidth="0.7" fill="none" transform="rotate(120 7 7)" />
+        </svg>
+      );
+
+    // Radar: WiFi-style signal waves radiating (spvicon-icon_common_radar)
+    case "radar":
+      return (
+        <svg style={s} viewBox="0 0 14 14" fill="none">
+          <circle cx="7" cy="11" r="1.2" fill={f} />
+          <path d="M4.5 9C5.2 8.1 6 7.5 7 7.5S8.8 8.1 9.5 9" stroke={f} strokeWidth="1.1" strokeLinecap="round" fill="none" />
+          <path d="M2.5 7C3.8 5.3 5.3 4.2 7 4.2S10.2 5.3 11.5 7" stroke={f} strokeWidth="1.1" strokeLinecap="round" fill="none" />
+          <path d="M0.8 5C2.5 2.5 4.6 1.2 7 1.2S11.5 2.5 13.2 5" stroke={f} strokeWidth="1.1" strokeLinecap="round" fill="none" />
+        </svg>
+      );
+
+    // Coolers: 3-blade turbine fan (spvicon-icon_common_coolant)
     case "coolers":
       return (
         <svg style={s} viewBox="0 0 14 14" fill="none">
-          <circle cx="7" cy="7" r="1" fill={f} />
-          <path d="M7 6C7 4 5.5 2 4 2C5 3.5 6 4.5 7 6Z" fill={f} />
-          <path d="M8 7C10 7 12 5.5 12 4C10.5 5 9.5 6 8 7Z" fill={f} />
-          <path d="M7 8C7 10 8.5 12 10 12C9 10.5 8 9.5 7 8Z" fill={f} />
-          <path d="M6 7C4 7 2 8.5 2 10C3.5 9 4.5 8 6 7Z" fill={f} />
+          <circle cx="7" cy="7" r="1.2" fill={f} />
+          <path d="M7 5.8C6.8 4.2 5.8 2.5 4.2 2C5.2 3.2 5.8 4.8 6.2 5.8" stroke={f} strokeWidth="1.3" strokeLinecap="round" fill="none" />
+          <path d="M8 7.8C9.4 8.5 11 8.5 12 7.5C10.6 7.8 9.2 7.5 8.2 7.2" stroke={f} strokeWidth="1.3" strokeLinecap="round" fill="none" />
+          <path d="M6.2 8.2C5.8 9.6 5.8 11.2 7 12.2C6.4 10.8 6.4 9.4 6.6 8.4" stroke={f} strokeWidth="1.3" strokeLinecap="round" fill="none" />
         </svg>
       );
 
-    // Life Support: lungs / breathing icon
+    // Life Support: heart with ECG pulse line (spvicon-icon_common_life_support)
     case "lifesupport":
       return (
         <svg style={s} viewBox="0 0 14 14" fill="none">
-          <path d="M7 2V7" stroke={f} strokeWidth="1.2" strokeLinecap="round" />
-          <path d="M7 7C7 7 4 7 3 8.5C2 10 2.5 12 4 12C5.5 12 6 10.5 7 9" stroke={f} strokeWidth="1.1" fill="none" strokeLinecap="round" />
-          <path d="M7 7C7 7 10 7 11 8.5C12 10 11.5 12 10 12C8.5 12 8 10.5 7 9" stroke={f} strokeWidth="1.1" fill="none" strokeLinecap="round" />
+          <path d="M7 12C7 12 1.5 8.5 1.5 5C1.5 3 3 1.5 4.5 1.5C5.5 1.5 6.4 2 7 3C7.6 2 8.5 1.5 9.5 1.5C11 1.5 12.5 3 12.5 5C12.5 8.5 7 12 7 12Z" stroke={f} strokeWidth="1" fill="none" />
+          <polyline points="2.5,6.5 5,6.5 6,4.5 7,8 8,5.5 9,6.5 11.5,6.5" stroke={f} strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
         </svg>
       );
 
