@@ -244,17 +244,38 @@ function computeStats(
     // Build power instance for ALL components with power interaction
     const pCat = CAT_TO_POWER[cat];
     if (pCat) {
-      // Derive pips: use RegisterRange if available, otherwise derive from pMax
-      let totalPips = pn?.pips ?? 0;
-      if (totalPips === 0 && pn && pn.pMax > 0) {
-        // Components without interactive pips but with power draw
-        // Derive display pips from power max, capped at 6
+      // === PRIMARY: Use DB power_consumption_min/max if available ===
+      const dbMin = pickNum(s, "powerDrawMin");
+      const dbMax = pickNum(s, "powerDrawMax");
+
+      // Derive totalPips (max 6 cells like the game)
+      let totalPips = 0;
+      let powerMin = 0;
+      let powerMax = 0;
+
+      if (dbMax > 0) {
+        // DB values are the ground truth
+        totalPips = Math.min(6, Math.max(1, Math.ceil(dbMax)));
+        powerMin = dbMin;
+        powerMax = dbMax;
+      } else if (pn?.pips && pn.pips > 0) {
+        // Fallback: powerNetwork JSON has RegisterRange pips
+        totalPips = Math.min(6, pn.pips);
+        powerMin = pn.pMin ?? 0;
+        powerMax = pn.pMax ?? 0;
+      } else if (pn && pn.pMax > 0) {
+        // Fallback: derive from powerNetwork pMax
         totalPips = Math.min(6, Math.max(1, Math.ceil(pn.pMax)));
-      }
-      // Fallback: if no powerNetwork at all, use componentStats powerDraw
-      if (totalPips === 0 && !pn) {
+        powerMin = pn.pMin ?? 0;
+        powerMax = pn.pMax;
+      } else {
+        // Last resort: single powerDraw from componentStats
         const pd = pickNum(s, "powerDraw", "powerBase");
-        if (pd > 0) totalPips = Math.min(6, Math.max(1, Math.ceil(pd)));
+        if (pd > 0) {
+          totalPips = Math.min(6, Math.max(1, Math.ceil(pd)));
+          powerMin = pd;
+          powerMax = pd;
+        }
       }
 
       const allocPips = instancePower[hp.hardpointName] ?? 0;
@@ -262,7 +283,7 @@ function computeStats(
       cats[pCat].componentCount++;
       if (isOn) {
         cats[pCat].activeCount++;
-        cats[pCat].minDraw += pn?.pMin ?? pickNum(s, "powerDraw", "powerBase");
+        cats[pCat].minDraw += powerMin > 0 ? powerMin : (pn?.pMin ?? pickNum(s, "powerDraw", "powerBase"));
       }
       cats[pCat].allocated += allocPips;
 
@@ -282,12 +303,12 @@ function computeStats(
           totalPips,
           allocatedPips: Math.min(allocPips, totalPips),
           ranges: displayRanges,
-          powerMin: pn?.pMin ?? 0,
-          powerMax: pn?.pMax ?? 0,
+          powerMin,
+          powerMax,
           genPower: pn?.genP ?? 0,
           genCoolant: pn?.genC ?? 0,
-          emMax: pn?.em ?? 0,
-          irMax: pn?.ir ?? 0,
+          emMax: pn?.em ?? pickNum(s, "emSignature"),
+          irMax: pn?.ir ?? pickNum(s, "irSignature"),
           isOn,
         });
       }

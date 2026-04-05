@@ -1,16 +1,14 @@
 // =============================================================================
-// AL FILO — PowerManagementPanel v13 (Erkul/spviewer faithful replica)
+// AL FILO — PowerManagementPanel v14 (Erkul-faithful, DB min/max power)
 //
-// - ALWAYS 6 rows per column, tightly packed
-// - 1 column per component INSTANCE
-// - Tier number inside each allocated cell (operational blocks from PowerRanges)
-// - Proper icon PER COLUMN matching the component type:
-//   Weapons=ammunition, Thrusters=>>, QD=atom, Radar=waves, Shields=shield,
-//   Coolers=fan, LifeSupport=lungs
+// Uses power_consumption_min / power_consumption_max from DB as ground truth.
+// - 1 column per component INSTANCE (except power plants which generate power)
+// - Max 6 cells per column (game mechanic)
+// - Cells: filled = allocated, empty = available, dark = locked (beyond max)
 // - Orange for weapons, Green for systems
-// - Category icon + performance % per column below grid
-// - OUTPUT x/y and CONSUMPTION bar
-// - SCM MODE / NAV MODE toggle (NAV turns off shields)
+// - OUTPUT x/y bar, CONSUMPTION % bar
+// - SCM / NAV toggle (NAV disables shields)
+// - Signature stats row (EM, IR, PWR, THM)
 // =============================================================================
 
 "use client";
@@ -40,17 +38,20 @@ function catColor(cat: PowerCategory): string {
   return isOrangeCat(cat) ? "#f59e0b" : "#22c55e";
 }
 
+// Dimmer versions for available (unfilled) cells
+function catColorDim(cat: PowerCategory): string {
+  return isOrangeCat(cat) ? "rgba(245,158,11,0.15)" : "rgba(34,197,94,0.15)";
+}
+function catBorderDim(cat: PowerCategory): string {
+  return isOrangeCat(cat) ? "rgba(245,158,11,0.3)" : "rgba(34,197,94,0.3)";
+}
+
 // ── SVG Icons per component type (inline, 14×14) ──
-// Faithfully replicating spviewer icon set:
-//   icon_common_weapon_gun, Engineering_Icon_ItemThrusters,
-//   icon_common_generator_shield, icon_common_quantum,
-//   icon_common_radar, icon_common_life_support, icon_common_coolant
 function ComponentIcon({ cat, color }: { cat: PowerCategory; color: string }) {
   const s = { width: 14, height: 14, display: "block" };
   const f = color;
 
   switch (cat) {
-    // Weapons: 4 bullet/ammo bars with pointed tips (spvicon-icon_common_weapon_gun)
     case "weapons":
       return (
         <svg style={s} viewBox="0 0 14 14" fill="none">
@@ -60,8 +61,6 @@ function ComponentIcon({ cat, color }: { cat: PowerCategory; color: string }) {
           <path d="M10.5 12V5L11.5 3L12.5 5V12Z" fill={f} />
         </svg>
       );
-
-    // Thrusters: double chevron >> (spvicon-Engineering_Icon_ItemThrusters)
     case "thrusters":
       return (
         <svg style={s} viewBox="0 0 14 14" fill="none">
@@ -69,8 +68,6 @@ function ComponentIcon({ cat, color }: { cat: PowerCategory; color: string }) {
           <polyline points="7,3.5 11.5,7 7,10.5" stroke={f} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
         </svg>
       );
-
-    // Shields: shield shape with + cross inside (spvicon-icon_common_generator_shield)
     case "shields":
       return (
         <svg style={s} viewBox="0 0 14 14" fill="none">
@@ -79,8 +76,6 @@ function ComponentIcon({ cat, color }: { cat: PowerCategory; color: string }) {
           <line x1="4.5" y1="7" x2="9.5" y2="7" stroke={f} strokeWidth="1.2" strokeLinecap="round" />
         </svg>
       );
-
-    // Quantum Drive: atom with 3 orbital rings (spvicon-icon_common_quantum)
     case "quantum":
       return (
         <svg style={s} viewBox="0 0 14 14" fill="none">
@@ -90,8 +85,6 @@ function ComponentIcon({ cat, color }: { cat: PowerCategory; color: string }) {
           <ellipse cx="7" cy="7" rx="6" ry="2.2" stroke={f} strokeWidth="0.7" fill="none" transform="rotate(120 7 7)" />
         </svg>
       );
-
-    // Radar: WiFi-style signal waves radiating (spvicon-icon_common_radar)
     case "radar":
       return (
         <svg style={s} viewBox="0 0 14 14" fill="none">
@@ -101,8 +94,6 @@ function ComponentIcon({ cat, color }: { cat: PowerCategory; color: string }) {
           <path d="M0.8 5C2.5 2.5 4.6 1.2 7 1.2S11.5 2.5 13.2 5" stroke={f} strokeWidth="1.1" strokeLinecap="round" fill="none" />
         </svg>
       );
-
-    // Coolers: 3-blade turbine fan (spvicon-icon_common_coolant)
     case "coolers":
       return (
         <svg style={s} viewBox="0 0 14 14" fill="none">
@@ -112,8 +103,6 @@ function ComponentIcon({ cat, color }: { cat: PowerCategory; color: string }) {
           <path d="M6.2 8.2C5.8 9.6 5.8 11.2 7 12.2C6.4 10.8 6.4 9.4 6.6 8.4" stroke={f} strokeWidth="1.3" strokeLinecap="round" fill="none" />
         </svg>
       );
-
-    // Life Support: heart with ECG pulse line (spvicon-icon_common_life_support)
     case "lifesupport":
       return (
         <svg style={s} viewBox="0 0 14 14" fill="none">
@@ -121,8 +110,6 @@ function ComponentIcon({ cat, color }: { cat: PowerCategory; color: string }) {
           <polyline points="2.5,6.5 5,6.5 6,4.5 7,8 8,5.5 9,6.5 11.5,6.5" stroke={f} strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
         </svg>
       );
-
-    // Fallback: power circle
     default:
       return (
         <svg style={s} viewBox="0 0 14 14" fill="none">
@@ -146,10 +133,10 @@ export function PowerManagementPanel({
   flightMode: FlightMode;
   onModeChange: (m: FlightMode) => void;
 }) {
-  const { autoAllocatePower, setInstancePower } = useLoadoutStore();
+  const { setInstancePower } = useLoadoutStore();
   const pn = stats.powerNetwork;
 
-  // Build ordered columns
+  // Build ordered columns (skip power plants — they generate, not consume)
   const columns = useMemo(() => {
     const cols: ComponentPowerInstance[] = [];
     for (const cat of CATEGORY_ORDER) {
@@ -167,13 +154,15 @@ export function PowerManagementPanel({
     ? Math.round((pn.totalMinDraw / totalOutput) * 100)
     : 0;
 
-  // Click handler
+  // Click handler — toggle pip allocation
   const handleCellClick = (inst: ComponentPowerInstance, row: number) => {
     if (!inst.isOn || row >= inst.totalPips) return;
     const current = inst.allocatedPips;
     if (row < current) {
+      // Clicking below current allocation = reduce to that row
       setInstancePower(inst.hardpointName, row);
     } else {
+      // Clicking at or above = allocate up to row+1
       setInstancePower(inst.hardpointName, row + 1);
     }
   };
@@ -182,18 +171,32 @@ export function PowerManagementPanel({
     <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-sm overflow-hidden">
       <div className="p-3 space-y-2">
         {/* ── OUTPUT & CONSUMPTION ── */}
-        <div className="space-y-1">
+        <div className="space-y-1.5">
+          {/* Output bar */}
           <div className="flex items-center gap-2">
             <span className="text-[11px]" style={{ color: "#f59e0b" }}>⚡</span>
             <span className="text-[9px] font-mono text-zinc-500 tracking-widest uppercase">Output</span>
+            <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden ml-1">
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{
+                  width: totalOutput > 0
+                    ? Math.min(100, (totalAllocated / totalOutput) * 100) + "%"
+                    : "0%",
+                  backgroundColor: totalAllocated > totalOutput ? "#ef4444" : "#f59e0b",
+                }}
+              />
+            </div>
             <span
-              className="text-lg font-mono font-bold tabular-nums ml-auto"
+              className="text-sm font-mono font-bold tabular-nums"
               style={{ color: totalAllocated > totalOutput ? "#ef4444" : "#f59e0b" }}
             >
               {totalAllocated}
             </span>
-            <span className="text-[13px] font-mono text-zinc-600">/ {totalOutput}</span>
+            <span className="text-[11px] font-mono text-zinc-600">/ {totalOutput}</span>
           </div>
+
+          {/* Consumption bar */}
           <div className="flex items-center gap-2">
             <span className="text-[11px]" style={{ color: "#22c55e" }}>⚙</span>
             <span className="text-[9px] font-mono text-zinc-500 tracking-widest uppercase">Consumption</span>
@@ -218,48 +221,51 @@ export function PowerManagementPanel({
         {/* ── POWER GRID ── */}
         {columns.length > 0 && (
           <div className="space-y-1">
-            {/* Grid: 6 rows × N columns */}
+            {/* Grid: 6 rows × N columns, bottom-to-top fill */}
             <div className="flex" style={{ gap: "2px", justifyContent: "center" }}>
               {columns.map((inst, colIdx) => {
                 const color = catColor(inst.category);
+                const dimBg = catColorDim(inst.category);
+                const dimBorder = catBorderDim(inst.category);
                 const prevCat = colIdx > 0 ? columns[colIdx - 1].category : null;
                 const showSep = prevCat !== null && prevCat !== inst.category;
 
-                // Build tier for each pip position
-                const tierLabels: number[] = [];
-                for (const r of inst.ranges) {
-                  for (let i = 0; i < r.range; i++) {
-                    tierLabels.push(r.modifier >= 1.0 ? 3 : r.modifier >= 0.85 ? 2 : 1);
-                  }
-                }
-                while (tierLabels.length < inst.totalPips) tierLabels.push(3);
+                // Determine minimum pips needed (from powerMin)
+                const minPips = inst.powerMin > 0
+                  ? Math.min(inst.totalPips, Math.max(1, Math.ceil(inst.powerMin)))
+                  : 0;
 
                 return (
                   <React.Fragment key={inst.hardpointName}>
-                    {showSep && <div style={{ width: "3px" }} />}
+                    {showSep && <div style={{ width: "4px" }} />}
                     <div className="flex flex-col-reverse" style={{ gap: "2px" }}>
                       {Array.from({ length: ROWS }).map((_, row) => {
                         const locked = row >= inst.totalPips;
                         const allocated = !locked && row < inst.allocatedPips && inst.isOn;
-                        const available = !locked && !allocated && inst.isOn;
-                        const tier = tierLabels[row] ?? 0;
+                        const isMinZone = !locked && row < minPips;
 
                         let bg: string;
                         let borderC: string;
+                        let opacity = 1;
 
                         if (locked) {
+                          // Beyond component's max — dark/invisible
                           bg = "#1a1a1d";
                           borderC = "#222225";
+                          opacity = 0.2;
                         } else if (!inst.isOn) {
+                          // Component off
                           bg = "#1f1f23";
                           borderC = "#2a2a2e";
+                          opacity = 0.35;
                         } else if (allocated) {
+                          // Filled pip — full color
                           bg = color;
                           borderC = color;
                         } else {
-                          // Available — darker shade
-                          bg = "#2a2a2e";
-                          borderC = "#3a3a3e";
+                          // Available but not filled — dim colored
+                          bg = dimBg;
+                          borderC = dimBorder;
                         }
 
                         return (
@@ -276,19 +282,25 @@ export function PowerManagementPanel({
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
-                              opacity: locked ? 0.25 : !inst.isOn ? 0.4 : 1,
+                              opacity,
                               transition: "all 100ms",
                             }}
+                            title={
+                              locked ? "" :
+                              `${inst.componentName} — pip ${row + 1}/${inst.totalPips}` +
+                              (isMinZone ? " (min)" : "")
+                            }
                           >
-                            {allocated && tier > 0 && (
+                            {/* Show a small dot in minimum-zone cells when allocated */}
+                            {allocated && isMinZone && (
                               <span style={{
-                                fontSize: 8,
-                                fontWeight: 800,
+                                fontSize: 7,
+                                fontWeight: 900,
                                 fontFamily: "monospace",
                                 color: "#000",
                                 lineHeight: 1,
                               }}>
-                                {tier}
+                                ●
                               </span>
                             )}
                           </div>
@@ -312,13 +324,13 @@ export function PowerManagementPanel({
 
                 return (
                   <React.Fragment key={inst.hardpointName + "-icon"}>
-                    {showSep && <div style={{ width: "3px" }} />}
+                    {showSep && <div style={{ width: "4px" }} />}
                     <div
                       className="flex flex-col items-center"
                       style={{ width: 20 }}
-                      title={`${inst.componentName} — ${pct}%`}
+                      title={`${inst.componentName} — ${inst.allocatedPips}/${inst.totalPips} pips (min: ${Math.ceil(inst.powerMin)}, max: ${inst.powerMax})`}
                     >
-                      <ComponentIcon cat={inst.category} color={color} />
+                      <ComponentIcon cat={inst.category} color={inst.isOn ? color : "#3f3f46"} />
                       <span
                         className="text-[7px] font-mono font-bold tabular-nums"
                         style={{ color: pct >= 100 ? color : "#52525b", marginTop: 1 }}
@@ -327,6 +339,29 @@ export function PowerManagementPanel({
                       </span>
                     </div>
                   </React.Fragment>
+                );
+              })}
+            </div>
+
+            {/* Category legend row */}
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 pt-0.5">
+              {CATEGORY_ORDER.filter(cat =>
+                columns.some(c => c.category === cat)
+              ).map(cat => {
+                const catCols = columns.filter(c => c.category === cat);
+                const totalPips = catCols.reduce((a, c) => a + c.totalPips, 0);
+                const allocPips = catCols.reduce((a, c) => a + c.allocatedPips, 0);
+                const color = catColor(cat);
+                return (
+                  <div key={cat} className="flex items-center gap-1">
+                    <div style={{ width: 6, height: 6, backgroundColor: color, borderRadius: 1 }} />
+                    <span className="text-[7px] font-mono text-zinc-500 uppercase tracking-wider">
+                      {cat}
+                    </span>
+                    <span className="text-[8px] font-mono font-bold" style={{ color }}>
+                      {allocPips}/{totalPips}
+                    </span>
+                  </div>
                 );
               })}
             </div>
