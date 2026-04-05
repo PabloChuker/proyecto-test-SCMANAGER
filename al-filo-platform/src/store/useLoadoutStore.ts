@@ -334,6 +334,7 @@ function computeStats(
     if (pn?.ir) irSig += pn.ir;
 
     // TURRET/RACK with children: DPS comes from children, base stats from parent
+    // Also create power instances for each child weapon
     if ((cat === "TURRET" || cat === "MISSILE_RACK") && hp.children.length > 0) {
       if (!pn) accumBase(s);
       for (const child of hp.children) {
@@ -343,6 +344,37 @@ function computeStats(
         if (!cItem) continue;
         accumDps(cItem.componentStats);
         if (!cItem.powerNetwork) accumBase(cItem.componentStats);
+
+        // Build power instance for child weapons (they have powerNetwork from the JSON)
+        const childPn = cItem.powerNetwork;
+        const childS = cItem.componentStats;
+        if (childPn && childPn.pMax > 0) {
+          const childPips = Math.min(6, Math.max(1, Math.ceil(childPn.pMax)));
+          const childAllocPips = instancePower[child.hardpointName] ?? 0;
+          cats.weapons.componentCount++;
+          if (childOn) {
+            cats.weapons.activeCount++;
+            cats.weapons.minDraw += childPn.pMin ?? 0;
+          }
+          cats.weapons.allocated += childAllocPips;
+          instances.push({
+            hardpointId: child.id,
+            hardpointName: child.hardpointName,
+            componentName: cItem.name,
+            category: "weapons",
+            type: childPn.type || "WeaponGun",
+            totalPips: childPips,
+            allocatedPips: Math.min(childAllocPips, childPips),
+            ranges: (childPn.ranges ?? []).map(r => ({ start: r.s, modifier: r.m, range: r.r })),
+            powerMin: childPn.pMin ?? 0,
+            powerMax: childPn.pMax,
+            genPower: 0,
+            genCoolant: 0,
+            emMax: childPn.em ?? pickNum(childS, "emSignature"),
+            irMax: childPn.ir ?? 0,
+            isOn: childOn,
+          });
+        }
       }
     } else {
       if (cat === "WEAPON" || cat === "TURRET") { accumDps(s); }
