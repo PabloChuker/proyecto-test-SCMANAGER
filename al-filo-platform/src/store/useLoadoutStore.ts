@@ -223,6 +223,15 @@ function computeStats(
     irSig += pickNum(s, "irSignature");
   };
 
+  // ── Weapons: accumulate into a single combined power column ──
+  let weaponPowerMin = 0;
+  let weaponPowerMax = 0;
+  let weaponEmMax = 0;
+  let weaponIrMax = 0;
+  let weaponCount = 0;
+  let weaponActiveCount = 0;
+  const WEAPON_POWER_ID = "__weapons_combined__";
+
   for (const hp of hardpoints) {
     const cat = hp.resolvedCategory;
     if (!USEFUL.has(cat)) continue;
@@ -287,10 +296,19 @@ function computeStats(
       }
       cats[pCat].allocated += allocPips;
 
-      // Add to instances if component has any displayable pips
-      if (totalPips > 0) {
+      // WEAPONS → accumulate into single combined column (game mechanic: 1 column for all weapons)
+      if (pCat === "weapons") {
+        if (totalPips > 0) {
+          weaponPowerMin += powerMin;
+          weaponPowerMax += powerMax;
+          weaponEmMax += pn?.em ?? pickNum(s, "emSignature");
+          weaponIrMax += pn?.ir ?? pickNum(s, "irSignature");
+          weaponCount++;
+          if (isOn) weaponActiveCount++;
+        }
+      } else if (totalPips > 0) {
+        // Non-weapons: individual instance per component (as before)
         const ranges = (pn?.ranges ?? []).map(r => ({ start: r.s, modifier: r.m, range: r.r }));
-        // If no ranges but we derived pips, create a single tier-3 range
         const displayRanges = ranges.length > 0 ? ranges
           : [{ start: 0, modifier: 1, range: totalPips }];
 
@@ -345,35 +363,23 @@ function computeStats(
         accumDps(cItem.componentStats);
         if (!cItem.powerNetwork) accumBase(cItem.componentStats);
 
-        // Build power instance for child weapons (they have powerNetwork from the JSON)
+        // Accumulate child weapon power into combined weapons column
         const childPn = cItem.powerNetwork;
         const childS = cItem.componentStats;
         if (childPn && childPn.pMax > 0) {
-          const childPips = Math.min(6, Math.max(1, Math.ceil(childPn.pMax)));
-          const childAllocPips = instancePower[child.hardpointName] ?? 0;
           cats.weapons.componentCount++;
           if (childOn) {
             cats.weapons.activeCount++;
             cats.weapons.minDraw += childPn.pMin ?? 0;
           }
+          const childAllocPips = instancePower[child.hardpointName] ?? 0;
           cats.weapons.allocated += childAllocPips;
-          instances.push({
-            hardpointId: child.id,
-            hardpointName: child.hardpointName,
-            componentName: cItem.name,
-            category: "weapons",
-            type: childPn.type || "WeaponGun",
-            totalPips: childPips,
-            allocatedPips: Math.min(childAllocPips, childPips),
-            ranges: (childPn.ranges ?? []).map(r => ({ start: r.s, modifier: r.m, range: r.r })),
-            powerMin: childPn.pMin ?? 0,
-            powerMax: childPn.pMax,
-            genPower: 0,
-            genCoolant: 0,
-            emMax: childPn.em ?? pickNum(childS, "emSignature"),
-            irMax: childPn.ir ?? 0,
-            isOn: childOn,
-          });
+          weaponPowerMin += childPn.pMin ?? 0;
+          weaponPowerMax += childPn.pMax;
+          weaponEmMax += childPn.em ?? pickNum(childS, "emSignature");
+          weaponIrMax += childPn.ir ?? 0;
+          weaponCount++;
+          if (childOn) weaponActiveCount++;
         }
       }
     } else {
@@ -383,6 +389,31 @@ function computeStats(
       if (cat === "COOLER") { coolingRate += pickNum(s, "coolingRate"); }
       if (!pn) accumBase(s);
     }
+  }
+
+  // ── Push single combined weapons column ──
+  if (weaponCount > 0) {
+    const weaponAllocPips = instancePower[WEAPON_POWER_ID] ?? 0;
+    const combinedPips = Math.min(6, Math.max(1, Math.ceil(weaponPowerMax)));
+    // Override the per-weapon allocated counts with the single combined allocation
+    cats.weapons.allocated = weaponAllocPips;
+    instances.push({
+      hardpointId: WEAPON_POWER_ID,
+      hardpointName: WEAPON_POWER_ID,
+      componentName: `Weapons (${weaponCount})`,
+      category: "weapons",
+      type: "WeaponGun",
+      totalPips: combinedPips,
+      allocatedPips: Math.min(weaponAllocPips, combinedPips),
+      ranges: [{ start: 0, modifier: 1, range: combinedPips }],
+      powerMin: weaponPowerMin,
+      powerMax: weaponPowerMax,
+      genPower: 0,
+      genCoolant: 0,
+      emMax: weaponEmMax,
+      irMax: weaponIrMax,
+      isOn: weaponActiveCount > 0,
+    });
   }
 
   // Prefer component-level power output (from equipped power plants) over ship-level static data.
