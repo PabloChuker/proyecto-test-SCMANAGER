@@ -1,12 +1,19 @@
 export const dynamic = 'force-dynamic';
 // =============================================================================
-// SC LABS — GET /api/ships/compare
+// SC LABS — GET /api/ships/compare v2
 // Returns detailed data for up to 3 ships for side-by-side comparison.
 // Query: ?ids=uuid1,uuid2,uuid3
+// Rewritten to use raw SQL (matching /api/ships/[id] approach).
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+
+function numOrNull(v: any): number | null {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  return isNaN(n) ? null : n;
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -23,72 +30,98 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No valid ids provided" }, { status: 400 });
     }
 
-    const ships = await prisma.item.findMany({
-      where: {
-        id: { in: ids },
-        type: { in: ["SHIP", "VEHICLE"] },
-      },
-      select: {
-        id: true,
-        reference: true,
-        name: true,
-        localizedName: true,
-        type: true,
-        size: true,
-        manufacturer: true,
-        gameVersion: true,
-        ship: {
-          select: {
-            maxCrew: true,
-            cargo: true,
-            scmSpeed: true,
-            afterburnerSpeed: true,
-            pitchRate: true,
-            yawRate: true,
-            rollRate: true,
-            maxAccelMain: true,
-            maxAccelRetro: true,
-            hydrogenFuelCap: true,
-            quantumFuelCap: true,
-            lengthMeters: true,
-            beamMeters: true,
-            heightMeters: true,
-            role: true,
-            focus: true,
-            career: true,
-            baseEmSignature: true,
-            baseIrSignature: true,
-            baseCsSignature: true,
-          },
-        },
-        hardpoints: {
-          select: {
-            id: true,
-            hardpointName: true,
-            category: true,
-            minSize: true,
-            maxSize: true,
-            equippedItem: {
-              select: {
-                id: true,
-                name: true,
-                type: true,
-                size: true,
-                weaponStats: { select: { dps: true, alphaDamage: true, fireRate: true, range: true } },
-                shieldStats: { select: { maxHp: true, regenRate: true, downedDelay: true } },
-                powerStats: { select: { powerOutput: true } },
-                coolingStats: { select: { coolingRate: true } },
-                quantumStats: { select: { maxSpeed: true, maxRange: true, spoolUpTime: true } },
-                missileStats: { select: { damage: true, lockTime: true, lockRange: true } },
-              },
-            },
-          },
-        },
-      },
-    });
+    // ── 1. Fetch ships by ID ──
+    // Build parameterized query for multiple IDs
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
+    const ships: any[] = await prisma.$queryRawUnsafe(
+      `SELECT * FROM ships WHERE id::text IN (${placeholders})`,
+      ...ids,
+    );
 
-    // Compute aggregated stats for each ship
+    if (ships.length === 0) {
+      return NextResponse.json({ data: [] });
+    }
+
+    // ── 2. Fetch satellite data for all ships ──
+    const shipIds = ships.map((s) => String(s.id));
+    const shipRefs = ships.map((s) => String(s.reference));
+
+    const flightPlaceholders = shipIds.map((_, i) => `$${i + 1}`).join(", ");
+    let flightRows: any[] = [];
+    try {
+      flightRows = await prisma.$queryRawUnsafe(
+        `SELECT * FROM ship_flight_stats WHERE ship_id::text IN (${flightPlaceholders})`,
+        ...shipIds,
+      ) as any[];
+    } catch {}
+
+    let fuelRows: any[] = [];
+    try {
+      fuelRows = await prisma.$queryRawUnsafe(
+        `SELECT * FROM ship_fuel WHERE ship_id::text IN (${flightPlaceholders})`,
+        ...shipIds,
+      ) as any[];
+    } catch {}
+
+    // ── 3. Fetch hardpoints for all ships ──
+    const refPlaceholders = shipRefs.map((_, i) => `$${i + 1}`).join(", ");
+    const allHardpoints: any[] = await prisma.$queryRawUnsafe(
+      `SELECT * FROM ship_hardpoints WHERE ship_reference IN (${refPlaceholders})
+       ORDER BY ship_reference, hardpoint_type, max_size DESC`,
+      ...shipRefs,
+    );
+
+    // ── 4. Batch-load all component data ──
+    const allClasses = allHardpoints
+      .map((hp) => hp.default_item_class)
+      .filter((c: any) => c && c !== "");
+
+    // Also gather child classes from loadout_json
+    for (const hp of allHardpoints) {
+      const loadout = hp.loadout_json;
+      if (Array.isArray(loadout)) {
+        for (const entry of loadout) {
+          const cn = entry?.ClassName || entry?.className;
+          if (cn) allClasses.push(cn);
+        }
+      }
+    }
+
+    const uniqueClasses = [...new Set(allClasses)];
+
+    // Build component map: className -> stats
+    const componentMap = new Map<string, { table: string; row: any }>();
+
+    if (uniqueClasses.length > 0) {
+      const classPlaceholders = uniqueClasses.map((_, i) => `$${i + 1}`).join(", ");
+
+      const safeQuery = async (sql: string, params: string[]): Promise<any[]> => {
+        try { return await prisma.$queryRawUnsafe(sql, ...params) as any[]; }
+        catch { return []; }
+      };
+
+      const [weapons, shields, powerPlants, coolers, quantumDrives] = await Promise.all([
+        safeQuery(`SELECT * FROM weapon_guns WHERE class_name IN (${classPlaceholders})`, uniqueClasses),
+        safeQuery(`SELECT * FROM shields WHERE class_name IN (${classPlaceholders})`, uniqueClasses),
+        safeQuery(`SELECT * FROM power_plants WHERE class_name IN (${classPlaceholders})`, uniqueClasses),
+        safeQuery(`SELECT * FROM coolers WHERE class_name IN (${classPlaceholders})`, uniqueClasses),
+        safeQuery(`SELECT * FROM quantum_drives WHERE class_name IN (${classPlaceholders})`, uniqueClasses),
+      ]);
+
+      for (const r of (weapons as any[])) componentMap.set(r.class_name, { table: "weapon_guns", row: r });
+      for (const r of (shields as any[])) componentMap.set(r.class_name, { table: "shields", row: r });
+      for (const r of (powerPlants as any[])) componentMap.set(r.class_name, { table: "power_plants", row: r });
+      for (const r of (coolers as any[])) componentMap.set(r.class_name, { table: "coolers", row: r });
+      for (const r of (quantumDrives as any[])) componentMap.set(r.class_name, { table: "quantum_drives", row: r });
+    }
+
+    // ── 5. Build result for each ship ──
     const result = ships.map((ship) => {
+      const fs = flightRows.find((f: any) => String(f.ship_id) === String(ship.id));
+      const fuel = fuelRows.find((f: any) => String(f.ship_id) === String(ship.id));
+      const hps = allHardpoints.filter((hp: any) => hp.ship_reference === ship.reference);
+
+      // Aggregate stats from hardpoints + component data
       let totalDps = 0;
       let totalAlpha = 0;
       let totalShieldHp = 0;
@@ -103,56 +136,149 @@ export async function GET(request: NextRequest) {
       let quantumRange: number | null = null;
       let quantumSpool: number | null = null;
 
-      for (const hp of ship.hardpoints) {
-        const eq = hp.equippedItem;
-        if (!eq) continue;
+      for (const hp of hps) {
+        const cls = hp.default_item_class;
+        const hpType = (hp.hardpoint_type || "").split(".")[0];
 
-        if (hp.category === "WEAPON" || hp.category === "TURRET") {
+        if (!cls) continue;
+        const comp = componentMap.get(cls);
+
+        // Weapons (direct + children in loadout_json)
+        if (hpType === "Weapon" || hpType === "WeaponGun") {
           weaponCount++;
-          if (eq.weaponStats) {
-            totalDps += eq.weaponStats.dps || 0;
-            totalAlpha += eq.weaponStats.alphaDamage || 0;
+          if (comp?.table === "weapon_guns") {
+            const r = comp.row;
+            const dps =
+              (numOrNull(r.dps_physical) ?? 0) +
+              (numOrNull(r.dps_energy) ?? 0) +
+              (numOrNull(r.dps_distortion) ?? 0) +
+              (numOrNull(r.dps_thermal) ?? 0) +
+              (numOrNull(r.dps_biochemical) ?? 0) +
+              (numOrNull(r.dps_stun) ?? 0);
+            const alpha =
+              (numOrNull(r.alpha_physical) ?? 0) +
+              (numOrNull(r.alpha_energy) ?? 0) +
+              (numOrNull(r.alpha_distortion) ?? 0) +
+              (numOrNull(r.alpha_thermal) ?? 0) +
+              (numOrNull(r.alpha_biochemical) ?? 0) +
+              (numOrNull(r.alpha_stun) ?? 0);
+            totalDps += dps;
+            totalAlpha += alpha;
           }
         }
-        if (hp.category === "MISSILE_RACK" && eq.missileStats) {
+
+        // Turrets with children
+        if (hpType === "Turret" || hpType === "TurretBase") {
+          const loadout = hp.loadout_json;
+          if (Array.isArray(loadout)) {
+            for (const entry of loadout) {
+              const childCls = entry?.ClassName || entry?.className;
+              if (!childCls) continue;
+              const childComp = componentMap.get(childCls);
+              if (childComp?.table === "weapon_guns") {
+                weaponCount++;
+                const r = childComp.row;
+                const dps =
+                  (numOrNull(r.dps_physical) ?? 0) +
+                  (numOrNull(r.dps_energy) ?? 0) +
+                  (numOrNull(r.dps_distortion) ?? 0) +
+                  (numOrNull(r.dps_thermal) ?? 0) +
+                  (numOrNull(r.dps_biochemical) ?? 0) +
+                  (numOrNull(r.dps_stun) ?? 0);
+                const alpha =
+                  (numOrNull(r.alpha_physical) ?? 0) +
+                  (numOrNull(r.alpha_energy) ?? 0) +
+                  (numOrNull(r.alpha_distortion) ?? 0) +
+                  (numOrNull(r.alpha_thermal) ?? 0) +
+                  (numOrNull(r.alpha_biochemical) ?? 0) +
+                  (numOrNull(r.alpha_stun) ?? 0);
+                totalDps += dps;
+                totalAlpha += alpha;
+              }
+            }
+          }
+        }
+
+        // Missiles
+        if (hpType === "MissileLauncher") {
           missileCount++;
-          totalMissileDmg += eq.missileStats.damage || 0;
+          // Missile damage from loadout children
+          const loadout = hp.loadout_json;
+          if (Array.isArray(loadout)) {
+            for (const entry of loadout) {
+              const dmg = numOrNull(entry?.DamageTotal) ?? 0;
+              totalMissileDmg += dmg;
+            }
+          }
         }
-        if (hp.category === "SHIELD" && eq.shieldStats) {
+
+        // Shields
+        if (hpType === "Shield" && comp?.table === "shields") {
           shieldCount++;
-          totalShieldHp += eq.shieldStats.maxHp || 0;
-          totalShieldRegen += eq.shieldStats.regenRate || 0;
+          totalShieldHp += numOrNull(comp.row.max_shield_health) ?? 0;
+          totalShieldRegen += numOrNull(comp.row.max_shield_regen) ?? 0;
         }
-        if (hp.category === "POWER_PLANT" && eq.powerStats) {
-          totalPowerOutput += eq.powerStats.powerOutput || 0;
+
+        // Power Plants
+        if (hpType === "PowerPlant" && comp?.table === "power_plants") {
+          let gen = numOrNull(comp.row.power_generation) ?? 0;
+          if (!gen) {
+            gen = numOrNull(comp.row.raw_data?.stdItem?.ResourceNetwork?.Usage?.Power?.Maximum) ?? 0;
+          }
+          totalPowerOutput += gen;
         }
-        if (hp.category === "COOLER" && eq.coolingStats) {
-          totalCooling += eq.coolingStats.coolingRate || 0;
+
+        // Coolers
+        if (hpType === "Cooler" && comp?.table === "coolers") {
+          totalCooling += numOrNull(comp.row.cooling_rate) ?? 0;
         }
-        if (hp.category === "QUANTUM_DRIVE" && eq.quantumStats) {
-          quantumSpeed = eq.quantumStats.maxSpeed;
-          quantumRange = eq.quantumStats.maxRange;
-          quantumSpool = eq.quantumStats.spoolUpTime;
+
+        // Quantum Drive
+        if (hpType === "QuantumDrive" && comp?.table === "quantum_drives") {
+          quantumSpeed = numOrNull(comp.row.drive_speed);
+          quantumRange = null; // not in our table
+          quantumSpool = numOrNull(comp.row.spool_up_time);
         }
       }
 
       return {
-        id: ship.id,
-        name: ship.name,
-        localizedName: ship.localizedName,
-        manufacturer: ship.manufacturer,
-        type: ship.type,
-        size: ship.size,
-        gameVersion: ship.gameVersion,
-        ship: ship.ship,
+        id: String(ship.id),
+        name: ship.name || "",
+        localizedName: null,
+        manufacturer: ship.manufacturer || null,
+        type: "SHIP",
+        size: numOrNull(ship.size),
+        gameVersion: ship.game_version || "",
+        ship: {
+          maxCrew: numOrNull(ship.max_crew),
+          cargo: numOrNull(ship.cargo_capacity),
+          scmSpeed: numOrNull(fs?.scm_speed ?? ship.scm_speed),
+          afterburnerSpeed: numOrNull(fs?.max_speed ?? ship.afterburner_speed),
+          pitchRate: numOrNull(fs?.pitch ?? fs?.pitch_rate),
+          yawRate: numOrNull(fs?.yaw ?? fs?.yaw_rate),
+          rollRate: numOrNull(fs?.roll ?? fs?.roll_rate),
+          maxAccelMain: numOrNull(fs?.accel_forward),
+          maxAccelRetro: numOrNull(fs?.accel_backward),
+          hydrogenFuelCap: numOrNull(fuel?.hydrogen_capacity),
+          quantumFuelCap: numOrNull(fuel?.quantum_fuel_capacity ?? fuel?.quantum_capacity),
+          lengthMeters: numOrNull(ship.length_meters ?? ship.length),
+          beamMeters: numOrNull(ship.beam_meters ?? ship.beam),
+          heightMeters: numOrNull(ship.height_meters ?? ship.height),
+          role: ship.role || null,
+          focus: ship.focus || null,
+          career: ship.career || null,
+          baseEmSignature: numOrNull(ship.base_em_signature),
+          baseIrSignature: numOrNull(ship.base_ir_signature),
+          baseCsSignature: numOrNull(ship.base_cs_signature),
+        },
         computed: {
-          totalDps,
-          totalAlpha,
-          totalShieldHp,
-          totalShieldRegen,
-          totalPowerOutput,
-          totalCooling,
-          totalMissileDmg,
+          totalDps: Math.round(totalDps * 100) / 100,
+          totalAlpha: Math.round(totalAlpha * 100) / 100,
+          totalShieldHp: Math.round(totalShieldHp),
+          totalShieldRegen: Math.round(totalShieldRegen * 100) / 100,
+          totalPowerOutput: Math.round(totalPowerOutput * 100) / 100,
+          totalCooling: Math.round(totalCooling * 100) / 100,
+          totalMissileDmg: Math.round(totalMissileDmg),
           weaponCount,
           missileCount,
           shieldCount,
