@@ -46,78 +46,28 @@ function catBorderDim(cat: PowerCategory): string {
   return isOrangeCat(cat) ? "rgba(245,158,11,0.3)" : "rgba(34,197,94,0.3)";
 }
 
-// ── SVG Icons per component type (inline, 14×14) ──
-function ComponentIcon({ cat, color }: { cat: PowerCategory; color: string }) {
-  const s = { width: 14, height: 14, display: "block" };
-  const f = color;
+// ── PNG Icons per component type (from /icons/ folder) ──
+const CAT_ICON_MAP: Record<PowerCategory, string> = {
+  weapons: "/icons/weapons.png",
+  thrusters: "/icons/Ships.png",
+  shields: "/icons/shilds.png",
+  quantum: "/icons/Quantum_drives.png",
+  radar: "/icons/interdict_pulse.png",
+  coolers: "/icons/coolers.png",
+  lifesupport: "/icons/shilds.png",
+};
 
-  switch (cat) {
-    case "weapons":
-      return (
-        <svg style={s} viewBox="0 0 14 14" fill="none">
-          <path d="M1.5 12V5L2.5 3L3.5 5V12Z" fill={f} />
-          <path d="M4.5 12V5L5.5 3L6.5 5V12Z" fill={f} />
-          <path d="M7.5 12V5L8.5 3L9.5 5V12Z" fill={f} />
-          <path d="M10.5 12V5L11.5 3L12.5 5V12Z" fill={f} />
-        </svg>
-      );
-    case "thrusters":
-      return (
-        <svg style={s} viewBox="0 0 14 14" fill="none">
-          <polyline points="1,3.5 5.5,7 1,10.5" stroke={f} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-          <polyline points="7,3.5 11.5,7 7,10.5" stroke={f} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        </svg>
-      );
-    case "shields":
-      return (
-        <svg style={s} viewBox="0 0 14 14" fill="none">
-          <path d="M7 1L2 3.5V6.5C2 9.5 7 13 7 13S12 9.5 12 6.5V3.5L7 1Z" stroke={f} strokeWidth="1.2" fill="none" />
-          <line x1="7" y1="4.5" x2="7" y2="9.5" stroke={f} strokeWidth="1.2" strokeLinecap="round" />
-          <line x1="4.5" y1="7" x2="9.5" y2="7" stroke={f} strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
-      );
-    case "quantum":
-      return (
-        <svg style={s} viewBox="0 0 14 14" fill="none">
-          <circle cx="7" cy="7" r="1.3" fill={f} />
-          <ellipse cx="7" cy="7" rx="6" ry="2.2" stroke={f} strokeWidth="0.7" fill="none" />
-          <ellipse cx="7" cy="7" rx="6" ry="2.2" stroke={f} strokeWidth="0.7" fill="none" transform="rotate(60 7 7)" />
-          <ellipse cx="7" cy="7" rx="6" ry="2.2" stroke={f} strokeWidth="0.7" fill="none" transform="rotate(120 7 7)" />
-        </svg>
-      );
-    case "radar":
-      return (
-        <svg style={s} viewBox="0 0 14 14" fill="none">
-          <circle cx="7" cy="11" r="1.2" fill={f} />
-          <path d="M4.5 9C5.2 8.1 6 7.5 7 7.5S8.8 8.1 9.5 9" stroke={f} strokeWidth="1.1" strokeLinecap="round" fill="none" />
-          <path d="M2.5 7C3.8 5.3 5.3 4.2 7 4.2S10.2 5.3 11.5 7" stroke={f} strokeWidth="1.1" strokeLinecap="round" fill="none" />
-          <path d="M0.8 5C2.5 2.5 4.6 1.2 7 1.2S11.5 2.5 13.2 5" stroke={f} strokeWidth="1.1" strokeLinecap="round" fill="none" />
-        </svg>
-      );
-    case "coolers":
-      return (
-        <svg style={s} viewBox="0 0 14 14" fill="none">
-          <circle cx="7" cy="7" r="1.2" fill={f} />
-          <path d="M7 5.8C6.8 4.2 5.8 2.5 4.2 2C5.2 3.2 5.8 4.8 6.2 5.8" stroke={f} strokeWidth="1.3" strokeLinecap="round" fill="none" />
-          <path d="M8 7.8C9.4 8.5 11 8.5 12 7.5C10.6 7.8 9.2 7.5 8.2 7.2" stroke={f} strokeWidth="1.3" strokeLinecap="round" fill="none" />
-          <path d="M6.2 8.2C5.8 9.6 5.8 11.2 7 12.2C6.4 10.8 6.4 9.4 6.6 8.4" stroke={f} strokeWidth="1.3" strokeLinecap="round" fill="none" />
-        </svg>
-      );
-    case "lifesupport":
-      return (
-        <svg style={s} viewBox="0 0 14 14" fill="none">
-          <path d="M7 12C7 12 1.5 8.5 1.5 5C1.5 3 3 1.5 4.5 1.5C5.5 1.5 6.4 2 7 3C7.6 2 8.5 1.5 9.5 1.5C11 1.5 12.5 3 12.5 5C12.5 8.5 7 12 7 12Z" stroke={f} strokeWidth="1" fill="none" />
-          <polyline points="2.5,6.5 5,6.5 6,4.5 7,8 8,5.5 9,6.5 11.5,6.5" stroke={f} strokeWidth="0.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        </svg>
-      );
-    default:
-      return (
-        <svg style={s} viewBox="0 0 14 14" fill="none">
-          <circle cx="7" cy="7" r="4" stroke={f} strokeWidth="1.2" fill="none" />
-          <circle cx="7" cy="7" r="1.5" fill={f} />
-        </svg>
-      );
-  }
+function ComponentIcon({ cat, color }: { cat: PowerCategory; color: string }) {
+  const src = CAT_ICON_MAP[cat] || "/icons/weapons.png";
+  return (
+    <img
+      src={src}
+      alt={cat}
+      width={14}
+      height={14}
+      style={{ display: "block", opacity: color === "#3f3f46" ? 0.35 : 1 }}
+    />
+  );
 }
 
 // =============================================================================
