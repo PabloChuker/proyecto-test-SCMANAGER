@@ -6,6 +6,7 @@
 // =============================================================================
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 
@@ -120,7 +121,11 @@ function gradeColor(value: any): string {
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function ComponentsPage() {
-  const [activeCategory, setActiveCategory] = useState<CategoryDef>(CATEGORIES[0]);
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+  const initialCat = (tabParam && CATEGORIES.find(c => c.key === tabParam)) || CATEGORIES[0];
+
+  const [activeCategory, setActiveCategory] = useState<CategoryDef>(initialCat);
   const [rows, setRows] = useState<any[]>([]);
   const [columns, setColumns] = useState<ColumnDef[]>([]);
   const [meta, setMeta] = useState({ total: 0, limit: 200, offset: 0 });
@@ -130,6 +135,20 @@ export default function ComponentsPage() {
   const [sortCol, setSortCol] = useState("name");
   const [sortDir, setSortDir] = useState<"ASC" | "DESC">("ASC");
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Sync with ?tab= param changes
+  useEffect(() => {
+    if (tabParam) {
+      const cat = CATEGORIES.find(c => c.key === tabParam);
+      if (cat && cat.key !== activeCategory.key) {
+        setActiveCategory(cat);
+        setSearch("");
+        setSizeFilter("");
+        setSortCol("name");
+        setSortDir("ASC");
+      }
+    }
+  }, [tabParam]);
 
   const fetchData = useCallback(async (cat: CategoryDef, s: string, size: string, sort: string, dir: string) => {
     setLoading(true);
@@ -201,6 +220,18 @@ export default function ComponentsPage() {
           <Image src="/sclabs-logo.png" alt="SC LABS" width={24} height={24} className="rounded-sm" />
         </Link>
         <div className="w-6 h-px bg-zinc-800 mb-2" />
+
+        {/* DPS Calculator link */}
+        <Link
+          href="/dps"
+          title="DPS Calculator"
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded flex items-center justify-center transition-all duration-150 text-zinc-600 hover:text-zinc-400 hover:bg-zinc-800/40 mb-1"
+        >
+          <SvgIcon>
+            <circle cx="12" cy="12" r="3" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /><path d="M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </SvgIcon>
+        </Link>
+        <div className="w-6 h-px bg-zinc-800 mb-1" />
 
         {CATEGORIES.map((cat) => {
           const isActive = activeCategory.key === cat.key;
