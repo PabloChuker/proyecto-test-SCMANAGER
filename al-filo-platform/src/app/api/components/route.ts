@@ -167,12 +167,14 @@ function buildStats(row: any, type: string): Record<string, any> | null {
       break;
     }
     case "SHIELD": {
-      s.shieldHp = numOrNull(row.max_shield_health);
-      s.maxHp = numOrNull(row.max_shield_health);
+      s.shieldHp = numOrNull(row.pool_hp);
+      s.maxHp = numOrNull(row.pool_hp);
       s.shieldRegen = numOrNull(row.max_shield_regen);
       s.regenRate = numOrNull(row.max_shield_regen);
-      s.downedDelay = numOrNull(row.downed_delay);
-      s.damagedDelay = numOrNull(row.damaged_delay);
+      s.downedDelay = numOrNull(row.downed_regen_delay);
+      s.damagedDelay = numOrNull(row.damaged_regen_delay);
+      s.powerDraw = numOrNull(row.power_consumption);
+      s.emSignature = numOrNull(row.em_max);
       break;
     }
     case "POWER_PLANT": {
@@ -181,12 +183,18 @@ function buildStats(row: any, type: string): Record<string, any> | null {
         powerGen = numOrNull(row.raw_data?.stdItem?.ResourceNetwork?.Usage?.Power?.Maximum) ?? 0;
       }
       s.powerOutput = powerGen;
-      s.emSignature = numOrNull(row.raw_data?.stdItem?.Emission?.Em?.Maximum) ?? 0;
+      let emSig = numOrNull(row.em_max);
+      if (!emSig || emSig === 0) {
+        emSig = numOrNull(row.raw_data?.stdItem?.Emission?.Em?.Maximum) ?? 0;
+      }
+      s.emSignature = emSig;
       break;
     }
     case "COOLER": {
-      s.coolingRate = numOrNull(row.cooling_rate);
-      s.powerDraw = numOrNull(row.power_draw_max);
+      s.coolingRate = numOrNull(row.cooling_generation);
+      s.powerDraw = numOrNull(row.power_consumption);
+      s.emSignature = numOrNull(row.em_max);
+      s.irSignature = numOrNull(row.ir_max);
       break;
     }
     case "QUANTUM_DRIVE": {
