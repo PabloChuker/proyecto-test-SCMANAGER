@@ -72,13 +72,14 @@ export interface ShipInfo {
 export type FlightMode = "SCM" | "NAV";
 
 /** Power categories for UI grouping */
-export type PowerCategory = "weapons" | "thrusters" | "shields" | "quantum" | "radar" | "coolers";
-export const POWER_CATEGORIES: PowerCategory[] = ["weapons", "thrusters", "shields", "quantum", "radar", "coolers"];
+export type PowerCategory = "weapons" | "thrusters" | "shields" | "quantum" | "radar" | "coolers" | "lifesupport";
+export const POWER_CATEGORIES: PowerCategory[] = ["weapons", "thrusters", "shields", "quantum", "radar", "coolers", "lifesupport"];
 
 const CAT_TO_POWER: Record<string, PowerCategory> = {
   WEAPON: "weapons", TURRET: "weapons", MISSILE_RACK: "weapons",
   SHIELD: "shields", COOLER: "coolers", QUANTUM_DRIVE: "quantum",
   MINING: "weapons", UTILITY: "weapons", RADAR: "radar",
+  LIFE_SUPPORT: "lifesupport",
 };
 
 /** Per-instance power allocation info for the power grid UI */
@@ -130,15 +131,16 @@ const TYPE_TO_CAT: Record<string, string> = {
   SHIELD: "SHIELD", POWER_PLANT: "POWER_PLANT", COOLER: "COOLER", QUANTUM_DRIVE: "QUANTUM_DRIVE",
   MINING_LASER: "MINING", MINING: "MINING", TRACTOR_BEAM: "UTILITY", EMP: "UTILITY",
   RADAR: "RADAR", COUNTERMEASURE: "COUNTERMEASURE",
+  LIFE_SUPPORT: "LIFE_SUPPORT", LifeSupportGenerator: "LIFE_SUPPORT",
 };
 const NAME_PATTERNS: [RegExp, string][] = [
   [/turret/i, "TURRET"], [/weapon|gun|cannon|gatling|repeater|scattergun|gimbal/i, "WEAPON"],
   [/missile|rocket|msd-/i, "MISSILE_RACK"], [/shield/i, "SHIELD"],
   [/power_plant|powerplant|power plant/i, "POWER_PLANT"], [/cool/i, "COOLER"],
   [/quantum|qdrive/i, "QUANTUM_DRIVE"], [/mining/i, "MINING"],
-  [/radar|scanner/i, "RADAR"],
+  [/radar|scanner/i, "RADAR"], [/life.?support/i, "LIFE_SUPPORT"],
 ];
-const USEFUL = new Set(["WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "UTILITY", "RADAR", "COUNTERMEASURE"]);
+const USEFUL = new Set(["WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "UTILITY", "RADAR", "COUNTERMEASURE", "LIFE_SUPPORT"]);
 
 function inferCategory(category: string, item: EquippedItem | null, hpName: string): string {
   if (category !== "OTHER" && USEFUL.has(category)) return category;
@@ -185,7 +187,7 @@ function parseEquipped(eq: any): EquippedItem | null {
 // =============================================================================
 
 const WEAPON_CATS = new Set(["WEAPON", "TURRET", "MISSILE_RACK"]);
-const SYSTEM_CATS = new Set(["SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "UTILITY"]);
+const SYSTEM_CATS = new Set(["SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "UTILITY", "LIFE_SUPPORT"]);
 
 function emptyCat(): CategoryPowerInfo { return { minDraw: 0, allocated: 0, componentCount: 0, activeCount: 0 }; }
 
@@ -341,7 +343,19 @@ function computeStats(
   const consumptionPercent = totalPO > 0 ? Math.round((totalMinDraw / totalPO) * 100) : 0;
   const activeCategories = POWER_CATEGORIES.filter(c => cats[c].componentCount > 0);
 
-  if (flightMode === "NAV") { totalDps = 0; totalAlpha = 0; shieldRegen = 0; }
+  if (flightMode === "NAV") {
+    totalDps = 0; totalAlpha = 0; shieldRegen = 0; shieldHp = 0;
+    // NAV mode turns off shields — free their power allocation
+    for (const inst of instances) {
+      if (inst.category === "shields") {
+        inst.isOn = false;
+        inst.allocatedPips = 0;
+        cats.shields.activeCount = 0;
+        cats.shields.allocated = 0;
+        cats.shields.minDraw = 0;
+      }
+    }
+  }
 
   let effectiveSpeed: number | null; let effectiveSpeedLabel: string;
   if (flightMode === "NAV") { effectiveSpeed = shipInfo?.afterburnerSpeed ?? null; effectiveSpeedLabel = "NAV"; } else { effectiveSpeed = shipInfo?.scmSpeed ?? null; effectiveSpeedLabel = "SCM"; }
@@ -362,7 +376,7 @@ function computeStats(
 // Store
 // =============================================================================
 
-const ZERO_ALLOC: Record<PowerCategory, number> = { weapons: 0, thrusters: 0, shields: 0, quantum: 0, radar: 0, coolers: 0 };
+const ZERO_ALLOC: Record<PowerCategory, number> = { weapons: 0, thrusters: 0, shields: 0, quantum: 0, radar: 0, coolers: 0, lifesupport: 0 };
 const EMPTY_NET: PowerNetworkState = { totalOutput: 0, totalAllocated: 0, totalMinDraw: 0, consumptionPercent: 0, freePoints: 0, isOverloaded: false, categories: (() => { const c = {} as any; for (const k of POWER_CATEGORIES) c[k] = emptyCat(); return c; })(), activeCategories: [], instances: [] };
 const EMPTY_STATS: ComputedStats = { totalDps: 0, totalAlpha: 0, shieldHp: 0, shieldRegen: 0, powerOutput: 0, powerDraw: 0, powerBalance: 0, coolingRate: 0, thermalOutput: 0, thermalBalance: 0, emSignature: 0, irSignature: 0, effectiveSpeed: null, effectiveSpeedLabel: "SCM", powerNetwork: EMPTY_NET, summary: { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0, activeComponents: 0, totalComponents: 0 } };
 
@@ -524,7 +538,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   clearSlot: (hpId) => { set(s => { const n = new Map(s.overrides); n.set(hpId, null); return { overrides: n }; }); setTimeout(() => get().autoAllocatePower(), 0); },
   toggleComponent: (hpName) => { set(s => ({ componentStates: { ...s.componentStates, [hpName]: s.componentStates[hpName] === false } })); setTimeout(() => get().autoAllocatePower(), 0); },
   resetAll: () => { const fresh: Record<string, boolean> = {}; for (const hp of get().hardpoints) { fresh[hp.hardpointName] = true; for (const ch of hp.children) fresh[ch.hardpointName] = true; } set({ overrides: new Map(), componentStates: fresh, flightMode: "SCM" as FlightMode, instancePower: {}, allocatedPower: { ...ZERO_ALLOC } }); setTimeout(() => get().autoAllocatePower(), 0); },
-  setFlightMode: (mode) => set({ flightMode: mode }),
+  setFlightMode: (mode) => { set({ flightMode: mode }); setTimeout(() => get().autoAllocatePower(), 0); },
 
   setInstancePower: (hardpointName, pips) => {
     const s = get();

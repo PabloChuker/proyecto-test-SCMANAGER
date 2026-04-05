@@ -1,14 +1,16 @@
 // =============================================================================
-// AL FILO — PowerManagementPanel v12 (Erkul/spviewer faithful replica)
+// AL FILO — PowerManagementPanel v13 (Erkul/spviewer faithful replica)
 //
 // - ALWAYS 6 rows per column, tightly packed
 // - 1 column per component INSTANCE
-// - Tier number inside each allocated cell
-// - Proper icon PER COLUMN matching the component type
+// - Tier number inside each allocated cell (operational blocks from PowerRanges)
+// - Proper icon PER COLUMN matching the component type:
+//   Weapons=ammunition, Thrusters=>>, QD=atom, Radar=waves, Shields=shield,
+//   Coolers=fan, LifeSupport=lungs
 // - Orange for weapons, Green for systems
 // - Category icon + performance % per column below grid
 // - OUTPUT x/y and CONSUMPTION bar
-// - SCM MODE / NAV MODE toggle
+// - SCM MODE / NAV MODE toggle (NAV turns off shields)
 // =============================================================================
 
 "use client";
@@ -25,9 +27,9 @@ import type {
 // ── Constants ──
 const ROWS = 6;
 
-// Category display ordering
+// Category display ordering (weapons first, then systems in Erkul order)
 const CATEGORY_ORDER: PowerCategory[] = [
-  "weapons", "thrusters", "quantum", "radar", "shields", "coolers",
+  "weapons", "thrusters", "quantum", "radar", "shields", "coolers", "lifesupport",
 ];
 
 // Whether category uses orange or green
@@ -39,77 +41,92 @@ function catColor(cat: PowerCategory): string {
 }
 
 // ── SVG Icons per component type (inline, 14×14) ──
-function ComponentIcon({ type, cat, color }: { type: string; cat: PowerCategory; color: string }) {
+// Designed to match Erkul / spviewer visual style
+function ComponentIcon({ cat, color }: { cat: PowerCategory; color: string }) {
   const s = { width: 14, height: 14, display: "block" };
-  const fill = color;
-  const t = type.toLowerCase();
+  const f = color;
 
-  // Weapon / Gun
-  if (cat === "weapons" || t.includes("weapon") || t.includes("gun") || t.includes("turret")) {
-    return (
-      <svg style={s} viewBox="0 0 14 14" fill="none">
-        <rect x="1" y="5" width="12" height="2" rx="0.5" fill={fill} />
-        <rect x="1" y="8" width="12" height="2" rx="0.5" fill={fill} />
-        <rect x="9" y="3" width="4" height="2" rx="0.5" fill={fill} />
-      </svg>
-    );
+  switch (cat) {
+    // Weapons: ammunition rounds (3 vertical bars like |||)
+    case "weapons":
+      return (
+        <svg style={s} viewBox="0 0 14 14" fill="none">
+          <rect x="2.5" y="3" width="2" height="8" rx="1" fill={f} />
+          <rect x="6" y="3" width="2" height="8" rx="1" fill={f} />
+          <rect x="9.5" y="3" width="2" height="8" rx="1" fill={f} />
+        </svg>
+      );
+
+    // Thrusters: double chevron >> (Erkul style)
+    case "thrusters":
+      return (
+        <svg style={s} viewBox="0 0 14 14" fill="none">
+          <polyline points="1.5,3 6,7 1.5,11" stroke={f} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+          <polyline points="7,3 11.5,7 7,11" stroke={f} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </svg>
+      );
+
+    // Quantum Drive: atom orbits
+    case "quantum":
+      return (
+        <svg style={s} viewBox="0 0 14 14" fill="none">
+          <circle cx="7" cy="7" r="1.5" fill={f} />
+          <ellipse cx="7" cy="7" rx="5.5" ry="2.5" stroke={f} strokeWidth="0.8" fill="none" />
+          <ellipse cx="7" cy="7" rx="5.5" ry="2.5" stroke={f} strokeWidth="0.8" fill="none" transform="rotate(60 7 7)" />
+          <ellipse cx="7" cy="7" rx="5.5" ry="2.5" stroke={f} strokeWidth="0.8" fill="none" transform="rotate(120 7 7)" />
+        </svg>
+      );
+
+    // Radar: concentric arcs with antenna
+    case "radar":
+      return (
+        <svg style={s} viewBox="0 0 14 14" fill="none">
+          <path d="M4.5 9.5A3.5 3.5 0 0 1 7 6" stroke={f} strokeWidth="1.2" strokeLinecap="round" fill="none" />
+          <path d="M2.5 11.5A6.5 6.5 0 0 1 7 3.5" stroke={f} strokeWidth="1.2" strokeLinecap="round" fill="none" />
+          <circle cx="7" cy="12" r="1" fill={f} />
+          <line x1="7" y1="11" x2="10.5" y2="3" stroke={f} strokeWidth="1" strokeLinecap="round" />
+        </svg>
+      );
+
+    // Shields: shield outline
+    case "shields":
+      return (
+        <svg style={s} viewBox="0 0 14 14" fill="none">
+          <path d="M7 1L2.5 3.5V7C2.5 10 7 13 7 13S11.5 10 11.5 7V3.5L7 1Z" stroke={f} strokeWidth="1.3" fill="none" />
+        </svg>
+      );
+
+    // Coolers: fan/ventilator (4 curved blades) like spviewer
+    case "coolers":
+      return (
+        <svg style={s} viewBox="0 0 14 14" fill="none">
+          <circle cx="7" cy="7" r="1" fill={f} />
+          <path d="M7 6C7 4 5.5 2 4 2C5 3.5 6 4.5 7 6Z" fill={f} />
+          <path d="M8 7C10 7 12 5.5 12 4C10.5 5 9.5 6 8 7Z" fill={f} />
+          <path d="M7 8C7 10 8.5 12 10 12C9 10.5 8 9.5 7 8Z" fill={f} />
+          <path d="M6 7C4 7 2 8.5 2 10C3.5 9 4.5 8 6 7Z" fill={f} />
+        </svg>
+      );
+
+    // Life Support: lungs / breathing icon
+    case "lifesupport":
+      return (
+        <svg style={s} viewBox="0 0 14 14" fill="none">
+          <path d="M7 2V7" stroke={f} strokeWidth="1.2" strokeLinecap="round" />
+          <path d="M7 7C7 7 4 7 3 8.5C2 10 2.5 12 4 12C5.5 12 6 10.5 7 9" stroke={f} strokeWidth="1.1" fill="none" strokeLinecap="round" />
+          <path d="M7 7C7 7 10 7 11 8.5C12 10 11.5 12 10 12C8.5 12 8 10.5 7 9" stroke={f} strokeWidth="1.1" fill="none" strokeLinecap="round" />
+        </svg>
+      );
+
+    // Fallback: power circle
+    default:
+      return (
+        <svg style={s} viewBox="0 0 14 14" fill="none">
+          <circle cx="7" cy="7" r="4" stroke={f} strokeWidth="1.2" fill="none" />
+          <circle cx="7" cy="7" r="1.5" fill={f} />
+        </svg>
+      );
   }
-  // Shield
-  if (t.includes("shield")) {
-    return (
-      <svg style={s} viewBox="0 0 14 14" fill="none">
-        <path d="M7 1.5L2.5 3.5V7C2.5 9.5 7 12.5 7 12.5S11.5 9.5 11.5 7V3.5L7 1.5Z" stroke={fill} strokeWidth="1.3" fill="none" />
-      </svg>
-    );
-  }
-  // Cooler
-  if (t.includes("cooler")) {
-    return (
-      <svg style={s} viewBox="0 0 14 14" fill="none">
-        <line x1="7" y1="1.5" x2="7" y2="12.5" stroke={fill} strokeWidth="1.2" />
-        <line x1="1.5" y1="7" x2="12.5" y2="7" stroke={fill} strokeWidth="1.2" />
-        <line x1="3" y1="3" x2="11" y2="11" stroke={fill} strokeWidth="1" />
-        <line x1="11" y1="3" x2="3" y2="11" stroke={fill} strokeWidth="1" />
-      </svg>
-    );
-  }
-  // Quantum Drive
-  if (t.includes("quantum")) {
-    return (
-      <svg style={s} viewBox="0 0 14 14" fill="none">
-        <circle cx="7" cy="7" r="2" fill={fill} />
-        <ellipse cx="7" cy="7" rx="5.5" ry="3" stroke={fill} strokeWidth="0.8" fill="none" />
-        <ellipse cx="7" cy="7" rx="3" ry="5.5" stroke={fill} strokeWidth="0.8" fill="none" />
-      </svg>
-    );
-  }
-  // Radar
-  if (t.includes("radar")) {
-    return (
-      <svg style={s} viewBox="0 0 14 14" fill="none">
-        <path d="M4 10C4 7.8 5.3 6 7 6" stroke={fill} strokeWidth="1.2" fill="none" />
-        <path d="M2 12C2 8 4 4.5 7 4.5" stroke={fill} strokeWidth="1.2" fill="none" />
-        <circle cx="7" cy="12" r="1.2" fill={fill} />
-        <line x1="7" y1="12" x2="11" y2="3" stroke={fill} strokeWidth="1" />
-      </svg>
-    );
-  }
-  // Thruster / Flight Controller
-  if (cat === "thrusters" || t.includes("thruster") || t.includes("flight")) {
-    return (
-      <svg style={s} viewBox="0 0 14 14" fill="none">
-        <polygon points="2,7 6,4 6,10" fill={fill} />
-        <polygon points="7,7 11,4 11,10" fill={fill} />
-      </svg>
-    );
-  }
-  // Fallback: power dot
-  return (
-    <svg style={s} viewBox="0 0 14 14" fill="none">
-      <circle cx="7" cy="7" r="4" stroke={fill} strokeWidth="1.2" fill="none" />
-      <circle cx="7" cy="7" r="1.5" fill={fill} />
-    </svg>
-  );
 }
 
 // =============================================================================
@@ -297,7 +314,7 @@ export function PowerManagementPanel({
                       style={{ width: 20 }}
                       title={`${inst.componentName} — ${pct}%`}
                     >
-                      <ComponentIcon type={inst.type} cat={inst.category} color={color} />
+                      <ComponentIcon cat={inst.category} color={color} />
                       <span
                         className="text-[7px] font-mono font-bold tabular-nums"
                         style={{ color: pct >= 100 ? color : "#52525b", marginTop: 1 }}

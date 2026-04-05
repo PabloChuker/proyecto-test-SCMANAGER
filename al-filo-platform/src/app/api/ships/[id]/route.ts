@@ -64,10 +64,14 @@ const HP_TYPE_TO_CATEGORY: Record<string, string> = {
   Armor: "ARMOR",
   FuelTank: "FUEL_TANK",
   FuelIntake: "FUEL_INTAKE",
+  LifeSupportGenerator: "LIFE_SUPPORT",
 };
 
 function hpCategory(hpType: string, hpName: string): string {
   if (HP_TYPE_TO_CATEGORY[hpType]) return HP_TYPE_TO_CATEGORY[hpType];
+  // Try base type (e.g. "LifeSupportGenerator.UNDEFINED" → "LifeSupportGenerator")
+  const baseType = hpType.split(".")[0];
+  if (baseType !== hpType && HP_TYPE_TO_CATEGORY[baseType]) return HP_TYPE_TO_CATEGORY[baseType];
   // Fallback: infer from name
   const n = hpName.toLowerCase();
   if (n.includes("turret")) return "TURRET";
@@ -79,6 +83,7 @@ function hpCategory(hpType: string, hpName: string): string {
   if (n.includes("quantum")) return "QUANTUM_DRIVE";
   if (n.includes("radar")) return "RADAR";
   if (n.includes("countermeasure")) return "COUNTERMEASURE";
+  if (n.includes("lifesupport") || n.includes("life_support")) return "LIFE_SUPPORT";
   return "OTHER";
 }
 
@@ -435,7 +440,7 @@ export async function GET(
         // Keep: WEAPON, TURRET, MISSILE_RACK, SHIELD, POWER_PLANT, COOLER, QUANTUM_DRIVE, RADAR, COUNTERMEASURE
         const USEFUL = new Set([
           "WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT",
-          "COOLER", "QUANTUM_DRIVE", "RADAR", "COUNTERMEASURE",
+          "COOLER", "QUANTUM_DRIVE", "RADAR", "COUNTERMEASURE", "LIFE_SUPPORT",
         ]);
         if (!USEFUL.has(category)) return null;
 
