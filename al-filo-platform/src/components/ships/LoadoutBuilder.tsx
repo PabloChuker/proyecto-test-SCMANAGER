@@ -72,9 +72,6 @@ const CAT_CONFIG: Record<string, { label: string; icon: string; accent: string }
   UTILITY: { label: "UTILITY", icon: "◎", accent: "#94a3b8" },
 };
 
-// Component categories (used by widget-level rendering)
-const ALL_CATS = ["SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "RADAR", "UTILITY", "MINING"];
-
 // ── Drag & Drop Widget System (individual blocks) ────────────────────────────
 type WidgetId =
   | "weapons" | "missiles" | "accel-radar"
@@ -83,12 +80,13 @@ type WidgetId =
   | "power-grid" | "signatures" | "balance"
   | "ship-selector" | "ship-card" | "dps-detail";
 
-const DEFAULT_WIDGET_ORDER: WidgetId[] = [
-  "weapons", "missiles", "accel-radar",
-  "shields", "powerplants", "coolers", "maneuver-radar",
-  "quantum", "radar", "utility", "combat-summary",
-  "power-grid", "signatures", "balance",
-  "ship-selector", "ship-card", "dps-detail",
+// Default column assignments — 5 columns, exactly like the original layout
+const DEFAULT_COLUMNS: WidgetId[][] = [
+  ["weapons", "missiles", "accel-radar"],                          // Col 1
+  ["shields", "powerplants", "coolers", "maneuver-radar"],         // Col 2
+  ["quantum", "radar", "utility", "combat-summary"],               // Col 3
+  ["power-grid", "signatures", "balance"],                         // Col 4
+  ["ship-selector", "ship-card", "dps-detail"],                    // Col 5
 ];
 
 const WIDGET_LABELS: Record<WidgetId, string> = {
@@ -99,26 +97,25 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   "ship-selector": "SEARCH", "ship-card": "SHIP CARD", "dps-detail": "DPS DETAIL",
 };
 
-// Widgets that need a wider column in the grid
-const WIDE_WIDGETS = new Set<WidgetId>(["power-grid", "ship-card", "dps-detail"]);
+const ALL_WIDGET_IDS = DEFAULT_COLUMNS.flat();
 
-function loadWidgetOrder(): WidgetId[] {
+function loadColumns(): WidgetId[][] {
   try {
-    const raw = localStorage.getItem("al-filo-widget-order");
+    const raw = localStorage.getItem("al-filo-widget-cols");
     if (raw) {
-      const parsed = JSON.parse(raw) as WidgetId[];
-      // Validate: every default widget must be present (extras are ignored)
-      if (DEFAULT_WIDGET_ORDER.every(w => parsed.includes(w))) {
-        // Return only known widgets in saved order
-        return parsed.filter(w => DEFAULT_WIDGET_ORDER.includes(w));
+      const parsed = JSON.parse(raw) as WidgetId[][];
+      const flat = parsed.flat();
+      // Validate all widgets present
+      if (ALL_WIDGET_IDS.every(w => flat.includes(w)) && parsed.length === 5) {
+        return parsed;
       }
     }
   } catch {}
-  return [...DEFAULT_WIDGET_ORDER];
+  return DEFAULT_COLUMNS.map(c => [...c]);
 }
 
-function saveWidgetOrder(order: WidgetId[]) {
-  try { localStorage.setItem("al-filo-widget-order", JSON.stringify(order)); } catch {}
+function saveColumns(cols: WidgetId[][]) {
+  try { localStorage.setItem("al-filo-widget-cols", JSON.stringify(cols)); } catch {}
 }
 
 function DragWidget({ id, label, children, dragState, onDragStart, onDragOver, onDrop, onDragEnd }: {
@@ -167,6 +164,164 @@ function DragWidget({ id, label, children, dragState, onDragStart, onDragOver, o
   );
 }
 
+// ── Widget renderer — maps a WidgetId to its JSX content ────────────────────
+function renderWidget(
+  wId: WidgetId,
+  dp: { dragState: { dragging: WidgetId | null; over: WidgetId | null }; onDragStart: (id: WidgetId) => void; onDragOver: (e: React.DragEvent, id: WidgetId) => void; onDrop: (e: React.DragEvent, id: WidgetId) => void; onDragEnd: () => void },
+  ctx: any,
+): React.ReactNode {
+  const { weaponHps, missileHps, useful, store, setPickerHp, si, shipInfo, stats, flightMode, setFlightMode, fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount } = ctx;
+  const W = (children: React.ReactNode) => <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}>{children}</DragWidget>;
+
+  switch (wId) {
+    case "weapons":
+      return weaponHps.length > 0 ? W(<HpGroup title="WEAPONS" icon="▪" hps={weaponHps} store={store} onClickHp={setPickerHp} accent="#eab308" />) : null;
+    case "missiles":
+      return missileHps.length > 0 ? W(<HpGroup title="MISSILES & BOMBS" icon="◆" hps={missileHps} store={store} onClickHp={setPickerHp} accent="#f97316" />) : null;
+    case "accel-radar":
+      return W(<div className="bg-zinc-900/80 border border-zinc-800/60 p-3"><div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-1 text-center">Acceleration Profile</div><div className="flex justify-center"><AccelerationRadar shipData={si} /></div></div>);
+    case "shields": {
+      const hps = useful.filter((hp: any) => hp.resolvedCategory === "SHIELD");
+      return hps.length > 0 ? W(<HpGroup title={CAT_CONFIG.SHIELD.label} icon={CAT_CONFIG.SHIELD.icon} hps={hps} store={store} onClickHp={setPickerHp} accent={CAT_CONFIG.SHIELD.accent} />) : null;
+    }
+    case "powerplants": {
+      const hps = useful.filter((hp: any) => hp.resolvedCategory === "POWER_PLANT");
+      return hps.length > 0 ? W(<HpGroup title={CAT_CONFIG.POWER_PLANT.label} icon={CAT_CONFIG.POWER_PLANT.icon} hps={hps} store={store} onClickHp={setPickerHp} accent={CAT_CONFIG.POWER_PLANT.accent} />) : null;
+    }
+    case "coolers": {
+      const hps = useful.filter((hp: any) => hp.resolvedCategory === "COOLER");
+      return hps.length > 0 ? W(<HpGroup title={CAT_CONFIG.COOLER.label} icon={CAT_CONFIG.COOLER.icon} hps={hps} store={store} onClickHp={setPickerHp} accent={CAT_CONFIG.COOLER.accent} />) : null;
+    }
+    case "maneuver-radar":
+      return W(<div className="bg-zinc-900/80 border border-zinc-800/60 p-3"><div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-1 text-center">Maneuverability</div><div className="flex justify-center"><ManeuverabilityRadar shipInfo={shipInfo} /></div></div>);
+    case "quantum": {
+      const hps = useful.filter((hp: any) => hp.resolvedCategory === "QUANTUM_DRIVE");
+      return hps.length > 0 ? W(<HpGroup title={CAT_CONFIG.QUANTUM_DRIVE.label} icon={CAT_CONFIG.QUANTUM_DRIVE.icon} hps={hps} store={store} onClickHp={setPickerHp} accent={CAT_CONFIG.QUANTUM_DRIVE.accent} />) : null;
+    }
+    case "radar": {
+      const hps = useful.filter((hp: any) => hp.resolvedCategory === "RADAR");
+      return hps.length > 0 ? W(<HpGroup title={CAT_CONFIG.RADAR.label} icon={CAT_CONFIG.RADAR.icon} hps={hps} store={store} onClickHp={setPickerHp} accent={CAT_CONFIG.RADAR.accent} />) : null;
+    }
+    case "utility": {
+      const hps = useful.filter((hp: any) => hp.resolvedCategory === "UTILITY" || hp.resolvedCategory === "MINING");
+      return hps.length > 0 ? W(<HpGroup title="UTILITY" icon="◎" hps={hps} store={store} onClickHp={setPickerHp} accent="#94a3b8" />) : null;
+    }
+    case "combat-summary":
+      return W(
+        <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-1.5">
+          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase border-b border-zinc-800/40 pb-1">Combat Summary</div>
+          <div className="grid grid-cols-2 gap-2">
+            <CompactStat label="DPS" value={fmtDps(stats.totalDps)} color={flightMode === "NAV" ? "#52525b" : "#ef4444"} locked={flightMode === "NAV"} />
+            <CompactStat label="ALPHA" value={fmtStat(stats.totalAlpha)} color={flightMode === "NAV" ? "#52525b" : "#f97316"} locked={flightMode === "NAV"} />
+            <CompactStat label="SHIELD HP" value={fmtStat(stats.shieldHp)} color="#3b82f6" />
+            <CompactStat label="SH REGEN" value={fmtStat(stats.shieldRegen)} color={flightMode === "NAV" ? "#52525b" : "#60a5fa"} />
+          </div>
+        </div>
+      );
+    case "power-grid":
+      return W(<PowerManagementPanel stats={stats} flightMode={flightMode} onModeChange={setFlightMode} />);
+    case "signatures":
+      return W(
+        <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-2">
+          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase border-b border-zinc-800/40 pb-1">Signatures</div>
+          <SignatureBar label="EM" value={stats.emSignature} max={20000} color="#a855f7" />
+          <SignatureBar label="IR" value={stats.irSignature} max={20000} color="#f97316" />
+        </div>
+      );
+    case "balance":
+      return W(
+        <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-2">
+          <BalanceRow label="POWER" value={stats.powerBalance} output={stats.powerOutput} draw={stats.powerDraw} posColor="#22c55e" negColor="#ef4444" />
+          <BalanceRow label="THERMAL" value={stats.thermalBalance} output={stats.coolingRate} draw={stats.thermalOutput} posColor="#06b6d4" negColor="#ef4444" />
+        </div>
+      );
+    case "ship-selector":
+      return W(<ShipSelector currentRef={shipInfo.reference} />);
+    case "ship-card":
+      return W(
+        <div className="bg-zinc-900/80 border border-zinc-800/60">
+          <div className="relative bg-zinc-800/20 border-b border-zinc-800/50 overflow-hidden" style={{ height: 120 }}>
+            <img src={getShipImageUrl(shipInfo.name, shipInfo.manufacturer)} alt={shipInfo.name} className="w-full h-full object-cover" onError={(e) => { const img = e.currentTarget; img.style.display = "none"; const fb = img.nextElementSibling as HTMLElement; if (fb) fb.style.display = "flex"; }} />
+            <div className="absolute inset-0 items-center justify-center" style={{ display: "none" }}><span className="text-[10px] font-mono text-zinc-700 uppercase tracking-widest">Ship Preview</span></div>
+          </div>
+          <div className="p-2.5 space-y-2">
+            <div>
+              <div className="text-sm font-medium text-zinc-200 tracking-wide">{shipInfo.localizedName || shipInfo.name}</div>
+              <div className="text-[9px] font-mono text-zinc-600 tracking-[0.12em]">{shipInfo.manufacturer || "Unknown"}</div>
+            </div>
+            <div className="space-y-0 text-[9px]">
+              {si.role && <StatRow label="ROLE" value={si.role} />}
+              {si.size && <StatRow label="SIZE" value={"S" + si.size} />}
+              <StatRow label="CREW SIZE" value={fmtNum(si.crew)} />
+              <StatRow label="SCM SPEED" value={fmtNum(si.scmSpeed)} unit="m/s" />
+              <StatRow label="SCM BOOST FWD" value={fmtNum(si.boostSpeedForward)} unit="m/s" />
+              <StatRow label="SCM BOOST BWD" value={fmtNum(si.boostSpeedBackward)} unit="m/s" />
+              <StatRow label="NAV MAX SPEED" value={fmtNum(si.afterburnerSpeed)} unit="m/s" />
+              <StatRow label="PITCH/YAW/ROLL" value={`${fmtNum(si.pitchRate)} / ${fmtNum(si.yawRate)} / ${fmtNum(si.rollRate)}`} unit="°/s" />
+              {(si.boostedPitch || si.boostedYaw || si.boostedRoll) && <StatRow label="BOOSTED MAX" value={`${fmtNum(si.boostedPitch)} / ${fmtNum(si.boostedYaw)} / ${fmtNum(si.boostedRoll)}`} unit="°/s" />}
+              <StatRow label="POWER CONSUMPTION" value={String(Math.round(stats.powerDraw))} />
+              <StatRow label="CM DECOY/NOISE" value={`${cmDecoyCount} / ${cmNoiseCount}`} />
+              <StatRow label="HP" value={si.hullHp ? fmtMass(si.hullHp) : (si.shieldHpTotal ? fmtStat(si.shieldHpTotal) : "—")} />
+              <StatRow label="CARGO" value={si.cargo > 0 ? Math.round(si.cargo).toString() : "—"} unit="SCU" />
+              {si.mass && si.mass > 0 && <StatRow label="MASS" value={fmtMass(si.mass)} unit="kg" />}
+              <StatRow label="HYDROGEN CAPACITY" value={si.hydrogenCapacity ? fmtStat(si.hydrogenCapacity) : "—"} unit="SCU" />
+              {si.quantumFuelCapacity && <StatRow label="QT FUEL CAPACITY" value={fmtDec(si.quantumFuelCapacity)} unit="SCU" />}
+            </div>
+          </div>
+        </div>
+      );
+    case "dps-detail":
+      return W(
+        <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-2.5">
+          <div className="flex gap-1.5">
+            <ModeBtn label="SCM" active={flightMode === "SCM"} c="#eab308" onClick={() => setFlightMode("SCM")} />
+            <ModeBtn label="NAV" active={flightMode === "NAV"} c="#8b5cf6" onClick={() => setFlightMode("NAV")} />
+          </div>
+          <div className={flightMode === "NAV" ? "opacity-30" : ""}>
+            <div className="text-[7px] font-mono text-zinc-600 tracking-wider uppercase mb-0.5">Sustained</div>
+            <div className="flex items-baseline gap-3">
+              <span className="text-[11px]" style={{ color: "#ef4444", opacity: 0.5 }}>⬡</span>
+              <span className="text-2xl font-mono font-bold tabular-nums text-red-500">{fmtDps(stats.totalDps)}</span>
+              <span className="text-[10px] font-mono text-zinc-500">dps</span>
+              <span className="text-lg font-mono font-bold tabular-nums text-red-400/70">{fmtStat(stats.totalAlpha)}</span>
+              <span className="text-[10px] font-mono text-zinc-500">alpha</span>
+            </div>
+          </div>
+          <div className={flightMode === "NAV" ? "opacity-30" : ""}>
+            <div className="flex items-baseline gap-3">
+              <span className="text-[11px]" style={{ color: "#f97316", opacity: 0.5 }}>◆</span>
+              <span className="text-lg font-mono font-bold tabular-nums text-orange-500">{stats.summary.missiles > 0 ? fmtStat(stats.totalAlpha) : "0"}</span>
+              <span className="text-[10px] font-mono text-zinc-500">dmg</span>
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-3">
+              <span className="text-[11px]" style={{ color: "#eab308", opacity: 0.5 }}>»</span>
+              <span className="text-lg font-mono font-bold tabular-nums text-amber-500">{stats.shieldRegen > 0 ? (stats.shieldHp / Math.max(stats.shieldRegen, 0.01)).toFixed(1) : "—"}</span>
+              <span className="text-[10px] font-mono text-zinc-500">s full regen time</span>
+            </div>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-3">
+              <span className="text-[11px]" style={{ color: "#3b82f6", opacity: 0.5 }}>◉</span>
+              <span className="text-xl font-mono font-bold tabular-nums text-blue-500">{stats.shieldHp > 0 ? fmtStat(stats.shieldHp) : (si.shieldHpTotal ? fmtStat(si.shieldHpTotal) : "0")}</span>
+              <span className="text-[10px] font-mono text-zinc-500">hp</span>
+              {stats.shieldRegen > 0 && (<><span className="text-sm font-mono tabular-nums text-blue-400/70">{fmtStat(stats.shieldRegen)}</span><span className="text-[10px] font-mono text-zinc-500">hp/s</span></>)}
+            </div>
+          </div>
+          {si.hullHp && si.hullHp > 0 && (
+            <div><div className="flex items-baseline gap-3">
+              <span className="text-[11px]" style={{ color: "#94a3b8", opacity: 0.5 }}>◑</span>
+              <span className="text-lg font-mono font-bold tabular-nums text-zinc-400">{fmtStat(si.hullHp)}</span>
+              <span className="text-[10px] font-mono text-zinc-500">hp</span>
+            </div></div>
+          )}
+        </div>
+      );
+    default: return null;
+  }
+}
+
 export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }) {
   const searchParams = useSearchParams();
   const store = useLoadoutStore();
@@ -177,11 +332,11 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const mountedRef = useRef(false);
   const overrideCountRef = useRef(0);
 
-  // ── Drag & Drop state (widget-level) ──
-  const [widgetOrder, setWidgetOrder] = useState<WidgetId[]>(DEFAULT_WIDGET_ORDER);
+  // ── Drag & Drop state (widget-level, column-aware) ──
+  const [columns, setColumns] = useState<WidgetId[][]>(DEFAULT_COLUMNS.map(c => [...c]));
   const [dragState, setDragState] = useState<{ dragging: WidgetId | null; over: WidgetId | null }>({ dragging: null, over: null });
 
-  useEffect(() => { setWidgetOrder(loadWidgetOrder()); }, []);
+  useEffect(() => { setColumns(loadColumns()); }, []);
 
   const handleDragStart = useCallback((id: WidgetId) => {
     setDragState({ dragging: id, over: null });
@@ -195,14 +350,27 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     setDragState(prev => {
       const sourceId = prev.dragging;
       if (sourceId && sourceId !== targetId) {
-        setWidgetOrder(prevOrder => {
-          const next = [...prevOrder];
-          const srcIdx = next.indexOf(sourceId);
-          const tgtIdx = next.indexOf(targetId);
-          if (srcIdx === -1 || tgtIdx === -1) return prevOrder;
-          next.splice(srcIdx, 1);
-          next.splice(tgtIdx, 0, sourceId);
-          saveWidgetOrder(next);
+        setColumns(prevCols => {
+          const next = prevCols.map(col => [...col]);
+          // Find source and target positions
+          let srcCol = -1, srcIdx = -1, tgtCol = -1, tgtIdx = -1;
+          for (let c = 0; c < next.length; c++) {
+            const si = next[c].indexOf(sourceId);
+            if (si !== -1) { srcCol = c; srcIdx = si; }
+            const ti = next[c].indexOf(targetId);
+            if (ti !== -1) { tgtCol = c; tgtIdx = ti; }
+          }
+          if (srcCol === -1 || tgtCol === -1) return prevCols;
+          // Remove from source
+          next[srcCol].splice(srcIdx, 1);
+          // Insert at target position
+          const newTgtIdx = next[tgtCol].indexOf(targetId);
+          if (newTgtIdx !== -1) {
+            next[tgtCol].splice(newTgtIdx, 0, sourceId);
+          } else {
+            next[tgtCol].push(sourceId);
+          }
+          saveColumns(next);
           return next;
         });
       }
@@ -215,8 +383,9 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   }, []);
 
   const handleResetLayout = useCallback(() => {
-    setWidgetOrder([...DEFAULT_WIDGET_ORDER]);
-    saveWidgetOrder([...DEFAULT_WIDGET_ORDER]);
+    const reset = DEFAULT_COLUMNS.map(c => [...c]);
+    setColumns(reset);
+    saveColumns(reset);
   }, []);
 
   useEffect(() => { if (mountedRef.current) return; mountedRef.current = true; loadShip(shipId, searchParams.get("build") || null); }, [shipId]);
@@ -263,229 +432,13 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
         </div>
       </div>
 
-      {/* ── Desktop Grid (individual draggable widgets) ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-2 items-start">
-        {widgetOrder.map((wId) => {
-          const dp = { dragState, onDragStart: handleDragStart, onDragOver: handleDragOver, onDrop: handleDrop, onDragEnd: handleDragEnd };
-
-          switch (wId) {
-            case "weapons":
-              return weaponHps.length > 0 ? <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}><HpGroup title="WEAPONS" icon="▪" hps={weaponHps} store={store} onClickHp={setPickerHp} accent="#eab308" /></DragWidget> : null;
-
-            case "missiles":
-              return missileHps.length > 0 ? <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}><HpGroup title="MISSILES & BOMBS" icon="◆" hps={missileHps} store={store} onClickHp={setPickerHp} accent="#f97316" /></DragWidget> : null;
-
-            case "accel-radar":
-              return (
-                <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}>
-                  <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
-                    <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-1 text-center">Acceleration Profile</div>
-                    <div className="flex justify-center"><AccelerationRadar shipData={si} /></div>
-                  </div>
-                </DragWidget>
-              );
-
-            case "shields": {
-              const shieldHps = useful.filter(hp => hp.resolvedCategory === "SHIELD");
-              const cfg = CAT_CONFIG.SHIELD;
-              return shieldHps.length > 0 ? <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}><HpGroup title={cfg.label} icon={cfg.icon} hps={shieldHps} store={store} onClickHp={setPickerHp} accent={cfg.accent} /></DragWidget> : null;
-            }
-
-            case "powerplants": {
-              const ppHps = useful.filter(hp => hp.resolvedCategory === "POWER_PLANT");
-              const cfg = CAT_CONFIG.POWER_PLANT;
-              return ppHps.length > 0 ? <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}><HpGroup title={cfg.label} icon={cfg.icon} hps={ppHps} store={store} onClickHp={setPickerHp} accent={cfg.accent} /></DragWidget> : null;
-            }
-
-            case "coolers": {
-              const coolHps = useful.filter(hp => hp.resolvedCategory === "COOLER");
-              const cfg = CAT_CONFIG.COOLER;
-              return coolHps.length > 0 ? <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}><HpGroup title={cfg.label} icon={cfg.icon} hps={coolHps} store={store} onClickHp={setPickerHp} accent={cfg.accent} /></DragWidget> : null;
-            }
-
-            case "maneuver-radar":
-              return (
-                <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}>
-                  <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
-                    <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-1 text-center">Maneuverability</div>
-                    <div className="flex justify-center"><ManeuverabilityRadar shipInfo={shipInfo} /></div>
-                  </div>
-                </DragWidget>
-              );
-
-            case "quantum": {
-              const qtHps = useful.filter(hp => hp.resolvedCategory === "QUANTUM_DRIVE");
-              const cfg = CAT_CONFIG.QUANTUM_DRIVE;
-              return qtHps.length > 0 ? <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}><HpGroup title={cfg.label} icon={cfg.icon} hps={qtHps} store={store} onClickHp={setPickerHp} accent={cfg.accent} /></DragWidget> : null;
-            }
-
-            case "radar": {
-              const radarHps = useful.filter(hp => hp.resolvedCategory === "RADAR");
-              const cfg = CAT_CONFIG.RADAR;
-              return radarHps.length > 0 ? <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}><HpGroup title={cfg.label} icon={cfg.icon} hps={radarHps} store={store} onClickHp={setPickerHp} accent={cfg.accent} /></DragWidget> : null;
-            }
-
-            case "utility": {
-              const utilHps = useful.filter(hp => hp.resolvedCategory === "UTILITY" || hp.resolvedCategory === "MINING");
-              if (utilHps.length === 0) return null;
-              return <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}><HpGroup title="UTILITY" icon="◎" hps={utilHps} store={store} onClickHp={setPickerHp} accent="#94a3b8" /></DragWidget>;
-            }
-
-            case "combat-summary":
-              return (
-                <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}>
-                  <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-1.5">
-                    <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase border-b border-zinc-800/40 pb-1">Combat Summary</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <CompactStat label="DPS" value={fmtDps(stats.totalDps)} color={flightMode === "NAV" ? "#52525b" : "#ef4444"} locked={flightMode === "NAV"} />
-                      <CompactStat label="ALPHA" value={fmtStat(stats.totalAlpha)} color={flightMode === "NAV" ? "#52525b" : "#f97316"} locked={flightMode === "NAV"} />
-                      <CompactStat label="SHIELD HP" value={fmtStat(stats.shieldHp)} color="#3b82f6" />
-                      <CompactStat label="SH REGEN" value={fmtStat(stats.shieldRegen)} color={flightMode === "NAV" ? "#52525b" : "#60a5fa"} />
-                    </div>
-                  </div>
-                </DragWidget>
-              );
-
-            case "power-grid":
-              return (
-                <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}>
-                  <PowerManagementPanel stats={stats} flightMode={flightMode} onModeChange={setFlightMode} />
-                </DragWidget>
-              );
-
-            case "signatures":
-              return (
-                <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}>
-                  <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-2">
-                    <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase border-b border-zinc-800/40 pb-1">Signatures</div>
-                    <SignatureBar label="EM" value={stats.emSignature} max={20000} color="#a855f7" />
-                    <SignatureBar label="IR" value={stats.irSignature} max={20000} color="#f97316" />
-                  </div>
-                </DragWidget>
-              );
-
-            case "balance":
-              return (
-                <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}>
-                  <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-2">
-                    <BalanceRow label="POWER" value={stats.powerBalance} output={stats.powerOutput} draw={stats.powerDraw} posColor="#22c55e" negColor="#ef4444" />
-                    <BalanceRow label="THERMAL" value={stats.thermalBalance} output={stats.coolingRate} draw={stats.thermalOutput} posColor="#06b6d4" negColor="#ef4444" />
-                  </div>
-                </DragWidget>
-              );
-
-            case "ship-selector":
-              return (
-                <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}>
-                  <ShipSelector currentRef={shipInfo.reference} />
-                </DragWidget>
-              );
-
-            case "ship-card":
-              return (
-                <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}>
-                  <div className="bg-zinc-900/80 border border-zinc-800/60">
-                    <div className="relative bg-zinc-800/20 border-b border-zinc-800/50 overflow-hidden" style={{ height: 120 }}>
-                      <img src={getShipImageUrl(shipInfo.name, shipInfo.manufacturer)} alt={shipInfo.name} className="w-full h-full object-cover" onError={(e) => { const img = e.currentTarget; img.style.display = "none"; const fb = img.nextElementSibling as HTMLElement; if (fb) fb.style.display = "flex"; }} />
-                      <div className="absolute inset-0 items-center justify-center" style={{ display: "none" }}>
-                        <span className="text-[10px] font-mono text-zinc-700 uppercase tracking-widest">Ship Preview</span>
-                      </div>
-                    </div>
-                    <div className="p-2.5 space-y-2">
-                      <div>
-                        <div className="text-sm font-medium text-zinc-200 tracking-wide">{shipInfo.localizedName || shipInfo.name}</div>
-                        <div className="text-[9px] font-mono text-zinc-600 tracking-[0.12em]">{shipInfo.manufacturer || "Unknown"}</div>
-                      </div>
-                      <div className="space-y-0 text-[9px]">
-                        {si.role && <StatRow label="ROLE" value={si.role} />}
-                        {si.size && <StatRow label="SIZE" value={"S" + si.size} />}
-                        <StatRow label="CREW SIZE" value={fmtNum(si.crew)} />
-                        <StatRow label="SCM SPEED" value={fmtNum(si.scmSpeed)} unit="m/s" />
-                        <StatRow label="SCM BOOST FWD" value={fmtNum(si.boostSpeedForward)} unit="m/s" />
-                        <StatRow label="SCM BOOST BWD" value={fmtNum(si.boostSpeedBackward)} unit="m/s" />
-                        <StatRow label="NAV MAX SPEED" value={fmtNum(si.afterburnerSpeed)} unit="m/s" />
-                        <StatRow label="PITCH/YAW/ROLL" value={`${fmtNum(si.pitchRate)} / ${fmtNum(si.yawRate)} / ${fmtNum(si.rollRate)}`} unit="°/s" />
-                        {(si.boostedPitch || si.boostedYaw || si.boostedRoll) && (
-                          <StatRow label="BOOSTED MAX" value={`${fmtNum(si.boostedPitch)} / ${fmtNum(si.boostedYaw)} / ${fmtNum(si.boostedRoll)}`} unit="°/s" />
-                        )}
-                        <StatRow label="POWER CONSUMPTION" value={String(Math.round(stats.powerDraw))} />
-                        <StatRow label="CM DECOY/NOISE" value={`${cmDecoyCount} / ${cmNoiseCount}`} />
-                        <StatRow label="HP" value={si.hullHp ? fmtMass(si.hullHp) : (si.shieldHpTotal ? fmtStat(si.shieldHpTotal) : "—")} />
-                        <StatRow label="CARGO" value={si.cargo > 0 ? Math.round(si.cargo).toString() : "—"} unit="SCU" />
-                        {si.mass && si.mass > 0 && <StatRow label="MASS" value={fmtMass(si.mass)} unit="kg" />}
-                        <StatRow label="HYDROGEN CAPACITY" value={si.hydrogenCapacity ? fmtStat(si.hydrogenCapacity) : "—"} unit="SCU" />
-                        {si.quantumFuelCapacity && <StatRow label="QT FUEL CAPACITY" value={fmtDec(si.quantumFuelCapacity)} unit="SCU" />}
-                      </div>
-                    </div>
-                  </div>
-                </DragWidget>
-              );
-
-            case "dps-detail":
-              return (
-                <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}>
-                  <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-2.5">
-                    <div className="flex gap-1.5">
-                      <ModeBtn label="SCM" active={flightMode === "SCM"} c="#eab308" onClick={() => setFlightMode("SCM")} />
-                      <ModeBtn label="NAV" active={flightMode === "NAV"} c="#8b5cf6" onClick={() => setFlightMode("NAV")} />
-                    </div>
-                    <div className={flightMode === "NAV" ? "opacity-30" : ""}>
-                      <div className="text-[7px] font-mono text-zinc-600 tracking-wider uppercase mb-0.5">Sustained</div>
-                      <div className="flex items-baseline gap-3">
-                        <span className="text-[11px]" style={{ color: "#ef4444", opacity: 0.5 }}>⬡</span>
-                        <span className="text-2xl font-mono font-bold tabular-nums text-red-500">{fmtDps(stats.totalDps)}</span>
-                        <span className="text-[10px] font-mono text-zinc-500">dps</span>
-                        <span className="text-lg font-mono font-bold tabular-nums text-red-400/70">{fmtStat(stats.totalAlpha)}</span>
-                        <span className="text-[10px] font-mono text-zinc-500">alpha</span>
-                      </div>
-                    </div>
-                    <div className={flightMode === "NAV" ? "opacity-30" : ""}>
-                      <div className="flex items-baseline gap-3">
-                        <span className="text-[11px]" style={{ color: "#f97316", opacity: 0.5 }}>◆</span>
-                        <span className="text-lg font-mono font-bold tabular-nums text-orange-500">{stats.summary.missiles > 0 ? fmtStat(stats.totalAlpha) : "0"}</span>
-                        <span className="text-[10px] font-mono text-zinc-500">dmg</span>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex items-baseline gap-3">
-                        <span className="text-[11px]" style={{ color: "#eab308", opacity: 0.5 }}>»</span>
-                        <span className="text-lg font-mono font-bold tabular-nums text-amber-500">
-                          {stats.shieldRegen > 0 ? (stats.shieldHp / Math.max(stats.shieldRegen, 0.01)).toFixed(1) : "—"}
-                        </span>
-                        <span className="text-[10px] font-mono text-zinc-500">s full regen time</span>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="flex items-baseline gap-3">
-                        <span className="text-[11px]" style={{ color: "#3b82f6", opacity: 0.5 }}>◉</span>
-                        <span className="text-xl font-mono font-bold tabular-nums text-blue-500">
-                          {stats.shieldHp > 0 ? fmtStat(stats.shieldHp) : (si.shieldHpTotal ? fmtStat(si.shieldHpTotal) : "0")}
-                        </span>
-                        <span className="text-[10px] font-mono text-zinc-500">hp</span>
-                        {stats.shieldRegen > 0 && (
-                          <>
-                            <span className="text-sm font-mono tabular-nums text-blue-400/70">{fmtStat(stats.shieldRegen)}</span>
-                            <span className="text-[10px] font-mono text-zinc-500">hp/s</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                    {si.hullHp && si.hullHp > 0 && (
-                      <div>
-                        <div className="flex items-baseline gap-3">
-                          <span className="text-[11px]" style={{ color: "#94a3b8", opacity: 0.5 }}>◑</span>
-                          <span className="text-lg font-mono font-bold tabular-nums text-zinc-400">{fmtStat(si.hullHp)}</span>
-                          <span className="text-[10px] font-mono text-zinc-500">hp</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </DragWidget>
-              );
-
-            default: return null;
-          }
-        })}
+      {/* ── Main Grid — original 5-column layout, each block draggable ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_1fr_1fr_340px] gap-2">
+        {columns.map((colWidgets, colIdx) => (
+          <div key={colIdx} className="space-y-2">
+            {colWidgets.map((wId) => renderWidget(wId, { dragState, onDragStart: handleDragStart, onDragOver: handleDragOver, onDrop: handleDrop, onDragEnd: handleDragEnd }, { weaponHps, missileHps, useful, store, setPickerHp, si, shipInfo, stats, flightMode, setFlightMode, fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount }))}
+          </div>
+        ))}
       </div>
 
       {pickerHp && <ComponentPicker hardpoint={pickerHp} currentItemId={getEffectiveItem(pickerHp.id)?.id ?? null} onSelect={handleSelect} onClear={handleClear} onClose={() => setPickerHp(null)} />}
