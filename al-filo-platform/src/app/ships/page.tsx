@@ -35,11 +35,17 @@ export const metadata = {
 export default function ShipsPage() {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
-      {/* ── Background atmosférico ── */}
-      <div className="fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(232,137,12,0.04),transparent_60%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(93,160,7,0.03),transparent_50%)]" />
-      </div>
+      {/* ── Background atmosférico con video ── */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="fixed inset-0 w-full h-full object-cover opacity-15 pointer-events-none z-0"
+      >
+        <source src="/videos/bg.mp4" type="video/mp4" />
+      </video>
+      <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/60 via-zinc-950/80 to-zinc-950/95 pointer-events-none z-0" />
 
       {/* ── Header ── */}
       <header className="border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-40">
