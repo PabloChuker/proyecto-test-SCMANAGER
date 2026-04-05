@@ -133,7 +133,7 @@ export function PowerManagementPanel({
   flightMode: FlightMode;
   onModeChange: (m: FlightMode) => void;
 }) {
-  const { setInstancePower } = useLoadoutStore();
+  const { setInstancePower, toggleComponent } = useLoadoutStore();
   const pn = stats.powerNetwork;
 
   // Build ordered columns (skip power plants — they generate, not consume)
@@ -156,15 +156,30 @@ export function PowerManagementPanel({
 
   // Click handler — toggle pip allocation
   const handleCellClick = (inst: ComponentPowerInstance, row: number) => {
-    if (!inst.isOn || row >= inst.totalPips) return;
+    if (row >= inst.totalPips) return;
+    // If component is off, turn it on and allocate up to row+1
+    if (!inst.isOn) {
+      toggleComponent(inst.hardpointName);
+      return;
+    }
     const current = inst.allocatedPips;
     if (row < current) {
-      // Clicking below current allocation = reduce to that row
       setInstancePower(inst.hardpointName, row);
     } else {
-      // Clicking at or above = allocate up to row+1
       setInstancePower(inst.hardpointName, row + 1);
     }
+  };
+
+  // Click handler for merged min cell — toggle between min allocation and off
+  const handleMinCellClick = (inst: ComponentPowerInstance, minPips: number) => {
+    if (!inst.isOn) {
+      // Turn on and allocate minimum
+      toggleComponent(inst.hardpointName);
+      return;
+    }
+    // If currently allocated, turn off completely
+    setInstancePower(inst.hardpointName, 0);
+    toggleComponent(inst.hardpointName);
   };
 
   return (
@@ -264,7 +279,7 @@ export function PowerManagementPanel({
                     cells.push(
                       <div
                         key="min-merged"
-                        onClick={() => handleCellClick(inst, minPips - 1)}
+                        onClick={() => handleMinCellClick(inst, minPips)}
                         style={{
                           width: 20,
                           height: mergedHeight,
