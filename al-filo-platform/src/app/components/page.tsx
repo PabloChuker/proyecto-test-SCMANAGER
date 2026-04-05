@@ -5,7 +5,7 @@
 // Sidebar with component category icons + sortable/filterable data table.
 // =============================================================================
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -121,6 +121,19 @@ function gradeColor(value: any): string {
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function ComponentsPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+        <div className="w-4 h-4 border-2 border-zinc-800 border-t-amber-500 rounded-full animate-spin mr-3" />
+        <span className="text-xs text-zinc-600 font-mono uppercase tracking-widest">Loading...</span>
+      </div>
+    }>
+      <ComponentsPageInner />
+    </Suspense>
+  );
+}
+
+function ComponentsPageInner() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const initialCat = (tabParam && CATEGORIES.find(c => c.key === tabParam)) || CATEGORIES[0];
