@@ -314,10 +314,10 @@ function computeStats(
       }
     }
 
-    // Power plants: always output (use shipPowerGen from sc-unpacked)
+    // Power plants: always output — prefer DB value over static JSON
     if (cat === "POWER_PLANT") {
-      // Use real power output from powerNetwork data if available
-      const ppOutput = pn?.genP ?? pickNum(s, "powerOutput");
+      const dbPower = pickNum(s, "powerOutput");
+      const ppOutput = dbPower > 0 ? dbPower : (pn?.genP ?? 0);
       powerOutput += ppOutput;
       if (isOn) { activeComponents++; }
       // EM from power network data
@@ -353,8 +353,9 @@ function computeStats(
     }
   }
 
-  // Use ship-level power generation if we didn't get it from components
-  const totalPO = shipPowerGen > 0 ? shipPowerGen : Math.round(powerOutput);
+  // Prefer component-level power output (from equipped power plants) over ship-level static data.
+  // Ship-level is only a fallback when no power plant components are found.
+  const totalPO = powerOutput > 0 ? Math.round(powerOutput) : (shipPowerGen > 0 ? shipPowerGen : 0);
 
   let totalAllocated = 0, totalMinDraw = 0;
   for (const c of POWER_CATEGORIES) {
