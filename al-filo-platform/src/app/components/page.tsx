@@ -268,7 +268,7 @@ function ComponentsPageInner() {
       </aside>
 
       {/* ═══ Main Content ═══ */}
-      <div className="flex-1 z-10 relative flex flex-col min-w-0">
+      <div className="flex-1 z-10 relative flex flex-col overflow-hidden">
         {/* ── Top Header ── */}
         <header className="border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-30">
           <div className="px-4 sm:px-6 flex items-center justify-between h-12">
