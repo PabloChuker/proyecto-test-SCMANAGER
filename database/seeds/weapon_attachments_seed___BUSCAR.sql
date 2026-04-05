@@ -1,0 +1,38 @@
+-- =============================================================================
+-- weapon_attachments_seed.sql
+-- Generado por: scripts/import-weapon-attachments.js
+-- Fecha:        2026-04-04
+-- Origen:       ship-items.json (4852 registros totales, 320 de type WeaponAttachment)
+-- Importados:   0  |  Excluidos: 320
+-- =============================================================================
+--
+-- Excluidos (320/320):
+--   MXOX_NeutronRepeater_PowerArray_S3  →  PLACEHOLDER
+--   WEP_CannonBarrel_Template  →  PLACEHOLDER, _Template
+--   HRST_LaserScatterGun_Ventilation_S3  →  PLACEHOLDER
+--   GATS_BallisticCannon_Barrel_S1  →  PLACEHOLDER
+--   WEP_RepeaterPowerArray_Template  →  PLACEHOLDER, _Template
+--   Bengal_BallisticCannon_PowerArray_S8  →  PLACEHOLDER
+--   BEHR_JavelinBallisticCannon_FiringMechanism_S7  →  PLACEHOLDER
+--   VNCL_Gen2_PlasmaCannon_FiringMechanism_S2  →  PLACEHOLDER
+--   BEHR_JavelinBallisticCannon_Barrel_S7  →  PLACEHOLDER
+--   HRST_LaserScatterGun_Ventilation_S2  →  PLACEHOLDER
+--   BEHR_JavelinBallisticCannon_Ventilation_S7  →  PLACEHOLDER
+--   MXOX_NeutronRepeater_PowerArray_S2  →  PLACEHOLDER
+--   WEP_GatlingFiringMechanism_Template  →  PLACEHOLDER, _Template
+--   WEP_FiringMechanism_Template  →  PLACEHOLDER, _Template
+--   ESPR_BallisticCannon_PowerArray_S6  →  PLACEHOLDER
+--   BEHR_LaserRepeater_Ventilation_S10  →  PLACEHOLDER
+--   ESPR_BallisticCannon_PowerArray_S4  →  PLACEHOLDER
+--   GATS_BallisticCannon_Barrel_S2  →  PLACEHOLDER
+--   HRST_LaserRepeater_FiringMechanism_S3_Storm  →  PLACEHOLDER
+--   GATS_BallisticCannon_Barrel_S3  →  PLACEHOLDER
+--   ... y 300 registros más con el mismo motivo (PLACEHOLDER).
+--
+-- Sin registros que importar en este ciclo.
+-- ESTADO DEL DATASET: los 320 registros WeaponAttachment tienen
+-- stdItem.Name = "<= PLACEHOLDER =>" — CIG aún no ha publicado nombres.
+-- Los datos estructurales (class_name, sub_type, size, grade) SÍ existen
+-- y son válidos. El seed se llenará al re-ejecutar el script cuando
+-- ship-items.json incluya nombres definitivos.
+-- No se genera INSERT. La tabla queda vacía hasta la próxima actualización.

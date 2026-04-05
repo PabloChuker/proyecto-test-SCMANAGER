@@ -1,0 +1,17 @@
+-- =============================================================================
+-- transponders_seed.sql
+-- Generado por: scripts/import-transponders.js
+-- Fecha:        2026-04-04
+-- Origen:       ship-items.json (4852 registros totales, 3 de type Transponder)
+-- Importados:   0  |  Excluidos: 3
+-- =============================================================================
+--
+-- Excluidos (3/3):
+--   TRNS_Transponder_EM_3000  →  PLACEHOLDER
+--   TRNS_Transponder_EM_100  →  PLACEHOLDER
+--   test_transponder  →  PLACEHOLDER, test_*
+--
+-- Sin registros que importar en este ciclo.
+-- Este archivo se actualizará automáticamente al re-ejecutar el script
+-- cuando ship-items.json incluya Transponders con datos reales.
+-- No se genera INSERT. La tabla queda vacía hasta la próxima actualización.
