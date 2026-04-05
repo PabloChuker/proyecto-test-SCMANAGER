@@ -333,7 +333,7 @@ function ComponentsPageInner() {
         </div>
 
         {/* ── Data Table ── */}
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-x-auto overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center h-64">
               <div className="flex items-center gap-2 text-zinc-600 text-sm">
@@ -348,7 +348,7 @@ function ComponentsPageInner() {
               No results found
             </div>
           ) : (
-            <table className="w-full text-xs">
+            <table className="min-w-full w-max text-xs border-collapse">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-zinc-900/95 border-b border-zinc-800/60">
                   {columns.map((col) => (
@@ -356,8 +356,8 @@ function ComponentsPageInner() {
                       key={col.key}
                       onClick={() => handleSort(col.key)}
                       className={`
-                        px-3 py-2 text-left font-mono tracking-[0.1em] uppercase cursor-pointer select-none
-                        transition-colors hover:text-zinc-300
+                        px-4 py-2.5 text-left font-mono tracking-[0.1em] uppercase cursor-pointer select-none
+                        transition-colors hover:text-zinc-300 whitespace-nowrap
                         ${sortCol === col.key ? "text-amber-400" : "text-zinc-600"}
                         ${col.type === "number" || col.type === "grade" ? "text-right" : ""}
                       `}
@@ -398,7 +398,7 @@ function ComponentsPageInner() {
                         <td
                           key={col.key}
                           className={`
-                            px-3 py-2 font-mono tabular-nums whitespace-nowrap
+                            px-4 py-2 font-mono tabular-nums whitespace-nowrap
                             ${isNum || isGrade ? "text-right" : ""}
                             ${isName ? "text-amber-400/90 font-medium" : "text-zinc-400"}
                           `}
