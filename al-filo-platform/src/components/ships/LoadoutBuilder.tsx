@@ -26,6 +26,41 @@ import { fmtStat, fmtDps } from "./loadout-utils";
 const WEAPON_GROUPS = new Set(["WEAPON", "TURRET"]);
 const MISSILE_GROUPS = new Set(["MISSILE_RACK"]);
 
+// ── Ship thumbnail URL helper ──
+// Strips manufacturer prefix from ship name, converts to URL-safe slug
+const MANUFACTURERS = [
+  "Aegis", "RSI", "Drake", "MISC", "Anvil", "Origin", "Crusader", "Argo",
+  "Aopoa", "Consolidated Outland", "Esperia", "Gatac", "Greycat", "Kruger",
+  "Musashi Industrial", "Tumbril", "Banu", "Vanduul", "Roberts Space Industries",
+  "Crusader Industries", "Musashi", "CO",
+];
+function getShipImageUrl(name: string, manufacturer?: string | null): string {
+  let shipName = name || "";
+  // Strip manufacturer prefix if present
+  if (manufacturer) {
+    const mfr = manufacturer.trim();
+    if (shipName.startsWith(mfr + " ")) {
+      shipName = shipName.slice(mfr.length + 1);
+    }
+  }
+  // Also try known manufacturer prefixes
+  for (const mfr of MANUFACTURERS) {
+    if (shipName.startsWith(mfr + " ")) {
+      shipName = shipName.slice(mfr.length + 1);
+      break;
+    }
+  }
+  // Slugify: lowercase, replace spaces/special chars with hyphens
+  const slug = shipName
+    .toLowerCase()
+    .replace(/[''()]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/-$/, "");
+  return `/ships/${slug}.jpg`;
+}
+
 const CAT_CONFIG: Record<string, { label: string; icon: string; accent: string }> = {
   SHIELD: { label: "SHIELDS", icon: "◇", accent: "#3b82f6" },
   POWER_PLANT: { label: "POWER PLANTS", icon: "⚡", accent: "#22c55e" },
@@ -165,9 +200,23 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 
           {/* Ship Card */}
           <div className="bg-zinc-900/80 border border-zinc-800/60">
-            {/* Ship preview area */}
-            <div className="h-16 bg-zinc-800/20 border-b border-zinc-800/50 flex items-center justify-center">
-              <span className="text-[10px] font-mono text-zinc-700 uppercase tracking-widest">Ship Preview</span>
+            {/* Ship preview image */}
+            <div className="relative bg-zinc-800/20 border-b border-zinc-800/50 overflow-hidden" style={{ height: 120 }}>
+              <img
+                src={getShipImageUrl(shipInfo.name, shipInfo.manufacturer)}
+                alt={shipInfo.name}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  const img = e.currentTarget;
+                  // Hide broken image, show fallback text
+                  img.style.display = "none";
+                  const fb = img.nextElementSibling as HTMLElement;
+                  if (fb) fb.style.display = "flex";
+                }}
+              />
+              <div className="absolute inset-0 items-center justify-center" style={{ display: "none" }}>
+                <span className="text-[10px] font-mono text-zinc-700 uppercase tracking-widest">Ship Preview</span>
+              </div>
             </div>
             <div className="p-2.5 space-y-2">
               {/* Ship name + manufacturer */}
