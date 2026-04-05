@@ -147,30 +147,50 @@ function buildShieldItem(row: any): any {
     grade: gradeToLetter(row.grade),
     manufacturer: row.manufacturer_id ?? null,
     componentStats: {
-      shieldHp: numOrNull(row.max_shield_health),
-      maxHp: numOrNull(row.max_shield_health),
+      shieldHp: numOrNull(row.pool_hp),
+      maxHp: numOrNull(row.pool_hp),
       shieldRegen: numOrNull(row.max_shield_regen),
       regenRate: numOrNull(row.max_shield_regen),
-      downedDelay: numOrNull(row.downed_delay),
-      damagedDelay: numOrNull(row.damaged_delay),
+      regenTime: numOrNull(row.regen_time),
+      downedDelay: numOrNull(row.downed_regen_delay),
+      damagedDelay: numOrNull(row.damaged_regen_delay),
+      powerDraw: numOrNull(row.power_consumption),
+      emSignature: numOrNull(row.em_max),
+      // Resistance ranges (min/max as fraction, e.g. 0.25 = 25%)
+      physicalResistanceMin: numOrNull(row.physical_resistance_min),
+      physicalResistanceMax: numOrNull(row.physical_resistance_max),
+      energyResistanceMin: numOrNull(row.energy_resistance_min),
+      energyResistanceMax: numOrNull(row.energy_resistance_max),
+      distortionResistanceMin: numOrNull(row.distortion_resistance_min),
+      distortionResistanceMax: numOrNull(row.distortion_resistance_max),
+      // Absorption ranges
+      physicalAbsorptionMin: numOrNull(row.physical_absorption_min),
+      physicalAbsorptionMax: numOrNull(row.physical_absorption_max),
+      energyAbsorptionMin: numOrNull(row.energy_absorption_min),
+      energyAbsorptionMax: numOrNull(row.energy_absorption_max),
+      distortionAbsorptionMin: numOrNull(row.distortion_absorption_min),
+      distortionAbsorptionMax: numOrNull(row.distortion_absorption_max),
     },
     powerNetwork: getPowerNetworkInfo(row.class_name),
   };
 }
 
 function buildPowerPlantItem(row: any): any {
-  // power_generation column is 0 for all rows — extract from raw_data
+  // power_generation column now has real values from the updated DB
   let powerGen = numOrNull(row.power_generation);
+  // Fallback: try raw_data if column is still 0
   if (!powerGen || powerGen === 0) {
-    // Try raw_data -> stdItem -> ResourceNetwork -> Usage -> Power -> Maximum
     powerGen = numOrNull(row.raw_data?.stdItem?.ResourceNetwork?.Usage?.Power?.Maximum) ?? 0;
   }
 
-  // Also extract EM signature from raw_data
-  const emSig = numOrNull(row.raw_data?.stdItem?.Emission?.Em?.Maximum) ?? 0;
+  // EM signature now directly available in the table
+  let emSig = numOrNull(row.em_max);
+  if (!emSig || emSig === 0) {
+    emSig = numOrNull(row.raw_data?.stdItem?.Emission?.Em?.Maximum) ?? 0;
+  }
 
   return {
-    id: row.uuid || row.class_name,
+    id: row.uuid || row.id || row.class_name,
     reference: row.class_name || "",
     name: row.name || "",
     localizedName: null,
@@ -183,6 +203,7 @@ function buildPowerPlantItem(row: any): any {
       powerOutput: powerGen,
       powerDraw: 0,
       emSignature: emSig,
+      health: numOrNull(row.health),
     },
     powerNetwork: getPowerNetworkInfo(row.class_name),
   };
@@ -200,8 +221,11 @@ function buildCoolerItem(row: any): any {
     grade: gradeToLetter(row.grade),
     manufacturer: row.manufacturer_id ?? null,
     componentStats: {
-      coolingRate: numOrNull(row.cooling_rate),
-      powerDraw: numOrNull(row.power_draw_max),
+      coolingRate: numOrNull(row.cooling_generation),
+      powerDraw: numOrNull(row.power_consumption),
+      emSignature: numOrNull(row.em_max),
+      irSignature: numOrNull(row.ir_max),
+      health: numOrNull(row.health),
     },
     powerNetwork: getPowerNetworkInfo(row.class_name),
   };

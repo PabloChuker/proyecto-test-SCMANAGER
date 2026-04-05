@@ -215,7 +215,7 @@ export async function GET(request: NextRequest) {
         // Shields
         if (hpType === "Shield" && comp?.table === "shields") {
           shieldCount++;
-          totalShieldHp += numOrNull(comp.row.max_shield_health) ?? 0;
+          totalShieldHp += numOrNull(comp.row.pool_hp) ?? 0;
           totalShieldRegen += numOrNull(comp.row.max_shield_regen) ?? 0;
         }
 
@@ -230,7 +230,7 @@ export async function GET(request: NextRequest) {
 
         // Coolers
         if (hpType === "Cooler" && comp?.table === "coolers") {
-          totalCooling += numOrNull(comp.row.cooling_rate) ?? 0;
+          totalCooling += numOrNull(comp.row.cooling_generation) ?? 0;
         }
 
         // Quantum Drive

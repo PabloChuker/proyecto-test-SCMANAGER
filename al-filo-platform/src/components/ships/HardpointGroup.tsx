@@ -159,7 +159,8 @@ function getKeyStat(
       break;
 
     case "SHIELD":
-      if (stats.shieldHp) return { value: formatCompact(stats.shieldHp), label: "HP" };
+      if (stats.shieldHp || stats.maxHp) return { value: formatCompact(stats.shieldHp ?? stats.maxHp), label: "HP" };
+      if (stats.pool_hp) return { value: formatCompact(stats.pool_hp), label: "HP" };
       break;
 
     case "POWER_PLANT":
@@ -167,7 +168,7 @@ function getKeyStat(
       break;
 
     case "COOLER":
-      if (stats.coolingRate) return { value: formatCompact(stats.coolingRate), label: "Rate" };
+      if (stats.coolingRate) return { value: formatCompact(stats.coolingRate), label: "Cool" };
       break;
 
     case "QUANTUM_DRIVE":
