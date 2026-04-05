@@ -8,6 +8,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type { EquippedItem, ResolvedHardpoint } from "@/store/useLoadoutStore";
 import { CAT_COLORS, fmtPrice, getKeyStat } from "./loadout-utils";
+import powerNetworkLookup from "@/data/power-network-lookup.json";
+
+const pnLookup = powerNetworkLookup as Record<string, any>;
 
 const CAT_TO_API_TYPE: Record<string, string> = {
   WEAPON: "WEAPON", TURRET: "WEAPON,TURRET", MISSILE_RACK: "MISSILE",
@@ -112,7 +115,9 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
 
   const handleItemSelect = useCallback((item: CatalogItem) => {
     const stats = getItemStats(item);
-    onSelect({ id: item.id, reference: item.reference, name: item.name, localizedName: item.localizedName, className: item.className, type: item.type, size: item.size, grade: item.grade, manufacturer: item.manufacturer, componentStats: stats });
+    // Attach powerNetwork from the JSON lookup so the power grid picks it up
+    const pn = item.className ? pnLookup[item.className] ?? null : null;
+    onSelect({ id: item.id, reference: item.reference, name: item.name, localizedName: item.localizedName, className: item.className, type: item.type, size: item.size, grade: item.grade, manufacturer: item.manufacturer, componentStats: stats, powerNetwork: pn });
   }, [getItemStats, onSelect]);
 
   const statLabel = getStatColumnLabel(hardpoint.resolvedCategory);

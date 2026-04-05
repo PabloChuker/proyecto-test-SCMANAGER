@@ -133,7 +133,7 @@ export function PowerManagementPanel({
   flightMode: FlightMode;
   onModeChange: (m: FlightMode) => void;
 }) {
-  const { setInstancePower } = useLoadoutStore();
+  const { setInstancePower, toggleComponent } = useLoadoutStore();
   const pn = stats.powerNetwork;
 
   // Build ordered columns (skip power plants — they generate, not consume)
@@ -156,15 +156,30 @@ export function PowerManagementPanel({
 
   // Click handler — toggle pip allocation
   const handleCellClick = (inst: ComponentPowerInstance, row: number) => {
-    if (!inst.isOn || row >= inst.totalPips) return;
+    if (row >= inst.totalPips) return;
+    // If component is off, turn it on and allocate up to row+1
+    if (!inst.isOn) {
+      toggleComponent(inst.hardpointName);
+      return;
+    }
     const current = inst.allocatedPips;
     if (row < current) {
-      // Clicking below current allocation = reduce to that row
       setInstancePower(inst.hardpointName, row);
     } else {
-      // Clicking at or above = allocate up to row+1
       setInstancePower(inst.hardpointName, row + 1);
     }
+  };
+
+  // Click handler for merged min cell — toggle between min allocation and off
+  const handleMinCellClick = (inst: ComponentPowerInstance, minPips: number) => {
+    if (!inst.isOn) {
+      // Turn on and allocate minimum
+      toggleComponent(inst.hardpointName);
+      return;
+    }
+    // If currently allocated, turn off completely
+    setInstancePower(inst.hardpointName, 0);
+    toggleComponent(inst.hardpointName);
   };
 
   return (
@@ -235,77 +250,115 @@ export function PowerManagementPanel({
                   ? Math.min(inst.totalPips, Math.max(1, Math.ceil(inst.powerMin)))
                   : 0;
 
+                // Build cell list: merge min-zone cells into one big cell
+                // We render bottom-to-top (flex-col-reverse), so row 0 = bottom
+                const cells: React.ReactNode[] = [];
+                let row = 0;
+                while (row < ROWS) {
+                  const locked = row >= inst.totalPips;
+                  const allocated = !locked && row < inst.allocatedPips && inst.isOn;
+                  const isMinZone = !locked && row < minPips;
+
+                  // If this is the start of the min zone and minPips > 1, merge into one cell
+                  if (row === 0 && minPips > 1 && !locked) {
+                    const allMinAllocated = inst.isOn && inst.allocatedPips >= minPips;
+                    const someMinAllocated = inst.isOn && inst.allocatedPips > 0 && inst.allocatedPips < minPips;
+                    const mergedHeight = minPips * 14 + (minPips - 1) * 2; // cells + gaps
+
+                    let bg: string;
+                    let borderC: string;
+                    let opacity = 1;
+                    if (!inst.isOn) {
+                      bg = "#1f1f23"; borderC = "#2a2a2e"; opacity = 0.35;
+                    } else if (allMinAllocated || someMinAllocated) {
+                      bg = color; borderC = color;
+                    } else {
+                      bg = dimBg; borderC = dimBorder;
+                    }
+
+                    cells.push(
+                      <div
+                        key="min-merged"
+                        onClick={() => handleMinCellClick(inst, minPips)}
+                        style={{
+                          width: 20,
+                          height: mergedHeight,
+                          backgroundColor: bg,
+                          border: `1px solid ${borderC}`,
+                          borderRadius: 2,
+                          cursor: !inst.isOn ? "default" : "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          opacity,
+                          transition: "all 100ms",
+                        }}
+                        title={`${inst.componentName} — min ${minPips} pips`}
+                      >
+                        {(allMinAllocated || someMinAllocated) && (
+                          <span style={{
+                            fontSize: 8,
+                            fontWeight: 800,
+                            fontFamily: "monospace",
+                            color: "#000",
+                            lineHeight: 1,
+                          }}>
+                            {minPips}
+                          </span>
+                        )}
+                      </div>
+                    );
+                    row = minPips;
+                    continue;
+                  }
+
+                  // Regular cell — capture row in const for closure
+                  const currentRow = row;
+                  let bg: string;
+                  let borderC: string;
+                  let opacity = 1;
+
+                  if (locked) {
+                    bg = "#1a1a1d"; borderC = "#222225"; opacity = 0.2;
+                  } else if (!inst.isOn) {
+                    bg = "#1f1f23"; borderC = "#2a2a2e"; opacity = 0.35;
+                  } else if (allocated) {
+                    bg = color; borderC = color;
+                  } else {
+                    bg = dimBg; borderC = dimBorder;
+                  }
+
+                  cells.push(
+                    <div
+                      key={currentRow}
+                      onClick={() => handleCellClick(inst, currentRow)}
+                      style={{
+                        width: 20,
+                        height: 14,
+                        backgroundColor: bg,
+                        border: `1px solid ${borderC}`,
+                        borderRadius: 2,
+                        cursor: locked || !inst.isOn ? "default" : "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        opacity,
+                        transition: "all 100ms",
+                      }}
+                      title={
+                        locked ? "" :
+                        `${inst.componentName} — pip ${currentRow + 1}/${inst.totalPips}`
+                      }
+                    />
+                  );
+                  row++;
+                }
+
                 return (
                   <React.Fragment key={inst.hardpointName}>
                     {showSep && <div style={{ width: "4px" }} />}
                     <div className="flex flex-col-reverse" style={{ gap: "2px" }}>
-                      {Array.from({ length: ROWS }).map((_, row) => {
-                        const locked = row >= inst.totalPips;
-                        const allocated = !locked && row < inst.allocatedPips && inst.isOn;
-                        const isMinZone = !locked && row < minPips;
-
-                        let bg: string;
-                        let borderC: string;
-                        let opacity = 1;
-
-                        if (locked) {
-                          // Beyond component's max — dark/invisible
-                          bg = "#1a1a1d";
-                          borderC = "#222225";
-                          opacity = 0.2;
-                        } else if (!inst.isOn) {
-                          // Component off
-                          bg = "#1f1f23";
-                          borderC = "#2a2a2e";
-                          opacity = 0.35;
-                        } else if (allocated) {
-                          // Filled pip — full color
-                          bg = color;
-                          borderC = color;
-                        } else {
-                          // Available but not filled — dim colored
-                          bg = dimBg;
-                          borderC = dimBorder;
-                        }
-
-                        return (
-                          <div
-                            key={row}
-                            onClick={() => handleCellClick(inst, row)}
-                            style={{
-                              width: 20,
-                              height: 14,
-                              backgroundColor: bg,
-                              border: `1px solid ${borderC}`,
-                              borderRadius: 2,
-                              cursor: locked || !inst.isOn ? "default" : "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              opacity,
-                              transition: "all 100ms",
-                            }}
-                            title={
-                              locked ? "" :
-                              `${inst.componentName} — pip ${row + 1}/${inst.totalPips}` +
-                              (isMinZone ? " (min)" : "")
-                            }
-                          >
-                            {/* Show a small dot in minimum-zone cells when allocated */}
-                            {allocated && isMinZone && (
-                              <span style={{
-                                fontSize: 7,
-                                fontWeight: 900,
-                                fontFamily: "monospace",
-                                color: "#000",
-                                lineHeight: 1,
-                              }}>
-                                ●
-                              </span>
-                            )}
-                          </div>
-                        );
-                      })}
+                      {cells}
                     </div>
                   </React.Fragment>
                 );

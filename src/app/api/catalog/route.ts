@@ -264,30 +264,42 @@ function buildStats(row: any, type: string): Record<string, any> | null {
 
     case "SHIELD": {
       // shields columns
-      s.shieldHp = numOrNull(row.max_shield_health);
-      s.maxHp = numOrNull(row.max_shield_health);
+      s.shieldHp = numOrNull(row.pool_hp) ?? numOrNull(row.max_shield_health);
+      s.maxHp = numOrNull(row.pool_hp) ?? numOrNull(row.max_shield_health);
       s.shieldRegen = numOrNull(row.max_shield_regen);
       s.regenRate = numOrNull(row.max_shield_regen);
-      s.downedDelay = numOrNull(row.downed_delay);
-      s.damagedDelay = numOrNull(row.damaged_delay);
+      s.downedDelay = numOrNull(row.downed_regen_delay) ?? numOrNull(row.downed_delay);
+      s.damagedDelay = numOrNull(row.damaged_regen_delay) ?? numOrNull(row.damaged_delay);
+      s.powerDraw = numOrNull(row.power_consumption_max) ?? numOrNull(row.power_consumption);
+      s.powerDrawMin = numOrNull(row.power_consumption_min);
+      s.powerDrawMax = numOrNull(row.power_consumption_max);
+      s.emSignature = numOrNull(row.em_max);
       break;
     }
 
     case "POWER_PLANT": {
-      // power_plants columns — power_generation is ALWAYS 0, read from raw_data
+      // power_plants columns — prefer DB column, fallback to raw_data
       let powerGen = numOrNull(row.power_generation);
       if (!powerGen || powerGen === 0) {
         powerGen = numOrNull(row.raw_data?.stdItem?.ResourceNetwork?.Usage?.Power?.Maximum) ?? 0;
       }
       s.powerOutput = powerGen;
-      s.emSignature = numOrNull(row.raw_data?.stdItem?.Emission?.Em?.Maximum) ?? 0;
+      let emSig = numOrNull(row.em_max);
+      if (!emSig || emSig === 0) {
+        emSig = numOrNull(row.raw_data?.stdItem?.Emission?.Em?.Maximum) ?? 0;
+      }
+      s.emSignature = emSig;
       break;
     }
 
     case "COOLER": {
       // coolers columns
-      s.coolingRate = numOrNull(row.cooling_rate);
-      s.powerDraw = numOrNull(row.power_draw_max);
+      s.coolingRate = numOrNull(row.cooling_generation) ?? numOrNull(row.cooling_rate);
+      s.powerDraw = numOrNull(row.power_consumption_max) ?? numOrNull(row.power_draw_max);
+      s.powerDrawMin = numOrNull(row.power_consumption_min);
+      s.powerDrawMax = numOrNull(row.power_consumption_max);
+      s.emSignature = numOrNull(row.em_max);
+      s.irSignature = numOrNull(row.ir_max);
       break;
     }
 

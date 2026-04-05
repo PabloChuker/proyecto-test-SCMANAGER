@@ -314,10 +314,10 @@ function computeStats(
       }
     }
 
-    // Power plants: always output (use shipPowerGen from sc-unpacked)
+    // Power plants: always output — prefer DB value over static JSON
     if (cat === "POWER_PLANT") {
-      // Use real power output from powerNetwork data if available
-      const ppOutput = pn?.genP ?? pickNum(s, "powerOutput");
+      const dbPower = pickNum(s, "powerOutput");
+      const ppOutput = dbPower > 0 ? dbPower : (pn?.genP ?? 0);
       powerOutput += ppOutput;
       if (isOn) { activeComponents++; }
       // EM from power network data
@@ -334,6 +334,7 @@ function computeStats(
     if (pn?.ir) irSig += pn.ir;
 
     // TURRET/RACK with children: DPS comes from children, base stats from parent
+    // Also create power instances for each child weapon
     if ((cat === "TURRET" || cat === "MISSILE_RACK") && hp.children.length > 0) {
       if (!pn) accumBase(s);
       for (const child of hp.children) {
@@ -343,6 +344,37 @@ function computeStats(
         if (!cItem) continue;
         accumDps(cItem.componentStats);
         if (!cItem.powerNetwork) accumBase(cItem.componentStats);
+
+        // Build power instance for child weapons (they have powerNetwork from the JSON)
+        const childPn = cItem.powerNetwork;
+        const childS = cItem.componentStats;
+        if (childPn && childPn.pMax > 0) {
+          const childPips = Math.min(6, Math.max(1, Math.ceil(childPn.pMax)));
+          const childAllocPips = instancePower[child.hardpointName] ?? 0;
+          cats.weapons.componentCount++;
+          if (childOn) {
+            cats.weapons.activeCount++;
+            cats.weapons.minDraw += childPn.pMin ?? 0;
+          }
+          cats.weapons.allocated += childAllocPips;
+          instances.push({
+            hardpointId: child.id,
+            hardpointName: child.hardpointName,
+            componentName: cItem.name,
+            category: "weapons",
+            type: childPn.type || "WeaponGun",
+            totalPips: childPips,
+            allocatedPips: Math.min(childAllocPips, childPips),
+            ranges: (childPn.ranges ?? []).map(r => ({ start: r.s, modifier: r.m, range: r.r })),
+            powerMin: childPn.pMin ?? 0,
+            powerMax: childPn.pMax,
+            genPower: 0,
+            genCoolant: 0,
+            emMax: childPn.em ?? pickNum(childS, "emSignature"),
+            irMax: childPn.ir ?? 0,
+            isOn: childOn,
+          });
+        }
       }
     } else {
       if (cat === "WEAPON" || cat === "TURRET") { accumDps(s); }
@@ -353,8 +385,9 @@ function computeStats(
     }
   }
 
-  // Use ship-level power generation if we didn't get it from components
-  const totalPO = shipPowerGen > 0 ? shipPowerGen : Math.round(powerOutput);
+  // Prefer component-level power output (from equipped power plants) over ship-level static data.
+  // Ship-level is only a fallback when no power plant components are found.
+  const totalPO = powerOutput > 0 ? Math.round(powerOutput) : (shipPowerGen > 0 ? shipPowerGen : 0);
 
   let totalAllocated = 0, totalMinDraw = 0;
   for (const c of POWER_CATEGORIES) {
@@ -371,11 +404,22 @@ function computeStats(
       if (inst.category === "shields") {
         inst.isOn = false;
         inst.allocatedPips = 0;
-        cats.shields.activeCount = 0;
-        cats.shields.allocated = 0;
-        cats.shields.minDraw = 0;
       }
     }
+    cats.shields.activeCount = 0;
+    cats.shields.allocated = 0;
+    cats.shields.minDraw = 0;
+  } else {
+    // SCM mode turns off quantum drive — free their power allocation
+    for (const inst of instances) {
+      if (inst.category === "quantum") {
+        inst.isOn = false;
+        inst.allocatedPips = 0;
+      }
+    }
+    cats.quantum.activeCount = 0;
+    cats.quantum.allocated = 0;
+    cats.quantum.minDraw = 0;
   }
 
   let effectiveSpeed: number | null; let effectiveSpeedLabel: string;
