@@ -371,11 +371,22 @@ function computeStats(
       if (inst.category === "shields") {
         inst.isOn = false;
         inst.allocatedPips = 0;
-        cats.shields.activeCount = 0;
-        cats.shields.allocated = 0;
-        cats.shields.minDraw = 0;
       }
     }
+    cats.shields.activeCount = 0;
+    cats.shields.allocated = 0;
+    cats.shields.minDraw = 0;
+  } else {
+    // SCM mode turns off quantum drive — free their power allocation
+    for (const inst of instances) {
+      if (inst.category === "quantum") {
+        inst.isOn = false;
+        inst.allocatedPips = 0;
+      }
+    }
+    cats.quantum.activeCount = 0;
+    cats.quantum.allocated = 0;
+    cats.quantum.minDraw = 0;
   }
 
   let effectiveSpeed: number | null; let effectiveSpeedLabel: string;
