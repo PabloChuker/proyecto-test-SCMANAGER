@@ -17,10 +17,20 @@ export const metadata = {
 export default function ComparePage() {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
-      {/* Background */}
+      {/* Background video + gradient overlays */}
       <div className="fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(232,137,12,0.04),transparent_60%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(93,160,7,0.03),transparent_50%)]" />
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover opacity-[0.08] pointer-events-none"
+        >
+          <source src="/videos/comparador.mp4" type="video/mp4" />
+        </video>
+        <div className="absolute inset-0 bg-zinc-950/70" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(69,91,163,0.06),transparent_60%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(143,197,134,0.04),transparent_50%)]" />
       </div>
 
       <Header subtitle="Ship Comparator" />
