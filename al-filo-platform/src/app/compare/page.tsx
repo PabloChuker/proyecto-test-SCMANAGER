@@ -8,7 +8,7 @@ import Image from "next/image";
 import { ShipComparator } from "@/components/compare/ShipComparator";
 import Link from "next/link";
 import Header from "@/app/assets/header/Header";
-import { CompareVideoBackground } from "@/components/compare/CompareVideoBackground";
+import { PageVideoBackground } from "@/components/shared/PageVideoBackground";
 
 export const metadata = {
   title: "Ship Comparator — SC LABS",
@@ -18,8 +18,7 @@ export const metadata = {
 export default function ComparePage() {
   return (
     <main className="relative min-h-screen text-zinc-100">
-      {/* Video background — rendered as client component for autoplay */}
-      <CompareVideoBackground />
+      <PageVideoBackground />
 
       <div className="relative z-10">
         <Header subtitle="Ship Comparator" />

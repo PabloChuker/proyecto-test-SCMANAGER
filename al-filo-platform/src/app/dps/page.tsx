@@ -1,42 +1,17 @@
 "use client";
 
-import { Suspense, useRef, useEffect } from "react";
+import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Header from "@/app/assets/header/Header";
 import { SIDEBAR_ITEMS } from "@/app/assets/header/navigation";
 import LoadoutBuilder from "@/components/ships/LoadoutBuilder";
-
-function DpsVideoBackground() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (video) {
-      video.play().catch(() => {});
-    }
-  }, []);
-
-  return (
-    <div className="fixed inset-0 z-0">
-      <div className="absolute inset-0 bg-zinc-950" />
-      <video
-        ref={videoRef}
-        autoPlay loop muted playsInline
-        className="absolute inset-0 w-full h-full object-cover opacity-[0.20] pointer-events-none"
-      >
-        <source src="/videos/comparador.mp4" type="video/mp4" />
-      </video>
-      <div className="absolute inset-0 bg-zinc-950/50" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(245,158,11,0.04),transparent_60%)]" />
-    </div>
-  );
-}
+import { PageVideoBackground } from "@/components/shared/PageVideoBackground";
 
 export default function DpsPage() {
   return (
     <main className="relative min-h-screen text-zinc-100 flex flex-col">
-      <DpsVideoBackground />
+      <PageVideoBackground />
 
       <div className="relative z-10 flex flex-col flex-1">
         <Header />

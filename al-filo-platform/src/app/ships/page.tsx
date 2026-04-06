@@ -27,6 +27,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ShipsGrid } from "./ShipsGrid";
 import Header from "@/app/assets/header/Header";
+import { PageVideoBackground } from "@/components/shared/PageVideoBackground";
 
 export const metadata = {
   title: "Ship Database — SC LABS",
@@ -35,38 +36,19 @@ export const metadata = {
 
 export default function ShipsPage() {
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
-      {/* ── Background atmosférico con video ── */}
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="fixed inset-0 w-full h-full object-cover opacity-15 pointer-events-none z-0"
-      >
-        <source src="/media/videos/bg.mp4" type="video/mp4" />
-      </video>
-      <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/60 via-zinc-950/80 to-zinc-950/95 pointer-events-none z-0" />
+    <main className="relative min-h-screen text-zinc-100">
+      <PageVideoBackground src="/videos/comparador.mp4" />
 
-      <Header subtitle="Ship Database" />
+      <div className="relative z-10">
+        <Header subtitle="Ship Database" />
 
-      {/* ── Contenido ── */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Título de sección */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-light tracking-wide text-zinc-100">
-            Base de Naves
-          </h1>
-          <p className="text-sm text-zinc-500 mt-1.5 max-w-xl">
-            Datos extraídos automáticamente del cliente de Star Citizen.
-            Filtrá por fabricante, buscá por nombre o explorá por rol.
-          </p>
+        {/* ── Contenido ── */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {/* Grid interactiva */}
+          <Suspense fallback={<GridSkeleton />}>
+            <ShipsGrid />
+          </Suspense>
         </div>
-
-        {/* Grid interactiva */}
-        <Suspense fallback={<GridSkeleton />}>
-          <ShipsGrid />
-        </Suspense>
       </div>
     </main>
   );
