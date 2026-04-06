@@ -7,7 +7,6 @@ interface ShipSearchResult {
   reference: string;
   name: string;
   manufacturer?: string;
-  msrpUsd?: number | null;
 }
 
 interface AddShipModalProps {
@@ -68,10 +67,6 @@ export function AddShipModal({ onClose }: AddShipModalProps) {
   const handleSelectShip = (ship: ShipSearchResult) => {
     setSelectedShip(ship);
     setPledgeName(ship.name);
-    // Auto-fill pledge price with MSRP if available
-    if (ship.msrpUsd && !pledgePrice) {
-      setPledgePrice(ship.msrpUsd.toString());
-    }
     setStep("form");
   };
 
@@ -156,12 +151,7 @@ export function AddShipModal({ onClose }: AddShipModalProps) {
                       onClick={() => handleSelectShip(ship)}
                       className="w-full text-left p-3 bg-zinc-800/30 border border-zinc-800/50 rounded-sm hover:border-amber-500/50 hover:bg-zinc-800/50 transition-all duration-300"
                     >
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-zinc-100 font-medium">{ship.name}</p>
-                        {ship.msrpUsd && (
-                          <span className="text-[11px] text-amber-400 font-mono">${ship.msrpUsd}</span>
-                        )}
-                      </div>
+                      <p className="text-sm text-zinc-100 font-medium">{ship.name}</p>
                       {ship.manufacturer && (
                         <p className="text-[11px] text-zinc-500 mt-0.5">{ship.manufacturer}</p>
                       )}

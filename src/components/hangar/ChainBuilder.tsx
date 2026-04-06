@@ -7,7 +7,6 @@ interface ShipSearchResult {
   reference: string;
   name: string;
   manufacturer?: string;
-  msrpUsd?: number | null;
 }
 
 interface ChainBuilderProps {
@@ -28,8 +27,6 @@ export function ChainBuilder({ chain, onClose }: ChainBuilderProps) {
   const [status, setStatus] = useState<"planning" | "in_progress" | "completed">(
     chain?.status || "planning"
   );
-  const [startShipMsrp, setStartShipMsrp] = useState<number | null>(null);
-  const [targetShipMsrp, setTargetShipMsrp] = useState<number | null>(null);
   const [error, setError] = useState("");
 
   // Ship search state
@@ -82,11 +79,9 @@ export function ChainBuilder({ chain, onClose }: ChainBuilderProps) {
     if (activeSearchField === "start") {
       setStartShip(ship.name);
       setStartShipRef(ship.reference);
-      setStartShipMsrp(ship.msrpUsd ?? null);
     } else if (activeSearchField === "target") {
       setTargetShip(ship.name);
       setTargetShipRef(ship.reference);
-      setTargetShipMsrp(ship.msrpUsd ?? null);
     } else if (activeSearchField === "step" && addStepIndex !== null) {
       addStep(ship);
     }
@@ -157,10 +152,6 @@ export function ChainBuilder({ chain, onClose }: ChainBuilderProps) {
   const ownedSteps = steps.filter((step) => step.isOwned).length;
   const completedSteps = steps.filter((step) => step.isCompleted).length;
 
-  // Savings calculation: direct purchase price vs chain cost
-  const directPurchasePrice = targetShipMsrp ? targetShipMsrp - (startShipMsrp || 0) : null;
-  const savings = directPurchasePrice !== null ? directPurchasePrice - totalCost : null;
-
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-zinc-900 border border-zinc-800/50 rounded-sm max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -224,12 +215,7 @@ export function ChainBuilder({ chain, onClose }: ChainBuilderProps) {
                         onClick={() => handleSelectShip(ship)}
                         className="w-full text-left px-3 py-2 hover:bg-zinc-700/50 transition-colors text-sm"
                       >
-                        <div className="flex items-center justify-between">
-                          <p className="text-zinc-100">{ship.name}</p>
-                          {ship.msrpUsd && (
-                            <span className="text-[10px] text-amber-400 font-mono">${ship.msrpUsd}</span>
-                          )}
-                        </div>
+                        <p className="text-zinc-100">{ship.name}</p>
                         {ship.manufacturer && (
                           <p className="text-[11px] text-zinc-500">{ship.manufacturer}</p>
                         )}
@@ -268,12 +254,7 @@ export function ChainBuilder({ chain, onClose }: ChainBuilderProps) {
                         onClick={() => handleSelectShip(ship)}
                         className="w-full text-left px-3 py-2 hover:bg-zinc-700/50 transition-colors text-sm"
                       >
-                        <div className="flex items-center justify-between">
-                          <p className="text-zinc-100">{ship.name}</p>
-                          {ship.msrpUsd && (
-                            <span className="text-[10px] text-amber-400 font-mono">${ship.msrpUsd}</span>
-                          )}
-                        </div>
+                        <p className="text-zinc-100">{ship.name}</p>
                         {ship.manufacturer && (
                           <p className="text-[11px] text-zinc-500">{ship.manufacturer}</p>
                         )}
@@ -402,12 +383,7 @@ export function ChainBuilder({ chain, onClose }: ChainBuilderProps) {
                                 onClick={() => handleSelectShip(ship)}
                                 className="w-full text-left px-2 py-1 bg-zinc-800/50 hover:bg-zinc-800 rounded-sm text-[11px] transition-colors"
                               >
-                                <div className="flex items-center justify-between">
-                                  <p className="text-zinc-100">{ship.name}</p>
-                                  {ship.msrpUsd && (
-                                    <span className="text-[10px] text-amber-400 font-mono">${ship.msrpUsd}</span>
-                                  )}
-                                </div>
+                                <p className="text-zinc-100">{ship.name}</p>
                               </button>
                             ))}
                           </div>
@@ -435,54 +411,19 @@ export function ChainBuilder({ chain, onClose }: ChainBuilderProps) {
 
           {/* Summary Panel */}
           <div className="bg-zinc-800/20 border border-zinc-800/50 rounded-sm p-4 space-y-3">
-            {/* MSRP Info */}
-            {(startShipMsrp !== null || targetShipMsrp !== null) && (
-              <div className="flex items-center justify-between text-[11px] pb-2 border-b border-zinc-800/30">
-                <div className="flex gap-4">
-                  {startShipMsrp !== null && (
-                    <span className="text-zinc-500">
-                      Start MSRP: <span className="text-zinc-300 font-mono">${startShipMsrp}</span>
-                    </span>
-                  )}
-                  {targetShipMsrp !== null && (
-                    <span className="text-zinc-500">
-                      Target MSRP: <span className="text-zinc-300 font-mono">${targetShipMsrp}</span>
-                    </span>
-                  )}
-                </div>
-                {directPurchasePrice !== null && (
-                  <span className="text-zinc-500">
-                    Direct CCU: <span className="text-zinc-300 font-mono">${directPurchasePrice}</span>
-                  </span>
-                )}
-              </div>
-            )}
-
-            <div className="grid grid-cols-4 gap-4 text-[12px]">
+            <div className="grid grid-cols-3 gap-4 text-[12px]">
               <div>
-                <p className="text-zinc-500">Chain Cost</p>
+                <p className="text-zinc-500">Total Cost</p>
                 <p className="text-amber-400 font-medium mt-1">${totalCost.toFixed(2)}</p>
               </div>
               <div>
-                <p className="text-zinc-500">Savings</p>
-                <p className={`font-medium mt-1 ${
-                  savings !== null && savings > 0
-                    ? "text-emerald-400"
-                    : savings !== null && savings < 0
-                    ? "text-red-400"
-                    : "text-zinc-500"
-                }`}>
-                  {savings !== null ? (savings >= 0 ? `$${savings.toFixed(2)}` : `-$${Math.abs(savings).toFixed(2)}`) : "—"}
-                </p>
-              </div>
-              <div>
-                <p className="text-zinc-500">Owned</p>
+                <p className="text-zinc-500">Owned Steps</p>
                 <p className="text-emerald-400 font-medium mt-1">
                   {ownedSteps}/{steps.length}
                 </p>
               </div>
               <div>
-                <p className="text-zinc-500">Completed</p>
+                <p className="text-zinc-500">Completed Steps</p>
                 <p className="text-cyan-400 font-medium mt-1">
                   {completedSteps}/{steps.length}
                 </p>

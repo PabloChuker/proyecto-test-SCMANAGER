@@ -35,6 +35,8 @@ const SORT_MAP: Record<string, string> = {
   size: "s.size",
   role: "s.role",
   mass: "s.mass",
+  msrpUsd: "s.msrp_usd",
+  price: "s.msrp_usd",
 };
 
 interface ShipsQueryParams {
@@ -107,6 +109,7 @@ async function handleShipsQuery(params: ShipsQueryParams) {
     const ships: any[] = await prisma.$queryRawUnsafe(
       `SELECT s.id, s.reference, s.name, s.manufacturer, s.role, s.size,
               s.max_crew, s.mass, s.cargo_capacity, s.game_version,
+              s.msrp_usd, s.warbond_usd,
               fs.scm_speed, fs.max_speed as afterburner_speed
        FROM ships s
        ${joinClause}
@@ -133,6 +136,8 @@ async function handleShipsQuery(params: ShipsQueryParams) {
       size: s.size,
       manufacturer: s.manufacturer,
       gameVersion: s.game_version,
+      msrpUsd: s.msrp_usd != null ? Number(s.msrp_usd) : null,
+      warbondUsd: s.warbond_usd != null ? Number(s.warbond_usd) : null,
       ship: {
         maxCrew: s.max_crew,
         mass: s.mass != null ? Number(s.mass) : null,

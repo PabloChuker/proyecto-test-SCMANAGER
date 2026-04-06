@@ -81,14 +81,16 @@ export function ShipsGrid() {
       setError(null);
 
       try {
-        const params = new URLSearchParams();
-        if (urlSearch)       params.set("search", urlSearch);
-        if (urlManufacturer) params.set("manufacturer", urlManufacturer);
-        if (urlSortBy)       params.set("sortBy", urlSortBy);
-        if (urlPage > 1)     params.set("page", urlPage.toString());
-        params.set("limit", "24");
+        const body: Record<string, any> = { limit: 24 };
+        if (urlSearch)       body.search = urlSearch;
+        if (urlManufacturer) body.manufacturer = urlManufacturer;
+        if (urlSortBy)       body.sortBy = urlSortBy;
+        if (urlPage > 1)     body.page = urlPage;
 
-        const res = await fetch(`/api/ships?${params.toString()}`, {
+        const res = await fetch('/api/ships', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
           signal: controller.signal,
         });
 
@@ -221,15 +223,15 @@ function Pagination({
   }, [currentPage, totalPages]);
 
   return (
-    <div className="flex items-center justify-center gap-1.5 pt-4">
+    <div className="flex items-center justify-center gap-2 pt-6 pb-2">
       {/* Prev */}
       <button
         onClick={() => onPageChange(currentPage - 1)}
         disabled={currentPage <= 1}
         className="
-          px-2.5 py-1.5 rounded-sm text-xs
-          border border-zinc-800/70 text-zinc-500
-          hover:border-cyan-500/30 hover:text-zinc-300
+          px-3 py-2 rounded-sm text-sm font-mono
+          border border-zinc-700 text-zinc-300 bg-zinc-800/50
+          hover:border-cyan-500/50 hover:text-cyan-300 hover:bg-zinc-800
           disabled:opacity-30 disabled:cursor-not-allowed
           transition-all duration-200
         "
@@ -240,7 +242,7 @@ function Pagination({
       {/* Números */}
       {pages.map((page, idx) =>
         page === "..." ? (
-          <span key={`dots-${idx}`} className="px-1 text-zinc-700 text-xs">
+          <span key={`dots-${idx}`} className="px-1 text-zinc-500 text-sm">
             ···
           </span>
         ) : (
@@ -248,12 +250,12 @@ function Pagination({
             key={page}
             onClick={() => onPageChange(page)}
             className={`
-              min-w-[32px] py-1.5 rounded-sm text-xs font-mono
+              min-w-[36px] py-2 rounded-sm text-sm font-mono
               border transition-all duration-200
               ${
                 page === currentPage
-                  ? "border-cyan-500/40 bg-cyan-500/10 text-cyan-300"
-                  : "border-zinc-800/70 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300"
+                  ? "border-cyan-500/60 bg-cyan-500/15 text-cyan-300 shadow-[0_0_8px_-2px_rgba(6,182,212,0.3)]"
+                  : "border-zinc-700 text-zinc-300 bg-zinc-800/50 hover:border-zinc-600 hover:text-zinc-100 hover:bg-zinc-800"
               }
             `}
           >
@@ -267,9 +269,9 @@ function Pagination({
         onClick={() => onPageChange(currentPage + 1)}
         disabled={currentPage >= totalPages}
         className="
-          px-2.5 py-1.5 rounded-sm text-xs
-          border border-zinc-800/70 text-zinc-500
-          hover:border-cyan-500/30 hover:text-zinc-300
+          px-3 py-2 rounded-sm text-sm font-mono
+          border border-zinc-700 text-zinc-300 bg-zinc-800/50
+          hover:border-cyan-500/50 hover:text-cyan-300 hover:bg-zinc-800
           disabled:opacity-30 disabled:cursor-not-allowed
           transition-all duration-200
         "

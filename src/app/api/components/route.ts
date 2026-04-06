@@ -5,15 +5,25 @@ export const dynamic = "force-dynamic";
 // Searches real component tables (weapon_guns, shields, power_plants,
 // coolers, quantum_drives, missiles) for compatible items.
 //
-// Parameters:
+// Parameters (GET):
 //   ?category=WEAPON&maxSize=3
 //   ?category=SHIELD&maxSize=2&search=shimmer
 //   ?category=POWER_PLANT&search=js-400
 //   ?limit=50
+//
+// Parameters (POST):
+//   { category, maxSize, minSize, search, limit }
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import {
+  sanitizeString,
+  validateInt,
+  validateWhitelist,
+  parsePostBody,
+  secureHeaders,
+} from "@/lib/api-security";
 
 export const revalidate = 300;
 
@@ -27,6 +37,8 @@ const CATEGORY_TABLE: Record<string, { table: string; type: string; nameCol: str
   COOLER:        { table: "coolers",        type: "COOLER",        nameCol: "name", classCol: "class_name", sizeCol: "size" },
   QUANTUM_DRIVE: { table: "quantum_drives", type: "QUANTUM_DRIVE", nameCol: "name", classCol: "class_name", sizeCol: "size" },
 };
+
+const ALLOWED_CATEGORIES = Object.keys(CATEGORY_TABLE) as const;
 
 function numOrNull(v: any): number | null {
   if (v === null || v === undefined) return null;
@@ -44,93 +56,167 @@ function gradeToLetter(g: any): string | null {
   return String(g);
 }
 
+/** Shared internal function for component search */
+async function searchComponents(
+  category: string,
+  maxSize: number,
+  minSize: number,
+  search: string,
+  limit: number,
+) {
+  // Validate and sanitize inputs
+  const validCategory = validateWhitelist(category, ALLOWED_CATEGORIES, "WEAPON");
+  const safeSearch = sanitizeString(search, 100);
+  const safeMaxSize = validateInt(maxSize, 99, 0, 500);
+  const safeMinSize = validateInt(minSize, 0, 0, 500);
+  const safeLimit = validateInt(limit, 50, 1, 200);
+
+  const mapping = CATEGORY_TABLE[validCategory];
+  if (!mapping) {
+    return {
+      data: [],
+      meta: { total: 0, limit: safeLimit },
+      error: "Se requiere 'category' válido (WEAPON, SHIELD, POWER_PLANT, COOLER, QUANTUM_DRIVE, etc.)",
+    };
+  }
+
+  const { table, type, nameCol, classCol, sizeCol } = mapping;
+
+  // Build query
+  const conditions: string[] = [];
+  const params: any[] = [];
+  let idx = 1;
+
+  if (sizeCol) {
+    if (safeMaxSize < 500) {
+      conditions.push(`${sizeCol} <= $${idx}`);
+      params.push(safeMaxSize);
+      idx++;
+    }
+    if (safeMinSize > 0) {
+      conditions.push(`${sizeCol} >= $${idx}`);
+      params.push(safeMinSize);
+      idx++;
+    }
+  }
+
+  if (safeSearch) {
+    conditions.push(`(${nameCol} ILIKE $${idx} OR ${classCol} ILIKE $${idx})`);
+    params.push(`%${safeSearch}%`);
+    idx++;
+  }
+
+  const whereClause = conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
+  const orderCol = sizeCol ? `${sizeCol} DESC NULLS LAST, ` : "";
+
+  let rows: any[] = [];
+  let total = 0;
+
+  try {
+    const countResult: any[] = await prisma.$queryRawUnsafe(
+      `SELECT COUNT(*)::int as total FROM ${table} ${whereClause}`,
+      ...params,
+    );
+    total = countResult[0]?.total ?? 0;
+
+    rows = await prisma.$queryRawUnsafe(
+      `SELECT * FROM ${table} ${whereClause} ORDER BY ${orderCol}${nameCol} ASC LIMIT $${idx}`,
+      ...params,
+      safeLimit,
+    );
+  } catch {
+    rows = [];
+    total = 0;
+  }
+
+  const data = rows.map((row) => ({
+    id: row.id || row.uuid || "",
+    reference: row[classCol] || row.class_name || "",
+    name: row[nameCol] || row.name || "",
+    localizedName: null,
+    className: row.class_name || row[classCol] || null,
+    type,
+    size: numOrNull(row[sizeCol || "size"]),
+    grade: gradeToLetter(row.grade),
+    manufacturer: row.manufacturer_id ?? row.manufacturer ?? null,
+    componentStats: buildStats(row, type),
+  }));
+
+  return { data, meta: { total, limit: safeLimit } };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
     const category = searchParams.get("category")?.trim() || searchParams.get("type")?.trim() || "";
-    const maxSize  = parseInt(searchParams.get("maxSize") || "99", 10);
-    const minSize  = parseInt(searchParams.get("minSize") || "0", 10);
-    const search   = searchParams.get("search")?.trim() || "";
-    const limit    = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") || "50", 10)));
+    const maxSize = searchParams.get("maxSize") || "99";
+    const minSize = searchParams.get("minSize") || "0";
+    const search = searchParams.get("search")?.trim() || "";
+    const limit = searchParams.get("limit") || "50";
 
-    const mapping = CATEGORY_TABLE[category];
-    if (!mapping) {
+    const result = await searchComponents(category, parseInt(maxSize, 10), parseInt(minSize, 10), search, parseInt(limit, 10));
+
+    if ((result as any).error) {
       return NextResponse.json(
-        { error: "Se requiere 'category' válido (WEAPON, SHIELD, POWER_PLANT, COOLER, QUANTUM_DRIVE, etc.)" },
-        { status: 400 },
+        { error: (result as any).error },
+        { status: 400, headers: secureHeaders() },
       );
     }
 
-    const { table, type, nameCol, classCol, sizeCol } = mapping;
-
-    // Build query
-    const conditions: string[] = [];
-    const params: any[] = [];
-    let idx = 1;
-
-    if (sizeCol) {
-      if (maxSize < 99) {
-        conditions.push(`${sizeCol} <= $${idx}`);
-        params.push(maxSize);
-        idx++;
-      }
-      if (minSize > 0) {
-        conditions.push(`${sizeCol} >= $${idx}`);
-        params.push(minSize);
-        idx++;
-      }
-    }
-
-    if (search) {
-      conditions.push(`(${nameCol} ILIKE $${idx} OR ${classCol} ILIKE $${idx})`);
-      params.push(`%${search}%`);
-      idx++;
-    }
-
-    const whereClause = conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
-    const orderCol = sizeCol ? `${sizeCol} DESC NULLS LAST, ` : "";
-
-    let rows: any[] = [];
-    let total = 0;
-
-    try {
-      const countResult: any[] = await prisma.$queryRawUnsafe(
-        `SELECT COUNT(*)::int as total FROM ${table} ${whereClause}`,
-        ...params,
-      );
-      total = countResult[0]?.total ?? 0;
-
-      rows = await prisma.$queryRawUnsafe(
-        `SELECT * FROM ${table} ${whereClause} ORDER BY ${orderCol}${nameCol} ASC LIMIT $${idx}`,
-        ...params,
-        limit,
-      );
-    } catch {
-      rows = [];
-      total = 0;
-    }
-
-    const data = rows.map((row) => ({
-      id: row.id || row.uuid || "",
-      reference: row[classCol] || row.class_name || "",
-      name: row[nameCol] || row.name || "",
-      localizedName: null,
-      className: row.class_name || row[classCol] || null,
-      type,
-      size: numOrNull(row[sizeCol || "size"]),
-      grade: gradeToLetter(row.grade),
-      manufacturer: row.manufacturer_id ?? row.manufacturer ?? null,
-      componentStats: buildStats(row, type),
-    }));
-
-    return NextResponse.json(
-      { data, meta: { total, limit } },
-      { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" } },
-    );
+    return NextResponse.json(result, {
+      headers: secureHeaders({ "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" }),
+    });
   } catch (error) {
-    console.error("[API /components] Error:", error);
-    return NextResponse.json({ error: "Error al buscar componentes" }, { status: 500 });
+    console.error("[API /components] GET Error:", error);
+    return NextResponse.json(
+      { error: "Error al buscar componentes" },
+      { status: 500, headers: secureHeaders() },
+    );
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await parsePostBody<{
+      category?: string;
+      maxSize?: number;
+      minSize?: number;
+      search?: string;
+      limit?: number;
+    }>(request);
+
+    if (!body) {
+      return NextResponse.json(
+        { error: "Invalid or missing JSON body" },
+        { status: 400, headers: secureHeaders() },
+      );
+    }
+
+    const category = String(body.category || "");
+    const maxSize = body.maxSize ?? 99;
+    const minSize = body.minSize ?? 0;
+    const search = String(body.search || "");
+    const limit = body.limit ?? 50;
+
+    const result = await searchComponents(category, maxSize, minSize, search, limit);
+
+    if ((result as any).error) {
+      return NextResponse.json(
+        { error: (result as any).error },
+        { status: 400, headers: secureHeaders() },
+      );
+    }
+
+    return NextResponse.json(result, {
+      headers: secureHeaders({ "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" }),
+    });
+  } catch (error) {
+    console.error("[API /components] POST Error:", error);
+    return NextResponse.json(
+      { error: "Error al buscar componentes" },
+      { status: 500, headers: secureHeaders() },
+    );
   }
 }
 

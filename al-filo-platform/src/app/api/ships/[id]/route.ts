@@ -634,6 +634,8 @@ export async function GET(
       manufacturer: ship.manufacturer,
       gameVersion: col(ship, "game_version", "gameVersion") ?? "",
       type: "SHIP",
+      msrpUsd: numOrNull(ship.msrp_usd),
+      warbondUsd: numOrNull(ship.warbond_usd),
       ship: {
         scmSpeed,
         afterburnerSpeed,

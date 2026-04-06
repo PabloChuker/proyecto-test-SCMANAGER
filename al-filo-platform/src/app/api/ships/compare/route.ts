@@ -246,6 +246,8 @@ async function compareShips(ids: string[]) {
         type: "SHIP",
         size: numOrNull(ship.size),
         gameVersion: ship.game_version || "",
+        msrpUsd: numOrNull(ship.msrp_usd),
+        warbondUsd: numOrNull(ship.warbond_usd),
         ship: {
           maxCrew: numOrNull(ship.max_crew),
           cargo: numOrNull(ship.cargo_capacity),

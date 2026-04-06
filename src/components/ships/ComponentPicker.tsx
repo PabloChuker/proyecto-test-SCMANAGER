@@ -60,12 +60,12 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
       setLoading(true);
       try {
         const apiTypes = CAT_TO_API_TYPE[hardpoint.resolvedCategory] || "OTHER";
-        const params = new URLSearchParams({ types: apiTypes, limit: "80", include: "stats,shops" });
+        const body: Record<string, any> = { types: apiTypes, limit: 80, include: "stats,shops" };
         // Only filter by size if maxSize > 0
-        if (hardpoint.maxSize > 0) params.set("maxSize", hardpoint.maxSize.toString());
-        if (hardpoint.minSize > 0) params.set("minSize", hardpoint.minSize.toString());
-        if (search.trim()) params.set("search", search.trim());
-        const res = await fetch("/api/catalog?" + params.toString(), { signal: controller.signal });
+        if (hardpoint.maxSize > 0) body.maxSize = hardpoint.maxSize;
+        if (hardpoint.minSize > 0) body.minSize = hardpoint.minSize;
+        if (search.trim()) body.search = search.trim();
+        const res = await fetch("/api/catalog", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal });
         if (!res.ok) throw new Error("HTTP " + res.status);
         const json = await res.json();
         setResults(json.data || []);

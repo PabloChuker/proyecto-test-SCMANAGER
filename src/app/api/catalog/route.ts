@@ -1,11 +1,11 @@
 export const dynamic = "force-dynamic";
 // =============================================================================
-// AL FILO — GET /api/catalog v3 (Correct DB table names + columns)
+// AL FILO — GET/POST /api/catalog v3 (Correct DB table names + columns)
 //
 // Universal item catalog for the ComponentPicker. Queries the REAL tables:
 //   weapon_guns, shields, power_plants, coolers, quantum_drives, missiles
 //
-// Query params:
+// Query params (GET):
 //   types      — comma-separated: WEAPON, TURRET, MISSILE, SHIELD, etc.
 //   type       — single type alias
 //   maxSize    — max component size
@@ -13,10 +13,20 @@ export const dynamic = "force-dynamic";
 //   search     — ILIKE on name / class_name
 //   limit      — max results (default 80, max 200)
 //   include    — ignored (compat)
+//
+// POST body:
+//   { type?, types?, minSize?, maxSize?, search?, limit? }
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import {
+  sanitizeString,
+  validateInt,
+  validateWhitelist,
+  parsePostBody,
+  secureHeaders,
+} from "@/lib/api-security";
 
 export const revalidate = 300;
 
@@ -90,105 +100,191 @@ function gradeToLetter(g: any): string | null {
   return String(g);
 }
 
+// ─── Shared query function (used by GET and POST) ──────────────────────────
+
+interface CatalogParams {
+  type?: string;
+  types?: string;
+  minSize?: number;
+  maxSize?: number;
+  search?: string;
+  limit?: number;
+}
+
+async function queryCatalog(params: CatalogParams) {
+  const {
+    type: typeParam = "",
+    types: typesParam = "",
+    minSize = 0,
+    maxSize = 99,
+    search = "",
+    limit = 80,
+  } = params;
+
+  // Resolve types
+  let types: string[] = [];
+  if (typeParam) types = [typeParam];
+  else if (typesParam) types = typesParam.split(",").map((t) => t.trim()).filter(Boolean);
+
+  if (types.length === 0) {
+    return { data: [], meta: { total: 0, limit } };
+  }
+
+  // Validate and sanitize types against whitelist
+  const TYPE_WHITELIST = Object.keys(TYPE_TABLE) as const;
+  const validTypes = types
+    .map((t) => validateWhitelist(t, TYPE_WHITELIST, ""))
+    .filter(Boolean);
+
+  if (validTypes.length === 0) {
+    return { data: [], meta: { total: 0, limit } };
+  }
+
+  // Deduplicate tables (WEAPON and TURRET both map to weapon_guns)
+  const tablesToQuery = new Map<string, TableDef>();
+  for (const t of validTypes) {
+    const def = TYPE_TABLE[t];
+    if (def && !tablesToQuery.has(def.table)) {
+      tablesToQuery.set(def.table, def);
+    }
+  }
+
+  if (tablesToQuery.size === 0) {
+    return { data: [], meta: { total: 0, limit } };
+  }
+
+  // Query each table
+  const allItems: any[] = [];
+  let totalCount = 0;
+
+  for (const [, def] of tablesToQuery) {
+    try {
+      const conds: string[] = [];
+      const params: any[] = [];
+      let idx = 1;
+
+      // Size filter (only if the table has a size column)
+      if (def.sizeCol) {
+        if (maxSize < 99) {
+          conds.push(`${def.sizeCol} <= $${idx}`);
+          params.push(maxSize);
+          idx++;
+        }
+        if (minSize > 0) {
+          conds.push(`${def.sizeCol} >= $${idx}`);
+          params.push(minSize);
+          idx++;
+        }
+      }
+
+      // Text search (sanitized)
+      if (search) {
+        const sanitized = sanitizeString(search, 100);
+        conds.push(`(${def.nameCol} ILIKE $${idx} OR ${def.classCol} ILIKE $${idx})`);
+        params.push(`%${sanitized}%`);
+        idx++;
+      }
+
+      const where = conds.length > 0 ? "WHERE " + conds.join(" AND ") : "";
+      const orderCol = def.sizeCol ? `${def.sizeCol} DESC NULLS LAST, ` : "";
+
+      // Count
+      const countRows: any[] = await prisma.$queryRawUnsafe(
+        `SELECT COUNT(*)::int as total FROM ${def.table} ${where}`,
+        ...params,
+      );
+      const count = countRows[0]?.total ?? 0;
+      totalCount += count;
+
+      // Fetch
+      if (count > 0) {
+        const rows: any[] = await prisma.$queryRawUnsafe(
+          `SELECT * FROM ${def.table} ${where} ORDER BY ${orderCol}${def.nameCol} ASC LIMIT $${idx}`,
+          ...params,
+          limit,
+        );
+        for (const row of rows) {
+          allItems.push(mapRow(row, def));
+        }
+      }
+    } catch (err) {
+      console.error(`[catalog] Error querying ${def.table}:`, err);
+    }
+  }
+
+  return { data: allItems, meta: { total: totalCount, limit, types: validTypes } };
+}
+
 // ─── GET handler ────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
 
-    const typeParam  = searchParams.get("type")?.trim() || "";
-    const typesParam = searchParams.get("types")?.trim() || "";
-    const minSize    = parseInt(searchParams.get("minSize") || "0", 10);
-    const maxSize    = parseInt(searchParams.get("maxSize") || "99", 10);
-    const search     = searchParams.get("search")?.trim() || "";
-    const limit      = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") || "80", 10)));
+    // Extract and validate query parameters
+    const typeParam = sanitizeString(searchParams.get("type") || "", 100);
+    const typesParam = sanitizeString(searchParams.get("types") || "", 200);
+    const minSize = validateInt(searchParams.get("minSize"), 0, 0, 100);
+    const maxSize = validateInt(searchParams.get("maxSize"), 99, 0, 100);
+    const search = sanitizeString(searchParams.get("search") || "", 100);
+    const limit = validateInt(searchParams.get("limit"), 80, 1, 200);
 
-    // Resolve types
-    let types: string[] = [];
-    if (typeParam) types = [typeParam];
-    else if (typesParam) types = typesParam.split(",").map((t) => t.trim()).filter(Boolean);
-    if (types.length === 0) {
-      return NextResponse.json({ data: [], meta: { total: 0, limit } });
-    }
+    const result = await queryCatalog({
+      type: typeParam,
+      types: typesParam,
+      minSize,
+      maxSize,
+      search,
+      limit,
+    });
 
-    // Deduplicate tables (WEAPON and TURRET both map to weapon_guns)
-    const tablesToQuery = new Map<string, TableDef>();
-    for (const t of types) {
-      const def = TYPE_TABLE[t];
-      if (def && !tablesToQuery.has(def.table)) {
-        tablesToQuery.set(def.table, def);
-      }
-    }
-
-    if (tablesToQuery.size === 0) {
-      return NextResponse.json({ data: [], meta: { total: 0, limit } });
-    }
-
-    // Query each table
-    const allItems: any[] = [];
-    let totalCount = 0;
-
-    for (const [, def] of tablesToQuery) {
-      try {
-        const conds: string[] = [];
-        const params: any[] = [];
-        let idx = 1;
-
-        // Size filter (only if the table has a size column)
-        if (def.sizeCol) {
-          if (maxSize < 99) {
-            conds.push(`${def.sizeCol} <= $${idx}`);
-            params.push(maxSize);
-            idx++;
-          }
-          if (minSize > 0) {
-            conds.push(`${def.sizeCol} >= $${idx}`);
-            params.push(minSize);
-            idx++;
-          }
-        }
-
-        // Text search
-        if (search) {
-          conds.push(`(${def.nameCol} ILIKE $${idx} OR ${def.classCol} ILIKE $${idx})`);
-          params.push(`%${search}%`);
-          idx++;
-        }
-
-        const where = conds.length > 0 ? "WHERE " + conds.join(" AND ") : "";
-        const orderCol = def.sizeCol ? `${def.sizeCol} DESC NULLS LAST, ` : "";
-
-        // Count
-        const countRows: any[] = await prisma.$queryRawUnsafe(
-          `SELECT COUNT(*)::int as total FROM ${def.table} ${where}`,
-          ...params,
-        );
-        const count = countRows[0]?.total ?? 0;
-        totalCount += count;
-
-        // Fetch
-        if (count > 0) {
-          const rows: any[] = await prisma.$queryRawUnsafe(
-            `SELECT * FROM ${def.table} ${where} ORDER BY ${orderCol}${def.nameCol} ASC LIMIT $${idx}`,
-            ...params,
-            limit,
-          );
-          for (const row of rows) {
-            allItems.push(mapRow(row, def));
-          }
-        }
-      } catch (err) {
-        console.error(`[catalog] Error querying ${def.table}:`, err);
-      }
-    }
-
-    return NextResponse.json(
-      { data: allItems, meta: { total: totalCount, limit, types } },
-      { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" } },
-    );
+    return NextResponse.json(result, { headers: secureHeaders() });
   } catch (error) {
-    console.error("[API /catalog] Error:", error);
-    return NextResponse.json({ error: "Error en el catálogo" }, { status: 500 });
+    console.error("[API /catalog GET] Error:", error);
+    return NextResponse.json(
+      { error: "Error en el catálogo" },
+      { status: 500, headers: secureHeaders() },
+    );
+  }
+}
+
+// ─── POST handler ───────────────────────────────────────────────────────────
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await parsePostBody<CatalogParams>(request);
+
+    if (!body) {
+      return NextResponse.json(
+        { error: "Invalid request body. Expected JSON." },
+        { status: 400, headers: secureHeaders() },
+      );
+    }
+
+    // Validate and sanitize parameters
+    const typeParam = sanitizeString(body.type || "", 100);
+    const typesParam = sanitizeString(body.types || "", 200);
+    const minSize = validateInt(body.minSize, 0, 0, 100);
+    const maxSize = validateInt(body.maxSize, 99, 0, 100);
+    const search = sanitizeString(body.search || "", 100);
+    const limit = validateInt(body.limit, 80, 1, 200);
+
+    const result = await queryCatalog({
+      type: typeParam,
+      types: typesParam,
+      minSize,
+      maxSize,
+      search,
+      limit,
+    });
+
+    return NextResponse.json(result, { headers: secureHeaders() });
+  } catch (error) {
+    console.error("[API /catalog POST] Error:", error);
+    return NextResponse.json(
+      { error: "Error en el catálogo" },
+      { status: 500, headers: secureHeaders() },
+    );
   }
 }
 

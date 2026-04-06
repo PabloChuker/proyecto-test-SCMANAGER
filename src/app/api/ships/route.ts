@@ -1,67 +1,94 @@
 export const dynamic = "force-dynamic";
 // =============================================================================
-// AL FILO — GET /api/ships v3 (Raw SQL — actual DB schema)
+// AL FILO — /api/ships v3 (Raw SQL — actual DB schema)
 //
 // Lists all ships from the ships table directly.
 // Supports search, manufacturer filter, role filter, sorting, pagination.
+//
+// GET: Query parameters (backward compatible)
+// POST: JSON body with same parameters
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import {
+  sanitizeString,
+  validateInt,
+  validateSortColumn,
+  validateSortDir,
+  parsePostBody,
+  secureHeaders,
+} from "@/lib/api-security";
 
 export const revalidate = 300;
 
-export async function GET(request: NextRequest) {
+// Map sort keys to actual columns
+// Note: scm_speed and afterburner_speed are in ship_flight_stats, not ships
+const SORT_MAP: Record<string, string> = {
+  name: "s.name",
+  scmSpeed: "fs.scm_speed",
+  maxSpeed: "fs.max_speed",
+  cargo: "s.cargo_capacity",
+  maxCrew: "s.max_crew",
+  afterburnerSpeed: "fs.max_speed",
+  manufacturer: "s.manufacturer",
+  size: "s.size",
+  role: "s.role",
+  mass: "s.mass",
+};
+
+interface ShipsQueryParams {
+  search: string;
+  manufacturer: string;
+  role: string;
+  page: number;
+  limit: number;
+  sortBy: string;
+  sortOrder: "ASC" | "DESC";
+}
+
+/**
+ * Shared internal function for querying ships.
+ * Handles all business logic, security validation, and database queries.
+ */
+async function handleShipsQuery(params: ShipsQueryParams) {
   try {
-    const { searchParams } = new URL(request.url);
+    // Sanitize string inputs
+    const search = sanitizeString(params.search, 100);
+    const manufacturer = sanitizeString(params.manufacturer, 100);
+    const role = sanitizeString(params.role, 100);
 
-    const search       = searchParams.get("search")?.trim() || "";
-    const manufacturer = searchParams.get("manufacturer")?.trim() || "";
-    const role         = searchParams.get("role")?.trim() || "";
-    const page         = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
-    const limit        = Math.min(500, Math.max(1, parseInt(searchParams.get("limit") || "24", 10)));
-    const sortByRaw    = searchParams.get("sortBy") || "name";
-    const sortOrder    = searchParams.get("sortOrder") === "desc" ? "DESC" : "ASC";
+    // Validate and clamp integers
+    const page = validateInt(params.page, 1, 1, 1000);
+    const limit = validateInt(params.limit, 24, 1, 500);
 
-    // Map sort keys to actual columns
-    // Note: scm_speed and afterburner_speed are in ship_flight_stats, not ships
-    const SORT_MAP: Record<string, string> = {
-      name: "s.name",
-      scmSpeed: "fs.scm_speed",
-      maxSpeed: "fs.max_speed",
-      cargo: "s.cargo_capacity",
-      maxCrew: "s.max_crew",
-      afterburnerSpeed: "fs.max_speed",
-      manufacturer: "s.manufacturer",
-      size: "s.size",
-      role: "s.role",
-      mass: "s.mass",
-    };
-    const sortCol = SORT_MAP[sortByRaw] || "s.name";
-    const needsJoin = sortCol.startsWith("fs.");
+    // Validate sort column against whitelist and sort order
+    const sortBy = validateSortColumn(params.sortBy, SORT_MAP, "name");
+    const sortOrder = validateSortDir(params.sortOrder);
+    const sortCol = SORT_MAP[sortBy] || "s.name";
 
     // Build WHERE conditions
     const conditions: string[] = [];
-    const params: any[] = [];
+    const queryParams: any[] = [];
     let paramIdx = 1;
 
     if (search) {
       conditions.push(
         `(s.name ILIKE $${paramIdx} OR s.reference ILIKE $${paramIdx} OR s.manufacturer ILIKE $${paramIdx})`,
       );
-      params.push(`%${search}%`);
+      queryParams.push(`%${search}%`);
       paramIdx++;
     }
 
     if (manufacturer) {
       conditions.push(`s.manufacturer ILIKE $${paramIdx}`);
-      params.push(`%${manufacturer}%`);
+      queryParams.push(`%${manufacturer}%`);
       paramIdx++;
     }
 
     if (role) {
       conditions.push(`s.role ILIKE $${paramIdx}`);
-      params.push(`%${role}%`);
+      queryParams.push(`%${role}%`);
       paramIdx++;
     }
 
@@ -70,7 +97,7 @@ export async function GET(request: NextRequest) {
     // Count total
     const countResult: any[] = await prisma.$queryRawUnsafe(
       `SELECT COUNT(*)::int as total FROM ships s ${whereClause}`,
-      ...params,
+      ...queryParams,
     );
     const total = countResult[0]?.total ?? 0;
 
@@ -86,7 +113,7 @@ export async function GET(request: NextRequest) {
        ${whereClause}
        ORDER BY ${sortCol} ${sortOrder} NULLS LAST
        LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
-      ...params,
+      ...queryParams,
       limit,
       offset,
     );
@@ -118,21 +145,87 @@ export async function GET(request: NextRequest) {
       },
     }));
 
-    return NextResponse.json(
-      {
-        data,
-        meta: {
-          total,
-          page,
-          limit,
-          totalPages: Math.ceil(total / limit),
-          manufacturers: mfrs.map((m) => m.manufacturer).filter(Boolean),
-        },
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        manufacturers: mfrs.map((m) => m.manufacturer).filter(Boolean),
       },
-      { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" } },
-    );
+    };
   } catch (error) {
-    console.error("[API /ships] Error:", error);
-    return NextResponse.json({ error: "Error al obtener las naves" }, { status: 500 });
+    console.error("[API /ships] Query error:", error);
+    throw error;
+  }
+}
+
+/**
+ * GET handler — query parameters for backward compatibility
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+
+    const params: ShipsQueryParams = {
+      search: searchParams.get("search") || "",
+      manufacturer: searchParams.get("manufacturer") || "",
+      role: searchParams.get("role") || "",
+      page: parseInt(searchParams.get("page") || "1", 10),
+      limit: parseInt(searchParams.get("limit") || "24", 10),
+      sortBy: searchParams.get("sortBy") || "name",
+      sortOrder: (searchParams.get("sortOrder") === "desc" ? "DESC" : "ASC") as "ASC" | "DESC",
+    };
+
+    const result = await handleShipsQuery(params);
+
+    return NextResponse.json(result, {
+      headers: secureHeaders(),
+    });
+  } catch (error) {
+    console.error("[API /ships GET] Error:", error);
+    return NextResponse.json(
+      { error: "Error al obtener las naves" },
+      { status: 500, headers: secureHeaders() },
+    );
+  }
+}
+
+/**
+ * POST handler — JSON body parameters
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await parsePostBody<Record<string, any>>(request);
+
+    if (!body) {
+      return NextResponse.json(
+        { error: "Invalid request body or content type" },
+        { status: 400, headers: secureHeaders() },
+      );
+    }
+
+    const params: ShipsQueryParams = {
+      search: body.search || "",
+      manufacturer: body.manufacturer || "",
+      role: body.role || "",
+      page: body.page || 1,
+      limit: body.limit || 24,
+      sortBy: body.sortBy || "name",
+      sortOrder: (body.sortOrder === "DESC" ? "DESC" : "ASC") as "ASC" | "DESC",
+    };
+
+    const result = await handleShipsQuery(params);
+
+    return NextResponse.json(result, {
+      headers: secureHeaders(),
+    });
+  } catch (error) {
+    console.error("[API /ships POST] Error:", error);
+    return NextResponse.json(
+      { error: "Error al obtener las naves" },
+      { status: 500, headers: secureHeaders() },
+    );
   }
 }
