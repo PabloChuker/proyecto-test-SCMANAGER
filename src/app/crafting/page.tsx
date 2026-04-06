@@ -45,7 +45,7 @@ export default function CraftingPage() {
 
       <aside className="w-12 sm:w-14 flex-shrink-0 bg-zinc-950/90 border-r border-zinc-800/50 flex flex-col items-center py-3 gap-1 z-20 sticky top-0 h-screen overflow-y-auto">
         <Link href="/" className="mb-3 opacity-60 hover:opacity-100 transition-opacity">
-          <Image src="/media/images/sclabs-logo.png" alt="SC LABS" width={24} height={24} className="rounded-sm" />
+          <Image src="/sclabs-logo.png" alt="SC LABS" width={24} height={24} className="rounded-sm" />
         </Link>
         <div className="w-6 h-px bg-zinc-800 mb-2" />
 
