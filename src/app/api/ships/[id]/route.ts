@@ -354,6 +354,22 @@ function buildChildren(
       };
     }
 
+    // Tractor beam
+    if (!equippedItem && entry.Type?.includes("TractorBeam")) {
+      equippedItem = {
+        id: entry.UUID || `child-${idx}`,
+        reference: className,
+        name: entry.Name || className,
+        localizedName: null,
+        className,
+        type: "WEAPON",
+        size: entry.Size ?? entry.MaxSize ?? null,
+        grade: gradeToLetter(entry.Grade),
+        manufacturer: null,
+        componentStats: null,
+      };
+    }
+
     // Missile
     if (!equippedItem && entry.Type?.includes("Missile")) {
       equippedItem = {

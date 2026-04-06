@@ -1,0 +1,15 @@
+Recomendaciones Herbizida
+Calculador de DPF
+Graficos
+G STRAFE DE TODOS LOS VECTORES 
+comparador entre parche anterior y actual
+cuanto dura afterburner
+G con y sin afterburner
+corregir asignación d energía de armas
+agregar posibilidad de mover las tablas
+
+
+Comparador
+cambiar colores del comparador
+agregar graficos en combat
+Buscar naves (filtrar por grados por segundo guiñada roll)
