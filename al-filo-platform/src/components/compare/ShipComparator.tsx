@@ -10,7 +10,7 @@ import { ShipSearchDropdown } from "./ShipSearchDropdown";
 import { RadarChart } from "./RadarChart";
 import { CompareBarChart } from "./CompareBarChart";
 
-const SHIP_COLORS = ["#455ba3", "#8fc586", "#e06262"];
+const SHIP_COLORS = ["#CDEB63", "#EB7163", "#639CEA"];
 
 // ── Ship thumbnail URL helper (same as ShipCard) ──
 const MFR_PREFIXES = [
