@@ -1,0 +1,14 @@
+-- =============================================================================
+-- scanners_seed.sql
+-- Generado por: scripts/import-scanners.js
+-- Fecha:        2026-04-04
+-- Origen:       ship-items.json (4852 registros totales, 2 de type Scanner)
+-- Importados:   0  |  Excluidos: 2
+-- =============================================================================
+--
+-- Sin registros que importar en este ciclo.
+-- Los 2 registros Scanner presentes son PLACEHOLDER sin datos reales.
+-- Este archivo se actualizará automáticamente al re-ejecutar el script
+-- cuando ship-items.json incluya Scanners con nombre real.
+--
+-- No se genera INSERT. La tabla queda vacía hasta la próxima actualización.

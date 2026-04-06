@@ -28,3 +28,9 @@ scripts/venv/
 
 # Ignore the nested .git folder to avoid submodule issues
 al-filo-platform/.git/
+
+# External datasets
+ship-items.json
+manufacturers.json
+*.json.tmp
+
