@@ -1,0 +1,2 @@
+Vercel Deployment Test - 2026-04-06
+This file is used to trigger a new build on Vercel.
