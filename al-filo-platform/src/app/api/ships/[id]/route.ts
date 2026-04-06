@@ -472,6 +472,15 @@ export async function GET(
         ]);
         if (!USEFUL.has(category)) return null;
 
+        // Skip empty weapon_rack / weapon_regen_pool hardpoints (non-functional slots)
+        const hpNameLower = (hp.hardpoint_name || "").toLowerCase();
+        if (
+          !hp.default_item_class &&
+          (hpNameLower.includes("weapon_rack") || hpNameLower.includes("weapon_regen_pool"))
+        ) {
+          return null;
+        }
+
         // Build equippedItem from component table match
         let equippedItem: any = null;
         const cls = hp.default_item_class;
@@ -505,9 +514,15 @@ export async function GET(
         // The loadout_json contains the actual weapons inside gimbals
         const children = buildChildren(hp.loadout_json, weaponMap, missileMap);
 
-        // If we have children (gimbal → weapon), this is actually a TURRET
+        // Detect turrets: by children, by item name, or by hardpoint name
         let finalCategory = category;
+        const itemName = (equippedItem?.name || "").toLowerCase();
         if (category === "WEAPON" && children.length > 0) {
+          finalCategory = "TURRET";
+        } else if (
+          category === "WEAPON" &&
+          (itemName.includes("turret") || hpNameLower.includes("turret"))
+        ) {
           finalCategory = "TURRET";
         }
 

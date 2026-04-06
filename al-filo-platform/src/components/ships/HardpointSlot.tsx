@@ -87,6 +87,9 @@ function Row({ catColor, size, item, stat, isOn, isOverridden, onClick, onToggle
 const SKIP_CATEGORIES = new Set(["OTHER", "ARMOR", "FUEL_TANK", "FUEL_INTAKE", "AVIONICS", "THRUSTER_MAIN", "THRUSTER_MANEUVERING"]);
 
 export function isUsefulSlot(hp: ResolvedHardpoint, item: EquippedItem | null): boolean {
+  // Skip empty weapon_rack / weapon_regen_pool hardpoints (non-functional slots)
+  const n = hp.hardpointName.toLowerCase();
+  if (!item && (n.includes("weapon_rack") || n.includes("weapon_regen_pool"))) return false;
   if (item) return true;
   if (hp.maxSize > 0) return true;
   if (SKIP_CATEGORIES.has(hp.resolvedCategory)) return false;

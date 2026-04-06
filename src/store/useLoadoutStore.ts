@@ -1,5 +1,5 @@
 // =============================================================================
-// AL FILO ÔÇö useLoadoutStore v7 (Per-Instance Power Grid)
+// AL FILO — useLoadoutStore v7 (Per-Instance Power Grid)
 //
 // Power model redesign:
 //   - Each component INSTANCE gets its own power pip allocation
@@ -143,6 +143,8 @@ const NAME_PATTERNS: [RegExp, string][] = [
 const USEFUL = new Set(["WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "UTILITY", "RADAR", "COUNTERMEASURE", "LIFE_SUPPORT"]);
 
 function inferCategory(category: string, item: EquippedItem | null, hpName: string): string {
+  // Detect turrets by item name even when category is WEAPON
+  if (category === "WEAPON" && item?.name && /turret/i.test(item.name)) return "TURRET";
   if (category !== "OTHER" && USEFUL.has(category)) return category;
   if (item?.type) { const m = TYPE_TO_CAT[item.type]; if (m) return m; }
   for (const [re, cat] of NAME_PATTERNS) { if (re.test(hpName)) return cat; }
@@ -223,7 +225,7 @@ function computeStats(
     irSig += pickNum(s, "irSignature");
   };
 
-  // ÔöÇÔöÇ Weapons: accumulate into a single combined power column ÔöÇÔöÇ
+  // ── Weapons: accumulate into a single combined power column ──
   let weaponPowerMin = 0;
   let weaponPowerMax = 0;
   let weaponEmMax = 0;
@@ -296,7 +298,7 @@ function computeStats(
       }
       cats[pCat].allocated += allocPips;
 
-      // WEAPONS ÔåÆ accumulate into single combined column (game mechanic: 1 column for all weapons)
+      // WEAPONS → accumulate into single combined column (game mechanic: 1 column for all weapons)
       if (pCat === "weapons") {
         if (totalPips > 0) {
           weaponPowerMin += powerMin;
@@ -332,7 +334,7 @@ function computeStats(
       }
     }
 
-    // Power plants: always output ÔÇö prefer DB value over static JSON
+    // Power plants: always output — prefer DB value over static JSON
     if (cat === "POWER_PLANT") {
       const dbPower = pickNum(s, "powerOutput");
       const ppOutput = dbPower > 0 ? dbPower : (pn?.genP ?? 0);
@@ -391,7 +393,7 @@ function computeStats(
     }
   }
 
-  // ÔöÇÔöÇ Push single combined weapons column ÔöÇÔöÇ
+  // ── Push single combined weapons column ──
   if (weaponCount > 0) {
     const weaponAllocPips = instancePower[WEAPON_POWER_ID] ?? 0;
     const combinedPips = Math.min(6, Math.max(1, Math.ceil(weaponPowerMax)));
@@ -430,7 +432,7 @@ function computeStats(
 
   if (flightMode === "NAV") {
     totalDps = 0; totalAlpha = 0; shieldRegen = 0; shieldHp = 0;
-    // NAV mode turns off shields ÔÇö free their power allocation
+    // NAV mode turns off shields — free their power allocation
     for (const inst of instances) {
       if (inst.category === "shields") {
         inst.isOn = false;
@@ -441,7 +443,7 @@ function computeStats(
     cats.shields.allocated = 0;
     cats.shields.minDraw = 0;
   } else {
-    // SCM mode turns off quantum drive ÔÇö free their power allocation
+    // SCM mode turns off quantum drive — free their power allocation
     for (const inst of instances) {
       if (inst.category === "quantum") {
         inst.isOn = false;
@@ -653,7 +655,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
 
   // Legacy compatibility
   setAllocatedPower: (cat, points) => {
-    // No-op in the new model ÔÇö use setInstancePower instead
+    // No-op in the new model — use setInstancePower instead
   },
 
   autoAllocatePower: () => {

@@ -143,6 +143,8 @@ const NAME_PATTERNS: [RegExp, string][] = [
 const USEFUL = new Set(["WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "UTILITY", "RADAR", "COUNTERMEASURE", "LIFE_SUPPORT"]);
 
 function inferCategory(category: string, item: EquippedItem | null, hpName: string): string {
+  // Detect turrets by item name even when category is WEAPON
+  if (category === "WEAPON" && item?.name && /turret/i.test(item.name)) return "TURRET";
   if (category !== "OTHER" && USEFUL.has(category)) return category;
   if (item?.type) { const m = TYPE_TO_CAT[item.type]; if (m) return m; }
   for (const [re, cat] of NAME_PATTERNS) { if (re.test(hpName)) return cat; }
