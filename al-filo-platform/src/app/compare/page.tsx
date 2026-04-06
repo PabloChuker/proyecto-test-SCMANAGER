@@ -36,17 +36,7 @@ export default function ComparePage() {
       <Header subtitle="Ship Comparator" />
 
       {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-2xl font-light tracking-wide text-zinc-100">
-            Ship Comparator
-          </h1>
-          <p className="text-sm text-zinc-500 mt-1.5 max-w-xl">
-            Select up to 3 ships to compare side-by-side. Speed, propulsion, rotation,
-            shields, hull, combat, dimensions, emissions, fuel, quantum, and 40+ specs.
-          </p>
-        </div>
-
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <Suspense fallback={<CompareSkeleton />}>
           <ShipComparator />
         </Suspense>
