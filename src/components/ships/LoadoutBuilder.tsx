@@ -74,23 +74,23 @@ const CAT_CONFIG: Record<string, { label: string; icon: string; accent: string }
 
 // ÔöÇÔöÇ Drag & Drop Widget System (individual blocks) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 type WidgetId =
-  | "weapons" | "missiles" | "accel-radar"
+  | "weapons" | "missiles" | "strafe-profile" | "turning-profile"
   | "shields" | "powerplants" | "coolers" | "maneuver-radar"
   | "quantum" | "radar" | "utility" | "combat-summary"
   | "power-grid" | "signatures" | "balance"
   | "ship-selector" | "ship-card" | "dps-detail";
 
-// Default column assignments ÔÇö 5 columns, exactly like the original layout
+// Default column assignments — 5 columns
 const DEFAULT_COLUMNS: WidgetId[][] = [
-  ["weapons", "missiles", "accel-radar"],                          // Col 1
-  ["shields", "powerplants", "coolers", "maneuver-radar"],         // Col 2
+  ["weapons", "missiles", "strafe-profile"],                       // Col 1
+  ["shields", "powerplants", "coolers", "turning-profile"],        // Col 2
   ["quantum", "radar", "utility", "combat-summary"],               // Col 3
-  ["power-grid", "signatures", "balance"],                         // Col 4
+  ["power-grid", "signatures", "balance", "maneuver-radar"],       // Col 4
   ["ship-selector", "ship-card", "dps-detail"],                    // Col 5
 ];
 
 const WIDGET_LABELS: Record<WidgetId, string> = {
-  weapons: "WEAPONS", missiles: "MISSILES", "accel-radar": "ACCELERATION",
+  weapons: "WEAPONS", missiles: "MISSILES", "strafe-profile": "STRAFE PROFILE", "turning-profile": "TURNING PROFILES",
   shields: "SHIELDS", powerplants: "POWER PLANTS", coolers: "COOLERS", "maneuver-radar": "G-FORCES",
   quantum: "QT DRIVES", radar: "RADAR", utility: "UTILITY", "combat-summary": "COMBAT",
   "power-grid": "POWER GRID", signatures: "SIGNATURES", balance: "BALANCE",
@@ -178,8 +178,10 @@ function renderWidget(
       return weaponHps.length > 0 ? W(<HpGroup title="WEAPONS" icon="Ôû¬" hps={weaponHps} store={store} onClickHp={setPickerHp} accent="#eab308" />) : null;
     case "missiles":
       return missileHps.length > 0 ? W(<HpGroup title="MISSILES & BOMBS" icon="Ôùå" hps={missileHps} store={store} onClickHp={setPickerHp} accent="#f97316" />) : null;
-    case "accel-radar":
-      return W(<div className="bg-zinc-900/80 border border-zinc-800/60 p-3"><div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-1 text-center">Acceleration Profile</div><div className="flex justify-center"><AccelerationRadar shipData={si} /></div></div>);
+    case "strafe-profile":
+      return W(<div className="bg-zinc-900/80 border border-zinc-800/60 p-3"><div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-1 text-center">Strafe Profile</div><div className="flex justify-center"><StrafeProfile3D shipData={si} /></div></div>);
+    case "turning-profile":
+      return W(<div className="bg-zinc-900/80 border border-zinc-800/60 p-3"><div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-1 text-center">Turning Profiles</div><div className="flex justify-center"><TurningProfileRadar shipData={si} /></div></div>);
     case "shields": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "SHIELD");
       return hps.length > 0 ? W(<HpGroup title={CAT_CONFIG.SHIELD.label} icon={CAT_CONFIG.SHIELD.icon} hps={hps} store={store} onClickHp={setPickerHp} accent={CAT_CONFIG.SHIELD.accent} />) : null;
@@ -645,50 +647,246 @@ function DualRadarChart({ axes, size = 220, gridLevels = 5 }: {
   );
 }
 
-function AccelerationRadar({ shipData }: { shipData: any }) {
-  // SCM values
+/** 3D Strafe Profile — isometric octahedron showing movement accelerations (m/s²) with SCM + AFB */
+function StrafeProfile3D({ shipData }: { shipData: any }) {
   const fwd = shipData.accelForward ?? 0;
   const bwd = shipData.accelBackward ?? 0;
   const up = shipData.accelUp ?? 0;
   const down = shipData.accelDown ?? 0;
   const strafe = shipData.accelStrafe ?? 0;
+
+  // Afterburner estimates from boost speed ratios
+  const scmSpd = shipData.scmSpeed ?? 1;
+  const boostFwdSpd = shipData.boostSpeedForward ?? scmSpd;
+  const boostBwdSpd = shipData.boostSpeedBackward ?? scmSpd;
+  const ratioF = scmSpd > 0 ? Math.min(boostFwdSpd / scmSpd, 3) : 1.5;
+  const ratioB = scmSpd > 0 ? Math.min(boostBwdSpd / scmSpd, 3) : 1.3;
+
+  const afbFwd = fwd * ratioF;
+  const afbBwd = bwd * ratioB;
+  const afbUp = up;     // no boost data for vertical/lateral
+  const afbDown = down;
+  const afbStrafe = strafe;
+
+  const W = 260, H = 260;
+  const cx = W / 2, cy = H / 2 + 10;
+  const maxVal = Math.max(fwd, bwd, up, down, strafe, afbFwd, afbBwd, 30);
+  const scale = 80 / maxVal; // normalize so largest axis ≈ 80px
+
+  // Isometric basis vectors
+  const ix = { x: Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) };
+  const iz = { x: -Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) };
+  const iy = { x: 0, y: -1 };
+
+  const project = (x: number, y: number, z: number) => ({
+    px: cx + (x * ix.x + z * iz.x + y * iy.x) * scale,
+    py: cy + (x * ix.y + z * iz.y + y * iy.y) * scale,
+  });
+
+  const axLen = maxVal * 1.35;
+  const xPos = project(axLen, 0, 0);
+  const xNeg = project(-axLen, 0, 0);
+  const yPos = project(0, axLen, 0);
+  const yNeg = project(0, -axLen, 0);
+  const zPos = project(0, 0, axLen);
+  const zNeg = project(0, 0, -axLen);
+
+  // SCM shape vertices: +X(strafe), +Y(up), +Z(fwd), -X(strafe), -Y(down), -Z(bwd)
+  const scmPts = [
+    project(strafe, 0, 0), project(0, up, 0), project(0, 0, fwd),
+    project(-strafe, 0, 0), project(0, -down, 0), project(0, 0, -bwd),
+  ];
+  const afbPts = [
+    project(afbStrafe, 0, 0), project(0, afbUp, 0), project(0, 0, afbFwd),
+    project(-afbStrafe, 0, 0), project(0, -afbDown, 0), project(0, 0, -afbBwd),
+  ];
+
+  const shapeFaces = (pts: { px: number; py: number }[]) => {
+    const eq = [pts[0], pts[2], pts[3], pts[5]];
+    const top = pts[1], bottom = pts[4];
+    return [
+      [eq[0], top, eq[1]], [eq[1], top, eq[2]], [eq[2], top, eq[3]], [eq[3], top, eq[0]],
+      [eq[0], bottom, eq[1]], [eq[1], bottom, eq[2]], [eq[2], bottom, eq[3]], [eq[3], bottom, eq[0]],
+    ];
+  };
+
+  const scmFaces = shapeFaces(scmPts);
+  const afbFaces = shapeFaces(afbPts);
+  const scmColor = "#f59e0b";
+  const afbColor = "#ef4444";
+
+  // Grid ticks
+  const gridMarks = Array.from({ length: 8 }, (_, i) => i + 1).filter(g => g * (30 / maxVal) <= axLen / maxVal * 1.1);
+  const tickGap = Math.ceil(maxVal / 4);
+  const ticks = Array.from({ length: 6 }, (_, i) => (i + 1) * tickGap).filter(v => v < axLen);
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H, overflow: "visible" }}>
+      {/* Grid ticks on Y axis */}
+      {ticks.map(v => {
+        const p = project(0, v, 0);
+        return <g key={`t-${v}`} opacity={0.3}>
+          <line x1={p.px - 3} y1={p.py} x2={p.px + 3} y2={p.py} stroke="#71717a" strokeWidth={0.5} />
+          <text x={p.px + 6} y={p.py + 2} style={{ fontSize: "5px", fontFamily: "monospace", fill: "#52525b" }}>{Math.round(v)}</text>
+        </g>;
+      })}
+
+      {/* 3D axes */}
+      <line x1={xNeg.px} y1={xNeg.py} x2={xPos.px} y2={xPos.py} stroke="#71717a" strokeWidth={0.5} opacity={0.4} />
+      <line x1={yNeg.px} y1={yNeg.py} x2={yPos.px} y2={yPos.py} stroke="#71717a" strokeWidth={0.5} opacity={0.4} />
+      <line x1={zNeg.px} y1={zNeg.py} x2={zPos.px} y2={zPos.py} stroke="#71717a" strokeWidth={0.5} opacity={0.4} />
+
+      {/* AFB diamond (behind, dashed) */}
+      {afbFaces.map((face, i) => (
+        <polygon key={`af-${i}`} points={face.map(p => `${p.px},${p.py}`).join(" ")} fill={afbColor} fillOpacity={0.06} stroke={afbColor} strokeWidth={0.6} strokeLinejoin="round" strokeDasharray="3,2" opacity={0.5} />
+      ))}
+      {afbPts.map((p, i) => <circle key={`av-${i}`} cx={p.px} cy={p.py} r={1.5} fill={afbColor} opacity={0.5} />)}
+
+      {/* SCM diamond (front, solid) */}
+      {scmFaces.map((face, i) => (
+        <polygon key={`sf-${i}`} points={face.map(p => `${p.px},${p.py}`).join(" ")} fill={scmColor} fillOpacity={0.1} stroke={scmColor} strokeWidth={0.8} strokeLinejoin="round" opacity={0.7} />
+      ))}
+      {scmPts.map((p, i) => <circle key={`sv-${i}`} cx={p.px} cy={p.py} r={2} fill={scmColor} stroke="#18181b" strokeWidth={0.5} />)}
+
+      {/* Axis labels */}
+      <text x={xPos.px + 4} y={xPos.py + 2} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Strafe R</text>
+      <text x={xNeg.px - 34} y={xNeg.py + 2} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Strafe L</text>
+      <text x={zPos.px - 18} y={zPos.py + 12} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Fwd</text>
+      <text x={zNeg.px + 4} y={zNeg.py - 4} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Bwd</text>
+      <text x={yPos.px + 4} y={yPos.py + 3} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Up</text>
+      <text x={yNeg.px + 4} y={yNeg.py + 3} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Down</text>
+
+      {/* SCM value labels */}
+      {[
+        { pt: scmPts[2], val: fwd, dx: -24, dy: -8 },
+        { pt: scmPts[5], val: bwd, dx: 8, dy: -4 },
+        { pt: scmPts[1], val: up, dx: 8, dy: -2 },
+        { pt: scmPts[4], val: down, dx: 8, dy: 4 },
+        { pt: scmPts[0], val: strafe, dx: 6, dy: -6 },
+      ].map((item, i) => item.val > 0 ? (
+        <text key={`sl-${i}`} x={item.pt.px + item.dx} y={item.pt.py + item.dy} style={{ fontSize: "7px", fontFamily: "monospace", fill: scmColor, fontWeight: 600 }}>{Math.round(item.val)} m/s²</text>
+      ) : null)}
+
+      {/* AFB value labels (only show if different from SCM) */}
+      {[
+        { pt: afbPts[2], val: afbFwd, scmVal: fwd, dx: -24, dy: 4 },
+        { pt: afbPts[5], val: afbBwd, scmVal: bwd, dx: 8, dy: 8 },
+      ].map((item, i) => item.val > item.scmVal ? (
+        <text key={`al-${i}`} x={item.pt.px + item.dx} y={item.pt.py + item.dy} style={{ fontSize: "6.5px", fontFamily: "monospace", fill: afbColor, fontWeight: 500, opacity: 0.8 }}>{Math.round(item.val)} m/s²</text>
+      ) : null)}
+
+      {/* Legend */}
+      <rect x={4} y={H - 16} width={6} height={6} rx={1} fill={scmColor} opacity={0.8} />
+      <text x={13} y={H - 10} style={{ fontSize: "6px", fontFamily: "monospace", fill: "#71717a" }}>SCM</text>
+      <rect x={40} y={H - 16} width={6} height={6} rx={1} fill={afbColor} opacity={0.6} />
+      <text x={49} y={H - 10} style={{ fontSize: "6px", fontFamily: "monospace", fill: "#71717a" }}>AFB</text>
+    </svg>
+  );
+}
+
+/** Turning Profiles — 3-axis radar chart for Pitch / Yaw / Roll with SCM + AFB */
+function TurningProfileRadar({ shipData }: { shipData: any }) {
   const pitch = shipData.pitchRate ?? 0;
   const yaw = shipData.yawRate ?? 0;
   const roll = shipData.rollRate ?? 0;
-
-  // Boost values (use boosted rates for pitch/yaw/roll, boost speeds for movement)
-  const boostFwd = shipData.boostSpeedForward ?? fwd;
-  const boostBwd = shipData.boostSpeedBackward ?? bwd;
   const boostPitch = shipData.boostedPitch ?? pitch;
   const boostYaw = shipData.boostedYaw ?? yaw;
   const boostRoll = shipData.boostedRoll ?? roll;
-  // No boosted strafe/up/down data ÔÇö use SCM as fallback
-  const boostUp = up;
-  const boostDown = down;
-  const boostStrafe = strafe;
 
-  // Max values for normalization (use boost values as ceiling when available)
-  const maxFwd = Math.max(fwd, boostFwd, 30);
-  const maxBwd = Math.max(bwd, boostBwd, 30);
-  const maxUp = Math.max(up, boostUp, 25);
-  const maxDown = Math.max(down, boostDown, 25);
-  const maxStrafe = Math.max(strafe, boostStrafe, 25);
-  const maxPitch = Math.max(pitch, boostPitch, 100);
-  const maxYaw = Math.max(yaw, boostYaw, 100);
-  const maxRoll = Math.max(roll, boostRoll, 200);
+  const maxPitch = Math.max(pitch, boostPitch, 50);
+  const maxYaw = Math.max(yaw, boostYaw, 50);
+  const maxRoll = Math.max(roll, boostRoll, 100);
 
   const axes = [
-    { label: "Forward",  scm: fwd,    boost: boostFwd,    max: maxFwd },
-    { label: "Up",       scm: up,     boost: boostUp,     max: maxUp },
-    { label: "Strafe",   scm: strafe, boost: boostStrafe,  max: maxStrafe },
-    { label: "Pitch",    scm: pitch,  boost: boostPitch,  max: maxPitch },
-    { label: "Backward", scm: bwd,    boost: boostBwd,    max: maxBwd },
-    { label: "Down",     scm: down,   boost: boostDown,   max: maxDown },
-    { label: "Roll",     scm: roll,   boost: boostRoll,   max: maxRoll },
-    { label: "Yaw",      scm: yaw,    boost: boostYaw,    max: maxYaw },
+    { label: "Pitch",  scm: pitch, boost: boostPitch, max: maxPitch },
+    { label: "Yaw",    scm: yaw,   boost: boostYaw,   max: maxYaw },
+    { label: "Roll",   scm: roll,  boost: boostRoll,  max: maxRoll },
   ];
 
-  return <DualRadarChart axes={axes} size={260} gridLevels={5} />;
+  // Custom 3-axis radar with dual layers (SCM + AFB)
+  const size = 260;
+  const cx = size / 2, cy = size / 2;
+  const radius = size * 0.30;
+  const labelR = size * 0.44;
+  const n = 3;
+  const step = (2 * Math.PI) / n;
+  const start = -Math.PI / 2;
+  const gridLevels = 5;
+
+  const normScm = axes.map(a => a.max > 0 ? Math.min(1, a.scm / a.max) : 0);
+  const normBoost = axes.map(a => a.max > 0 ? Math.min(1, a.boost / a.max) : 0);
+
+  const pts = (vals: number[]) => vals.map((v, i) => {
+    const a = start + i * step;
+    const r = v * radius;
+    return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`;
+  }).join(" ");
+
+  const grids = Array.from({ length: gridLevels }, (_, i) => {
+    const lv = (i + 1) / gridLevels;
+    return axes.map((_, j) => {
+      const a = start + j * step;
+      const r = lv * radius;
+      return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`;
+    }).join(" ");
+  });
+
+  const scmColor = "#f59e0b";
+  const boostColor = "#ef4444";
+
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, overflow: "visible" }}>
+      {/* Grid polygons */}
+      {grids.map((p, i) => <polygon key={i} points={p} fill="none" stroke="#3f3f46" strokeWidth={0.5} opacity={0.4} />)}
+      {/* Axis lines */}
+      {axes.map((_, i) => {
+        const a = start + i * step;
+        return <line key={i} x1={cx} y1={cy} x2={cx + radius * Math.cos(a)} y2={cy + radius * Math.sin(a)} stroke="#3f3f46" strokeWidth={0.5} opacity={0.3} />;
+      })}
+
+      {/* AFB layer (behind, dashed) */}
+      <polygon points={pts(normBoost)} fill={boostColor} fillOpacity={0.08} stroke={boostColor} strokeWidth={1} strokeLinejoin="round" strokeDasharray="3,2" opacity={0.7} />
+      {normBoost.map((v, i) => {
+        const a = start + i * step;
+        const r = v * radius;
+        return v > 0 ? <circle key={`b${i}`} cx={cx + r * Math.cos(a)} cy={cy + r * Math.sin(a)} r={1.5} fill={boostColor} stroke="#18181b" strokeWidth={0.5} opacity={0.6} /> : null;
+      })}
+
+      {/* SCM layer (front, solid) */}
+      <polygon points={pts(normScm)} fill={scmColor} fillOpacity={0.15} stroke={scmColor} strokeWidth={1.5} strokeLinejoin="round" />
+      {normScm.map((v, i) => {
+        const a = start + i * step;
+        const r = v * radius;
+        return <circle key={`s${i}`} cx={cx + r * Math.cos(a)} cy={cy + r * Math.sin(a)} r={2.5} fill={scmColor} stroke="#18181b" strokeWidth={0.8} />;
+      })}
+
+      {/* Labels with dual values */}
+      {axes.map((ax, i) => {
+        const a = start + i * step;
+        const lx = cx + labelR * Math.cos(a);
+        const ly = cy + labelR * Math.sin(a);
+        let anchor = "middle";
+        if (Math.cos(a) > 0.3) anchor = "start";
+        else if (Math.cos(a) < -0.3) anchor = "end";
+        const hasBoost = ax.boost > ax.scm;
+        return (
+          <g key={`l-${i}`}>
+            <text x={lx} y={ly - (hasBoost ? 8 : 4)} textAnchor={anchor} dominantBaseline="middle" className="fill-zinc-400" style={{ fontSize: "9px", fontFamily: "monospace", fontWeight: 600 }}>{ax.label}</text>
+            <text x={lx} y={ly + 5} textAnchor={anchor} dominantBaseline="middle" style={{ fontSize: "10px", fontFamily: "monospace", fill: scmColor, fontWeight: 600 }}>{ax.scm > 0 ? `${Math.round(ax.scm)}°/s` : "—"}</text>
+            {hasBoost && (
+              <text x={lx} y={ly + 17} textAnchor={anchor} dominantBaseline="middle" style={{ fontSize: "8.5px", fontFamily: "monospace", fill: boostColor, fontWeight: 500, opacity: 0.8 }}>{Math.round(ax.boost)}°/s</text>
+            )}
+          </g>
+        );
+      })}
+
+      {/* Legend */}
+      <rect x={4} y={size - 16} width={6} height={6} rx={1} fill={scmColor} opacity={0.8} />
+      <text x={13} y={size - 10} className="fill-zinc-500" style={{ fontSize: "6px", fontFamily: "monospace" }}>SCM</text>
+      <rect x={40} y={size - 16} width={6} height={6} rx={1} fill={boostColor} opacity={0.6} />
+      <text x={49} y={size - 10} className="fill-zinc-500" style={{ fontSize: "6px", fontFamily: "monospace" }}>AFB</text>
+    </svg>
+  );
 }
 
 function GForce3DChart({ shipData }: { shipData: any }) {
