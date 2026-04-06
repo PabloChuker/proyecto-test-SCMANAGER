@@ -144,8 +144,8 @@ function DragWidget({ id, label, children, dragState, onDragStart, onDragOver, o
       onDragEnd={onDragEnd}
       className="relative transition-all duration-150"
       style={{
-        opacity: isDragging ? 0.35 : 1,
-        transform: isOver ? "scale(0.97)" : "scale(1)",
+        ...(isDragging ? { opacity: 0.35 } : {}),
+        ...(isOver ? { transform: "scale(0.97)" } : {}),
       }}
     >
       {/* Drop indicator glow */}
