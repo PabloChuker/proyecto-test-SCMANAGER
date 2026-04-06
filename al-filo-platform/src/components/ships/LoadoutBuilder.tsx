@@ -388,7 +388,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     saveColumns(reset);
   }, []);
 
-  useEffect(() => { if (mountedRef.current) return; mountedRef.current = true; loadShip(shipId, searchParams.get("build") || null); }, [shipId]);
+  useEffect(() => { if (mountedRef.current) return; mountedRef.current = true; const urlShip = searchParams.get("ship"); loadShip(urlShip || shipId, searchParams.get("build") || null); }, [shipId]);
   useEffect(() => { const c = overrides.size; if (!mountedRef.current) return; if (c === overrideCountRef.current && c === 0) return; overrideCountRef.current = c; const encoded = encodeBuild(); const url = new URL(window.location.href); if (encoded) url.searchParams.set("build", encoded); else url.searchParams.delete("build"); window.history.replaceState({}, "", url.toString()); }, [overrides, encodeBuild]);
 
   const stats = getStats();

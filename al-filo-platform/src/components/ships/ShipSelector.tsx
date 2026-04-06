@@ -103,7 +103,17 @@ export function ShipSelector() {
     setOpen(false);
     setSearch("");
     setSelectedMfr(null);
-    router.push("/ships/" + encodeURIComponent(ship.reference));
+    // Stay on current page (e.g. /dps) — only navigate away if on /ships/
+    const path = window.location.pathname;
+    if (path.startsWith("/dps")) {
+      // Stay on DPS calculator, just update query param
+      const url = new URL(window.location.href);
+      url.searchParams.set("ship", ship.reference);
+      url.searchParams.delete("build");
+      window.history.replaceState({}, "", url.toString());
+    } else {
+      router.push("/ships/" + encodeURIComponent(ship.reference));
+    }
     loadShip(ship.reference);
   };
 
