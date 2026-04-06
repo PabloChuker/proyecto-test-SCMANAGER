@@ -82,7 +82,7 @@ export function ShipComparator() {
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/ships/compare?ids=${ids.join(",")}`);
+      const res = await fetch('/api/ships/compare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: ids }) });
       if (!res.ok) throw new Error("Failed to fetch");
       const json = await res.json();
       const data = json.data || [];

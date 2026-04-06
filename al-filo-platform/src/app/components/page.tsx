@@ -126,10 +126,10 @@ function ComponentsPageInner() {
   const fetchData = useCallback(async (cat: CategoryDef, s: string, size: string, sort: string, dir: string) => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ table: cat.table, sort, dir, limit: "200" });
-      if (s) params.set("search", s);
-      if (size) params.set("size", size);
-      const res = await fetch(`/api/components/browse?${params}`);
+      const body: Record<string, any> = { table: cat.table, sort, dir, limit: 200 };
+      if (s) body.search = s;
+      if (size) body.size = size;
+      const res = await fetch(`/api/components/browse`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       const json = await res.json();
       if (json.rows) {
         setRows(json.rows);

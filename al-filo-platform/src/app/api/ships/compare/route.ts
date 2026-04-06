@@ -1,13 +1,15 @@
 export const dynamic = 'force-dynamic';
 // =============================================================================
-// SC LABS — GET /api/ships/compare v2
+// SC LABS — GET/POST /api/ships/compare v2
 // Returns detailed data for up to 3 ships for side-by-side comparison.
-// Query: ?ids=uuid1,uuid2,uuid3
+// GET: Query: ?ids=uuid1,uuid2,uuid3
+// POST: Body: { ids: ["uuid1", "uuid2", "uuid3"] } or { ids: "uuid1,uuid2,uuid3" }
 // Rewritten to use raw SQL (matching /api/ships/[id] approach).
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { validateIds, parsePostBody, secureHeaders } from "@/lib/api-security";
 
 function numOrNull(v: any): number | null {
   if (v === null || v === undefined) return null;
@@ -15,21 +17,16 @@ function numOrNull(v: any): number | null {
   return isNaN(n) ? null : n;
 }
 
-export async function GET(request: NextRequest) {
+/**
+ * Shared internal function for fetching and comparing ships.
+ * Called by both GET and POST handlers.
+ */
+async function compareShips(ids: string[]) {
+  if (ids.length === 0) {
+    return { error: "No valid ids provided", status: 400, data: null };
+  }
+
   try {
-    const { searchParams } = new URL(request.url);
-    const idsParam = searchParams.get("ids");
-
-    if (!idsParam) {
-      return NextResponse.json({ error: "Missing ids parameter" }, { status: 400 });
-    }
-
-    const ids = idsParam.split(",").slice(0, 3).map((s) => s.trim()).filter(Boolean);
-
-    if (ids.length === 0) {
-      return NextResponse.json({ error: "No valid ids provided" }, { status: 400 });
-    }
-
     // ── 1. Fetch ships by ID ──
     // Build parameterized query for multiple IDs
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
@@ -39,7 +36,7 @@ export async function GET(request: NextRequest) {
     );
 
     if (ships.length === 0) {
-      return NextResponse.json({ data: [] });
+      return { error: null, status: 200, data: [] };
     }
 
     // ── 2. Fetch satellite data for all ships ──
@@ -292,11 +289,88 @@ export async function GET(request: NextRequest) {
     // Reorder to match input ids order
     const ordered = ids.map((id) => result.find((r) => r.id === id)).filter(Boolean);
 
-    return NextResponse.json({ data: ordered }, {
-      headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" },
-    });
+    return { error: null, status: 200, data: ordered };
   } catch (error) {
     console.error("[API /ships/compare] Error:", error);
-    return NextResponse.json({ error: "Error comparing ships" }, { status: 500 });
+    return { error: "Error comparing ships", status: 500, data: null };
+  }
+}
+
+/**
+ * GET handler — backward compatible query parameter support
+ */
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const idsParam = searchParams.get("ids");
+
+    if (!idsParam) {
+      return NextResponse.json(
+        { error: "Missing ids parameter" },
+        { status: 400, headers: secureHeaders() }
+      );
+    }
+
+    // Validate IDs using security utility
+    const ids = validateIds(idsParam, 3);
+
+    const result = await compareShips(ids);
+
+    if (result.error) {
+      return NextResponse.json(
+        { error: result.error },
+        { status: result.status, headers: secureHeaders() }
+      );
+    }
+
+    return NextResponse.json(
+      { data: result.data },
+      { headers: secureHeaders() }
+    );
+  } catch (error) {
+    console.error("[API /ships/compare GET] Error:", error);
+    return NextResponse.json(
+      { error: "Error comparing ships" },
+      { status: 500, headers: secureHeaders() }
+    );
+  }
+}
+
+/**
+ * POST handler — accepts JSON body with ids array or comma-separated string
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await parsePostBody<{ ids?: string[] | string }>(request);
+
+    if (!body || !body.ids) {
+      return NextResponse.json(
+        { error: "Missing or invalid ids in request body" },
+        { status: 400, headers: secureHeaders() }
+      );
+    }
+
+    // Validate IDs using security utility
+    const ids = validateIds(body.ids, 3);
+
+    const result = await compareShips(ids);
+
+    if (result.error) {
+      return NextResponse.json(
+        { error: result.error },
+        { status: result.status, headers: secureHeaders() }
+      );
+    }
+
+    return NextResponse.json(
+      { data: result.data },
+      { headers: secureHeaders() }
+    );
+  } catch (error) {
+    console.error("[API /ships/compare POST] Error:", error);
+    return NextResponse.json(
+      { error: "Error comparing ships" },
+      { status: 500, headers: secureHeaders() }
+    );
   }
 }

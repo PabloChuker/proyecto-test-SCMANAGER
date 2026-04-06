@@ -81,14 +81,16 @@ export function ShipsGrid() {
       setError(null);
 
       try {
-        const params = new URLSearchParams();
-        if (urlSearch)       params.set("search", urlSearch);
-        if (urlManufacturer) params.set("manufacturer", urlManufacturer);
-        if (urlSortBy)       params.set("sortBy", urlSortBy);
-        if (urlPage > 1)     params.set("page", urlPage.toString());
-        params.set("limit", "24");
+        const body: Record<string, any> = { limit: 24 };
+        if (urlSearch)       body.search = urlSearch;
+        if (urlManufacturer) body.manufacturer = urlManufacturer;
+        if (urlSortBy)       body.sortBy = urlSortBy;
+        if (urlPage > 1)     body.page = urlPage;
 
-        const res = await fetch(`/api/ships?${params.toString()}`, {
+        const res = await fetch('/api/ships', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
           signal: controller.signal,
         });
 

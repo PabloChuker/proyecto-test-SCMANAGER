@@ -50,7 +50,7 @@ export function ShipSearchDropdown({
     if (allLoaded) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/ships?limit=500&sort=name&order=asc");
+      const res = await fetch("/api/ships", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ limit: 500, sort: "name", order: "asc" }) });
       if (!res.ok) return;
       const json = await res.json();
       setAllShips(json.data || []);
@@ -75,7 +75,10 @@ export function ShipSearchDropdown({
       setLoading(true);
 
       try {
-        const res = await fetch(`/api/ships?search=${encodeURIComponent(q)}&limit=30`, {
+        const res = await fetch("/api/ships", {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ search: q, limit: 30 }),
           signal: ctrl.signal,
         });
         if (!res.ok) return;

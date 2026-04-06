@@ -47,7 +47,7 @@ export function AddShipModal({ onClose }: AddShipModalProps) {
     setIsSearching(true);
     searchTimeoutRef.current = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/ships?search=${encodeURIComponent(searchQuery)}&limit=10`);
+        const res = await fetch('/api/ships', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ search: searchQuery, limit: 10 }) });
         if (res.ok) {
           const data = await res.json();
           setSearchResults(data.data || []);

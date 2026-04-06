@@ -37,7 +37,7 @@ export function ShipSelector() {
   useEffect(() => {
     if (ships.length > 0) return;
     setLoading(true);
-    fetch("/api/ships?limit=500")
+    fetch('/api/ships', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ limit: 500 }) })
       .then(r => r.json())
       .then(d => {
         const list: ShipEntry[] = (d.data ?? d.items ?? []).map((s: any) => ({
