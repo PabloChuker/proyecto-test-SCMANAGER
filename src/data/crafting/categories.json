@@ -1,0 +1,42 @@
+[
+  {
+    "id": "ammo",
+    "name": "Ammunition",
+    "icon": "⊕",
+    "subCategories": [
+      { "id": "smg_magazines", "name": "SMG Magazines" },
+      { "id": "rifle_magazines", "name": "Rifle Magazines" },
+      { "id": "sniper_magazines", "name": "Sniper Magazines" },
+      { "id": "shotgun_shells", "name": "Shotgun Shells" },
+      { "id": "lmg_drums", "name": "LMG Drums" },
+      { "id": "energy_batteries", "name": "Energy Batteries" }
+    ]
+  },
+  {
+    "id": "fps_weapons",
+    "name": "FPS Weapons",
+    "icon": "⬡",
+    "subCategories": [
+      { "id": "pistols", "name": "Pistols" },
+      { "id": "smgs", "name": "SMGs" },
+      { "id": "assault_rifles", "name": "Assault Rifles" },
+      { "id": "shotguns", "name": "Shotguns" },
+      { "id": "sniper_rifles", "name": "Sniper Rifles" },
+      { "id": "lmgs", "name": "LMGs" },
+      { "id": "energy_weapons", "name": "Energy Weapons" },
+      { "id": "special", "name": "Special Weapons" }
+    ]
+  },
+  {
+    "id": "fps_armor",
+    "name": "FPS Armor",
+    "icon": "◇",
+    "subCategories": [
+      { "id": "helmets", "name": "Helmets" },
+      { "id": "chest", "name": "Chest Armor" },
+      { "id": "arms", "name": "Arm Armor" },
+      { "id": "legs", "name": "Leg Armor" },
+      { "id": "undersuits", "name": "Undersuits" }
+    ]
+  }
+]

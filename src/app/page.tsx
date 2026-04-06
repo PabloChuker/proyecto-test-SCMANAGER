@@ -21,13 +21,13 @@ const PANELS = [
     id: "mining",
     label: "Mining & Industry",
     video: "/media/videos/mineria.mp4",
-    href: "#",
+    href: "/mining",
   },
   {
     id: "crafting",
     label: "Crafting",
     video: "/media/videos/crafting.mp4",
-    href: "#",
+    href: "/crafting",
   },
 ];
 
