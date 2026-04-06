@@ -793,14 +793,13 @@ function TurningProfileRadar({ shipData }: { shipData: any }) {
   const boostYaw = shipData.boostedYaw ?? yaw;
   const boostRoll = shipData.boostedRoll ?? roll;
 
-  const maxPitch = Math.max(pitch, boostPitch, 50);
-  const maxYaw = Math.max(yaw, boostYaw, 50);
-  const maxRoll = Math.max(roll, boostRoll, 100);
+  // Use a single global max so the triangle shape reflects real proportions
+  const globalMax = Math.max(pitch, yaw, roll, boostPitch, boostYaw, boostRoll, 50);
 
   const axes = [
-    { label: "Pitch",  scm: pitch, boost: boostPitch, max: maxPitch },
-    { label: "Yaw",    scm: yaw,   boost: boostYaw,   max: maxYaw },
-    { label: "Roll",   scm: roll,  boost: boostRoll,  max: maxRoll },
+    { label: "Pitch",  scm: pitch, boost: boostPitch, max: globalMax },
+    { label: "Yaw",    scm: yaw,   boost: boostYaw,   max: globalMax },
+    { label: "Roll",   scm: roll,  boost: boostRoll,  max: globalMax },
   ];
 
   // Custom 3-axis radar with dual layers (SCM + AFB)
