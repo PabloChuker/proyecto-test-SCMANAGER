@@ -283,63 +283,109 @@ function buildChildren(
 ): any[] {
   if (!loadoutJson || !Array.isArray(loadoutJson)) return [];
 
-  return loadoutJson
-    .map((entry, idx) => {
-      const className = entry.ClassName || entry.className || "";
-      let equippedItem: any = null;
+  const results: any[] = [];
 
-      // Try to find the weapon in weapon_guns
-      if (weaponMap.has(className)) {
-        equippedItem = buildWeaponItem(weaponMap.get(className));
+  for (let idx = 0; idx < loadoutJson.length; idx++) {
+    const entry = loadoutJson[idx];
+    const className = entry.ClassName || entry.className || "";
+    let equippedItem: any = null;
+
+    // Check if this is a gimbal/mount with nested Children (turret sub-weapons)
+    const isGimbal = className.startsWith("Mount_Gimbal") ||
+      entry.Type?.includes("Turret.GunTurret") ||
+      entry.Type?.includes("TurretBase");
+
+    if (isGimbal && Array.isArray(entry.Children) && entry.Children.length > 0) {
+      // This is a gimbal inside a turret — flatten to show the actual weapons
+      for (let ci = 0; ci < entry.Children.length; ci++) {
+        const child = entry.Children[ci];
+        const childClassName = child.ClassName || child.className || "";
+        let childItem: any = null;
+
+        if (weaponMap.has(childClassName)) {
+          childItem = buildWeaponItem(weaponMap.get(childClassName));
+        }
+        if (!childItem) {
+          childItem = {
+            id: child.UUID || `child-${idx}-${ci}`,
+            reference: childClassName,
+            name: child.Name || childClassName,
+            localizedName: null,
+            className: childClassName,
+            type: "WEAPON",
+            size: child.Size ?? child.MaxSize ?? null,
+            grade: null,
+            manufacturer: null,
+            componentStats: null,
+          };
+        }
+
+        results.push({
+          id: child.UUID || `child-${idx}-${ci}`,
+          hardpointName: child.HardpointName || entry.HardpointName || `sub_${idx}_${ci}`,
+          category: "WEAPON",
+          minSize: 0,
+          maxSize: child.MaxSize ?? childItem.size ?? entry.MaxSize ?? 0,
+          isFixed: false,
+          equippedItem: childItem,
+        });
       }
+      continue;
+    }
 
-      // If not found and it's a weapon type, build from loadout entry data
-      if (!equippedItem && entry.Type?.includes("WeaponGun")) {
-        equippedItem = {
-          id: entry.UUID || `child-${idx}`,
-          reference: className,
-          name: entry.Name || className,
-          localizedName: null,
-          className,
-          type: "WEAPON",
-          size: entry.Size ?? null,
-          grade: gradeToLetter(entry.Grade),
-          manufacturer: null,
-          componentStats: null,
-        };
-      }
+    // Direct weapon (no nested children)
+    if (weaponMap.has(className)) {
+      equippedItem = buildWeaponItem(weaponMap.get(className));
+    }
 
-      // Missile
-      if (!equippedItem && entry.Type?.includes("Missile")) {
-        equippedItem = {
-          id: entry.UUID || `child-${idx}`,
-          reference: className,
-          name: entry.Name || className,
-          localizedName: null,
-          className,
-          type: "MISSILE_RACK",
-          size: entry.Size ?? null,
-          grade: gradeToLetter(entry.Grade),
-          manufacturer: null,
-          componentStats: entry.DamageTotal
-            ? { alphaDamage: Number(entry.DamageTotal), damage: Number(entry.DamageTotal) }
-            : null,
-        };
-      }
-
-      if (!equippedItem) return null;
-
-      return {
+    // If not found and it's a weapon type, build from loadout entry data
+    if (!equippedItem && (entry.Type?.includes("WeaponGun") || isGimbal)) {
+      equippedItem = {
         id: entry.UUID || `child-${idx}`,
-        hardpointName: entry.HardpointName || `sub_${idx}`,
-        category: equippedItem.type === "MISSILE_RACK" ? "MISSILE_RACK" : "WEAPON",
-        minSize: 0,
-        maxSize: entry.MaxSize ?? equippedItem.size ?? 0,
-        isFixed: false,
-        equippedItem,
+        reference: className,
+        name: entry.Name || className,
+        localizedName: null,
+        className,
+        type: "WEAPON",
+        size: entry.Size ?? null,
+        grade: gradeToLetter(entry.Grade),
+        manufacturer: null,
+        componentStats: null,
       };
-    })
-    .filter(Boolean);
+    }
+
+    // Missile
+    if (!equippedItem && entry.Type?.includes("Missile")) {
+      equippedItem = {
+        id: entry.UUID || `child-${idx}`,
+        reference: className,
+        name: entry.Name || className,
+        localizedName: null,
+        className,
+        type: "MISSILE_RACK",
+        size: entry.Size ?? null,
+        grade: gradeToLetter(entry.Grade),
+        manufacturer: null,
+        componentStats: entry.DamageTotal
+          ? { alphaDamage: Number(entry.DamageTotal), damage: Number(entry.DamageTotal) }
+          : null,
+      };
+    }
+
+    if (!equippedItem) continue;
+
+    results.push({
+      id: entry.UUID || `child-${idx}`,
+      hardpointName: entry.HardpointName || `sub_${idx}`,
+      category: equippedItem.type === "MISSILE_RACK" ? "MISSILE_RACK" : "WEAPON",
+      minSize: 0,
+      maxSize: entry.MaxSize ?? equippedItem.size ?? 0,
+      isFixed: false,
+      equippedItem,
+    });
+  }
+
+  return results;
 }
 
 // ─── Main handler ───────────────────────────────────────────────────────────
@@ -406,7 +452,7 @@ export async function GET(
       .map((hp) => hp.default_item_class)
       .filter((c) => c && c !== "");
 
-    // Also collect class names from loadout_json children
+    // Also collect class names from loadout_json children (including nested Children)
     const childClasses: string[] = [];
     for (const hp of hardpointRows) {
       const loadout = hp.loadout_json;
@@ -414,6 +460,13 @@ export async function GET(
         for (const entry of loadout) {
           if (entry.ClassName) childClasses.push(entry.ClassName);
           if (entry.className) childClasses.push(entry.className);
+          // Turret gimbals may have nested Children with the actual weapons
+          if (Array.isArray(entry.Children)) {
+            for (const child of entry.Children) {
+              if (child.ClassName) childClasses.push(child.ClassName);
+              if (child.className) childClasses.push(child.className);
+            }
+          }
         }
       }
     }
