@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import Header from "@/app/assets/header/Header";
 
 // ─── Category Definitions ────────────────────────────────────────────────────
 
@@ -17,21 +18,21 @@ interface CategoryDef {
   table: string;
   label: string;
   shortLabel: string;
-  icon: string; // path to PNG in /public/icons/
+  icon: string; // path to PNG in /public/media/icons/
 }
 
 const CATEGORIES: CategoryDef[] = [
-  { key: "ships", table: "ships", label: "Ships", shortLabel: "Ships", icon: "/icons/Ships.png" },
-  { key: "weapons", table: "weapon_guns", label: "Weapons", shortLabel: "Weapons", icon: "/icons/weapons.png" },
-  { key: "missiles", table: "missiles", label: "Missiles", shortLabel: "Missiles", icon: "/icons/missile.png" },
-  { key: "emps", table: "emps", label: "EMP Generators", shortLabel: "EMP", icon: "/icons/emp.png" },
-  { key: "shields", table: "shields", label: "Shields", shortLabel: "Shields", icon: "/icons/shilds.png" },
-  { key: "power_plants", table: "power_plants", label: "Power Plants", shortLabel: "Power", icon: "/icons/power_plants.png" },
-  { key: "coolers", table: "coolers", label: "Coolers", shortLabel: "Coolers", icon: "/icons/coolers.png" },
-  { key: "quantum_drives", table: "quantum_drives", label: "Quantum Drives", shortLabel: "QD", icon: "/icons/Quantum_drives.png" },
-  { key: "qed", table: "quantum_interdiction_generators", label: "QED Generators", shortLabel: "QED", icon: "/icons/interdict_pulse.png" },
-  { key: "mining", table: "mining_lasers", label: "Mining Lasers", shortLabel: "Mining", icon: "/icons/mining_lasers.png" },
-  { key: "turrets", table: "turrets", label: "Turrets", shortLabel: "Turrets", icon: "/icons/weapons.png" },
+  { key: "ships", table: "ships", label: "Ships", shortLabel: "Ships", icon: "/media/icons/Ships.png" },
+  { key: "weapons", table: "weapon_guns", label: "Weapons", shortLabel: "Weapons", icon: "/media/icons/weapons.png" },
+  { key: "missiles", table: "missiles", label: "Missiles", shortLabel: "Missiles", icon: "/media/icons/missile.png" },
+  { key: "emps", table: "emps", label: "EMP Generators", shortLabel: "EMP", icon: "/media/icons/emp.png" },
+  { key: "shields", table: "shields", label: "Shields", shortLabel: "Shields", icon: "/media/icons/shilds.png" },
+  { key: "power_plants", table: "power_plants", label: "Power Plants", shortLabel: "Power", icon: "/media/icons/power_plants.png" },
+  { key: "coolers", table: "coolers", label: "Coolers", shortLabel: "Coolers", icon: "/media/icons/coolers.png" },
+  { key: "quantum_drives", table: "quantum_drives", label: "Quantum Drives", shortLabel: "QD", icon: "/media/icons/Quantum_drives.png" },
+  { key: "qed", table: "quantum_interdiction_generators", label: "QED Generators", shortLabel: "QED", icon: "/media/icons/interdict_pulse.png" },
+  { key: "mining", table: "mining_lasers", label: "Mining Lasers", shortLabel: "Mining", icon: "/media/icons/mining_lasers.png" },
+  { key: "turrets", table: "turrets", label: "Turrets", shortLabel: "Turrets", icon: "/media/icons/weapons.png" },
 ];
 
 // ─── Column type ────────────────────────────────────────────────────────────
@@ -181,7 +182,7 @@ function ComponentsPageInner() {
         autoPlay loop muted playsInline
         className="fixed inset-0 w-full h-full object-cover opacity-10 pointer-events-none z-0"
       >
-        <source src="/videos/bg.mp4" type="video/mp4" />
+        <source src="/media/videos/bg.mp4" type="video/mp4" />
       </video>
       <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/70 via-zinc-950/85 to-zinc-950/95 pointer-events-none z-0" />
 
@@ -189,7 +190,7 @@ function ComponentsPageInner() {
       <aside className="w-12 sm:w-14 flex-shrink-0 bg-zinc-950/90 border-r border-zinc-800/50 flex flex-col items-center py-3 gap-1 z-20 sticky top-0 h-screen overflow-y-auto">
         {/* Logo */}
         <Link href="/" className="mb-3 opacity-60 hover:opacity-100 transition-opacity">
-          <Image src="/sclabs-logo.png" alt="SC LABS" width={24} height={24} className="rounded-sm" />
+          <Image src="/media/images/sclabs-logo.png" alt="SC LABS" width={24} height={24} className="rounded-sm" />
         </Link>
         <div className="w-6 h-px bg-zinc-800 mb-2" />
 
@@ -199,7 +200,7 @@ function ComponentsPageInner() {
           title="DPS Calculator"
           className="w-9 h-9 sm:w-10 sm:h-10 rounded flex items-center justify-center transition-all duration-150 hover:bg-zinc-800/40 mb-1"
         >
-          <Image src="/icons/DPS_calculator.png" alt="DPS Calculator" width={22} height={22} className="opacity-50 hover:opacity-80 transition-opacity" />
+          <Image src="/media/icons/DPS_calculator.png" alt="DPS Calculator" width={22} height={22} className="opacity-50 hover:opacity-80 transition-opacity" />
         </Link>
         <div className="w-6 h-px bg-zinc-800 mb-1" />
 
@@ -232,32 +233,7 @@ function ComponentsPageInner() {
 
       {/* ═══ Main Content ═══ */}
       <div className="flex-1 z-10 relative flex flex-col overflow-hidden">
-        {/* ── Top Header ── */}
-        <header className="border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-30">
-          <div className="px-4 sm:px-6 flex items-center justify-between h-12">
-            <div className="flex items-center gap-3">
-              <Link href="/" className="text-xs tracking-[0.15em] uppercase text-zinc-600 hover:text-zinc-400 transition-colors">
-                SC Labs
-              </Link>
-              <div className="h-4 w-px bg-zinc-800" />
-              <span className="text-xs tracking-[0.12em] uppercase text-amber-500 font-medium">
-                {activeCategory.label}
-              </span>
-              {meta.total > 0 && (
-                <span className="text-[10px] font-mono text-zinc-600 bg-zinc-800/50 px-1.5 py-0.5 rounded">
-                  {meta.total}
-                </span>
-              )}
-            </div>
-
-            {/* Nav links */}
-            <nav className="hidden sm:flex items-center gap-5 text-xs tracking-[0.1em] uppercase text-zinc-600">
-              <Link href="/ships" className="hover:text-zinc-400 transition-colors">Naves</Link>
-              <Link href="/compare" className="hover:text-zinc-400 transition-colors">Comparar</Link>
-              <span className="text-amber-500 border-b border-amber-500/30 pb-0.5">Componentes</span>
-            </nav>
-          </div>
-        </header>
+        <Header subtitle={activeCategory.label} />
 
         {/* ── Filters Bar ── */}
         <div className="border-b border-zinc-800/30 bg-zinc-950/60 px-4 sm:px-6 py-2 flex items-center gap-3 flex-wrap">

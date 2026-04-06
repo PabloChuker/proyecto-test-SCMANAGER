@@ -26,6 +26,7 @@ import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { ShipsGrid } from "./ShipsGrid";
+import Header from "@/app/assets/header/Header";
 
 export const metadata = {
   title: "Ship Database — SC LABS",
@@ -47,39 +48,7 @@ export default function ShipsPage() {
       </video>
       <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/60 via-zinc-950/80 to-zinc-950/95 pointer-events-none z-0" />
 
-      {/* ── Header ── */}
-      <header className="border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-4">
-              <Link href="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-                <Image
-                  src="/media/images/sclabs-logo.png"
-                  alt="SC LABS"
-                  width={32}
-                  height={32}
-                  className="rounded-sm"
-                />
-                <span className="text-sm font-medium tracking-[0.2em] uppercase text-zinc-400">
-                  SC Labs
-                </span>
-              </Link>
-              <div className="h-5 w-px bg-zinc-800" />
-              <span className="text-xs tracking-[0.15em] uppercase text-zinc-600">
-                Ship Database
-              </span>
-            </div>
-
-            {/* Nav links placeholder */}
-            <nav className="hidden sm:flex items-center gap-6 text-xs tracking-[0.12em] uppercase text-zinc-600">
-              <span className="text-amber-500 border-b border-amber-500/30 pb-0.5">Naves</span>
-              <Link href="/compare" className="hover:text-zinc-400 transition-colors">Comparar</Link>
-              <Link href="/components" className="hover:text-zinc-400 transition-colors">Componentes</Link>
-              <span className="hover:text-zinc-400 cursor-not-allowed opacity-40">Minería</span>
-            </nav>
-          </div>
-        </div>
-      </header>
+      <Header subtitle="Ship Database" />
 
       {/* ── Contenido ── */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">

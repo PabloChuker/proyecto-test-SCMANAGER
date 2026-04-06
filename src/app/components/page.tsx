@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
+import Header from "@/app/assets/header/Header";
 
 // ─── Category Definitions ────────────────────────────────────────────────────
 
@@ -232,32 +233,7 @@ function ComponentsPageInner() {
 
       {/* ═══ Main Content ═══ */}
       <div className="flex-1 z-10 relative flex flex-col overflow-hidden">
-        {/* ── Top Header ── */}
-        <header className="border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-30">
-          <div className="px-4 sm:px-6 flex items-center justify-between h-12">
-            <div className="flex items-center gap-3">
-              <Link href="/" className="text-xs tracking-[0.15em] uppercase text-zinc-600 hover:text-zinc-400 transition-colors">
-                SC Labs
-              </Link>
-              <div className="h-4 w-px bg-zinc-800" />
-              <span className="text-xs tracking-[0.12em] uppercase text-amber-500 font-medium">
-                {activeCategory.label}
-              </span>
-              {meta.total > 0 && (
-                <span className="text-[10px] font-mono text-zinc-600 bg-zinc-800/50 px-1.5 py-0.5 rounded">
-                  {meta.total}
-                </span>
-              )}
-            </div>
-
-            {/* Nav links */}
-            <nav className="hidden sm:flex items-center gap-5 text-xs tracking-[0.1em] uppercase text-zinc-600">
-              <Link href="/ships" className="hover:text-zinc-400 transition-colors">Naves</Link>
-              <Link href="/compare" className="hover:text-zinc-400 transition-colors">Comparar</Link>
-              <span className="text-amber-500 border-b border-amber-500/30 pb-0.5">Componentes</span>
-            </nav>
-          </div>
-        </header>
+        <Header subtitle={activeCategory.label} />
 
         {/* ── Filters Bar ── */}
         <div className="border-b border-zinc-800/30 bg-zinc-950/60 px-4 sm:px-6 py-2 flex items-center gap-3 flex-wrap">

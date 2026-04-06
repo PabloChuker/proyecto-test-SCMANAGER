@@ -3,31 +3,18 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import Header from "@/app/assets/header/Header";
+import { SIDEBAR_ITEMS } from "@/app/assets/header/navigation";
 import MiningLoadoutCalculator from "./MiningLoadoutCalculator";
 import WorkOrderCalculator from "./WorkOrderCalculator";
 import RockCalculator from "./RockCalculator";
 import RefineryDataTable from "./RefineryDataTable";
 
-const SIDEBAR_ITEMS = [
-  { key: "dps", href: "/dps", label: "DPS Calculator", icon: "/icons/DPS_calculator.png" },
-  { key: "ships", href: "/components?tab=ships", label: "Ships", icon: "/icons/Ships.png" },
-  { key: "weapons", href: "/components?tab=weapons", label: "Weapons", icon: "/icons/weapons.png" },
-  { key: "missiles", href: "/components?tab=missiles", label: "Missiles", icon: "/icons/missile.png" },
-  { key: "emps", href: "/components?tab=emps", label: "EMP Generators", icon: "/icons/emp.png" },
-  { key: "shields", href: "/components?tab=shields", label: "Shields", icon: "/icons/shilds.png" },
-  { key: "power_plants", href: "/components?tab=power_plants", label: "Power Plants", icon: "/icons/power_plants.png" },
-  { key: "coolers", href: "/components?tab=coolers", label: "Coolers", icon: "/icons/coolers.png" },
-  { key: "quantum_drives", href: "/components?tab=quantum_drives", label: "Quantum Drives", icon: "/icons/Quantum_drives.png" },
-  { key: "qed", href: "/components?tab=qed", label: "QED Generators", icon: "/icons/interdict_pulse.png" },
-  { key: "mining", href: "/mining", label: "Mining Tools", icon: "/icons/mining_lasers.png" },
-  { key: "turrets", href: "/components?tab=turrets", label: "Turrets", icon: "/icons/weapons.png" },
-];
-
 const TABS = [
-  { id: "loadout", label: "Loadout Calculator", icon: "⚙" },
-  { id: "workorder", label: "Work Order", icon: "📊" },
+  { id: "loadout", label: "Loadout Calculator", icon: "⛏" },
+  { id: "workorder", label: "Work Order", icon: "📈" },
   { id: "rock", label: "Rock Calculator", icon: "🪨" },
-  { id: "refinery", label: "Refinery Data", icon: "🏭" },
+  { id: "refinery", label: "Refinery Data", icon: "🏚" },
 ];
 
 export default function MiningPage() {
@@ -77,26 +64,7 @@ export default function MiningPage() {
       </aside>
 
       <div className="flex-1 z-10 relative flex flex-col min-w-0">
-        <header className="sticky top-0 z-40 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl">
-          <div className="px-4 sm:px-6 flex items-center justify-between h-12">
-            <div className="flex items-center gap-3">
-              <Link href="/" className="text-xs tracking-[0.15em] uppercase text-zinc-600 hover:text-zinc-400 transition-colors">
-                SC Labs
-              </Link>
-              <div className="h-4 w-px bg-zinc-800" />
-              <span className="text-xs tracking-[0.12em] uppercase text-amber-500 font-medium">
-                Mining & Industry
-              </span>
-            </div>
-
-            <nav className="hidden sm:flex items-center gap-5 text-[10px] tracking-[0.12em] uppercase text-zinc-600">
-              <span className="text-amber-500 border-b border-amber-500/30 pb-0.5">Mining</span>
-              <Link href="/dps" className="hover:text-zinc-400 transition-colors">DPS</Link>
-              <Link href="/compare" className="hover:text-zinc-400 transition-colors">Compare</Link>
-              <Link href="/components" className="hover:text-zinc-400 transition-colors">Components</Link>
-            </nav>
-          </div>
-        </header>
+        <Header subtitle="Mining & Industry" />
 
         <div className="relative px-4 py-3 flex-1 overflow-y-auto">
           <div className="mb-4 border-b border-zinc-800/60 flex gap-2">
