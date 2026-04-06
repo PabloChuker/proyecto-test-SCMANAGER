@@ -1,0 +1,1084 @@
+[
+  {
+    "id": "fs9-magazine-75",
+    "name": "FS-9 Magazine (75)",
+    "category": "ammo",
+    "subCategory": "smg_magazines",
+    "description": "Standard 75-round SMG magazine",
+    "craftTime": 120,
+    "parts": [
+      { "component": "Magazine Body", "materials": [{ "id": "iron", "qty": 0.02 }, { "id": "copper", "qty": 0.01 }] },
+      { "component": "Spring Assembly", "materials": [{ "id": "titanium", "qty": 0.005 }, { "id": "steel", "qty": 0.008 }] }
+    ],
+    "qualityEffects": { "capacity": { "base": 75, "maxBonus": 0 }, "reliability": { "base": 100, "maxBonus": 5 } }
+  },
+  {
+    "id": "fs9-magazine-100",
+    "name": "FS-9 Magazine (100)",
+    "category": "ammo",
+    "subCategory": "smg_magazines",
+    "description": "Extended 100-round SMG magazine",
+    "craftTime": 150,
+    "parts": [
+      { "component": "Magazine Body", "materials": [{ "id": "iron", "qty": 0.03 }, { "id": "copper", "qty": 0.015 }] },
+      { "component": "Spring Assembly", "materials": [{ "id": "titanium", "qty": 0.008 }, { "id": "aluminum", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "capacity": { "base": 100, "maxBonus": 0 }, "reliability": { "base": 100, "maxBonus": 6 } }
+  },
+  {
+    "id": "p4ar-magazine-30",
+    "name": "P4-AR Magazine (30)",
+    "category": "ammo",
+    "subCategory": "rifle_magazines",
+    "description": "Standard 30-round assault rifle magazine",
+    "craftTime": 140,
+    "parts": [
+      { "component": "Magazine Body", "materials": [{ "id": "steel", "qty": 0.02 }, { "id": "aluminum", "qty": 0.015 }] },
+      { "component": "Follower & Spring", "materials": [{ "id": "titanium", "qty": 0.01 }, { "id": "copper", "qty": 0.008 }] }
+    ],
+    "qualityEffects": { "capacity": { "base": 30, "maxBonus": 0 }, "reliability": { "base": 100, "maxBonus": 5 } }
+  },
+  {
+    "id": "p4ar-magazine-60",
+    "name": "P4-AR Magazine (60)",
+    "category": "ammo",
+    "subCategory": "rifle_magazines",
+    "description": "Extended 60-round assault rifle magazine",
+    "craftTime": 180,
+    "parts": [
+      { "component": "Magazine Body", "materials": [{ "id": "steel", "qty": 0.035 }, { "id": "aluminum", "qty": 0.025 }] },
+      { "component": "Follower & Spring", "materials": [{ "id": "titanium", "qty": 0.015 }, { "id": "copper", "qty": 0.01 }] },
+      { "component": "Reinforcement Ribs", "materials": [{ "id": "iron", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "capacity": { "base": 60, "maxBonus": 0 }, "reliability": { "base": 100, "maxBonus": 6 } }
+  },
+  {
+    "id": "gp33-magazine-40",
+    "name": "GP-33 Magazine (40)",
+    "category": "ammo",
+    "subCategory": "rifle_magazines",
+    "description": "GP-33 40-round rifle magazine",
+    "craftTime": 160,
+    "parts": [
+      { "component": "Magazine Body", "materials": [{ "id": "steel", "qty": 0.025 }, { "id": "aluminum", "qty": 0.018 }] },
+      { "component": "Spring Assembly", "materials": [{ "id": "titanium", "qty": 0.012 }, { "id": "copper", "qty": 0.008 }] }
+    ],
+    "qualityEffects": { "capacity": { "base": 40, "maxBonus": 0 }, "reliability": { "base": 100, "maxBonus": 5 } }
+  },
+  {
+    "id": "atzkav-magazine-8",
+    "name": "Atzkav Mag (8)",
+    "category": "ammo",
+    "subCategory": "sniper_magazines",
+    "description": "Sniper rifle 8-round magazine",
+    "craftTime": 120,
+    "parts": [
+      { "component": "Magazine Body", "materials": [{ "id": "steel", "qty": 0.018 }, { "id": "gold", "qty": 0.005 }] },
+      { "component": "Precision Spring", "materials": [{ "id": "titanium", "qty": 0.008 }, { "id": "beryl", "qty": 0.003 }] }
+    ],
+    "qualityEffects": { "capacity": { "base": 8, "maxBonus": 0 }, "reliability": { "base": 100, "maxBonus": 8 } }
+  },
+  {
+    "id": "atzkav-magazine-12",
+    "name": "Atzkav Mag (12)",
+    "category": "ammo",
+    "subCategory": "sniper_magazines",
+    "description": "Sniper rifle 12-round magazine",
+    "craftTime": 150,
+    "parts": [
+      { "component": "Magazine Body", "materials": [{ "id": "steel", "qty": 0.025 }, { "id": "gold", "qty": 0.008 }] },
+      { "component": "Precision Spring", "materials": [{ "id": "titanium", "qty": 0.012 }, { "id": "beryl", "qty": 0.005 }] },
+      { "component": "Separator Plates", "materials": [{ "id": "aluminum", "qty": 0.008 }] }
+    ],
+    "qualityEffects": { "capacity": { "base": 12, "maxBonus": 0 }, "reliability": { "base": 100, "maxBonus": 8 } }
+  },
+  {
+    "id": "ravager-shells-6",
+    "name": "Ravager Shells (6)",
+    "category": "ammo",
+    "subCategory": "shotgun_shells",
+    "description": "Shotgun 6-shell magazine",
+    "craftTime": 130,
+    "parts": [
+      { "component": "Shell Casing", "materials": [{ "id": "copper", "qty": 0.03 }, { "id": "titanium", "qty": 0.01 }] },
+      { "component": "Shot Pellets", "materials": [{ "id": "tungsten", "qty": 0.04 }, { "id": "iron", "qty": 0.02 }] }
+    ],
+    "qualityEffects": { "capacity": { "base": 6, "maxBonus": 0 }, "damage": { "base": 100, "maxBonus": 12 } }
+  },
+  {
+    "id": "ravager-shells-8",
+    "name": "Ravager Shells (8)",
+    "category": "ammo",
+    "subCategory": "shotgun_shells",
+    "description": "Shotgun 8-shell magazine",
+    "craftTime": 160,
+    "parts": [
+      { "component": "Shell Casing", "materials": [{ "id": "copper", "qty": 0.04 }, { "id": "titanium", "qty": 0.015 }] },
+      { "component": "Shot Pellets", "materials": [{ "id": "tungsten", "qty": 0.06 }, { "id": "iron", "qty": 0.03 }] },
+      { "component": "Spring Mechanism", "materials": [{ "id": "steel", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "capacity": { "base": 8, "maxBonus": 0 }, "damage": { "base": 100, "maxBonus": 12 } }
+  },
+  {
+    "id": "demeco-drum-80",
+    "name": "Demeco LMG Drum (80)",
+    "category": "ammo",
+    "subCategory": "lmg_drums",
+    "description": "Light machine gun 80-round drum magazine",
+    "craftTime": 200,
+    "parts": [
+      { "component": "Drum Body", "materials": [{ "id": "steel", "qty": 0.05 }, { "id": "aluminum", "qty": 0.03 }] },
+      { "component": "Feed System", "materials": [{ "id": "titanium", "qty": 0.02 }, { "id": "copper", "qty": 0.015 }] },
+      { "component": "Spring Assembly", "materials": [{ "id": "steel", "qty": 0.015 }, { "id": "beryl", "qty": 0.005 }] }
+    ],
+    "qualityEffects": { "capacity": { "base": 80, "maxBonus": 0 }, "reliability": { "base": 100, "maxBonus": 8 } }
+  },
+  {
+    "id": "demeco-drum-100",
+    "name": "Demeco LMG Drum (100)",
+    "category": "ammo",
+    "subCategory": "lmg_drums",
+    "description": "Light machine gun 100-round drum magazine",
+    "craftTime": 240,
+    "parts": [
+      { "component": "Drum Body", "materials": [{ "id": "steel", "qty": 0.065 }, { "id": "aluminum", "qty": 0.04 }] },
+      { "component": "Feed System", "materials": [{ "id": "titanium", "qty": 0.025 }, { "id": "copper", "qty": 0.02 }] },
+      { "component": "Spring Assembly", "materials": [{ "id": "steel", "qty": 0.02 }, { "id": "beryl", "qty": 0.008 }] }
+    ],
+    "qualityEffects": { "capacity": { "base": 100, "maxBonus": 0 }, "reliability": { "base": 100, "maxBonus": 8 } }
+  },
+  {
+    "id": "demeco-drum-150",
+    "name": "Demeco LMG Drum (150)",
+    "category": "ammo",
+    "subCategory": "lmg_drums",
+    "description": "Light machine gun 150-round drum magazine",
+    "craftTime": 300,
+    "parts": [
+      { "component": "Drum Body", "materials": [{ "id": "steel", "qty": 0.08 }, { "id": "aluminum", "qty": 0.05 }] },
+      { "component": "Feed System", "materials": [{ "id": "titanium", "qty": 0.03 }, { "id": "copper", "qty": 0.025 }] },
+      { "component": "Spring Assembly", "materials": [{ "id": "steel", "qty": 0.025 }, { "id": "beryl", "qty": 0.01 }] },
+      { "component": "Drum Separator", "materials": [{ "id": "aluminum", "qty": 0.015 }] }
+    ],
+    "qualityEffects": { "capacity": { "base": 150, "maxBonus": 0 }, "reliability": { "base": 100, "maxBonus": 8 } }
+  },
+  {
+    "id": "arclight-battery-30",
+    "name": "Arclight Battery (30)",
+    "category": "ammo",
+    "subCategory": "energy_batteries",
+    "description": "30-charge energy pistol battery",
+    "craftTime": 90,
+    "parts": [
+      { "component": "Battery Core", "materials": [{ "id": "hephaestanite", "qty": 0.01 }, { "id": "quartz", "qty": 0.01 }] },
+      { "component": "Conductor Coil", "materials": [{ "id": "copper", "qty": 0.008 }, { "id": "gold", "qty": 0.003 }] }
+    ],
+    "qualityEffects": { "chargeRate": { "base": 100, "maxBonus": 10 }, "capacity": { "base": 30, "maxBonus": 0 } }
+  },
+  {
+    "id": "arclight-battery-rifle",
+    "name": "Arclight Rifle Battery (50)",
+    "category": "ammo",
+    "subCategory": "energy_batteries",
+    "description": "50-charge energy rifle battery",
+    "craftTime": 120,
+    "parts": [
+      { "component": "Battery Core", "materials": [{ "id": "hephaestanite", "qty": 0.015 }, { "id": "quartz", "qty": 0.015 }] },
+      { "component": "Conductor Coil", "materials": [{ "id": "copper", "qty": 0.012 }, { "id": "gold", "qty": 0.005 }] },
+      { "component": "Heat Sink", "materials": [{ "id": "aluminum", "qty": 0.008 }] }
+    ],
+    "qualityEffects": { "chargeRate": { "base": 100, "maxBonus": 12 }, "capacity": { "base": 50, "maxBonus": 0 } }
+  },
+  {
+    "id": "arclight-battery-rifle-80",
+    "name": "Arclight Rifle Battery (80)",
+    "category": "ammo",
+    "subCategory": "energy_batteries",
+    "description": "80-charge extended energy rifle battery",
+    "craftTime": 160,
+    "parts": [
+      { "component": "Battery Core", "materials": [{ "id": "hephaestanite", "qty": 0.025 }, { "id": "quartz", "qty": 0.025 }] },
+      { "component": "Conductor Coil", "materials": [{ "id": "copper", "qty": 0.018 }, { "id": "gold", "qty": 0.008 }] },
+      { "component": "Heat Sink", "materials": [{ "id": "aluminum", "qty": 0.015 }, { "id": "titanium", "qty": 0.008 }] }
+    ],
+    "qualityEffects": { "chargeRate": { "base": 100, "maxBonus": 12 }, "capacity": { "base": 80, "maxBonus": 0 } }
+  },
+  {
+    "id": "ballista-battery-40",
+    "name": "BR-2 Ballista Battery (40)",
+    "category": "ammo",
+    "subCategory": "energy_batteries",
+    "description": "40-charge ballistic energy weapon battery",
+    "craftTime": 110,
+    "parts": [
+      { "component": "Battery Core", "materials": [{ "id": "hephaestanite", "qty": 0.012 }, { "id": "diamond", "qty": 0.008 }] },
+      { "component": "Conductor Coil", "materials": [{ "id": "copper", "qty": 0.01 }, { "id": "gold", "qty": 0.005 }] }
+    ],
+    "qualityEffects": { "chargeRate": { "base": 100, "maxBonus": 15 }, "capacity": { "base": 40, "maxBonus": 0 } }
+  },
+  {
+    "id": "arclight-pistol",
+    "name": "Arclight Pistol",
+    "category": "fps_weapons",
+    "subCategory": "pistols",
+    "description": "Energy pistol with decent accuracy and rate of fire",
+    "craftTime": 420,
+    "parts": [
+      { "component": "Slide Assembly", "materials": [{ "id": "titanium", "qty": 0.04 }, { "id": "aluminum", "qty": 0.03 }] },
+      { "component": "Energy Chamber", "materials": [{ "id": "hephaestanite", "qty": 0.02 }, { "id": "quartz", "qty": 0.02 }] },
+      { "component": "Grip Frame", "materials": [{ "id": "polymer", "qty": 0.015 }, { "id": "copper", "qty": 0.01 }] },
+      { "component": "Firing Mechanism", "materials": [{ "id": "steel", "qty": 0.015 }, { "id": "beryl", "qty": 0.005 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 75, "maxBonus": 15 }, "fireRate": { "base": 600, "maxBonus": 60 }, "damage": { "base": 45, "maxBonus": 8 } }
+  },
+  {
+    "id": "lh86-pistol",
+    "name": "LH86 Pistol",
+    "category": "fps_weapons",
+    "subCategory": "pistols",
+    "description": "Reliable ballistic service pistol",
+    "craftTime": 400,
+    "parts": [
+      { "component": "Slide Assembly", "materials": [{ "id": "steel", "qty": 0.05 }, { "id": "titanium", "qty": 0.03 }] },
+      { "component": "Barrel", "materials": [{ "id": "tungsten", "qty": 0.02 }, { "id": "steel", "qty": 0.02 }] },
+      { "component": "Grip Frame", "materials": [{ "id": "aluminum", "qty": 0.02 }, { "id": "polymer", "qty": 0.015 }] },
+      { "component": "Trigger Assembly", "materials": [{ "id": "steel", "qty": 0.012 }, { "id": "copper", "qty": 0.008 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 80, "maxBonus": 12 }, "fireRate": { "base": 500, "maxBonus": 40 }, "damage": { "base": 50, "maxBonus": 10 } }
+  },
+  {
+    "id": "p4sc-pistol",
+    "name": "P4-SC Pistol",
+    "category": "fps_weapons",
+    "subCategory": "pistols",
+    "description": "Combat-focused plasma pistol",
+    "craftTime": 450,
+    "parts": [
+      { "component": "Energy Housing", "materials": [{ "id": "titanium", "qty": 0.05 }, { "id": "hephaestanite", "qty": 0.025 }] },
+      { "component": "Plasma Generator", "materials": [{ "id": "quantanium", "qty": 0.015 }, { "id": "gold", "qty": 0.01 }] },
+      { "component": "Cooling System", "materials": [{ "id": "aluminum", "qty": 0.02 }, { "id": "beryl", "qty": 0.01 }] },
+      { "component": "Control Circuit", "materials": [{ "id": "silicon", "qty": 0.012 }, { "id": "copper", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 70, "maxBonus": 18 }, "fireRate": { "base": 450, "maxBonus": 50 }, "damage": { "base": 65, "maxBonus": 15 } }
+  },
+  {
+    "id": "coda-pistol",
+    "name": "Coda Pistol",
+    "category": "fps_weapons",
+    "subCategory": "pistols",
+    "description": "Heavy impact service pistol",
+    "craftTime": 430,
+    "parts": [
+      { "component": "Slide Assembly", "materials": [{ "id": "steel", "qty": 0.055 }, { "id": "tungsten", "qty": 0.025 }] },
+      { "component": "Barrel", "materials": [{ "id": "tungsten", "qty": 0.025 }, { "id": "titanium", "qty": 0.015 }] },
+      { "component": "Grip Frame", "materials": [{ "id": "aluminum", "qty": 0.025 }, { "id": "polymer", "qty": 0.02 }] },
+      { "component": "Recoil Dampening", "materials": [{ "id": "beryl", "qty": 0.012 }, { "id": "copper", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 72, "maxBonus": 14 }, "fireRate": { "base": 400, "maxBonus": 35 }, "damage": { "base": 62, "maxBonus": 18 } }
+  },
+  {
+    "id": "fs9-smg",
+    "name": "FS-9 SMG",
+    "category": "fps_weapons",
+    "subCategory": "smgs",
+    "description": "Lightweight submachine gun with high rate of fire",
+    "craftTime": 480,
+    "parts": [
+      { "component": "Receiver", "materials": [{ "id": "aluminum", "qty": 0.04 }, { "id": "titanium", "qty": 0.03 }] },
+      { "component": "Barrel Assembly", "materials": [{ "id": "steel", "qty": 0.035 }, { "id": "tungsten", "qty": 0.015 }] },
+      { "component": "Stock Assembly", "materials": [{ "id": "polymer", "qty": 0.025 }, { "id": "aluminum", "qty": 0.015 }] },
+      { "component": "Fire Control", "materials": [{ "id": "steel", "qty": 0.02 }, { "id": "copper", "qty": 0.015 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 65, "maxBonus": 12 }, "fireRate": { "base": 900, "maxBonus": 100 }, "damage": { "base": 35, "maxBonus": 6 } }
+  },
+  {
+    "id": "lumin-v-smg",
+    "name": "Lumin V SMG",
+    "category": "fps_weapons",
+    "subCategory": "smgs",
+    "description": "Energy-based submachine gun",
+    "craftTime": 520,
+    "parts": [
+      { "component": "Energy Receiver", "materials": [{ "id": "titanium", "qty": 0.05 }, { "id": "hephaestanite", "qty": 0.025 }] },
+      { "component": "Energy Lens", "materials": [{ "id": "quartz", "qty": 0.025 }, { "id": "diamond", "qty": 0.015 }] },
+      { "component": "Cooling Jacket", "materials": [{ "id": "aluminum", "qty": 0.03 }, { "id": "beryl", "qty": 0.015 }] },
+      { "component": "Power Circuit", "materials": [{ "id": "copper", "qty": 0.02 }, { "id": "silicon", "qty": 0.015 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 70, "maxBonus": 15 }, "fireRate": { "base": 800, "maxBonus": 90 }, "damage": { "base": 40, "maxBonus": 12 } }
+  },
+  {
+    "id": "p4ar-rifle",
+    "name": "P4-AR Rifle",
+    "category": "fps_weapons",
+    "subCategory": "assault_rifles",
+    "description": "Versatile assault rifle platform",
+    "craftTime": 540,
+    "parts": [
+      { "component": "Receiver", "materials": [{ "id": "steel", "qty": 0.05 }, { "id": "titanium", "qty": 0.03 }] },
+      { "component": "Barrel Assembly", "materials": [{ "id": "tungsten", "qty": 0.03 }, { "id": "steel", "qty": 0.025 }] },
+      { "component": "Stock Assembly", "materials": [{ "id": "polymer", "qty": 0.03 }, { "id": "aluminum", "qty": 0.02 }] },
+      { "component": "Gas System", "materials": [{ "id": "steel", "qty": 0.02 }, { "id": "beryl", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 80, "maxBonus": 16 }, "fireRate": { "base": 650, "maxBonus": 75 }, "damage": { "base": 55, "maxBonus": 12 } }
+  },
+  {
+    "id": "gp33-rifle",
+    "name": "GP-33 Rifle",
+    "category": "fps_weapons",
+    "subCategory": "assault_rifles",
+    "description": "Precision assault rifle with improved accuracy",
+    "craftTime": 560,
+    "parts": [
+      { "component": "Receiver", "materials": [{ "id": "steel", "qty": 0.055 }, { "id": "titanium", "qty": 0.035 }] },
+      { "component": "Barrel Assembly", "materials": [{ "id": "tungsten", "qty": 0.035 }, { "id": "beryl", "qty": 0.015 }] },
+      { "component": "Stock Assembly", "materials": [{ "id": "polymer", "qty": 0.035 }, { "id": "aluminum", "qty": 0.025 }] },
+      { "component": "Precision Optics Mount", "materials": [{ "id": "steel", "qty": 0.02 }, { "id": "quartz", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 88, "maxBonus": 12 }, "fireRate": { "base": 600, "maxBonus": 60 }, "damage": { "base": 58, "maxBonus": 11 } }
+  },
+  {
+    "id": "s71-rifle",
+    "name": "S71 Rifle",
+    "category": "fps_weapons",
+    "subCategory": "assault_rifles",
+    "description": "Scout-focused tactical rifle",
+    "craftTime": 530,
+    "parts": [
+      { "component": "Receiver", "materials": [{ "id": "steel", "qty": 0.048 }, { "id": "titanium", "qty": 0.032 }] },
+      { "component": "Barrel Assembly", "materials": [{ "id": "tungsten", "qty": 0.032 }, { "id": "steel", "qty": 0.023 }] },
+      { "component": "Stock Assembly", "materials": [{ "id": "polymer", "qty": 0.028 }, { "id": "aluminum", "qty": 0.018 }] },
+      { "component": "Tactical Rail", "materials": [{ "id": "steel", "qty": 0.018 }, { "id": "beryl", "qty": 0.008 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 82, "maxBonus": 15 }, "fireRate": { "base": 580, "maxBonus": 65 }, "damage": { "base": 52, "maxBonus": 10 } }
+  },
+  {
+    "id": "demeco-rifle",
+    "name": "Demeco Rifle",
+    "category": "fps_weapons",
+    "subCategory": "assault_rifles",
+    "description": "Heavy assault rifle with sustained fire capability",
+    "craftTime": 590,
+    "parts": [
+      { "component": "Receiver", "materials": [{ "id": "steel", "qty": 0.065 }, { "id": "titanium", "qty": 0.04 }] },
+      { "component": "Barrel Assembly", "materials": [{ "id": "tungsten", "qty": 0.04 }, { "id": "steel", "qty": 0.03 }] },
+      { "component": "Stock Assembly", "materials": [{ "id": "polymer", "qty": 0.04 }, { "id": "aluminum", "qty": 0.03 }] },
+      { "component": "Cooling System", "materials": [{ "id": "aluminum", "qty": 0.025 }, { "id": "beryl", "qty": 0.015 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 75, "maxBonus": 14 }, "fireRate": { "base": 750, "maxBonus": 85 }, "damage": { "base": 60, "maxBonus": 13 } }
+  },
+  {
+    "id": "ravager-212-shotgun",
+    "name": "Ravager-212 Shotgun",
+    "category": "fps_weapons",
+    "subCategory": "shotguns",
+    "description": "Combat shotgun with massive stopping power",
+    "craftTime": 520,
+    "parts": [
+      { "component": "Receiver", "materials": [{ "id": "steel", "qty": 0.06 }, { "id": "titanium", "qty": 0.04 }] },
+      { "component": "Barrel Tube", "materials": [{ "id": "tungsten", "qty": 0.04 }, { "id": "steel", "qty": 0.035 }] },
+      { "component": "Stock Assembly", "materials": [{ "id": "polymer", "qty": 0.04 }, { "id": "aluminum", "qty": 0.025 }] },
+      { "component": "Trigger Housing", "materials": [{ "id": "steel", "qty": 0.025 }, { "id": "copper", "qty": 0.015 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 60, "maxBonus": 8 }, "fireRate": { "base": 100, "maxBonus": 15 }, "damage": { "base": 120, "maxBonus": 25 } }
+  },
+  {
+    "id": "klaus-werner-shotgun",
+    "name": "Klaus & Werner Shotgun",
+    "category": "fps_weapons",
+    "subCategory": "shotguns",
+    "description": "Precision combat shotgun",
+    "craftTime": 540,
+    "parts": [
+      { "component": "Receiver", "materials": [{ "id": "steel", "qty": 0.062 }, { "id": "titanium", "qty": 0.042 }] },
+      { "component": "Barrel Tube", "materials": [{ "id": "tungsten", "qty": 0.042 }, { "id": "beryl", "qty": 0.018 }] },
+      { "component": "Stock Assembly", "materials": [{ "id": "polymer", "qty": 0.042 }, { "id": "aluminum", "qty": 0.028 }] },
+      { "component": "Choke System", "materials": [{ "id": "steel", "qty": 0.028 }, { "id": "quartz", "qty": 0.012 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 72, "maxBonus": 14 }, "fireRate": { "base": 110, "maxBonus": 18 }, "damage": { "base": 115, "maxBonus": 22 } }
+  },
+  {
+    "id": "atzkav-sniper",
+    "name": "Atzkav Sniper Rifle",
+    "category": "fps_weapons",
+    "subCategory": "sniper_rifles",
+    "description": "Long-range precision sniper rifle",
+    "craftTime": 580,
+    "parts": [
+      { "component": "Receiver", "materials": [{ "id": "steel", "qty": 0.055 }, { "id": "titanium", "qty": 0.035 }] },
+      { "component": "Barrel Assembly", "materials": [{ "id": "tungsten", "qty": 0.04 }, { "id": "beryl", "qty": 0.02 }] },
+      { "component": "Stock Assembly", "materials": [{ "id": "polymer", "qty": 0.035 }, { "id": "aluminum", "qty": 0.025 }] },
+      { "component": "Optics Mount", "materials": [{ "id": "steel", "qty": 0.025 }, { "id": "quartz", "qty": 0.015 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 95, "maxBonus": 5 }, "fireRate": { "base": 60, "maxBonus": 8 }, "damage": { "base": 95, "maxBonus": 20 } }
+  },
+  {
+    "id": "a03-sniper",
+    "name": "A03 Sniper Rifle",
+    "category": "fps_weapons",
+    "subCategory": "sniper_rifles",
+    "description": "Advanced precision sniper weapon",
+    "craftTime": 600,
+    "parts": [
+      { "component": "Receiver", "materials": [{ "id": "steel", "qty": 0.058 }, { "id": "titanium", "qty": 0.038 }] },
+      { "component": "Barrel Assembly", "materials": [{ "id": "tungsten", "qty": 0.042 }, { "id": "diamond", "qty": 0.018 }] },
+      { "component": "Stock Assembly", "materials": [{ "id": "polymer", "qty": 0.038 }, { "id": "aluminum", "qty": 0.028 }] },
+      { "component": "Precision Optics", "materials": [{ "id": "quartz", "qty": 0.02 }, { "id": "silicon", "qty": 0.012 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 96, "maxBonus": 4 }, "fireRate": { "base": 50, "maxBonus": 6 }, "damage": { "base": 100, "maxBonus": 22 } }
+  },
+  {
+    "id": "demeco-lmg",
+    "name": "Demeco LMG",
+    "category": "fps_weapons",
+    "subCategory": "lmgs",
+    "description": "Light machine gun with sustained firepower",
+    "craftTime": 620,
+    "parts": [
+      { "component": "Receiver", "materials": [{ "id": "steel", "qty": 0.07 }, { "id": "titanium", "qty": 0.045 }] },
+      { "component": "Barrel Assembly", "materials": [{ "id": "tungsten", "qty": 0.045 }, { "id": "steel", "qty": 0.035 }] },
+      { "component": "Stock Assembly", "materials": [{ "id": "polymer", "qty": 0.045 }, { "id": "aluminum", "qty": 0.035 }] },
+      { "component": "Cooling Jacket", "materials": [{ "id": "aluminum", "qty": 0.035 }, { "id": "beryl", "qty": 0.02 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 70, "maxBonus": 12 }, "fireRate": { "base": 800, "maxBonus": 90 }, "damage": { "base": 62, "maxBonus": 14 } }
+  },
+  {
+    "id": "br2-ballista",
+    "name": "BR-2 Ballista",
+    "category": "fps_weapons",
+    "subCategory": "energy_weapons",
+    "description": "Energy ballistic weapon system",
+    "craftTime": 600,
+    "parts": [
+      { "component": "Energy Housing", "materials": [{ "id": "titanium", "qty": 0.06 }, { "id": "hephaestanite", "qty": 0.03 }] },
+      { "component": "Energy Accelerator", "materials": [{ "id": "quantanium", "qty": 0.02 }, { "id": "quartz", "qty": 0.025 }] },
+      { "component": "Cooling System", "materials": [{ "id": "aluminum", "qty": 0.035 }, { "id": "beryl", "qty": 0.018 }] },
+      { "component": "Power Management", "materials": [{ "id": "copper", "qty": 0.025 }, { "id": "silicon", "qty": 0.015 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 78, "maxBonus": 16 }, "fireRate": { "base": 200, "maxBonus": 30 }, "damage": { "base": 75, "maxBonus": 20 } }
+  },
+  {
+    "id": "custodian-energy",
+    "name": "Custodian Energy Weapon",
+    "category": "fps_weapons",
+    "subCategory": "energy_weapons",
+    "description": "Defensive energy weapon platform",
+    "craftTime": 580,
+    "parts": [
+      { "component": "Energy Housing", "materials": [{ "id": "titanium", "qty": 0.055 }, { "id": "hephaestanite", "qty": 0.028 }] },
+      { "component": "Energy Core", "materials": [{ "id": "hephaestanite", "qty": 0.025 }, { "id": "gold", "qty": 0.015 }] },
+      { "component": "Heat Management", "materials": [{ "id": "aluminum", "qty": 0.032 }, { "id": "beryl", "qty": 0.016 }] },
+      { "component": "Safety Circuit", "materials": [{ "id": "copper", "qty": 0.022 }, { "id": "silicon", "qty": 0.012 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 75, "maxBonus": 18 }, "fireRate": { "base": 250, "maxBonus": 35 }, "damage": { "base": 70, "maxBonus": 18 } }
+  },
+  {
+    "id": "scalpel-railgun",
+    "name": "Scalpel Railgun",
+    "category": "fps_weapons",
+    "subCategory": "special",
+    "description": "Advanced railgun with electromagnetic acceleration",
+    "craftTime": 720,
+    "parts": [
+      { "component": "Magnetic Chamber", "materials": [{ "id": "titanium", "qty": 0.075 }, { "id": "quantanium", "qty": 0.035 }] },
+      { "component": "Rail Assembly", "materials": [{ "id": "tungsten", "qty": 0.05 }, { "id": "copper", "qty": 0.04 }] },
+      { "component": "Power Supply", "materials": [{ "id": "hephaestanite", "qty": 0.03 }, { "id": "gold", "qty": 0.02 }] },
+      { "component": "Targeting System", "materials": [{ "id": "silicon", "qty": 0.02 }, { "id": "quartz", "qty": 0.015 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 92, "maxBonus": 8 }, "fireRate": { "base": 30, "maxBonus": 4 }, "damage": { "base": 150, "maxBonus": 35 } }
+  },
+  {
+    "id": "frag-launcher",
+    "name": "Frag Grenade Launcher",
+    "category": "fps_weapons",
+    "subCategory": "special",
+    "description": "Explosive ordnance delivery system",
+    "craftTime": 680,
+    "parts": [
+      { "component": "Launcher Tube", "materials": [{ "id": "steel", "qty": 0.065 }, { "id": "titanium", "qty": 0.04 }] },
+      { "component": "Firing Mechanism", "materials": [{ "id": "steel", "qty": 0.035 }, { "id": "copper", "qty": 0.025 }] },
+      { "component": "Magazine Assembly", "materials": [{ "id": "aluminum", "qty": 0.04 }, { "id": "steel", "qty": 0.025 }] },
+      { "component": "Impact Sensor", "materials": [{ "id": "silicon", "qty": 0.018 }, { "id": "beryl", "qty": 0.012 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 65, "maxBonus": 10 }, "fireRate": { "base": 45, "maxBonus": 8 }, "damage": { "base": 110, "maxBonus": 30 } }
+  },
+  {
+    "id": "pembroke-light-helmet",
+    "name": "Pembroke Light Helmet",
+    "category": "fps_armor",
+    "subCategory": "helmets",
+    "description": "Lightweight protective helmet for scouts",
+    "craftTime": 360,
+    "parts": [
+      { "component": "Shell Structure", "materials": [{ "id": "titanium", "qty": 0.035 }, { "id": "aluminum", "qty": 0.025 }] },
+      { "component": "Visor System", "materials": [{ "id": "quartz", "qty": 0.015 }, { "id": "copper", "qty": 0.008 }] },
+      { "component": "Interior Padding", "materials": [{ "id": "polymer", "qty": 0.02 }, { "id": "beryl", "qty": 0.005 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 60, "maxBonus": 12 }, "comfort": { "base": 85, "maxBonus": 10 } }
+  },
+  {
+    "id": "pembroke-medium-helmet",
+    "name": "Pembroke Medium Helmet",
+    "category": "fps_armor",
+    "subCategory": "helmets",
+    "description": "Standard protective helmet",
+    "craftTime": 420,
+    "parts": [
+      { "component": "Shell Structure", "materials": [{ "id": "steel", "qty": 0.045 }, { "id": "titanium", "qty": 0.035 }] },
+      { "component": "Visor System", "materials": [{ "id": "quartz", "qty": 0.02 }, { "id": "copper", "qty": 0.012 }] },
+      { "component": "Interior Padding", "materials": [{ "id": "polymer", "qty": 0.025 }, { "id": "beryl", "qty": 0.01 }] },
+      { "component": "Comms Module", "materials": [{ "id": "silicon", "qty": 0.008 }, { "id": "copper", "qty": 0.006 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 75, "maxBonus": 15 }, "comfort": { "base": 80, "maxBonus": 12 } }
+  },
+  {
+    "id": "orc-helmet-mk1",
+    "name": "ORC Helmet MkI",
+    "category": "fps_armor",
+    "subCategory": "helmets",
+    "description": "Heavy combat protection helmet",
+    "craftTime": 480,
+    "parts": [
+      { "component": "Shell Structure", "materials": [{ "id": "steel", "qty": 0.06 }, { "id": "tungsten", "qty": 0.03 }] },
+      { "component": "Reinforced Visor", "materials": [{ "id": "diamond", "qty": 0.015 }, { "id": "quartz", "qty": 0.025 }] },
+      { "component": "Interior Padding", "materials": [{ "id": "polymer", "qty": 0.03 }, { "id": "beryl", "qty": 0.015 }] },
+      { "component": "Comms & Sensor", "materials": [{ "id": "silicon", "qty": 0.012 }, { "id": "copper", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 92, "maxBonus": 12 }, "comfort": { "base": 65, "maxBonus": 15 } }
+  },
+  {
+    "id": "pembroke-light-chest",
+    "name": "Pembroke Light Chest",
+    "category": "fps_armor",
+    "subCategory": "chest",
+    "description": "Lightweight chest protection",
+    "craftTime": 420,
+    "parts": [
+      { "component": "Plate Carrier", "materials": [{ "id": "titanium", "qty": 0.045 }, { "id": "aluminum", "qty": 0.035 }] },
+      { "component": "Armor Plates", "materials": [{ "id": "ceramic", "qty": 0.035 }, { "id": "tungsten", "qty": 0.018 }] },
+      { "component": "Backing Material", "materials": [{ "id": "polymer", "qty": 0.025 }, { "id": "beryl", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 65, "maxBonus": 14 }, "comfort": { "base": 82, "maxBonus": 12 } }
+  },
+  {
+    "id": "pembroke-medium-chest",
+    "name": "Pembroke Medium Chest",
+    "category": "fps_armor",
+    "subCategory": "chest",
+    "description": "Standard chest armor",
+    "craftTime": 480,
+    "parts": [
+      { "component": "Plate Carrier", "materials": [{ "id": "steel", "qty": 0.055 }, { "id": "titanium", "qty": 0.04 }] },
+      { "component": "Armor Plates", "materials": [{ "id": "ceramic", "qty": 0.045 }, { "id": "tungsten", "qty": 0.025 }] },
+      { "component": "Backing Material", "materials": [{ "id": "polymer", "qty": 0.03 }, { "id": "beryl", "qty": 0.015 }] },
+      { "component": "Load Distribution", "materials": [{ "id": "aluminum", "qty": 0.015 }, { "id": "copper", "qty": 0.008 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 78, "maxBonus": 16 }, "comfort": { "base": 75, "maxBonus": 14 } }
+  },
+  {
+    "id": "orc-chest-mk1",
+    "name": "ORC Chest MkI",
+    "category": "fps_armor",
+    "subCategory": "chest",
+    "description": "Heavy combat chest armor",
+    "craftTime": 560,
+    "parts": [
+      { "component": "Plate Carrier", "materials": [{ "id": "steel", "qty": 0.075 }, { "id": "tungsten", "qty": 0.04 }] },
+      { "component": "Armor Plates", "materials": [{ "id": "ceramic", "qty": 0.065 }, { "id": "diamond", "qty": 0.02 }] },
+      { "component": "Backing Material", "materials": [{ "id": "polymer", "qty": 0.04 }, { "id": "beryl", "qty": 0.02 }] },
+      { "component": "Load Distribution", "materials": [{ "id": "steel", "qty": 0.02 }, { "id": "copper", "qty": 0.012 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 95, "maxBonus": 10 }, "comfort": { "base": 55, "maxBonus": 20 } }
+  },
+  {
+    "id": "pembroke-light-arms",
+    "name": "Pembroke Light Arms",
+    "category": "fps_armor",
+    "subCategory": "arms",
+    "description": "Lightweight arm protection",
+    "craftTime": 340,
+    "parts": [
+      { "component": "Shoulder Piece", "materials": [{ "id": "titanium", "qty": 0.025 }, { "id": "aluminum", "qty": 0.018 }] },
+      { "component": "Forearm Guard", "materials": [{ "id": "steel", "qty": 0.022 }, { "id": "tungsten", "qty": 0.012 }] },
+      { "component": "Joint Articulation", "materials": [{ "id": "polymer", "qty": 0.015 }, { "id": "beryl", "qty": 0.008 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 55, "maxBonus": 12 }, "mobility": { "base": 88, "maxBonus": 8 } }
+  },
+  {
+    "id": "pembroke-medium-arms",
+    "name": "Pembroke Medium Arms",
+    "category": "fps_armor",
+    "subCategory": "arms",
+    "description": "Standard arm armor",
+    "craftTime": 400,
+    "parts": [
+      { "component": "Shoulder Piece", "materials": [{ "id": "steel", "qty": 0.032 }, { "id": "titanium", "qty": 0.025 }] },
+      { "component": "Forearm Guard", "materials": [{ "id": "steel", "qty": 0.028 }, { "id": "tungsten", "qty": 0.018 }] },
+      { "component": "Joint Articulation", "materials": [{ "id": "polymer", "qty": 0.02 }, { "id": "beryl", "qty": 0.012 }] },
+      { "component": "Connectivity Straps", "materials": [{ "id": "aluminum", "qty": 0.01 }, { "id": "copper", "qty": 0.006 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 68, "maxBonus": 14 }, "mobility": { "base": 80, "maxBonus": 12 } }
+  },
+  {
+    "id": "orc-arms-mk1",
+    "name": "ORC Arms MkI",
+    "category": "fps_armor",
+    "subCategory": "arms",
+    "description": "Heavy combat arm protection",
+    "craftTime": 480,
+    "parts": [
+      { "component": "Shoulder Piece", "materials": [{ "id": "steel", "qty": 0.045 }, { "id": "tungsten", "qty": 0.025 }] },
+      { "component": "Forearm Guard", "materials": [{ "id": "steel", "qty": 0.042 }, { "id": "diamond", "qty": 0.015 }] },
+      { "component": "Joint Articulation", "materials": [{ "id": "polymer", "qty": 0.028 }, { "id": "beryl", "qty": 0.016 }] },
+      { "component": "Reinforcement Plates", "materials": [{ "id": "tungsten", "qty": 0.018 }, { "id": "copper", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 88, "maxBonus": 12 }, "mobility": { "base": 65, "maxBonus": 18 } }
+  },
+  {
+    "id": "pembroke-light-legs",
+    "name": "Pembroke Light Legs",
+    "category": "fps_armor",
+    "subCategory": "legs",
+    "description": "Lightweight leg protection",
+    "craftTime": 380,
+    "parts": [
+      { "component": "Thigh Protection", "materials": [{ "id": "titanium", "qty": 0.032 }, { "id": "aluminum", "qty": 0.022 }] },
+      { "component": "Shin Guard", "materials": [{ "id": "steel", "qty": 0.028 }, { "id": "tungsten", "qty": 0.015 }] },
+      { "component": "Joint System", "materials": [{ "id": "polymer", "qty": 0.02 }, { "id": "beryl", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 60, "maxBonus": 13 }, "mobility": { "base": 85, "maxBonus": 10 } }
+  },
+  {
+    "id": "pembroke-medium-legs",
+    "name": "Pembroke Medium Legs",
+    "category": "fps_armor",
+    "subCategory": "legs",
+    "description": "Standard leg armor",
+    "craftTime": 440,
+    "parts": [
+      { "component": "Thigh Protection", "materials": [{ "id": "steel", "qty": 0.042 }, { "id": "titanium", "qty": 0.032 }] },
+      { "component": "Shin Guard", "materials": [{ "id": "steel", "qty": 0.038 }, { "id": "tungsten", "qty": 0.022 }] },
+      { "component": "Joint System", "materials": [{ "id": "polymer", "qty": 0.028 }, { "id": "beryl", "qty": 0.016 }] },
+      { "component": "Knee Protection", "materials": [{ "id": "aluminum", "qty": 0.012 }, { "id": "copper", "qty": 0.008 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 72, "maxBonus": 15 }, "mobility": { "base": 78, "maxBonus": 13 } }
+  },
+  {
+    "id": "orc-legs-mk1",
+    "name": "ORC Legs MkI",
+    "category": "fps_armor",
+    "subCategory": "legs",
+    "description": "Heavy combat leg protection",
+    "craftTime": 520,
+    "parts": [
+      { "component": "Thigh Protection", "materials": [{ "id": "steel", "qty": 0.058 }, { "id": "tungsten", "qty": 0.032 }] },
+      { "component": "Shin Guard", "materials": [{ "id": "steel", "qty": 0.055 }, { "id": "diamond", "qty": 0.018 }] },
+      { "component": "Joint System", "materials": [{ "id": "polymer", "qty": 0.038 }, { "id": "beryl", "qty": 0.022 }] },
+      { "component": "Ankle Support", "materials": [{ "id": "tungsten", "qty": 0.02 }, { "id": "copper", "qty": 0.012 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 92, "maxBonus": 11 }, "mobility": { "base": 60, "maxBonus": 22 } }
+  },
+  {
+    "id": "light-undersuit",
+    "name": "Light Combat Undersuit",
+    "category": "fps_armor",
+    "subCategory": "undersuits",
+    "description": "Breathable undersuit for light armor",
+    "craftTime": 300,
+    "parts": [
+      { "component": "Base Layer", "materials": [{ "id": "polymer", "qty": 0.035 }, { "id": "aluminum", "qty": 0.015 }] },
+      { "component": "Comfort Lining", "materials": [{ "id": "polymer", "qty": 0.025 }, { "id": "beryl", "qty": 0.008 }] },
+      { "component": "Reinforcement Stitching", "materials": [{ "id": "copper", "qty": 0.01 }, { "id": "silicon", "qty": 0.005 }] }
+    ],
+    "qualityEffects": { "comfort": { "base": 90, "maxBonus": 8 }, "temperature": { "base": 75, "maxBonus": 15 } }
+  },
+  {
+    "id": "medium-undersuit",
+    "name": "Medium Combat Undersuit",
+    "category": "fps_armor",
+    "subCategory": "undersuits",
+    "description": "Standard combat undersuit",
+    "craftTime": 360,
+    "parts": [
+      { "component": "Base Layer", "materials": [{ "id": "polymer", "qty": 0.045 }, { "id": "aluminum", "qty": 0.022 }] },
+      { "component": "Thermal Lining", "materials": [{ "id": "polymer", "qty": 0.035 }, { "id": "beryl", "qty": 0.012 }] },
+      { "component": "Reinforcement Stitching", "materials": [{ "id": "copper", "qty": 0.015 }, { "id": "silicon", "qty": 0.008 }] },
+      { "component": "Padding System", "materials": [{ "id": "polymer", "qty": 0.025 }, { "id": "aluminum", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "comfort": { "base": 80, "maxBonus": 12 }, "temperature": { "base": 85, "maxBonus": 12 } }
+  },
+  {
+    "id": "heavy-undersuit",
+    "name": "Heavy Combat Undersuit",
+    "category": "fps_armor",
+    "subCategory": "undersuits",
+    "description": "Advanced thermal and impact protection undersuit",
+    "craftTime": 420,
+    "parts": [
+      { "component": "Base Layer", "materials": [{ "id": "polymer", "qty": 0.055 }, { "id": "titanium", "qty": 0.025 }] },
+      { "component": "Thermal Liner", "materials": [{ "id": "polymer", "qty": 0.045 }, { "id": "beryl", "qty": 0.018 }] },
+      { "component": "Shock Absorption", "materials": [{ "id": "aluminum", "qty": 0.025 }, { "id": "copper", "qty": 0.015 }] },
+      { "component": "Reinforcement Grid", "materials": [{ "id": "steel", "qty": 0.02 }, { "id": "silicon", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "comfort": { "base": 70, "maxBonus": 18 }, "temperature": { "base": 92, "maxBonus": 8 } }
+  },
+  {
+    "id": "novikov-light-helmet",
+    "name": "Novikov Light Helmet",
+    "category": "fps_armor",
+    "subCategory": "helmets",
+    "description": "Scout-focused helmet with integrated visor",
+    "craftTime": 380,
+    "parts": [
+      { "component": "Shell Structure", "materials": [{ "id": "titanium", "qty": 0.038 }, { "id": "aluminum", "qty": 0.028 }] },
+      { "component": "Smart Visor", "materials": [{ "id": "quartz", "qty": 0.018 }, { "id": "silicon", "qty": 0.01 }] },
+      { "component": "Interior Padding", "materials": [{ "id": "polymer", "qty": 0.022 }, { "id": "beryl", "qty": 0.008 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 62, "maxBonus": 13 }, "comfort": { "base": 86, "maxBonus": 10 } }
+  },
+  {
+    "id": "novikov-light-chest",
+    "name": "Novikov Light Chest",
+    "category": "fps_armor",
+    "subCategory": "chest",
+    "description": "Scout-optimized chest armor",
+    "craftTime": 440,
+    "parts": [
+      { "component": "Plate Carrier", "materials": [{ "id": "titanium", "qty": 0.048 }, { "id": "aluminum", "qty": 0.038 }] },
+      { "component": "Armor Plates", "materials": [{ "id": "ceramic", "qty": 0.038 }, { "id": "tungsten", "qty": 0.02 }] },
+      { "component": "Backing Material", "materials": [{ "id": "polymer", "qty": 0.028 }, { "id": "beryl", "qty": 0.012 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 68, "maxBonus": 15 }, "comfort": { "base": 83, "maxBonus": 11 } }
+  },
+  {
+    "id": "novikov-light-arms",
+    "name": "Novikov Light Arms",
+    "category": "fps_armor",
+    "subCategory": "arms",
+    "description": "Scout arm protection",
+    "craftTime": 360,
+    "parts": [
+      { "component": "Shoulder Piece", "materials": [{ "id": "titanium", "qty": 0.028 }, { "id": "aluminum", "qty": 0.02 }] },
+      { "component": "Forearm Guard", "materials": [{ "id": "steel", "qty": 0.024 }, { "id": "tungsten", "qty": 0.014 }] },
+      { "component": "Joint Articulation", "materials": [{ "id": "polymer", "qty": 0.018 }, { "id": "beryl", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 58, "maxBonus": 13 }, "mobility": { "base": 87, "maxBonus": 9 } }
+  },
+  {
+    "id": "novikov-light-legs",
+    "name": "Novikov Light Legs",
+    "category": "fps_armor",
+    "subCategory": "legs",
+    "description": "Scout leg protection",
+    "craftTime": 400,
+    "parts": [
+      { "component": "Thigh Protection", "materials": [{ "id": "titanium", "qty": 0.035 }, { "id": "aluminum", "qty": 0.025 }] },
+      { "component": "Shin Guard", "materials": [{ "id": "steel", "qty": 0.03 }, { "id": "tungsten", "qty": 0.017 }] },
+      { "component": "Joint System", "materials": [{ "id": "polymer", "qty": 0.022 }, { "id": "beryl", "qty": 0.012 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 63, "maxBonus": 14 }, "mobility": { "base": 86, "maxBonus": 9 } }
+  },
+  {
+    "id": "antium-medium-helmet",
+    "name": "Antium Medium Helmet",
+    "category": "fps_armor",
+    "subCategory": "helmets",
+    "description": "Professional-grade protective helmet",
+    "craftTime": 440,
+    "parts": [
+      { "component": "Shell Structure", "materials": [{ "id": "steel", "qty": 0.048 }, { "id": "titanium", "qty": 0.038 }] },
+      { "component": "Reinforced Visor", "materials": [{ "id": "quartz", "qty": 0.022 }, { "id": "copper", "qty": 0.014 }] },
+      { "component": "Interior Padding", "materials": [{ "id": "polymer", "qty": 0.028 }, { "id": "beryl", "qty": 0.012 }] },
+      { "component": "Comms Module", "materials": [{ "id": "silicon", "qty": 0.01 }, { "id": "copper", "qty": 0.008 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 77, "maxBonus": 16 }, "comfort": { "base": 78, "maxBonus": 13 } }
+  },
+  {
+    "id": "antium-medium-chest",
+    "name": "Antium Medium Chest",
+    "category": "fps_armor",
+    "subCategory": "chest",
+    "description": "Professional combat chest armor",
+    "craftTime": 500,
+    "parts": [
+      { "component": "Plate Carrier", "materials": [{ "id": "steel", "qty": 0.058 }, { "id": "titanium", "qty": 0.042 }] },
+      { "component": "Armor Plates", "materials": [{ "id": "ceramic", "qty": 0.048 }, { "id": "tungsten", "qty": 0.028 }] },
+      { "component": "Backing Material", "materials": [{ "id": "polymer", "qty": 0.032 }, { "id": "beryl", "qty": 0.018 }] },
+      { "component": "Load Distribution", "materials": [{ "id": "aluminum", "qty": 0.018 }, { "id": "copper", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 80, "maxBonus": 17 }, "comfort": { "base": 73, "maxBonus": 15 } }
+  },
+  {
+    "id": "kastak-medium-chest",
+    "name": "Kastak Arms Medium Chest",
+    "category": "fps_armor",
+    "subCategory": "chest",
+    "description": "Military-grade body armor",
+    "craftTime": 520,
+    "parts": [
+      { "component": "Tactical Carrier", "materials": [{ "id": "steel", "qty": 0.062 }, { "id": "titanium", "qty": 0.045 }] },
+      { "component": "Advanced Plates", "materials": [{ "id": "ceramic", "qty": 0.052 }, { "id": "tungsten", "qty": 0.032 }] },
+      { "component": "Backing Material", "materials": [{ "id": "polymer", "qty": 0.035 }, { "id": "beryl", "qty": 0.02 }] },
+      { "component": "Tactical Rails", "materials": [{ "id": "steel", "qty": 0.018 }, { "id": "copper", "qty": 0.012 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 82, "maxBonus": 16 }, "comfort": { "base": 70, "maxBonus": 16 } }
+  },
+  {
+    "id": "clark-defense-heavy-chest",
+    "name": "Clark Defense Heavy Chest",
+    "category": "fps_armor",
+    "subCategory": "chest",
+    "description": "Maximum protection tactical armor",
+    "craftTime": 580,
+    "parts": [
+      { "component": "Reinforced Carrier", "materials": [{ "id": "steel", "qty": 0.08 }, { "id": "tungsten", "qty": 0.042 }] },
+      { "component": "Ceramic Plates", "materials": [{ "id": "ceramic", "qty": 0.072 }, { "id": "diamond", "qty": 0.022 }] },
+      { "component": "Energy Absorption", "materials": [{ "id": "polymer", "qty": 0.042 }, { "id": "beryl", "qty": 0.024 }] },
+      { "component": "Integrated Systems", "materials": [{ "id": "steel", "qty": 0.022 }, { "id": "copper", "qty": 0.015 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 96, "maxBonus": 8 }, "comfort": { "base": 50, "maxBonus": 25 } }
+  },
+  {
+    "id": "adp-light-helmet",
+    "name": "ADP Light Helmet",
+    "category": "fps_armor",
+    "subCategory": "helmets",
+    "description": "Advanced protective headgear",
+    "craftTime": 400,
+    "parts": [
+      { "component": "Shell Structure", "materials": [{ "id": "titanium", "qty": 0.04 }, { "id": "aluminum", "qty": 0.03 }] },
+      { "component": "Smart Optics", "materials": [{ "id": "quartz", "qty": 0.02 }, { "id": "silicon", "qty": 0.012 }] },
+      { "component": "Interior Padding", "materials": [{ "id": "polymer", "qty": 0.024 }, { "id": "beryl", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 65, "maxBonus": 14 }, "comfort": { "base": 84, "maxBonus": 11 } }
+  },
+  {
+    "id": "p4ar-magazine-20",
+    "name": "P4-AR Magazine (20)",
+    "category": "ammo",
+    "subCategory": "rifle_magazines",
+    "description": "Standard 20-round compact rifle magazine",
+    "craftTime": 110,
+    "parts": [
+      { "component": "Magazine Body", "materials": [{ "id": "steel", "qty": 0.015 }, { "id": "aluminum", "qty": 0.012 }] },
+      { "component": "Follower & Spring", "materials": [{ "id": "titanium", "qty": 0.008 }, { "id": "copper", "qty": 0.006 }] }
+    ],
+    "qualityEffects": { "capacity": { "base": 20, "maxBonus": 0 }, "reliability": { "base": 100, "maxBonus": 5 } }
+  },
+  {
+    "id": "s71-magazine-40",
+    "name": "S71 Magazine (40)",
+    "category": "ammo",
+    "subCategory": "rifle_magazines",
+    "description": "Scout rifle 40-round magazine",
+    "craftTime": 150,
+    "parts": [
+      { "component": "Magazine Body", "materials": [{ "id": "steel", "qty": 0.022 }, { "id": "aluminum", "qty": 0.016 }] },
+      { "component": "Spring Assembly", "materials": [{ "id": "titanium", "qty": 0.01 }, { "id": "copper", "qty": 0.008 }] }
+    ],
+    "qualityEffects": { "capacity": { "base": 40, "maxBonus": 0 }, "reliability": { "base": 100, "maxBonus": 5 } }
+  },
+  {
+    "id": "custodian-battery-50",
+    "name": "Custodian Battery (50)",
+    "category": "ammo",
+    "subCategory": "energy_batteries",
+    "description": "50-charge defensive energy weapon battery",
+    "craftTime": 130,
+    "parts": [
+      { "component": "Battery Core", "materials": [{ "id": "hephaestanite", "qty": 0.015 }, { "id": "gold", "qty": 0.008 }] },
+      { "component": "Conductor Coil", "materials": [{ "id": "copper", "qty": 0.012 }, { "id": "gold", "qty": 0.005 }] },
+      { "component": "Safety Circuit", "materials": [{ "id": "silicon", "qty": 0.01 }, { "id": "beryl", "qty": 0.005 }] }
+    ],
+    "qualityEffects": { "chargeRate": { "base": 100, "maxBonus": 12 }, "capacity": { "base": 50, "maxBonus": 0 } }
+  },
+  {
+    "id": "scalpel-ammo",
+    "name": "Scalpel Railgun Cartridge (6)",
+    "category": "ammo",
+    "subCategory": "sniper_magazines",
+    "description": "Advanced railgun ammunition pack",
+    "craftTime": 200,
+    "parts": [
+      { "component": "Kinetic Core", "materials": [{ "id": "tungsten", "qty": 0.08 }, { "id": "diamond", "qty": 0.025 }] },
+      { "component": "Magnetic Sabot", "materials": [{ "id": "iron", "qty": 0.05 }, { "id": "copper", "qty": 0.02 }] },
+      { "component": "Acceleration Matrix", "materials": [{ "id": "quantanium", "qty": 0.015 }, { "id": "quartz", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "capacity": { "base": 6, "maxBonus": 0 }, "damage": { "base": 150, "maxBonus": 35 } }
+  },
+  {
+    "id": "gp33-magazine-20",
+    "name": "GP-33 Magazine (20)",
+    "category": "ammo",
+    "subCategory": "rifle_magazines",
+    "description": "GP-33 20-round compact magazine",
+    "craftTime": 130,
+    "parts": [
+      { "component": "Magazine Body", "materials": [{ "id": "steel", "qty": 0.018 }, { "id": "aluminum", "qty": 0.014 }] },
+      { "component": "Spring Assembly", "materials": [{ "id": "titanium", "qty": 0.01 }, { "id": "copper", "qty": 0.007 }] }
+    ],
+    "qualityEffects": { "capacity": { "base": 20, "maxBonus": 0 }, "reliability": { "base": 100, "maxBonus": 5 } }
+  },
+  {
+    "id": "demeco-magazine-30",
+    "name": "Demeco Rifle Magazine (30)",
+    "category": "ammo",
+    "subCategory": "rifle_magazines",
+    "description": "Demeco rifle standard magazine",
+    "craftTime": 140,
+    "parts": [
+      { "component": "Magazine Body", "materials": [{ "id": "steel", "qty": 0.028 }, { "id": "aluminum", "qty": 0.02 }] },
+      { "component": "Feed System", "materials": [{ "id": "titanium", "qty": 0.012 }, { "id": "copper", "qty": 0.009 }] }
+    ],
+    "qualityEffects": { "capacity": { "base": 30, "maxBonus": 0 }, "reliability": { "base": 100, "maxBonus": 6 } }
+  },
+  {
+    "id": "klw-pistol",
+    "name": "Klaus & Werner Pistol",
+    "category": "fps_weapons",
+    "subCategory": "pistols",
+    "description": "Professional tactical service pistol",
+    "craftTime": 420,
+    "parts": [
+      { "component": "Slide Assembly", "materials": [{ "id": "steel", "qty": 0.052 }, { "id": "titanium", "qty": 0.032 }] },
+      { "component": "Barrel", "materials": [{ "id": "tungsten", "qty": 0.022 }, { "id": "steel", "qty": 0.022 }] },
+      { "component": "Grip Frame", "materials": [{ "id": "aluminum", "qty": 0.022 }, { "id": "polymer", "qty": 0.018 }] },
+      { "component": "Trigger Assembly", "materials": [{ "id": "steel", "qty": 0.015 }, { "id": "beryl", "qty": 0.008 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 82, "maxBonus": 13 }, "fireRate": { "base": 480, "maxBonus": 45 }, "damage": { "base": 52, "maxBonus": 11 } }
+  },
+  {
+    "id": "prototype-energy-rifle",
+    "name": "Prototype Energy Rifle",
+    "category": "fps_weapons",
+    "subCategory": "energy_weapons",
+    "description": "Experimental high-damage energy platform",
+    "craftTime": 640,
+    "parts": [
+      { "component": "Energy Housing", "materials": [{ "id": "titanium", "qty": 0.065 }, { "id": "hephaestanite", "qty": 0.032 }] },
+      { "component": "Plasma Accelerator", "materials": [{ "id": "quantanium", "qty": 0.025 }, { "id": "diamond", "qty": 0.015 }] },
+      { "component": "Cooling System", "materials": [{ "id": "aluminum", "qty": 0.04 }, { "id": "beryl", "qty": 0.022 }] },
+      { "component": "Power Electronics", "materials": [{ "id": "copper", "qty": 0.03 }, { "id": "silicon", "qty": 0.018 }] }
+    ],
+    "qualityEffects": { "accuracy": { "base": 75, "maxBonus": 20 }, "fireRate": { "base": 300, "maxBonus": 45 }, "damage": { "base": 85, "maxBonus": 25 } }
+  },
+  {
+    "id": "orc-chest-mk2",
+    "name": "ORC Chest MkII",
+    "category": "fps_armor",
+    "subCategory": "chest",
+    "description": "Advanced heavy tactical armor plate",
+    "craftTime": 600,
+    "parts": [
+      { "component": "Reinforced Carrier", "materials": [{ "id": "steel", "qty": 0.088 }, { "id": "tungsten", "qty": 0.048 }] },
+      { "component": "Advanced Ceramics", "materials": [{ "id": "ceramic", "qty": 0.078 }, { "id": "diamond", "qty": 0.028 }] },
+      { "component": "Shock Absorption", "materials": [{ "id": "polymer", "qty": 0.048 }, { "id": "beryl", "qty": 0.028 }] },
+      { "component": "Modular Attachment", "materials": [{ "id": "steel", "qty": 0.025 }, { "id": "copper", "qty": 0.018 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 98, "maxBonus": 9 }, "comfort": { "base": 48, "maxBonus": 28 } }
+  },
+  {
+    "id": "antium-medium-arms",
+    "name": "Antium Medium Arms",
+    "category": "fps_armor",
+    "subCategory": "arms",
+    "description": "Professional arm protection system",
+    "craftTime": 420,
+    "parts": [
+      { "component": "Shoulder Piece", "materials": [{ "id": "steel", "qty": 0.035 }, { "id": "titanium", "qty": 0.028 }] },
+      { "component": "Forearm Guard", "materials": [{ "id": "steel", "qty": 0.032 }, { "id": "tungsten", "qty": 0.02 }] },
+      { "component": "Joint Articulation", "materials": [{ "id": "polymer", "qty": 0.024 }, { "id": "beryl", "qty": 0.014 }] },
+      { "component": "Tactical Strap", "materials": [{ "id": "aluminum", "qty": 0.012 }, { "id": "copper", "qty": 0.008 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 72, "maxBonus": 16 }, "mobility": { "base": 76, "maxBonus": 15 } }
+  },
+  {
+    "id": "antium-medium-legs",
+    "name": "Antium Medium Legs",
+    "category": "fps_armor",
+    "subCategory": "legs",
+    "description": "Professional leg armor system",
+    "craftTime": 460,
+    "parts": [
+      { "component": "Thigh Protection", "materials": [{ "id": "steel", "qty": 0.048 }, { "id": "titanium", "qty": 0.038 }] },
+      { "component": "Shin Guard", "materials": [{ "id": "steel", "qty": 0.044 }, { "id": "tungsten", "qty": 0.025 }] },
+      { "component": "Joint System", "materials": [{ "id": "polymer", "qty": 0.032 }, { "id": "beryl", "qty": 0.018 }] },
+      { "component": "Knee Protection", "materials": [{ "id": "aluminum", "qty": 0.015 }, { "id": "copper", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 76, "maxBonus": 16 }, "mobility": { "base": 75, "maxBonus": 14 } }
+  },
+  {
+    "id": "kastak-medium-helmet",
+    "name": "Kastak Arms Medium Helmet",
+    "category": "fps_armor",
+    "subCategory": "helmets",
+    "description": "Military-grade combat helmet",
+    "craftTime": 460,
+    "parts": [
+      { "component": "Shell Structure", "materials": [{ "id": "steel", "qty": 0.052 }, { "id": "titanium", "qty": 0.042 }] },
+      { "component": "Tactical Visor", "materials": [{ "id": "quartz", "qty": 0.024 }, { "id": "copper", "qty": 0.016 }] },
+      { "component": "Interior Padding", "materials": [{ "id": "polymer", "qty": 0.032 }, { "id": "beryl", "qty": 0.014 }] },
+      { "component": "Comms & Sensors", "materials": [{ "id": "silicon", "qty": 0.012 }, { "id": "copper", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 80, "maxBonus": 17 }, "comfort": { "base": 72, "maxBonus": 14 } }
+  },
+  {
+    "id": "kastak-medium-arms",
+    "name": "Kastak Arms Medium Arms",
+    "category": "fps_armor",
+    "subCategory": "arms",
+    "description": "Tactical arm protection",
+    "craftTime": 440,
+    "parts": [
+      { "component": "Shoulder Piece", "materials": [{ "id": "steel", "qty": 0.038 }, { "id": "titanium", "qty": 0.03 }] },
+      { "component": "Forearm Guard", "materials": [{ "id": "steel", "qty": 0.035 }, { "id": "tungsten", "qty": 0.022 }] },
+      { "component": "Joint Articulation", "materials": [{ "id": "polymer", "qty": 0.026 }, { "id": "beryl", "qty": 0.016 }] },
+      { "component": "Tactical Rail", "materials": [{ "id": "steel", "qty": 0.015 }, { "id": "copper", "qty": 0.01 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 75, "maxBonus": 17 }, "mobility": { "base": 73, "maxBonus": 16 } }
+  },
+  {
+    "id": "clark-defense-heavy-helmet",
+    "name": "Clark Defense Heavy Helmet",
+    "category": "fps_armor",
+    "subCategory": "helmets",
+    "description": "Maximum protection tactical headgear",
+    "craftTime": 520,
+    "parts": [
+      { "component": "Reinforced Shell", "materials": [{ "id": "steel", "qty": 0.065 }, { "id": "tungsten", "qty": 0.035 }] },
+      { "component": "Armored Visor", "materials": [{ "id": "diamond", "qty": 0.02 }, { "id": "quartz", "qty": 0.03 }] },
+      { "component": "Interior Padding", "materials": [{ "id": "polymer", "qty": 0.038 }, { "id": "beryl", "qty": 0.022 }] },
+      { "component": "Advanced Comms", "materials": [{ "id": "silicon", "qty": 0.015 }, { "id": "copper", "qty": 0.012 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 94, "maxBonus": 10 }, "comfort": { "base": 60, "maxBonus": 22 } }
+  },
+  {
+    "id": "clark-defense-heavy-arms",
+    "name": "Clark Defense Heavy Arms",
+    "category": "fps_armor",
+    "subCategory": "arms",
+    "description": "Maximum protection arm armor",
+    "craftTime": 500,
+    "parts": [
+      { "component": "Shoulder Piece", "materials": [{ "id": "steel", "qty": 0.052 }, { "id": "tungsten", "qty": 0.03 }] },
+      { "component": "Forearm Guard", "materials": [{ "id": "steel", "qty": 0.048 }, { "id": "diamond", "qty": 0.018 }] },
+      { "component": "Joint Articulation", "materials": [{ "id": "polymer", "qty": 0.032 }, { "id": "beryl", "qty": 0.02 }] },
+      { "component": "Reinforcement Plates", "materials": [{ "id": "tungsten", "qty": 0.022 }, { "id": "copper", "qty": 0.012 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 90, "maxBonus": 12 }, "mobility": { "base": 62, "maxBonus": 20 } }
+  },
+  {
+    "id": "clark-defense-heavy-legs",
+    "name": "Clark Defense Heavy Legs",
+    "category": "fps_armor",
+    "subCategory": "legs",
+    "description": "Maximum protection leg armor",
+    "craftTime": 540,
+    "parts": [
+      { "component": "Thigh Protection", "materials": [{ "id": "steel", "qty": 0.065 }, { "id": "tungsten", "qty": 0.036 }] },
+      { "component": "Shin Guard", "materials": [{ "id": "steel", "qty": 0.062 }, { "id": "diamond", "qty": 0.022 }] },
+      { "component": "Joint System", "materials": [{ "id": "polymer", "qty": 0.042 }, { "id": "beryl", "qty": 0.025 }] },
+      { "component": "Ankle Support", "materials": [{ "id": "tungsten", "qty": 0.024 }, { "id": "copper", "qty": 0.015 }] }
+    ],
+    "qualityEffects": { "protection": { "base": 94, "maxBonus": 10 }, "mobility": { "base": 58, "maxBonus": 24 } }
+  }
+]

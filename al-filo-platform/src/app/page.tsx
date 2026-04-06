@@ -27,7 +27,7 @@ const PANELS = [
     id: "crafting",
     label: "Crafting",
     video: "/videos/crafting.mp4",
-    href: "#",
+    href: "/crafting",
   },
 ];
 
@@ -250,13 +250,4 @@ function VideoPanel({
       playsInline
       className="absolute inset-0 w-full h-full object-cover transition-all duration-500"
       style={{
-        filter: isHovered
-          ? "brightness(1) saturate(1.1)"
-          : "brightness(0.3) saturate(0.5)",
-        transform: isHovered ? "scale(1.05)" : "scale(1)",
-      }}
-    >
-      <source src={src} type="video/mp4" />
-    </video>
-  );
-}
+       
