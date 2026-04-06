@@ -176,7 +176,7 @@ function ComponentsPageInner() {
   };
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 flex">
+    <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       {/* ── Background video ── */}
       <video
         autoPlay loop muted playsInline
@@ -186,54 +186,52 @@ function ComponentsPageInner() {
       </video>
       <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/70 via-zinc-950/85 to-zinc-950/95 pointer-events-none z-0" />
 
-      {/* ═══ Sidebar ═══ */}
-      <aside className="w-12 sm:w-14 flex-shrink-0 bg-zinc-950/90 border-r border-zinc-800/50 flex flex-col items-center py-3 gap-1 z-20 sticky top-0 h-screen overflow-y-auto">
-        {/* Logo */}
-        <Link href="/" className="mb-3 opacity-60 hover:opacity-100 transition-opacity">
-          <Image src="/media/images/sclabs-logo.png" alt="SC LABS" width={24} height={24} className="rounded-sm" />
-        </Link>
-        <div className="w-6 h-px bg-zinc-800 mb-2" />
+      {/* ═══ Header (full width) ═══ */}
+      <Header subtitle={activeCategory.label} />
 
-        {/* DPS Calculator link */}
-        <Link
-          href="/dps"
-          title="DPS Calculator"
-          className="w-9 h-9 sm:w-10 sm:h-10 rounded flex items-center justify-center transition-all duration-150 hover:bg-zinc-800/40 mb-1"
-        >
-          <Image src="/media/icons/DPS_calculator.png" alt="DPS Calculator" width={22} height={22} className="opacity-50 hover:opacity-80 transition-opacity" />
-        </Link>
-        <div className="w-6 h-px bg-zinc-800 mb-1" />
+      {/* ═══ Body: Sidebar + Content ═══ */}
+      <div className="flex flex-1 min-h-0">
+        {/* ═══ Sidebar ═══ */}
+        <aside className="w-12 sm:w-14 flex-shrink-0 bg-zinc-950/90 border-r border-zinc-800/50 flex flex-col items-center py-3 gap-1 z-20 sticky top-12 h-[calc(100vh-3rem)] overflow-y-auto">
+          {/* DPS Calculator link */}
+          <Link
+            href="/dps"
+            title="DPS Calculator"
+            className="w-9 h-9 sm:w-10 sm:h-10 rounded flex items-center justify-center transition-all duration-150 hover:bg-zinc-800/40 mb-1"
+          >
+            <Image src="/icons/DPS_calculator.png" alt="DPS Calculator" width={22} height={22} className="opacity-50 hover:opacity-80 transition-opacity" />
+          </Link>
+          <div className="w-6 h-px bg-zinc-800 mb-1" />
 
-        {CATEGORIES.map((cat) => {
-          const isActive = activeCategory.key === cat.key;
-          return (
-            <button
-              key={cat.key}
-              onClick={() => handleCategoryClick(cat)}
-              title={cat.label}
-              className={`
-                w-9 h-9 sm:w-10 sm:h-10 rounded flex items-center justify-center transition-all duration-150
-                ${isActive
-                  ? "bg-amber-500/15 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.3)]"
-                  : "hover:bg-zinc-800/40"
-                }
-              `}
-            >
-              <Image
-                src={cat.icon}
-                alt={cat.label}
-                width={22}
-                height={22}
-                className={`transition-opacity ${isActive ? "opacity-100" : "opacity-40 hover:opacity-70"}`}
-              />
-            </button>
-          );
-        })}
-      </aside>
+          {CATEGORIES.map((cat) => {
+            const isActive = activeCategory.key === cat.key;
+            return (
+              <button
+                key={cat.key}
+                onClick={() => handleCategoryClick(cat)}
+                title={cat.label}
+                className={`
+                  w-9 h-9 sm:w-10 sm:h-10 rounded flex items-center justify-center transition-all duration-150
+                  ${isActive
+                    ? "bg-amber-500/15 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.3)]"
+                    : "hover:bg-zinc-800/40"
+                  }
+                `}
+              >
+                <Image
+                  src={cat.icon}
+                  alt={cat.label}
+                  width={22}
+                  height={22}
+                  className={`transition-opacity ${isActive ? "opacity-100" : "opacity-40 hover:opacity-70"}`}
+                />
+              </button>
+            );
+          })}
+        </aside>
 
-      {/* ═══ Main Content ═══ */}
-      <div className="flex-1 z-10 relative flex flex-col overflow-hidden">
-        <Header subtitle={activeCategory.label} />
+        {/* ═══ Main Content ═══ */}
+        <div className="flex-1 z-10 relative flex flex-col overflow-hidden">
 
         {/* ── Filters Bar ── */}
         <div className="border-b border-zinc-800/30 bg-zinc-950/60 px-4 sm:px-6 py-2 flex items-center gap-3 flex-wrap">
@@ -364,6 +362,7 @@ function ComponentsPageInner() {
             </table>
           )}
         </div>
+      </div>
       </div>
     </main>
   );
