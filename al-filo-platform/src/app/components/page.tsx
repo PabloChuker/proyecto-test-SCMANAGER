@@ -22,17 +22,17 @@ interface CategoryDef {
 }
 
 const CATEGORIES: CategoryDef[] = [
-  { key: "ships", table: "ships", label: "Ships", shortLabel: "Ships", icon: "/media/icons/Ships.png" },
-  { key: "weapons", table: "weapon_guns", label: "Weapons", shortLabel: "Weapons", icon: "/media/icons/weapons.png" },
-  { key: "missiles", table: "missiles", label: "Missiles", shortLabel: "Missiles", icon: "/media/icons/missile.png" },
-  { key: "emps", table: "emps", label: "EMP Generators", shortLabel: "EMP", icon: "/media/icons/emp.png" },
-  { key: "shields", table: "shields", label: "Shields", shortLabel: "Shields", icon: "/media/icons/shilds.png" },
-  { key: "power_plants", table: "power_plants", label: "Power Plants", shortLabel: "Power", icon: "/media/icons/power_plants.png" },
-  { key: "coolers", table: "coolers", label: "Coolers", shortLabel: "Coolers", icon: "/media/icons/coolers.png" },
-  { key: "quantum_drives", table: "quantum_drives", label: "Quantum Drives", shortLabel: "QD", icon: "/media/icons/Quantum_drives.png" },
-  { key: "qed", table: "quantum_interdiction_generators", label: "QED Generators", shortLabel: "QED", icon: "/media/icons/interdict_pulse.png" },
-  { key: "mining", table: "mining_lasers", label: "Mining Lasers", shortLabel: "Mining", icon: "/media/icons/mining_lasers.png" },
-  { key: "turrets", table: "turrets", label: "Turrets", shortLabel: "Turrets", icon: "/media/icons/weapons.png" },
+  { key: "ships", table: "ships", label: "Ships", shortLabel: "Ships", icon: "/icons/Ships.png" },
+  { key: "weapons", table: "weapon_guns", label: "Weapons", shortLabel: "Weapons", icon: "/icons/weapons.png" },
+  { key: "missiles", table: "missiles", label: "Missiles", shortLabel: "Missiles", icon: "/icons/missile.png" },
+  { key: "emps", table: "emps", label: "EMP Generators", shortLabel: "EMP", icon: "/icons/emp.png" },
+  { key: "shields", table: "shields", label: "Shields", shortLabel: "Shields", icon: "/icons/shilds.png" },
+  { key: "power_plants", table: "power_plants", label: "Power Plants", shortLabel: "Power", icon: "/icons/power_plants.png" },
+  { key: "coolers", table: "coolers", label: "Coolers", shortLabel: "Coolers", icon: "/icons/coolers.png" },
+  { key: "quantum_drives", table: "quantum_drives", label: "Quantum Drives", shortLabel: "QD", icon: "/icons/Quantum_drives.png" },
+  { key: "qed", table: "quantum_interdiction_generators", label: "QED Generators", shortLabel: "QED", icon: "/icons/interdict_pulse.png" },
+  { key: "mining", table: "mining_lasers", label: "Mining Lasers", shortLabel: "Mining", icon: "/icons/mining_lasers.png" },
+  { key: "turrets", table: "turrets", label: "Turrets", shortLabel: "Turrets", icon: "/icons/weapons.png" },
 ];
 
 // ─── Column type ────────────────────────────────────────────────────────────
