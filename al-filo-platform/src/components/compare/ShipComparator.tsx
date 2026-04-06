@@ -11,7 +11,7 @@ import { ShipSearchDropdown } from "./ShipSearchDropdown";
 import { RadarChart } from "./RadarChart";
 import { CompareBarChart } from "./CompareBarChart";
 
-const SHIP_COLORS = ["#E8890C", "#5DA007", "#B0B708"];
+const SHIP_COLORS = ["#455ba3", "#df8f6c", "#8fc586"];
 
 interface ShipData {
   id: string;
