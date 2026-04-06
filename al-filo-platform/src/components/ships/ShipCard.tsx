@@ -81,7 +81,7 @@ export function ShipCard({ ship }: { ship: ShipCardData }) {
       <article className="relative overflow-hidden rounded-sm bg-zinc-900/60 backdrop-blur-sm border border-zinc-800/70 transition-all duration-300 ease-out hover:border-cyan-500/40 hover:bg-zinc-900/80 hover:shadow-[0_0_30px_-8px_rgba(6,182,212,0.15)]">
         {/* Background ship image */}
         <div
-          className="absolute inset-0 bg-cover bg-center opacity-[0.08] group-hover:opacity-[0.15] transition-opacity duration-500 pointer-events-none"
+          className="absolute inset-0 bg-cover bg-center opacity-[0.22] group-hover:opacity-[0.35] transition-opacity duration-500 pointer-events-none"
           style={{ backgroundImage: `url(${thumbUrl})` }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/80 to-zinc-900/40 pointer-events-none" />
