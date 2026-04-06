@@ -65,6 +65,8 @@ const HP_TYPE_TO_CATEGORY: Record<string, string> = {
   FuelTank: "FUEL_TANK",
   FuelIntake: "FUEL_INTAKE",
   LifeSupportGenerator: "LIFE_SUPPORT",
+  TurretBase: "TURRET",
+  Turret: "TURRET",
 };
 
 function hpCategory(hpType: string, hpName: string): string {
@@ -586,13 +588,16 @@ export async function GET(
         // Detect turrets: by children, by item name, or by hardpoint name
         let finalCategory = category;
         const itemName = (equippedItem?.name || "").toLowerCase();
-        if (category === "WEAPON" && children.length > 0) {
+        const isMissileRack = itemName.includes("missile") || hpNameLower.includes("missile");
+        if (category === "WEAPON" && children.length > 0 && !isMissileRack) {
           finalCategory = "TURRET";
         } else if (
-          category === "WEAPON" &&
+          category === "WEAPON" && !isMissileRack &&
           (itemName.includes("turret") || hpNameLower.includes("turret"))
         ) {
           finalCategory = "TURRET";
+        } else if (isMissileRack) {
+          finalCategory = "MISSILE_RACK";
         }
 
         return {

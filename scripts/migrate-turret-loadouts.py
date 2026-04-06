@@ -183,6 +183,7 @@ def main():
             if weapon_loadout:
                 turrets_found[hp_name] = {
                     "class_name": class_name,
+                    "entry_type": entry_type,
                     "loadout_json": weapon_loadout,
                 }
 
@@ -239,18 +240,34 @@ def main():
     updated = 0
     not_found = 0
     overwritten = 0
+    inserted = 0
 
     for ship_ref, turrets in sorted(ship_turrets.items()):
         # Try to match ship_ref to DB
         db_ref = db_ships.get(ship_ref) or db_ships_lower.get(ship_ref.lower())
         if not db_ref:
             # Try without common suffixes
-            for suffix in ["_BIS2950", "_bis2950"]:
+            for suffix in ["_BIS2950", "_bis2950", "_Showdown", "_showdown"]:
                 if ship_ref.endswith(suffix):
                     base = ship_ref[:-len(suffix)]
                     db_ref = db_ships.get(base) or db_ships_lower.get(base.lower())
                     if db_ref:
                         break
+
+        if not db_ref:
+            # Try adding common suffixes (base variant → DB has variant)
+            for suffix in ["_Showdown", "_BIS2950"]:
+                variant = ship_ref + suffix
+                db_ref = db_ships.get(variant) or db_ships_lower.get(variant.lower())
+                if db_ref:
+                    break
+
+        if not db_ref:
+            # Try partial match: find any DB ref that starts with ship_ref
+            for candidate in db_ships:
+                if candidate.lower().startswith(ship_ref.lower()):
+                    db_ref = candidate
+                    break
 
         if not db_ref:
             not_found += 1
@@ -282,8 +299,59 @@ def main():
                     row = match
 
             if not row:
-                print(f"  ❓ {db_ref} / {hp_name} ({turret_class}): NOT FOUND in DB")
-                not_found += 1
+                # Row doesn't exist — INSERT a new hardpoint for this turret
+                # Determine turret type from entry type
+                hp_type = "TurretBase.MannedTurret"
+                for entry in turret_data.get("_raw_loadout", []):
+                    if entry.get("Type"):
+                        hp_type = entry["Type"]
+                        break
+                # Use the original entry type stored during extraction
+                hp_type = turret_data.get("entry_type", "TurretBase.MannedTurret")
+
+                # Determine max_size from the loadout (largest weapon size)
+                max_weapon_size = 0
+                for child in turret_data["loadout_json"]:
+                    sz = child.get("MaxSize", 0) or 0
+                    if sz > max_weapon_size:
+                        max_weapon_size = sz
+                    for sub in child.get("Children", []):
+                        ssz = sub.get("MaxSize", 0) or 0
+                        if ssz > max_weapon_size:
+                            max_weapon_size = ssz
+
+                # The turret itself is typically larger than its sub-weapons
+                # e.g., S7 turret holds S4 weapons. Use a heuristic:
+                turret_size = max_weapon_size + 3  # turrets are usually 3 sizes bigger
+
+                cur.execute(
+                    """INSERT INTO ship_hardpoints
+                       (ship_reference, hardpoint_name, hardpoint_type, min_size, max_size,
+                        editable, default_item_class, default_item_name, loadout_json)
+                       VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                    (
+                        db_ref,
+                        hp_name,
+                        hp_type,
+                        turret_size,
+                        turret_size,
+                        False,
+                        turret_class,
+                        turret_class,  # name = class for now
+                        loadout_json,
+                    )
+                )
+                inserted += 1
+
+                weapon_names = []
+                for w in turret_data["loadout_json"]:
+                    name = w.get("Name") or w.get("ClassName", "?")
+                    children = w.get("Children", [])
+                    if children:
+                        child_names = [c.get("Name") or c.get("ClassName", "?") for c in children]
+                        name += f" → [{', '.join(child_names)}]"
+                    weapon_names.append(name)
+                print(f"  🆕 {db_ref} / {hp_name} (INSERTED): {weapon_names}")
                 continue
 
             hp_id = row[0]
@@ -321,7 +389,8 @@ def main():
     print(f"\n{'=' * 60}")
     print(f"✅ New updates:   {updated} turret hardpoints")
     print(f"🔄 Overwritten:   {overwritten} (had old/incomplete data)")
-    print(f"❓ Not in DB:     {not_found} (ship/hardpoint not found)")
+    print(f"🆕 Inserted:      {inserted} (missing hardpoint rows created)")
+    print(f"❓ Not in DB:     {not_found} (ship not found in DB)")
     print(f"{'=' * 60}")
     print(f"\n🎉 Done! Push and redeploy to see turret weapons in the DPS calculator.")
 
