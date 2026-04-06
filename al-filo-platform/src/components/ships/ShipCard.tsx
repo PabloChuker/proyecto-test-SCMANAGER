@@ -51,13 +51,41 @@ function getRoleIndicator(role?: string | null) {
   return { icon: "◻", color: "text-zinc-500" };
 }
 
+// ── Ship thumbnail URL helper ──
+const MFR_PREFIXES = [
+  "Aegis", "RSI", "Drake", "MISC", "Anvil", "Origin", "Crusader", "Argo",
+  "Aopoa", "Consolidated Outland", "Esperia", "Gatac", "Greycat", "Kruger",
+  "Musashi Industrial", "Tumbril", "Banu", "Vanduul", "Roberts Space Industries",
+  "Crusader Industries", "Musashi", "CO",
+];
+function getShipThumbUrl(name: string, manufacturer?: string | null): string {
+  let n = name || "";
+  if (manufacturer) {
+    const m = manufacturer.trim();
+    if (n.startsWith(m + " ")) n = n.slice(m.length + 1);
+  }
+  for (const m of MFR_PREFIXES) {
+    if (n.startsWith(m + " ")) { n = n.slice(m.length + 1); break; }
+  }
+  const slug = n.toLowerCase().replace(/[''()]/g, "").replace(/\s+/g, "-").replace(/[^a-z0-9._-]/g, "-").replace(/-+/g, "-").replace(/-$/, "");
+  return `/ships/${slug}.jpg`;
+}
+
 export function ShipCard({ ship }: { ship: ShipCardData }) {
   const roleIndicator = getRoleIndicator(ship.ship?.role || ship.ship?.career);
   const roleColor = roleIndicator.color;
+  const thumbUrl = getShipThumbUrl(ship.name, ship.manufacturer);
 
   return (
     <Link href={"/ships/" + ship.reference} className="group block">
       <article className="relative overflow-hidden rounded-sm bg-zinc-900/60 backdrop-blur-sm border border-zinc-800/70 transition-all duration-300 ease-out hover:border-cyan-500/40 hover:bg-zinc-900/80 hover:shadow-[0_0_30px_-8px_rgba(6,182,212,0.15)]">
+        {/* Background ship image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center opacity-[0.08] group-hover:opacity-[0.15] transition-opacity duration-500 pointer-events-none"
+          style={{ backgroundImage: `url(${thumbUrl})` }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/80 to-zinc-900/40 pointer-events-none" />
+        <div className="relative z-10">
         <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-zinc-700/50 to-transparent group-hover:via-cyan-500/60 transition-all duration-500" />
         <div className="p-5">
           {/* Header */}
@@ -82,6 +110,7 @@ export function ShipCard({ ship }: { ship: ShipCardData }) {
         </div>
         <div className="absolute bottom-0 right-0 w-8 h-8 border-b border-r border-transparent group-hover:border-cyan-500/30 transition-colors duration-500" />
         <div className="absolute top-0 left-0 w-8 h-8 border-t border-l border-transparent group-hover:border-cyan-500/20 transition-colors duration-500" />
+        </div>
       </article>
     </Link>
   );
