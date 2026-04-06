@@ -75,7 +75,7 @@ export default function ShipsPage() {
               <span className="text-amber-500 border-b border-amber-500/30 pb-0.5">Naves</span>
               <Link href="/compare" className="hover:text-zinc-400 transition-colors">Comparar</Link>
               <Link href="/components" className="hover:text-zinc-400 transition-colors">Componentes</Link>
-              <span className="hover:text-zinc-400 cursor-not-allowed opacity-40">Minería</span>
+              <Link href="/mining" className="hover:text-zinc-400 transition-colors">Minería</Link>
             </nav>
           </div>
         </div>

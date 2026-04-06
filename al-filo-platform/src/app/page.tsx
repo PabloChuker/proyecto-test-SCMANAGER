@@ -21,7 +21,7 @@ const PANELS = [
     id: "mining",
     label: "Mining & Industry",
     video: "/videos/mineria.mp4",
-    href: "#",
+    href: "/mining",
   },
   {
     id: "crafting",
