@@ -589,18 +589,106 @@ function RadarChartInline({ axes, size = 180, color = "#f59e0b", fillOpacity = 0
   );
 }
 
+/** Dual-layer radar: SCM (base) + Afterburner overlay */
+function DualRadarChart({ axes, size = 220, gridLevels = 5 }: {
+  axes: { label: string; scm: number; boost: number; max: number }[];
+  size?: number; gridLevels?: number;
+}) {
+  if (axes.length < 3) return null;
+  const cx = size / 2, cy = size / 2, radius = size * 0.32, labelR = size * 0.45;
+  const n = axes.length, step = (2 * Math.PI) / n, start = -Math.PI / 2;
+  const normScm = axes.map(a => a.max > 0 ? Math.min(1, a.scm / a.max) : 0);
+  const normBoost = axes.map(a => a.max > 0 ? Math.min(1, a.boost / a.max) : 0);
+  const pts = (vals: number[]) => vals.map((v, i) => { const a = start + i * step; const r = v * radius; return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`; }).join(" ");
+  const grids = Array.from({ length: gridLevels }, (_, i) => { const lv = (i + 1) / gridLevels; return axes.map((_, j) => { const a = start + j * step; const r = lv * radius; return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`; }).join(" "); });
+
+  const scmColor = "#f59e0b";
+  const boostColor = "#ef4444";
+
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size }}>
+      {/* Grid */}
+      {grids.map((p, i) => <polygon key={i} points={p} fill="none" stroke="#3f3f46" strokeWidth={0.5} opacity={0.4} />)}
+      {axes.map((_, i) => { const a = start + i * step; return <line key={i} x1={cx} y1={cy} x2={cx + radius * Math.cos(a)} y2={cy + radius * Math.sin(a)} stroke="#3f3f46" strokeWidth={0.5} opacity={0.3} />; })}
+
+      {/* Afterburner layer (behind, wider) */}
+      <polygon points={pts(normBoost)} fill={boostColor} fillOpacity={0.08} stroke={boostColor} strokeWidth={1} strokeLinejoin="round" strokeDasharray="3,2" opacity={0.7} />
+      {normBoost.map((v, i) => { const a = start + i * step; const r = v * radius; return v > 0 ? <circle key={`b${i}`} cx={cx + r * Math.cos(a)} cy={cy + r * Math.sin(a)} r={1.5} fill={boostColor} stroke="#18181b" strokeWidth={0.5} opacity={0.6} /> : null; })}
+
+      {/* SCM layer (front, solid) */}
+      <polygon points={pts(normScm)} fill={scmColor} fillOpacity={0.15} stroke={scmColor} strokeWidth={1.5} strokeLinejoin="round" />
+      {normScm.map((v, i) => { const a = start + i * step; const r = v * radius; return <circle key={`s${i}`} cx={cx + r * Math.cos(a)} cy={cy + r * Math.sin(a)} r={2} fill={scmColor} stroke="#18181b" strokeWidth={0.8} />; })}
+
+      {/* Labels with dual values */}
+      {axes.map((ax, i) => {
+        const a = start + i * step;
+        const lx = cx + labelR * Math.cos(a), ly = cy + labelR * Math.sin(a);
+        let anchor = "middle"; if (Math.cos(a) > 0.3) anchor = "start"; else if (Math.cos(a) < -0.3) anchor = "end";
+        const hasBoost = ax.boost > ax.scm;
+        return (
+          <g key={`l-${i}`}>
+            <text x={lx} y={ly - (hasBoost ? 5 : 3)} textAnchor={anchor} dominantBaseline="middle" className="fill-zinc-500" style={{ fontSize: "6.5px", fontFamily: "monospace" }}>{ax.label}</text>
+            <text x={lx} y={ly + 5} textAnchor={anchor} dominantBaseline="middle" style={{ fontSize: "7.5px", fontFamily: "monospace", fill: scmColor, fontWeight: 600 }}>{ax.scm > 0 ? Math.round(ax.scm).toString() : "—"}</text>
+            {hasBoost && (
+              <text x={lx} y={ly + 14} textAnchor={anchor} dominantBaseline="middle" style={{ fontSize: "6.5px", fontFamily: "monospace", fill: boostColor, fontWeight: 500, opacity: 0.8 }}>{Math.round(ax.boost)}</text>
+            )}
+          </g>
+        );
+      })}
+
+      {/* Legend */}
+      <rect x={4} y={size - 16} width={6} height={6} rx={1} fill={scmColor} opacity={0.8} />
+      <text x={13} y={size - 10} className="fill-zinc-500" style={{ fontSize: "6px", fontFamily: "monospace" }}>SCM</text>
+      <rect x={36} y={size - 16} width={6} height={6} rx={1} fill={boostColor} opacity={0.6} />
+      <text x={45} y={size - 10} className="fill-zinc-500" style={{ fontSize: "6px", fontFamily: "monospace" }}>AFB</text>
+    </svg>
+  );
+}
+
 function AccelerationRadar({ shipData }: { shipData: any }) {
+  // SCM values
+  const fwd = shipData.accelForward ?? 0;
+  const bwd = shipData.accelBackward ?? 0;
+  const up = shipData.accelUp ?? 0;
+  const down = shipData.accelDown ?? 0;
+  const strafe = shipData.accelStrafe ?? 0;
+  const pitch = shipData.pitchRate ?? 0;
+  const yaw = shipData.yawRate ?? 0;
+  const roll = shipData.rollRate ?? 0;
+
+  // Boost values (use boosted rates for pitch/yaw/roll, boost speeds for movement)
+  const boostFwd = shipData.boostSpeedForward ?? fwd;
+  const boostBwd = shipData.boostSpeedBackward ?? bwd;
+  const boostPitch = shipData.boostedPitch ?? pitch;
+  const boostYaw = shipData.boostedYaw ?? yaw;
+  const boostRoll = shipData.boostedRoll ?? roll;
+  // No boosted strafe/up/down data — use SCM as fallback
+  const boostUp = up;
+  const boostDown = down;
+  const boostStrafe = strafe;
+
+  // Max values for normalization (use boost values as ceiling when available)
+  const maxFwd = Math.max(fwd, boostFwd, 30);
+  const maxBwd = Math.max(bwd, boostBwd, 30);
+  const maxUp = Math.max(up, boostUp, 25);
+  const maxDown = Math.max(down, boostDown, 25);
+  const maxStrafe = Math.max(strafe, boostStrafe, 25);
+  const maxPitch = Math.max(pitch, boostPitch, 100);
+  const maxYaw = Math.max(yaw, boostYaw, 100);
+  const maxRoll = Math.max(roll, boostRoll, 200);
+
   const axes = [
-    { label: "Forward", value: shipData.accelForward ?? 0, max: 30 },
-    { label: "Up", value: shipData.accelUp ?? 0, max: 25 },
-    { label: "Strafe", value: shipData.accelStrafe ?? 0, max: 25 },
-    { label: "Down", value: shipData.accelDown ?? 0, max: 25 },
-    { label: "Backward", value: shipData.accelBackward ?? 0, max: 30 },
-    { label: "Roll Accel", value: shipData.rollRate ? shipData.rollRate * 0.5 : 0, max: 150 },
-    { label: "Yaw Accel", value: shipData.yawRate ? shipData.yawRate * 0.3 : 0, max: 50 },
-    { label: "Pitch Accel", value: shipData.pitchRate ? shipData.pitchRate * 0.3 : 0, max: 50 },
+    { label: "Forward",  scm: fwd,    boost: boostFwd,    max: maxFwd },
+    { label: "Up",       scm: up,     boost: boostUp,     max: maxUp },
+    { label: "Strafe",   scm: strafe, boost: boostStrafe,  max: maxStrafe },
+    { label: "Pitch",    scm: pitch,  boost: boostPitch,  max: maxPitch },
+    { label: "Backward", scm: bwd,    boost: boostBwd,    max: maxBwd },
+    { label: "Down",     scm: down,   boost: boostDown,   max: maxDown },
+    { label: "Roll",     scm: roll,   boost: boostRoll,   max: maxRoll },
+    { label: "Yaw",      scm: yaw,    boost: boostYaw,    max: maxYaw },
   ];
-  return <RadarChartInline axes={axes} size={200} color="#f59e0b" fillOpacity={0.12} gridLevels={5} />;
+
+  return <DualRadarChart axes={axes} size={220} gridLevels={5} />;
 }
 
 function ManeuverabilityRadar({ shipInfo }: { shipInfo: any }) {
