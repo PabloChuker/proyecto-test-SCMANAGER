@@ -8,6 +8,7 @@ import Image from "next/image";
 import { ShipComparator } from "@/components/compare/ShipComparator";
 import Link from "next/link";
 import Header from "@/app/assets/header/Header";
+import { CompareVideoBackground } from "@/components/compare/CompareVideoBackground";
 
 export const metadata = {
   title: "Ship Comparator — SC LABS",
@@ -16,30 +17,19 @@ export const metadata = {
 
 export default function ComparePage() {
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
-      {/* Background video + gradient overlays */}
-      <div className="fixed inset-0 -z-10">
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover opacity-[0.25] pointer-events-none"
-        >
-          <source src="/videos/comparador.mp4" type="video/mp4" />
-        </video>
-        <div className="absolute inset-0 bg-zinc-950/40" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(69,91,163,0.06),transparent_60%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(143,197,134,0.04),transparent_50%)]" />
-      </div>
+    <main className="relative min-h-screen text-zinc-100">
+      {/* Video background — rendered as client component for autoplay */}
+      <CompareVideoBackground />
 
-      <Header subtitle="Ship Comparator" />
+      <div className="relative z-10">
+        <Header subtitle="Ship Comparator" />
 
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <Suspense fallback={<CompareSkeleton />}>
-          <ShipComparator />
-        </Suspense>
+        {/* Content */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <Suspense fallback={<CompareSkeleton />}>
+            <ShipComparator />
+          </Suspense>
+        </div>
       </div>
     </main>
   );
