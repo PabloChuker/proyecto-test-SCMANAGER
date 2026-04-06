@@ -1,15 +1,15 @@
 // =============================================================================
-// AL FILO ÔÇö LoadoutBuilder v17 (Drag & Drop Desktop Layout)
+// AL FILO — LoadoutBuilder v17 (Drag & Drop Desktop Layout)
 //
-// Layout panels are draggable ÔÇö click and hold to rearrange columns.
+// Layout panels are draggable — click and hold to rearrange columns.
 // Order persists in localStorage per ship.
 //
 // Panels:
-//   weapons    ÔÇö Weapons + Missiles + Acceleration Radar
-//   systems    ÔÇö Shields, Power Plants, Coolers + Maneuverability Radar
-//   modules    ÔÇö QT Drives, Radar, Tractor/PDC/Utility + Combat Summary
-//   power      ÔÇö Power Management (Erkul grid) + Signatures + Balance
-//   shipcard   ÔÇö Ship Card (full Erkul stats) + DPS Panel
+//   weapons    — Weapons + Missiles + Acceleration Radar
+//   systems    — Shields, Power Plants, Coolers + Maneuverability Radar
+//   modules    — QT Drives, Radar, Tractor/PDC/Utility + Combat Summary
+//   power      — Power Management (Erkul grid) + Signatures + Balance
+//   shipcard   — Ship Card (full Erkul stats) + DPS Panel
 // =============================================================================
 
 "use client";
@@ -63,13 +63,13 @@ function getShipImageUrl(name: string, manufacturer?: string | null): string {
 }
 
 const CAT_CONFIG: Record<string, { label: string; icon: string; accent: string }> = {
-  SHIELD: { label: "SHIELDS", icon: "Ôùç", accent: "#3b82f6" },
-  POWER_PLANT: { label: "POWER PLANTS", icon: "ÔÜí", accent: "#22c55e" },
-  COOLER: { label: "COOLERS", icon: "ÔØä", accent: "#06b6d4" },
-  QUANTUM_DRIVE: { label: "QUANTUM DRIVES", icon: "Ôùê", accent: "#a855f7" },
-  RADAR: { label: "RADAR", icon: "ÔùÄ", accent: "#22c55e" },
-  MINING: { label: "MINING", icon: "ÔøÅ", accent: "#f472b6" },
-  UTILITY: { label: "UTILITY", icon: "ÔùÄ", accent: "#94a3b8" },
+  SHIELD: { label: "SHIELDS", icon: "/icons/shilds.png", accent: "#3b82f6" },
+  POWER_PLANT: { label: "POWER PLANTS", icon: "/icons/power_plants.png", accent: "#22c55e" },
+  COOLER: { label: "COOLERS", icon: "/icons/coolers.png", accent: "#06b6d4" },
+  QUANTUM_DRIVE: { label: "QUANTUM DRIVES", icon: "/icons/Quantum_drives.png", accent: "#a855f7" },
+  RADAR: { label: "RADAR", icon: "/icons/DPS_calculator.png", accent: "#22c55e" },
+  MINING: { label: "MINING", icon: "/icons/mining_lasers.png", accent: "#f472b6" },
+  UTILITY: { label: "UTILITY", icon: "/icons/tractor_beam.png", accent: "#94a3b8" },
 };
 
 // ÔöÇÔöÇ Drag & Drop Widget System (individual blocks) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
@@ -154,17 +154,17 @@ function DragWidget({ id, label, children, dragState, onDragStart, onDragOver, o
       )}
       {/* Drag handle */}
       <div className="flex items-center gap-1 px-1.5 py-[2px] bg-zinc-950/60 border border-zinc-800/30 border-b-0 cursor-grab active:cursor-grabbing select-none group rounded-t-sm">
-        <span className="text-[7px] text-zinc-700 group-hover:text-yellow-600 transition-colors">Ôá┐</span>
+        <span className="text-[7px] text-zinc-700 group-hover:text-yellow-600 transition-colors">⟲</span>
         <span className="text-[6px] font-mono text-zinc-700 tracking-[0.15em] group-hover:text-zinc-500 transition-colors uppercase">{label}</span>
         <span className="flex-1" />
-        <span className="text-[7px] text-zinc-800 group-hover:text-zinc-600 transition-colors">Ôï«Ôï«</span>
+        <span className="text-[7px] text-zinc-800 group-hover:text-zinc-600 transition-colors">⋮⋮</span>
       </div>
       {children}
     </div>
   );
 }
 
-// ÔöÇÔöÇ Widget renderer ÔÇö maps a WidgetId to its JSX content ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+// ÔöÇÔöÇ Widget renderer — maps a WidgetId to its JSX content ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 function renderWidget(
   wId: WidgetId,
   dp: { dragState: { dragging: WidgetId | null; over: WidgetId | null }; onDragStart: (id: WidgetId) => void; onDragOver: (e: React.DragEvent, id: WidgetId) => void; onDrop: (e: React.DragEvent, id: WidgetId) => void; onDragEnd: () => void },
@@ -175,9 +175,9 @@ function renderWidget(
 
   switch (wId) {
     case "weapons":
-      return weaponHps.length > 0 ? W(<HpGroup title="WEAPONS" icon="Ôû¬" hps={weaponHps} store={store} onClickHp={setPickerHp} accent="#eab308" />) : null;
+      return weaponHps.length > 0 ? W(<HpGroup title="WEAPONS" icon="/icons/weapons.png" hps={weaponHps} store={store} onClickHp={setPickerHp} accent="#eab308" />) : null;
     case "missiles":
-      return missileHps.length > 0 ? W(<HpGroup title="MISSILES & BOMBS" icon="Ôùå" hps={missileHps} store={store} onClickHp={setPickerHp} accent="#f97316" />) : null;
+      return missileHps.length > 0 ? W(<HpGroup title="MISSILES & BOMBS" icon="/icons/missile.png" hps={missileHps} store={store} onClickHp={setPickerHp} accent="#f97316" />) : null;
     case "strafe-profile":
       return W(<div className="bg-zinc-900/80 border border-zinc-800/60 p-3"><div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-1 text-center">Strafe Profile</div><div className="flex justify-center"><StrafeProfile3D shipData={si} /></div></div>);
     case "turning-profile":
@@ -206,7 +206,7 @@ function renderWidget(
     }
     case "utility": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "UTILITY" || hp.resolvedCategory === "MINING");
-      return hps.length > 0 ? W(<HpGroup title="UTILITY" icon="ÔùÄ" hps={hps} store={store} onClickHp={setPickerHp} accent="#94a3b8" />) : null;
+      return hps.length > 0 ? W(<HpGroup title="UTILITY" icon="/icons/tractor_beam.png" hps={hps} store={store} onClickHp={setPickerHp} accent="#94a3b8" />) : null;
     }
     case "combat-summary":
       return W(
@@ -263,10 +263,10 @@ function renderWidget(
               {(si.boostedPitch || si.boostedYaw || si.boostedRoll) && <StatRow label="BOOSTED MAX" value={`${fmtNum(si.boostedPitch)} / ${fmtNum(si.boostedYaw)} / ${fmtNum(si.boostedRoll)}`} unit="┬░/s" />}
               <StatRow label="POWER CONSUMPTION" value={String(Math.round(stats.powerDraw))} />
               <StatRow label="CM DECOY/NOISE" value={`${cmDecoyCount} / ${cmNoiseCount}`} />
-              <StatRow label="HP" value={si.hullHp ? fmtMass(si.hullHp) : (si.shieldHpTotal ? fmtStat(si.shieldHpTotal) : "ÔÇö")} />
-              <StatRow label="CARGO" value={si.cargo > 0 ? Math.round(si.cargo).toString() : "ÔÇö"} unit="SCU" />
+              <StatRow label="HP" value={si.hullHp ? fmtMass(si.hullHp) : (si.shieldHpTotal ? fmtStat(si.shieldHpTotal) : "—")} />
+              <StatRow label="CARGO" value={si.cargo > 0 ? Math.round(si.cargo).toString() : "—"} unit="SCU" />
               {si.mass && si.mass > 0 && <StatRow label="MASS" value={fmtMass(si.mass)} unit="kg" />}
-              <StatRow label="HYDROGEN CAPACITY" value={si.hydrogenCapacity ? fmtStat(si.hydrogenCapacity) : "ÔÇö"} unit="SCU" />
+              <StatRow label="HYDROGEN CAPACITY" value={si.hydrogenCapacity ? fmtStat(si.hydrogenCapacity) : "—"} unit="SCU" />
               {si.quantumFuelCapacity && <StatRow label="QT FUEL CAPACITY" value={fmtDec(si.quantumFuelCapacity)} unit="SCU" />}
             </div>
           </div>
@@ -291,7 +291,7 @@ function renderWidget(
           </div>
           <div className={flightMode === "NAV" ? "opacity-30" : ""}>
             <div className="flex items-baseline gap-3">
-              <span className="text-[11px]" style={{ color: "#f97316", opacity: 0.5 }}>Ôùå</span>
+              <img src="/icons/missile.png" alt="" className="w-4 h-4" style={{ opacity: 0.5 }} />
               <span className="text-lg font-mono font-bold tabular-nums text-orange-500">{stats.summary.missiles > 0 ? fmtStat(stats.totalAlpha) : "0"}</span>
               <span className="text-[10px] font-mono text-zinc-500">dmg</span>
             </div>
@@ -299,13 +299,13 @@ function renderWidget(
           <div>
             <div className="flex items-baseline gap-3">
               <span className="text-[11px]" style={{ color: "#eab308", opacity: 0.5 }}>┬╗</span>
-              <span className="text-lg font-mono font-bold tabular-nums text-amber-500">{stats.shieldRegen > 0 ? (stats.shieldHp / Math.max(stats.shieldRegen, 0.01)).toFixed(1) : "ÔÇö"}</span>
+              <span className="text-lg font-mono font-bold tabular-nums text-amber-500">{stats.shieldRegen > 0 ? (stats.shieldHp / Math.max(stats.shieldRegen, 0.01)).toFixed(1) : "—"}</span>
               <span className="text-[10px] font-mono text-zinc-500">s full regen time</span>
             </div>
           </div>
           <div>
             <div className="flex items-baseline gap-3">
-              <span className="text-[11px]" style={{ color: "#3b82f6", opacity: 0.5 }}>Ôùë</span>
+              <img src="/icons/shilds.png" alt="" className="w-4 h-4" style={{ opacity: 0.5 }} />
               <span className="text-xl font-mono font-bold tabular-nums text-blue-500">{stats.shieldHp > 0 ? fmtStat(stats.shieldHp) : (si.shieldHpTotal ? fmtStat(si.shieldHpTotal) : "0")}</span>
               <span className="text-[10px] font-mono text-zinc-500">hp</span>
               {stats.shieldRegen > 0 && (<><span className="text-sm font-mono tabular-nums text-blue-400/70">{fmtStat(stats.shieldRegen)}</span><span className="text-[10px] font-mono text-zinc-500">hp/s</span></>)}
@@ -313,7 +313,7 @@ function renderWidget(
           </div>
           {si.hullHp && si.hullHp > 0 && (
             <div><div className="flex items-baseline gap-3">
-              <span className="text-[11px]" style={{ color: "#94a3b8", opacity: 0.5 }}>Ôùæ</span>
+              <img src="/icons/Ships.png" alt="" className="w-4 h-4" style={{ opacity: 0.5 }} />
               <span className="text-lg font-mono font-bold tabular-nums text-zinc-400">{fmtStat(si.hullHp)}</span>
               <span className="text-[10px] font-mono text-zinc-500">hp</span>
             </div></div>
@@ -412,17 +412,17 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   if (!shipInfo) return null;
 
   const si = shipInfo as any;
-  const fmtNum = (v: number | null) => v != null && v > 0 ? Math.round(v).toString() : "ÔÇö";
-  const fmtDec = (v: number | null) => v != null && v > 0 ? v.toFixed(1) : "ÔÇö";
-  const fmtMass = (v: number | null) => { if (!v || v <= 0) return "ÔÇö"; if (v >= 1000000) return (v / 1000000).toFixed(1) + "M"; if (v >= 1000) return Math.round(v / 1000).toLocaleString() + "k"; return Math.round(v).toLocaleString(); };
+  const fmtNum = (v: number | null) => v != null && v > 0 ? Math.round(v).toString() : "—";
+  const fmtDec = (v: number | null) => v != null && v > 0 ? v.toFixed(1) : "—";
+  const fmtMass = (v: number | null) => { if (!v || v <= 0) return "—"; if (v >= 1000000) return (v / 1000000).toFixed(1) + "M"; if (v >= 1000) return Math.round(v / 1000).toLocaleString() + "k"; return Math.round(v).toLocaleString(); };
 
   return (
     <div className="space-y-2">
       {/* ÔöÇÔöÇ Top Bar ÔöÇÔöÇ */}
       <div className="flex items-center justify-between px-2.5 py-1.5 bg-zinc-900/80 border border-zinc-800/60">
         <div className="flex items-center gap-4">
-          <SigBadge icon="Ôª┐" label="EM" value={stats.emSignature} color="#a855f7" />
-          <SigBadge icon="ÔÜí" label="IR" value={stats.irSignature} color="#f97316" />
+          <SigBadge icon="/icons/emp.png" label="EM" value={stats.emSignature} color="#a855f7" />
+          <SigBadge icon="/icons/power_plants.png" label="IR" value={stats.irSignature} color="#f97316" />
           <div className="h-3 w-px bg-zinc-800/60" />
           <span className="text-[9px] font-mono text-zinc-600 tracking-wider">{stats.summary.activeComponents}/{stats.summary.totalComponents} ACTIVE</span>
           {hasChanges() && <span className="text-[9px] font-mono text-yellow-500/80 tracking-wider">{overrides.size} MOD</span>}
@@ -430,11 +430,11 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
         <div className="flex items-center gap-1.5">
           <button onClick={handleCopyLink} className={copied ? "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border bg-green-950/30 text-green-500 border-green-800/50" : "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-yellow-500 hover:border-yellow-800/50 transition-colors"}>{copied ? "COPIED" : "SHARE"}</button>
           {hasChanges() && <button onClick={resetAll} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-orange-500/80 border-zinc-800 hover:border-orange-800/50 transition-colors">RESET</button>}
-          <button onClick={handleResetLayout} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-600 border-zinc-800 hover:text-cyan-500 hover:border-cyan-800/50 transition-colors" title="Reset panel layout to default">Ôá┐ LAYOUT</button>
+          <button onClick={handleResetLayout} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-600 border-zinc-800 hover:text-cyan-500 hover:border-cyan-800/50 transition-colors" title="Reset panel layout to default">⟲ LAYOUT</button>
         </div>
       </div>
 
-      {/* ÔöÇÔöÇ Main Grid ÔÇö original 5-column layout, each block draggable ÔöÇÔöÇ */}
+      {/* ÔöÇÔöÇ Main Grid — original 5-column layout, each block draggable ÔöÇÔöÇ */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_1fr_1fr_340px] gap-2">
         {columns.map((colWidgets, colIdx) => (
           <div key={colIdx} className="space-y-2">
@@ -458,7 +458,7 @@ function HpGroup({ title, icon, hps, store, onClickHp, accent }: { title: string
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60">
       <div className="flex items-center gap-2 px-2 py-1 border-b border-zinc-800/50 bg-zinc-900/50">
-        <span className="text-[10px]" style={{ color: accent, opacity: 0.6 }}>{icon}</span>
+        <img src={icon} alt="" className="w-4 h-4" style={{ opacity: 0.7 }} />
         <span className="text-[9px] font-mono font-medium tracking-[0.15em] uppercase text-zinc-400">{title}</span>
         <span className="text-[9px] font-mono text-zinc-700 ml-auto">{hps.length}</span>
       </div>
@@ -475,7 +475,7 @@ function SigBadge({ icon, label, value, color }: { icon: string; label: string; 
   const fmt = (v: number) => v >= 1000 ? (v / 1000).toFixed(1) + "K" : Math.round(v).toString();
   return (
     <div className="flex items-center gap-1">
-      <span className="text-[10px]" style={{ color, opacity: 0.7 }}>{icon}</span>
+      <img src={icon} alt="" className="w-3.5 h-3.5" style={{ opacity: 0.7 }} />
       <span className="text-[10px] font-mono font-bold tabular-nums" style={{ color }}>{fmt(value)}</span>
       <span className="text-[7px] font-mono text-zinc-600 tracking-wider">{label}</span>
     </div>
@@ -583,7 +583,7 @@ function RadarChartInline({ axes, size = 180, color = "#f59e0b", fillOpacity = 0
         return (
           <g key={`l-${i}`}>
             <text x={lx} y={ly - 3} textAnchor={anchor} dominantBaseline="middle" className="fill-zinc-500" style={{ fontSize: "7px", fontFamily: "monospace" }}>{ax.label}</text>
-            <text x={lx} y={ly + 7} textAnchor={anchor} dominantBaseline="middle" style={{ fontSize: "8px", fontFamily: "monospace", fill: color, fontWeight: 600 }}>{ax.value > 0 ? Math.round(ax.value).toString() : "ÔÇö"}</text>
+            <text x={lx} y={ly + 7} textAnchor={anchor} dominantBaseline="middle" style={{ fontSize: "8px", fontFamily: "monospace", fill: color, fontWeight: 600 }}>{ax.value > 0 ? Math.round(ax.value).toString() : "—"}</text>
           </g>
         );
       })}
@@ -630,7 +630,7 @@ function DualRadarChart({ axes, size = 220, gridLevels = 5 }: {
         return (
           <g key={`l-${i}`}>
             <text x={lx} y={ly - (hasBoost ? 6 : 3)} textAnchor={anchor} dominantBaseline="middle" className="fill-zinc-500" style={{ fontSize: "7.5px", fontFamily: "monospace" }}>{ax.label}</text>
-            <text x={lx} y={ly + 5} textAnchor={anchor} dominantBaseline="middle" style={{ fontSize: "8.5px", fontFamily: "monospace", fill: scmColor, fontWeight: 600 }}>{ax.scm > 0 ? Math.round(ax.scm).toString() : "ÔÇö"}</text>
+            <text x={lx} y={ly + 5} textAnchor={anchor} dominantBaseline="middle" style={{ fontSize: "8.5px", fontFamily: "monospace", fill: scmColor, fontWeight: 600 }}>{ax.scm > 0 ? Math.round(ax.scm).toString() : "—"}</text>
             {hasBoost && (
               <text x={lx} y={ly + 15} textAnchor={anchor} dominantBaseline="middle" style={{ fontSize: "7.5px", fontFamily: "monospace", fill: boostColor, fontWeight: 500, opacity: 0.8 }}>{Math.round(ax.boost)}</text>
             )}
