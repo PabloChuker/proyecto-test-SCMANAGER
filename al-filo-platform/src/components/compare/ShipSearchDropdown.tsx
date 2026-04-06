@@ -146,8 +146,11 @@ export function ShipSearchDropdown({
         <button
           onClick={onClear}
           className="shrink-0 w-6 h-6 rounded flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-colors"
+          aria-label="Clear selection"
         >
-          \u2715
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M1 1L9 9M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
         </button>
       </div>
     );
