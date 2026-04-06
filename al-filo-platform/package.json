@@ -1,30 +1,33 @@
 {
-    "name":  "al-filo-platform",
-    "version":  "0.1.0",
-    "private":  true,
-    "scripts":  {
-                    "dev":  "next dev",
-                    "build":  "prisma generate \u0026\u0026 next build",
-                    "start":  "next start",
-                    "lint":  "eslint"
-                },
-    "dependencies":  {
-                         "@prisma/client":  "^6.19.2",
-                         "next":  "16.2.1",
-                         "react":  "19.2.4",
-                         "react-dom":  "19.2.4",
-                         "zustand":  "^5.0.12"
-                     },
-    "devDependencies":  {
-                            "@tailwindcss/postcss":  "^4",
-                            "@types/node":  "^20",
-                            "@types/react":  "^19",
-                            "@types/react-dom":  "^19",
-                            "babel-plugin-react-compiler":  "1.0.0",
-                            "eslint":  "^9",
-                            "eslint-config-next":  "16.2.1",
-                            "prisma":  "^6.19.2",
-                            "tailwindcss":  "^4",
-                            "typescript":  "^5"
-                        }
+  "name": "sc-manager-canonical",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.2",
+    "next": "16.2.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "zustand": "^5.0.12",
+    "lucide-react": "^0.474.0",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.0.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "babel-plugin-react-compiler": "1.0.0",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.1",
+    "prisma": "^6.19.2",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
 }
