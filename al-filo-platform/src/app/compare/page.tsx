@@ -11,7 +11,7 @@ import Header from "@/app/assets/header/Header";
 
 export const metadata = {
   title: "Ship Comparator — SC LABS",
-  description: "Compare up to 3 Star Citizen ships side-by-side. Speed, DPS, shields, cargo, and 24+ metrics.",
+  description: "Compare up to 3 Star Citizen ships side-by-side. Speed, acceleration, shields, hull, combat, dimensions, emissions, fuel, and 40+ metrics.",
 };
 
 export default function ComparePage() {
@@ -32,8 +32,8 @@ export default function ComparePage() {
             Ship Comparator
           </h1>
           <p className="text-sm text-zinc-500 mt-1.5 max-w-xl">
-            Select up to 3 ships to compare side-by-side. View performance radar,
-            combat stats, and 24+ detailed specifications.
+            Select up to 3 ships to compare side-by-side. Speed, propulsion, rotation,
+            shields, hull, combat, dimensions, emissions, fuel, quantum, and 40+ specs.
           </p>
         </div>
 
