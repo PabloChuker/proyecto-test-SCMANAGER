@@ -595,7 +595,7 @@ function DualRadarChart({ axes, size = 220, gridLevels = 5 }: {
   size?: number; gridLevels?: number;
 }) {
   if (axes.length < 3) return null;
-  const cx = size / 2, cy = size / 2, radius = size * 0.32, labelR = size * 0.45;
+  const cx = size / 2, cy = size / 2, radius = size * 0.28, labelR = size * 0.42;
   const n = axes.length, step = (2 * Math.PI) / n, start = -Math.PI / 2;
   const normScm = axes.map(a => a.max > 0 ? Math.min(1, a.scm / a.max) : 0);
   const normBoost = axes.map(a => a.max > 0 ? Math.min(1, a.boost / a.max) : 0);
@@ -606,7 +606,7 @@ function DualRadarChart({ axes, size = 220, gridLevels = 5 }: {
   const boostColor = "#ef4444";
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size }}>
+    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, overflow: "visible" }}>
       {/* Grid */}
       {grids.map((p, i) => <polygon key={i} points={p} fill="none" stroke="#3f3f46" strokeWidth={0.5} opacity={0.4} />)}
       {axes.map((_, i) => { const a = start + i * step; return <line key={i} x1={cx} y1={cy} x2={cx + radius * Math.cos(a)} y2={cy + radius * Math.sin(a)} stroke="#3f3f46" strokeWidth={0.5} opacity={0.3} />; })}
@@ -627,10 +627,10 @@ function DualRadarChart({ axes, size = 220, gridLevels = 5 }: {
         const hasBoost = ax.boost > ax.scm;
         return (
           <g key={`l-${i}`}>
-            <text x={lx} y={ly - (hasBoost ? 5 : 3)} textAnchor={anchor} dominantBaseline="middle" className="fill-zinc-500" style={{ fontSize: "6.5px", fontFamily: "monospace" }}>{ax.label}</text>
-            <text x={lx} y={ly + 5} textAnchor={anchor} dominantBaseline="middle" style={{ fontSize: "7.5px", fontFamily: "monospace", fill: scmColor, fontWeight: 600 }}>{ax.scm > 0 ? Math.round(ax.scm).toString() : "—"}</text>
+            <text x={lx} y={ly - (hasBoost ? 6 : 3)} textAnchor={anchor} dominantBaseline="middle" className="fill-zinc-500" style={{ fontSize: "7.5px", fontFamily: "monospace" }}>{ax.label}</text>
+            <text x={lx} y={ly + 5} textAnchor={anchor} dominantBaseline="middle" style={{ fontSize: "8.5px", fontFamily: "monospace", fill: scmColor, fontWeight: 600 }}>{ax.scm > 0 ? Math.round(ax.scm).toString() : "—"}</text>
             {hasBoost && (
-              <text x={lx} y={ly + 14} textAnchor={anchor} dominantBaseline="middle" style={{ fontSize: "6.5px", fontFamily: "monospace", fill: boostColor, fontWeight: 500, opacity: 0.8 }}>{Math.round(ax.boost)}</text>
+              <text x={lx} y={ly + 15} textAnchor={anchor} dominantBaseline="middle" style={{ fontSize: "7.5px", fontFamily: "monospace", fill: boostColor, fontWeight: 500, opacity: 0.8 }}>{Math.round(ax.boost)}</text>
             )}
           </g>
         );
@@ -688,7 +688,7 @@ function AccelerationRadar({ shipData }: { shipData: any }) {
     { label: "Yaw",      scm: yaw,    boost: boostYaw,    max: maxYaw },
   ];
 
-  return <DualRadarChart axes={axes} size={220} gridLevels={5} />;
+  return <DualRadarChart axes={axes} size={260} gridLevels={5} />;
 }
 
 function GForce3DChart({ shipData }: { shipData: any }) {
