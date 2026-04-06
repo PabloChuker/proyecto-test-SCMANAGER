@@ -80,12 +80,50 @@ export default function CraftingCalculator() {
   const estimatedCost = useMemo(() => {
     return Object.entries(aggregatedMaterials).reduce((sum, [matId, qty]) => {
       const mat = materials.find((m) => m.id === matId);
-      // Rough cost calculation based on material type and quality
       const baseCost = mat?.type === "refined" ? 500 : 200;
       const qualityMultiplier = (qualityLevel / 500) * 0.8 + 0.2;
       return sum + baseCost * qty * qualityMultiplier;
     }, 0);
   }, [aggregatedMaterials, qualityLevel]);
+
+  /* ── Quality Simulator helpers ── */
+  const qualityPercentage = useMemo(() => {
+    return (qualityLevel / 1000) * 100;
+  }, [qualityLevel]);
+
+  const selectedBlueprint = useMemo(
+    () => blueprints.find((b) => b.id === selectedBlueprintId),
+    [selectedBlueprintId]
+  );
+
+  const modifiedStats = useMemo(() => {
+    if (!selectedBlueprint) return {};
+    const stats: Record<string, { base: number; modified: number; bonus: number }> = {};
+    Object.entries(selectedBlueprint.qualityEffects).forEach(([stat, effect]) => {
+      const bonusAmount = (effect.maxBonus * qualityPercentage) / 100;
+      stats[stat] = {
+        base: effect.base,
+        modified: effect.base + bonusAmount,
+        bonus: bonusAmount,
+      };
+    });
+    return stats;
+  }, [selectedBlueprint, qualityPercentage]);
+
+  const getQualityColor = (quality: number) => {
+    if (quality < 250) return "text-red-400";
+    if (quality < 500) return "text-orange-400";
+    if (quality < 750) return "text-yellow-400";
+    return "text-emerald-400";
+  };
+
+  const getQualityLabel = (quality: number) => {
+    if (quality < 250) return "Poor";
+    if (quality < 500) return "Substandard";
+    if (quality < 750) return "Standard";
+    if (quality < 900) return "High";
+    return "Excellent";
+  };
 
   return (
     <div className="max-w-6xl space-y-4">
@@ -127,7 +165,14 @@ export default function CraftingCalculator() {
         <div className="space-y-3">
           <div className="flex justify-between items-center">
             <span className="text-sm text-zinc-400">Quality Level</span>
-            <span className="font-mono text-lg text-cyan-400">{qualityLevel}</span>
+            <div className="text-right">
+              <span className={`font-mono text-lg ${getQualityColor(qualityLevel)}`}>
+                {qualityLevel}
+              </span>
+              <span className={`ml-2 text-sm font-semibold ${getQualityColor(qualityLevel)}`}>
+                {getQualityLabel(qualityLevel)}
+              </span>
+            </div>
           </div>
           <input
             type="range"
@@ -276,6 +321,136 @@ export default function CraftingCalculator() {
                   </div>
                 );
               })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Quality Impact on Stats (from Quality Simulator) ── */}
+      {selectedBlueprint && Object.keys(modifiedStats).length > 0 && (
+        <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-6">
+          <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider mb-2">
+            Quality Impact on Stats
+          </h3>
+          <p className="text-xs text-zinc-500 mb-6">
+            Showing quality effects for <span className="text-amber-400 font-mono">{selectedBlueprint.name}</span> at quality {qualityLevel}
+          </p>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {Object.entries(modifiedStats).map(([stat, values]) => {
+              const percentChange = ((values.bonus / values.base) * 100).toFixed(1);
+              const isPositive = values.bonus >= 0;
+
+              return (
+                <div
+                  key={stat}
+                  className="border border-zinc-800/40 rounded-lg p-4 space-y-3"
+                >
+                  <div className="flex justify-between items-baseline">
+                    <h4 className="text-sm font-semibold text-zinc-300 capitalize">
+                      {stat}
+                    </h4>
+                    <span className={`text-xs font-mono ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
+                      {isPositive ? "+" : ""}
+                      {percentChange}%
+                    </span>
+                  </div>
+
+                  {/* Base Value */}
+                  <div>
+                    <div className="flex justify-between items-baseline text-xs text-zinc-500 mb-1">
+                      <span>Base (Quality 0)</span>
+                      <span className="font-mono text-zinc-400">
+                        {values.base.toFixed(1)}
+                      </span>
+                    </div>
+                    <div className="h-2 bg-zinc-800/50 rounded">
+                      <div
+                        className="h-full bg-zinc-600 rounded"
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            (values.base /
+                              Math.max(values.base, values.modified)) *
+                              100
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Current Value */}
+                  <div>
+                    <div className="flex justify-between items-baseline text-xs text-zinc-500 mb-1">
+                      <span>Modified (Quality {qualityLevel})</span>
+                      <span className={`font-mono ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
+                        {values.modified.toFixed(1)}
+                      </span>
+                    </div>
+                    <div className="h-2 bg-zinc-800/50 rounded">
+                      <div
+                        className={`h-full rounded ${isPositive ? "bg-gradient-to-r from-cyan-500 to-emerald-500" : "bg-red-500"}`}
+                        style={{
+                          width: `${Math.min(
+                            100,
+                            (values.modified /
+                              Math.max(values.base, values.modified)) *
+                              100
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Bonus */}
+                  {values.bonus !== 0 && (
+                    <div className="pt-2 border-t border-zinc-700/50">
+                      <div className="flex justify-between items-baseline text-xs">
+                        <span className="text-zinc-600">Bonus</span>
+                        <span className={`font-mono ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
+                          {isPositive ? "+" : ""}
+                          {values.bonus.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Quality Recommendations ── */}
+      {selectedBlueprint && (
+        <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-6">
+          <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider mb-4">
+            Recommendations
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="border border-red-800/40 bg-red-900/10 rounded p-4">
+              <div className="text-sm font-semibold text-red-400 mb-2">
+                Poor Quality (0-250)
+              </div>
+              <p className="text-xs text-red-300">
+                Not recommended for critical applications. Stats will be significantly reduced.
+              </p>
+            </div>
+            <div className="border border-amber-800/40 bg-amber-900/10 rounded p-4">
+              <div className="text-sm font-semibold text-amber-400 mb-2">
+                Standard Quality (500-750)
+              </div>
+              <p className="text-xs text-amber-300">
+                Acceptable for most uses. Provides reliable performance with moderate bonuses.
+              </p>
+            </div>
+            <div className="border border-emerald-800/40 bg-emerald-900/10 rounded p-4">
+              <div className="text-sm font-semibold text-emerald-400 mb-2">
+                Excellent Quality (900+)
+              </div>
+              <p className="text-xs text-emerald-300">
+                Maximum performance. Stats reach peak values, ideal for specialized roles.
+              </p>
+            </div>
           </div>
         </div>
       )}

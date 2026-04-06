@@ -6,7 +6,7 @@ import Link from "next/link";
 import BlueprintBrowser from "./BlueprintBrowser";
 import CraftingCalculator from "./CraftingCalculator";
 import MaterialBrowser from "./MaterialBrowser";
-import QualitySimulator from "./QualitySimulator";
+
 
 const SIDEBAR_ITEMS = [
   { key: "dps", href: "/dps", label: "DPS Calculator", icon: "/icons/DPS_calculator.png" },
@@ -27,7 +27,6 @@ const TABS = [
   { id: "blueprints", label: "Blueprints", icon: "📐" },
   { id: "calculator", label: "Calculator", icon: "🧮" },
   { id: "materials", label: "Materials", icon: "⚗" },
-  { id: "quality", label: "Quality Sim", icon: "⚙" },
 ];
 
 export default function CraftingPage() {
@@ -122,7 +121,6 @@ export default function CraftingPage() {
             {activeTab === "blueprints" && <BlueprintBrowser />}
             {activeTab === "calculator" && <CraftingCalculator />}
             {activeTab === "materials" && <MaterialBrowser />}
-            {activeTab === "quality" && <QualitySimulator />}
           </div>
         </div>
       </div>
