@@ -132,6 +132,16 @@ function generateUUID(): string {
 }
 
 /**
+ * Clean CCU ship names by removing edition suffixes (Standard Edition, Warbond Edition, etc.)
+ */
+function cleanCCUShipName(raw: string): string {
+  return raw
+    .replace(/\s*[-–]?\s*(Standard|Warbond)\s*(Edition)?.*$/i, "")
+    .replace(/\s*[-–]\s*(LTI|IAE|Invictus|BIS|Best in Show|Anniversary|Citizencon).*$/i, "")
+    .trim();
+}
+
+/**
  * Parse SC Labs Hangar Importer format JSON
  * Structure: { version, myHangar: [...], myBuyBack: [...] }
  * Each item: { id, name, image, lastModification, contained, link, available, category,
@@ -157,13 +167,15 @@ function parseSCLabsItems(items: any[], location: ItemLocation): {
       if (category === "upgrade" && item.ccuInfo) {
         // Parse as CCU upgrade
         const ci = item.ccuInfo;
+        const rawFrom = ci.fromShipData?.name || "";
+        const rawTo = ci.toShipData?.name || "";
         const ccu: Omit<HangarCCU, "id"> = {
-          fromShip: ci.fromShipData?.name || "",
+          fromShip: cleanCCUShipName(rawFrom),
           fromShipReference: "",
-          toShip: ci.toShipData?.name || "",
+          toShip: cleanCCUShipName(rawTo),
           toShipReference: "",
           pricePaid: ci.price || 0,
-          isWarbond: false,
+          isWarbond: rawTo.toLowerCase().includes("warbond") || name.toLowerCase().includes("warbond"),
           location: location === "ccu_chain" ? "hangar" : location,
           notes: "",
         };
@@ -795,6 +807,27 @@ export const useHangarStore = create<HangarStoreState>()(
           });
           if (needsUpdate) {
             state.ships = patched;
+          }
+        }
+        // Clean CCU ship names: remove "Standard Edition", "Warbond Edition" etc.
+        if (state && state.ccus) {
+          let ccuNeedsUpdate = false;
+          const patchedCcus = state.ccus.map((ccu) => {
+            const cleanedFrom = cleanCCUShipName(ccu.fromShip);
+            const cleanedTo = cleanCCUShipName(ccu.toShip);
+            if (cleanedFrom !== ccu.fromShip || cleanedTo !== ccu.toShip) {
+              ccuNeedsUpdate = true;
+              return {
+                ...ccu,
+                fromShip: cleanedFrom,
+                toShip: cleanedTo,
+                isWarbond: ccu.isWarbond || ccu.toShip.toLowerCase().includes("warbond"),
+              };
+            }
+            return ccu;
+          });
+          if (ccuNeedsUpdate) {
+            state.ccus = patchedCcus;
           }
         }
       },

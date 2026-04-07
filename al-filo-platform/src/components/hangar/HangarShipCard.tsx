@@ -59,6 +59,11 @@ const INSURANCE_LABELS: Record<string, string> = {
 const SLUG_FIXES: Record<string, string> = {
   "gladiator": "t8c-gladiator",
   "c8r pisces": "c8r-pisces-rescue",
+  "aurora mr": "aurora-mr",
+  "aurora cl": "aurora-cl",
+  "aurora ln": "aurora-ln",
+  "aurora lx": "aurora-lx",
+  "aurora es": "aurora-es",
   "aurora mk i mr": "aurora-mr",
   "aurora mk i cl": "aurora-cl",
   "aurora mk i ln": "aurora-ln",
@@ -69,7 +74,91 @@ const SLUG_FIXES: Record<string, string> = {
   "vanduul blade": "blade",
   "ursa rover": "ursa",
   "hull b": "hull-b",
+  "c2 hercules": "hercules-starlifter-c2",
+  "c2 hercules starlifter": "hercules-starlifter-c2",
+  "m2 hercules": "m2-hercules-starlifter",
+  "m2 hercules starlifter": "m2-hercules-starlifter",
+  "a2 hercules": "a2-hercules-starlifter",
+  "a2 hercules starlifter": "a2-hercules-starlifter",
+  "f7c hornet mk ii": "f7c-hornet-mk-ii",
+  "f7c hornet mk i": "f7c-hornet-mk-i",
+  "f7a hornet mk ii": "f7a-hornet-mk-ii",
+  "f7c-m super hornet mk ii": "f7c-m-super-hornet-mk-ii",
+  "f7c-m super hornet mk i": "f7c-m-super-hornet-mk-i",
+  "f7c-r hornet tracker mk ii": "f7c-r-hornet-tracker-mk-ii",
+  "f7c-r hornet tracker mk i": "f7c-r-hornet-tracker-mk-i",
+  "f7c-s hornet ghost mk ii": "f7c-s-hornet-ghost-mk-ii",
+  "f7c-s hornet ghost mk i": "f7c-s-hornet-ghost-mk-i",
+  "f7c-m super hornet heartseeker mk ii": "f7c-m-hornet-heartseeker-mk-ii",
+  "f7c-m super hornet heartseeker mk i": "f7c-m-super-hornet-heartseeker-mk-i",
+  "f8c lightning": "f8c-lightning",
+  "super hornet mk ii": "f7c-m-super-hornet-mk-ii",
+  "super hornet mk i": "f7c-m-super-hornet-mk-i",
+  "hornet mk ii": "f7c-hornet-mk-ii",
+  "hornet mk i": "f7c-hornet-mk-i",
+  "ares inferno": "ares-star-fighter-inferno",
+  "ares ion": "ares-star-fighter-ion",
+  "ares star fighter inferno": "ares-star-fighter-inferno",
+  "ares star fighter ion": "ares-star-fighter-ion",
+  "mercury": "mercury-star-runner",
+  "mercury star runner": "mercury-star-runner",
+  "msr": "mercury-star-runner",
+  "pisces": "c8x-pisces-expedition",
+  "c8x pisces": "c8x-pisces-expedition",
+  "c8x pisces expedition": "c8x-pisces-expedition",
+  "p52 merlin": "p-52-merlin",
+  "p-52 merlin": "p-52-merlin",
+  "p72 archimedes": "p-72-archimedes",
+  "p-72 archimedes": "p-72-archimedes",
+  "cutlass black": "cutlass-black",
+  "cutlass blue": "cutlass-blue",
+  "cutlass red": "cutlass-red",
+  "cutlass steel": "cutlass-steel",
+  "dragonfly black": "dragonfly-black",
+  "dragonfly yellowjacket": "dragonfly-yellowjacket",
+  "reliant kore": "reliant-kore",
+  "reliant mako": "reliant-mako",
+  "reliant sen": "reliant-sen",
+  "reliant tana": "reliant-tana",
+  "santok yai": "santok.y-i",
+  "san'tok.yāi": "santok.y-i",
+  "san tok yai": "santok.y-i",
+  "constellation andromeda": "constellation-andromeda",
+  "constellation aquila": "constellation-aquila",
+  "constellation phoenix": "constellation-phoenix",
+  "constellation taurus": "constellation-taurus",
+  "vanguard warden": "vanguard-warden",
+  "vanguard sentinel": "vanguard-sentinel",
+  "vanguard harbinger": "vanguard-harbinger",
+  "vanguard hoplite": "vanguard-hoplite",
+  "starfarer gemini": "starfarer-gemini",
+  "hull a": "hull-a",
+  "hull c": "hull-c",
+  "hull d": "hull-d",
+  "hull e": "hull-e",
+  "890 jump": "890-jump",
+  "genesis starliner": "genesis-starliner",
+  "starlancer tac": "starlancer-tac",
+  "starlancer max": "starlancer-max",
+  "spirit a1": "a1-spirit",
+  "spirit c1": "c1-spirit",
+  "spirit e1": "e1-spirit",
+  "a1 spirit": "a1-spirit",
+  "c1 spirit": "c1-spirit",
+  "e1 spirit": "e1-spirit",
+  "scorpius antares": "scorpius-antares",
+  "ironclad assault": "ironclad-assault",
 };
+
+/**
+ * Clean ship name by removing edition suffixes (Standard Edition, Warbond Edition, etc.)
+ */
+function cleanShipName(name: string): string {
+  return name
+    .replace(/\s*[-–]?\s*(Standard|Warbond)\s*(Edition)?.*$/i, "")
+    .replace(/\s*[-–]\s*(LTI|IAE|Invictus|BIS|Best in Show|Anniversary|Citizencon).*$/i, "")
+    .trim();
+}
 
 /**
  * Build a local ship thumbnail URL from the ship name.
@@ -77,7 +166,8 @@ const SLUG_FIXES: Record<string, string> = {
  */
 function getShipThumbUrl(shipName: string): string {
   if (!shipName) return "";
-  const lower = shipName.toLowerCase().trim();
+  const cleaned = cleanShipName(shipName);
+  const lower = cleaned.toLowerCase().trim();
 
   // Check fixed mappings first
   if (SLUG_FIXES[lower]) return `/ships/${SLUG_FIXES[lower]}.jpg`;
