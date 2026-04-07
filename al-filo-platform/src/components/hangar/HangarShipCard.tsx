@@ -33,14 +33,34 @@ const INSURANCE_LABELS: Record<string, string> = {
   unknown: "—",
 };
 
+// Common name corrections: Guild Swarm name → image file slug
+const SLUG_FIXES: Record<string, string> = {
+  "gladiator": "t8c-gladiator",
+  "c8r pisces": "c8r-pisces-rescue",
+  "aurora mk i mr": "aurora-mr",
+  "aurora mk i cl": "aurora-cl",
+  "aurora mk i ln": "aurora-ln",
+  "aurora mk i lx": "aurora-lx",
+  "aurora mk i es": "aurora-es",
+  "a.t.l.s.": "atls",
+  "mustang alpha": "mustang-alpha",
+  "vanduul blade": "blade",
+  "ursa rover": "ursa",
+  "hull b": "hull-b",
+};
+
 /**
  * Build a local ship thumbnail URL from the ship name.
  * Maps "Gladius" → "/ships/gladius.jpg", "Zeus Mk II ES" → "/ships/zeus-mk-ii-es.jpg"
  */
 function getShipThumbUrl(shipName: string): string {
   if (!shipName) return "";
-  const slug = shipName
-    .toLowerCase()
+  const lower = shipName.toLowerCase().trim();
+
+  // Check fixed mappings first
+  if (SLUG_FIXES[lower]) return `/ships/${SLUG_FIXES[lower]}.jpg`;
+
+  const slug = lower
     .replace(/[''()]/g, "")
     .replace(/\s+/g, "-")
     .replace(/[^a-z0-9._-]/g, "-")
@@ -55,8 +75,8 @@ export function HangarShipCard({ ship }: { ship: HangarShip }) {
   const [imgError, setImgError] = useState(false);
   const removeShip = useHangarStore((state) => state.removeShip);
 
-  // Use shipName for local image, fallback to RSI CDN imageUrl, then pledge name
-  const displayName = ship.shipName || extractNameFromPledge(ship.pledgeName);
+  // Resolve ship display name: shipName → notes "Ship: X" / "Part of package" → pledge name extraction
+  const displayName = resolveDisplayName(ship);
   const localThumb = getShipThumbUrl(displayName);
   const fallbackImg = ship.imageUrl && !ship.imageUrl.includes("default-image") ? ship.imageUrl : "";
 
@@ -203,7 +223,29 @@ export function HangarShipCard({ ship }: { ship: HangarShip }) {
 }
 
 /**
- * Quick helper to extract ship name from pledge name if shipName is empty
+ * Resolve the best display name for a ship, trying multiple sources
+ */
+function resolveDisplayName(ship: HangarShip): string {
+  // 1. Explicit shipName field (from v2 import)
+  if (ship.shipName) return ship.shipName;
+
+  // 2. Notes field: "Ship: X (part of package)" or "Part of package: Y"
+  if (ship.notes) {
+    const shipMatch = ship.notes.match(/^Ship:\s*(.+?)(?:\s*\(|$)/);
+    if (shipMatch) return shipMatch[1].trim();
+    const partMatch = ship.notes.match(/^Part of package:\s*(.+)/);
+    if (partMatch) {
+      // notes say package name, extract from pledge
+      return extractNameFromPledge(ship.pledgeName);
+    }
+  }
+
+  // 3. Extract from pledge name
+  return extractNameFromPledge(ship.pledgeName);
+}
+
+/**
+ * Extract ship name from pledge name like "Standalone Ships - Perseus - 10 Year"
  */
 function extractNameFromPledge(pledgeName: string): string {
   let name = pledgeName;
