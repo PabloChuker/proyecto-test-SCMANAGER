@@ -270,9 +270,15 @@ function detectItemCategory(name: string, rawCategory: string): ItemCategory {
   // Game packages
   if (n.startsWith("package -") || n.startsWith("package –") || n.includes("starter pack") || n.includes("game package") || n.includes("squadron 42")) return "game_package";
 
-  // Paints / Skins / Liveries
+  // Paints / Skins / Liveries (including BIS reward paints for ships)
   if (n.startsWith("paints -") || n.startsWith("paint -") || n.includes(" paint") ||
       n.includes("skin -") || n.includes("livery") || n.includes("coloration")) return "paint";
+  // BIS (Best in Show) ship rewards are typically paints — but NOT pennants, trophies, charms
+  if ((n.includes("bis ") || n.includes("best in show")) && n.includes("reward") &&
+      !n.includes("pennant") && !n.includes("trophy") && !n.includes("charm") &&
+      !n.includes("plushie") && !n.includes("figurine") && !n.includes("poster") &&
+      !n.includes("coin") && !n.includes("badge") && !n.includes("helmet") &&
+      !n.includes("armor") && !n.includes("gear")) return "paint";
 
   // Gear / Armor / Weapons / Tools / Suits / Packs
   if (n.startsWith("gear -") || n.startsWith("add-ons -") ||

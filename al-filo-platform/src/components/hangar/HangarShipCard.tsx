@@ -112,7 +112,14 @@ export function HangarShipCard({ ship }: { ship: HangarShip }) {
   // Resolve display name
   const displayName = resolveDisplayName(ship);
   const localThumb = isShip ? getShipThumbUrl(displayName) : "";
-  const fallbackImg = ship.imageUrl && !ship.imageUrl.includes("default-image") ? ship.imageUrl : "";
+  // Resolve RSI CDN image — ensure absolute URL
+  let fallbackImg = "";
+  if (ship.imageUrl && !ship.imageUrl.includes("default-image")) {
+    const raw = ship.imageUrl.trim();
+    if (raw.startsWith("//")) fallbackImg = `https:${raw}`;
+    else if (raw.startsWith("/")) fallbackImg = `https://robertsspaceindustries.com${raw}`;
+    else fallbackImg = raw;
+  }
 
   const insuranceColor = INSURANCE_COLORS[ship.insuranceType] || INSURANCE_COLORS.unknown;
   const locationColor = LOCATION_COLORS[ship.location];

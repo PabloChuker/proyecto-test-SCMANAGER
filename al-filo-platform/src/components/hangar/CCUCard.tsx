@@ -9,12 +9,43 @@ const LOCATION_COLORS: Record<string, { bg: string; text: string; border: string
   buyback: { bg: "bg-orange-500/20", text: "text-orange-400", border: "border-orange-500/30" },
 };
 
+// Common name corrections for image slugs
+const SLUG_FIXES: Record<string, string> = {
+  "gladiator": "t8c-gladiator",
+  "c8r pisces": "c8r-pisces-rescue",
+  "aurora mr": "aurora-mr",
+  "aurora cl": "aurora-cl",
+  "aurora ln": "aurora-ln",
+  "aurora lx": "aurora-lx",
+  "aurora es": "aurora-es",
+  "a.t.l.s.": "atls",
+  "mustang alpha": "mustang-alpha",
+  "vanduul blade": "blade",
+  "ursa rover": "ursa",
+  "hull b": "hull-b",
+};
+
+function getShipThumbUrl(shipName: string): string {
+  if (!shipName) return "";
+  const lower = shipName.toLowerCase().trim();
+  if (SLUG_FIXES[lower]) return `/ships/${SLUG_FIXES[lower]}.jpg`;
+  const slug = lower
+    .replace(/[''()]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/-$/, "");
+  return `/ships/${slug}.jpg`;
+}
+
 export function CCUCard({ ccu }: { ccu: HangarCCU }) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const removeCCU = useHangarStore((state) => state.removeCCU);
 
   const locationColor = LOCATION_COLORS[ccu.location];
+  const toShipThumb = getShipThumbUrl(ccu.toShip);
 
   const handleDelete = () => {
     removeCCU(ccu.id);
@@ -24,7 +55,34 @@ export function CCUCard({ ccu }: { ccu: HangarCCU }) {
   return (
     <>
       <article className="relative overflow-hidden rounded-sm bg-zinc-900/60 backdrop-blur-sm border border-zinc-800/50 transition-all duration-300 hover:border-cyan-500/40 hover:bg-zinc-900/80 hover:shadow-[0_0_30px_-8px_rgba(6,182,212,0.15)] group">
-        <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/80 to-zinc-900/40 pointer-events-none" />
+        {/* ── Image Area — "to" ship ── */}
+        <div className="relative h-24 overflow-hidden bg-zinc-900">
+          {!imgError && toShipThumb ? (
+            <img
+              src={toShipThumb}
+              alt={ccu.toShip}
+              className="absolute inset-0 w-full h-full object-cover opacity-50 group-hover:opacity-70 group-hover:scale-105 transition-all duration-500"
+              onError={() => setImgError(true)}
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-3xl opacity-30">⬆️</span>
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/60 to-transparent" />
+          {/* Badges */}
+          <div className="absolute top-2 left-2 flex gap-1.5 z-10">
+            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm ${locationColor.bg} ${locationColor.text} border ${locationColor.border}`}>
+              {ccu.location === "hangar" ? "Hangar" : "Buyback"}
+            </span>
+            {ccu.isWarbond && (
+              <span className="text-[10px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                Warbond
+              </span>
+            )}
+          </div>
+        </div>
+
         <div className="relative z-10">
           <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-zinc-700/50 to-transparent group-hover:via-cyan-500/60 transition-all duration-500" />
           <div className="p-4">
@@ -59,23 +117,14 @@ export function CCUCard({ ccu }: { ccu: HangarCCU }) {
               )}
             </div>
 
-            {/* Warbond & Location Badges */}
-            <div className="mb-3 flex flex-wrap gap-2">
-              <span
-                className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${
-                  ccu.isWarbond
-                    ? "bg-amber-500/20 text-amber-400 border-amber-500/30"
-                    : "bg-zinc-700/30 text-zinc-400 border-zinc-600/30"
-                }`}
-              >
-                {ccu.isWarbond ? "Warbond" : "Standard"}
-              </span>
-              <span
-                className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${locationColor.bg} ${locationColor.text} border ${locationColor.border}`}
-              >
-                {ccu.location === "hangar" ? "Hangar" : "Buyback"}
-              </span>
-            </div>
+            {/* Standard badge if not warbond */}
+            {!ccu.isWarbond && (
+              <div className="mb-3">
+                <span className="text-[10px] font-medium px-2 py-0.5 rounded-full border bg-zinc-700/30 text-zinc-400 border-zinc-600/30">
+                  Standard
+                </span>
+              </div>
+            )}
 
             {/* Price */}
             <div className="mb-3 p-2 bg-zinc-800/30 rounded-sm">
