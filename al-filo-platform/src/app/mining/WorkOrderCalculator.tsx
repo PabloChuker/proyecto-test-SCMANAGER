@@ -4,6 +4,13 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import minerals from "@/data/mining/minerals.json";
 import refineries from "@/data/mining/refineries.json";
 import refiningMethods from "@/data/mining/refining-methods.json";
+import {
+  addOrder,
+  createSession,
+  getActiveSessionId,
+  getSessions,
+  type WOMineral,
+} from "@/lib/workOrderStore";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -310,6 +317,55 @@ export default function WorkOrderCalculator() {
     if (!refinery || !method || qty <= 0) return 0;
     const bonus = refinery.bonuses[oreId] || 0;
     return Math.round(qty * (method.yieldMultiplier + bonus / 100) * 100) / 100;
+  };
+
+  // ── Submit Order ──
+  const [submitted, setSubmitted] = useState(false);
+
+  const submitOrder = () => {
+    // Ensure a session exists
+    let sessionId = getActiveSessionId();
+    if (!sessionId) {
+      const session = createSession();
+      sessionId = session.id;
+    }
+
+    // Build ore list
+    const ores: WOMineral[] = [];
+    selectedOres.forEach((oreId) => {
+      const qty = oreQuantities[oreId] || 0;
+      if (qty <= 0 && mode !== "share") return;
+      const mineral = typedMinerals.find((m) => m.id === oreId);
+      if (!mineral) return;
+      const yieldQty = mode === "ship" ? getYield(oreId, qty) : qty;
+      ores.push({
+        id: oreId,
+        name: mineral.name,
+        quantity: qty,
+        yieldQty,
+        value: yieldQty * mineral.basePrice,
+      });
+    });
+
+    addOrder({
+      sessionId,
+      type: mode,
+      refinery: mode === "ship" ? refinery?.name : undefined,
+      method: mode === "ship" ? method?.name : undefined,
+      ores,
+      totalYield: ores.reduce((s, o) => s + o.yieldQty, 0),
+      grossValue: effectiveSellPrice,
+      expenses: expenses.map((e) => ({ claimant: e.claimant, name: e.name, amount: e.amount })),
+      totalExpenses,
+      motraderFee,
+      netProfit,
+      crew: crewPayouts.map((c) => ({ name: c.name, share: c.share, payout: c.payout })),
+      sellPrice: effectiveSellPrice,
+      timer: 0,
+    });
+
+    setSubmitted(true);
+    setTimeout(() => setSubmitted(false), 3000);
   };
 
   // ═════════════════════════════════════════════════════════════════════════════
@@ -791,6 +847,21 @@ export default function WorkOrderCalculator() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ── Submit Order Button ──────────────────────────────────── */}
+      <div className="mt-6">
+        <button
+          onClick={submitOrder}
+          disabled={submitted}
+          className={`w-full py-3.5 rounded-lg text-sm font-bold tracking-[0.15em] uppercase transition-all duration-300
+            ${submitted
+              ? "bg-emerald-500 text-zinc-900 shadow-[0_0_20px_rgba(16,185,129,0.4)]"
+              : "bg-amber-500 hover:bg-amber-400 text-zinc-900 shadow-[0_0_15px_rgba(245,158,11,0.3)] hover:shadow-[0_0_20px_rgba(245,158,11,0.5)]"
+            }`}
+        >
+          {submitted ? "✓ Order Saved to Dashboard" : "Submit Work Order"}
+        </button>
       </div>
 
       {/* ── Footer Note ────────────────────────────────────────────── */}
