@@ -318,16 +318,6 @@ export default function WorkOrderCalculator() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-0">
-      {/* ── Title ────────────────────────────────────────────────────── */}
-      <div className="text-center mb-6">
-        <h2 className="text-3xl font-bold italic text-zinc-100 tracking-tight font-serif">
-          Work Order Calculator
-        </h2>
-        <p className="text-sm text-zinc-500 mt-1">
-          Calculate the cost of a work order and share it between members of your org/party/crew.
-        </p>
-      </div>
-
       {/* ── Tab Bar ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-4 gap-0 mb-6 border border-zinc-700/60 rounded-lg overflow-hidden">
         {TAB_CONFIG.map((tab) => (
