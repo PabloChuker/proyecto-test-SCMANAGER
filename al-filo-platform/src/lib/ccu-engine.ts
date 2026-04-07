@@ -23,6 +23,8 @@ export interface CCUEdge {
   warbondPrice: number | null;
   isWarbondAvailable: boolean;
   isOwned: boolean;        // User already has this CCU in hangar/buyback
+  ownedLocation: "hangar" | "buyback" | null; // Where the owned CCU lives
+  ownedPricePaid: number;  // Original price paid for this CCU (for display)
   isLimited: boolean;      // Limited availability CCU
 }
 
@@ -38,16 +40,36 @@ export interface ShipNode {
   flightStatus: string;
 }
 
+export type PriceType =
+  | "hangar"           // Already in hangar — $0 additional, already paid
+  | "buyback-token"    // In buyback, user has token — costs credits (not cash)
+  | "buyback-cash"     // In buyback, no token — must pay cash
+  | "warbond"          // New purchase at warbond price (cash)
+  | "standard";        // New purchase at standard price (cash)
+
 export interface ChainStep {
   fromShip: ShipNode;
   toShip: ShipNode;
   standardPrice: number;
   warbondPrice: number | null;
-  effectivePrice: number;  // The price actually paid (considering warbond/owned)
-  priceType: "owned" | "warbond" | "standard";
+  effectivePrice: number;    // The price actually paid (considering warbond/owned)
+  priceType: PriceType;
+  pricePaid: number;         // Original price paid (for hangar/buyback items)
+  paymentMethod: "cash" | "credits" | "none"; // How this step is paid
   savingsVsStandard: number; // How much saved vs standard price
   cumulativeCost: number;    // Running total up to this step
   cumulativeSavings: number; // Running savings total
+}
+
+export interface CostBreakdown {
+  cashTotal: number;        // Total real money needed (warbond + standard + buyback-cash)
+  creditsTotal: number;     // Total store credits needed (buyback-token)
+  hangarValue: number;      // Value of CCUs already in hangar (already paid, $0 additional)
+  hangarCount: number;
+  buybackTokenCount: number;
+  buybackCashCount: number;
+  warbondCount: number;
+  standardCount: number;
 }
 
 export interface ChainResult {
@@ -55,6 +77,7 @@ export interface ChainResult {
   totalCost: number;
   totalSavingsVsDirect: number;  // Savings vs buying target directly
   directUpgradeCost: number;     // Cost of single CCU from start → target
+  costBreakdown: CostBreakdown;  // Desglose: efectivo / créditos / hangar
   startShip: ShipNode;
   targetShip: ShipNode;
   stepsCount: number;
@@ -64,7 +87,8 @@ export interface ChainResult {
 
 export interface CalculateOptions {
   preferWarbond: boolean;       // Prefer warbond prices when available
-  includeOwned: boolean;        // Include user's owned CCUs as $0 steps
+  includeOwned: boolean;        // Include user's owned CCUs
+  hasBuybackToken: boolean;     // User has a buyback token available
   maxSteps: number;             // Maximum chain length (default 15)
   excludeShipIds: string[];     // Ships to avoid in the chain
   onlyAvailable: boolean;       // Only use currently available CCUs
@@ -73,6 +97,7 @@ export interface CalculateOptions {
 const DEFAULT_OPTIONS: CalculateOptions = {
   preferWarbond: true,
   includeOwned: true,
+  hasBuybackToken: false,
   maxSteps: 15,
   excludeShipIds: [],
   onlyAvailable: true,
@@ -182,7 +207,7 @@ export function findCheapestChain(
 
   // Dijkstra's algorithm
   const dist = new Map<string, number>();    // shipId → minimum cost to reach
-  const prev = new Map<string, { edge: CCUEdge; priceType: "owned" | "warbond" | "standard" }>();
+  const prev = new Map<string, { edge: CCUEdge; priceType: PriceType }>();
   const stepCount = new Map<string, number>();
   const visited = new Set<string>();
 
@@ -199,7 +224,7 @@ export function findCheapestChain(
 
     // Found target — reconstruct path
     if (current.shipId === targetShipId) {
-      return reconstructPath(startShipId, targetShipId, prev, ships);
+      return reconstructPath(startShipId, targetShipId, prev, ships, opts);
     }
 
     // Check step limit
@@ -220,7 +245,7 @@ export function findCheapestChain(
         stepCount.set(edge.toShipId, newSteps);
         prev.set(edge.toShipId, {
           edge,
-          priceType: edge.isOwned ? "owned" : (opts.preferWarbond && edge.warbondPrice != null && edge.isWarbondAvailable) ? "warbond" : "standard",
+          priceType: determinePriceType(edge, opts),
         });
         heap.push({ shipId: edge.toShipId, cost: newCost, steps: newSteps });
       }
@@ -232,11 +257,43 @@ export function findCheapestChain(
 }
 
 /**
+ * Determine the price type for a CCU edge based on ownership and options.
+ */
+function determinePriceType(edge: CCUEdge, opts: CalculateOptions): PriceType {
+  if (opts.includeOwned && edge.isOwned) {
+    if (edge.ownedLocation === "hangar") return "hangar";
+    if (edge.ownedLocation === "buyback") {
+      return opts.hasBuybackToken ? "buyback-token" : "buyback-cash";
+    }
+    return "hangar"; // fallback
+  }
+  if (opts.preferWarbond && edge.warbondPrice != null && edge.isWarbondAvailable) {
+    return "warbond";
+  }
+  return "standard";
+}
+
+/**
  * Get the effective price for a CCU edge based on options.
+ *
+ * - Hangar: $0 additional cost (already owned and paid)
+ * - Buyback + token: price in credits (still a cost, but not cash)
+ * - Buyback - token: price in cash (must pay real money)
+ * - Warbond: discounted cash price
+ * - Standard: full cash price
+ *
+ * For Dijkstra, hangar = 0, buyback-token = pricePaid (credits count as cost),
+ * buyback-cash = pricePaid, warbond/standard = respective prices.
  */
 function getEffectivePrice(edge: CCUEdge, opts: CalculateOptions): number {
-  // User already owns this CCU — free!
-  if (opts.includeOwned && edge.isOwned) return 0;
+  if (opts.includeOwned && edge.isOwned) {
+    if (edge.ownedLocation === "hangar") return 0; // Already have it
+    if (edge.ownedLocation === "buyback") {
+      // Buyback always has a cost — either credits or cash
+      return edge.ownedPricePaid;
+    }
+    return 0; // fallback for legacy
+  }
 
   // Prefer warbond if available and cheaper
   if (opts.preferWarbond && edge.warbondPrice != null && edge.isWarbondAvailable) {
@@ -252,8 +309,9 @@ function getEffectivePrice(edge: CCUEdge, opts: CalculateOptions): number {
 function reconstructPath(
   startShipId: string,
   targetShipId: string,
-  prev: Map<string, { edge: CCUEdge; priceType: "owned" | "warbond" | "standard" }>,
+  prev: Map<string, { edge: CCUEdge; priceType: PriceType }>,
   ships: Map<string, ShipNode>,
+  opts: CalculateOptions,
 ): ChainResult | null {
   const steps: ChainStep[] = [];
   let current = targetShipId;
@@ -267,10 +325,13 @@ function reconstructPath(
     const toShip = ships.get(entry.edge.toShipId);
     if (!fromShip || !toShip) return null;
 
-    const effectivePrice =
-      entry.priceType === "owned" ? 0 :
-      entry.priceType === "warbond" ? (entry.edge.warbondPrice ?? entry.edge.standardPrice) :
-      entry.edge.standardPrice;
+    const effectivePrice = getEffectivePrice(entry.edge, opts);
+
+    // Determine payment method
+    let paymentMethod: "cash" | "credits" | "none" = "cash";
+    if (entry.priceType === "hangar") paymentMethod = "none";
+    else if (entry.priceType === "buyback-token") paymentMethod = "credits";
+    else paymentMethod = "cash"; // buyback-cash, warbond, standard
 
     steps.unshift({
       fromShip,
@@ -279,6 +340,8 @@ function reconstructPath(
       warbondPrice: entry.edge.warbondPrice,
       effectivePrice,
       priceType: entry.priceType,
+      pricePaid: entry.edge.ownedPricePaid || 0,
+      paymentMethod,
       savingsVsStandard: entry.edge.standardPrice - effectivePrice,
       cumulativeCost: 0,    // Will be calculated below
       cumulativeSavings: 0, // Will be calculated below
@@ -301,15 +364,53 @@ function reconstructPath(
   const targetShip = ships.get(targetShipId)!;
   const directUpgradeCost = targetShip.msrpUsd - startShip.msrpUsd;
 
+  // Build cost breakdown
+  const costBreakdown: CostBreakdown = {
+    cashTotal: 0,
+    creditsTotal: 0,
+    hangarValue: 0,
+    hangarCount: 0,
+    buybackTokenCount: 0,
+    buybackCashCount: 0,
+    warbondCount: 0,
+    standardCount: 0,
+  };
+
+  for (const step of steps) {
+    switch (step.priceType) {
+      case "hangar":
+        costBreakdown.hangarValue += step.pricePaid;
+        costBreakdown.hangarCount++;
+        break;
+      case "buyback-token":
+        costBreakdown.creditsTotal += step.effectivePrice;
+        costBreakdown.buybackTokenCount++;
+        break;
+      case "buyback-cash":
+        costBreakdown.cashTotal += step.effectivePrice;
+        costBreakdown.buybackCashCount++;
+        break;
+      case "warbond":
+        costBreakdown.cashTotal += step.effectivePrice;
+        costBreakdown.warbondCount++;
+        break;
+      case "standard":
+        costBreakdown.cashTotal += step.effectivePrice;
+        costBreakdown.standardCount++;
+        break;
+    }
+  }
+
   return {
     steps,
     totalCost: runningCost,
     totalSavingsVsDirect: directUpgradeCost - runningCost,
     directUpgradeCost,
+    costBreakdown,
     startShip,
     targetShip,
     stepsCount: steps.length,
-    ownedStepsCount: steps.filter(s => s.priceType === "owned").length,
+    ownedStepsCount: steps.filter(s => s.priceType === "hangar" || s.priceType === "buyback-token" || s.priceType === "buyback-cash").length,
     warbondStepsCount: steps.filter(s => s.priceType === "warbond").length,
   };
 }
@@ -363,6 +464,7 @@ export interface UserOwnedCCU {
   fromShip: string;   // Ship name
   toShip: string;     // Ship name
   pricePaid: number;
+  location: "hangar" | "buyback"; // Where this CCU lives
 }
 
 /**
@@ -385,21 +487,32 @@ export function mergeUserInventory(
     }
   }
 
-  // Build set of owned pairs
-  const ownedPairs = new Set<string>();
+  // Build map of owned pairs → { location, pricePaid }
+  const ownedMap = new Map<string, { location: "hangar" | "buyback"; pricePaid: number }>();
   for (const ccu of ownedCCUs) {
     const fromId = nameToId.get(ccu.fromShip.toLowerCase());
     const toId = nameToId.get(ccu.toShip.toLowerCase());
     if (fromId && toId) {
-      ownedPairs.add(`${fromId}->${toId}`);
+      const key = `${fromId}->${toId}`;
+      // If same CCU exists in both hangar and buyback, prefer hangar
+      const existing = ownedMap.get(key);
+      if (!existing || ccu.location === "hangar") {
+        ownedMap.set(key, { location: ccu.location || "hangar", pricePaid: ccu.pricePaid });
+      }
     }
   }
 
-  // Mark edges as owned
+  // Mark edges as owned with location info
   return edges.map(edge => {
     const key = `${edge.fromShipId}->${edge.toShipId}`;
-    if (ownedPairs.has(key)) {
-      return { ...edge, isOwned: true };
+    const owned = ownedMap.get(key);
+    if (owned) {
+      return {
+        ...edge,
+        isOwned: true,
+        ownedLocation: owned.location,
+        ownedPricePaid: owned.pricePaid,
+      };
     }
     return edge;
   });

@@ -15,7 +15,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useHangarStore, type HangarCCU } from "@/store/useHangarStore";
-import type { ChainResult, ChainStep } from "@/lib/ccu-engine";
+import type { ChainResult, ChainStep, PriceType, CostBreakdown } from "@/lib/ccu-engine";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -146,30 +146,45 @@ function ShipSearchSelect({
 
 function ChainStepCard({ step, index, isLast }: { step: ChainStep; index: number; isLast: boolean }) {
   const priceColor =
-    step.priceType === "owned" ? "text-emerald-400" :
+    step.priceType === "hangar" ? "text-emerald-400" :
+    step.priceType === "buyback-token" ? "text-violet-400" :
+    step.priceType === "buyback-cash" ? "text-orange-400" :
     step.priceType === "warbond" ? "text-cyan-400" :
     "text-zinc-300";
 
   const priceBg =
-    step.priceType === "owned" ? "bg-emerald-500/10 border-emerald-500/20" :
+    step.priceType === "hangar" ? "bg-emerald-500/10 border-emerald-500/20" :
+    step.priceType === "buyback-token" ? "bg-violet-500/10 border-violet-500/20" :
+    step.priceType === "buyback-cash" ? "bg-orange-500/10 border-orange-500/20" :
     step.priceType === "warbond" ? "bg-cyan-500/10 border-cyan-500/20" :
     "bg-zinc-800/40 border-zinc-700/30";
 
   const priceLabel =
-    step.priceType === "owned" ? "OWNED" :
+    step.priceType === "hangar" ? "HANGAR" :
+    step.priceType === "buyback-token" ? "BUYBACK (CRÉDITOS)" :
+    step.priceType === "buyback-cash" ? "BUYBACK (EFECTIVO)" :
     step.priceType === "warbond" ? "WARBOND" :
     "STANDARD";
+
+  const paymentIcon =
+    step.paymentMethod === "none" ? "✓" :
+    step.paymentMethod === "credits" ? "SC$" :
+    "$";
 
   return (
     <div className="relative flex items-stretch">
       {/* Timeline connector */}
       <div className="flex flex-col items-center mr-4 flex-shrink-0">
         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 ${
-          step.priceType === "owned"
+          step.priceType === "hangar"
             ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-400"
-            : step.priceType === "warbond"
-              ? "border-cyan-500/60 bg-cyan-500/15 text-cyan-400"
-              : "border-amber-500/60 bg-amber-500/15 text-amber-400"
+            : step.priceType === "buyback-token"
+              ? "border-violet-500/60 bg-violet-500/15 text-violet-400"
+              : step.priceType === "buyback-cash"
+                ? "border-orange-500/60 bg-orange-500/15 text-orange-400"
+                : step.priceType === "warbond"
+                  ? "border-cyan-500/60 bg-cyan-500/15 text-cyan-400"
+                  : "border-amber-500/60 bg-amber-500/15 text-amber-400"
         }`}>
           {index + 1}
         </div>
@@ -192,7 +207,9 @@ function ChainStepCard({ step, index, isLast }: { step: ChainStep; index: number
             </div>
             <div className="flex items-center gap-3 mt-1">
               <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
-                step.priceType === "owned" ? "bg-emerald-500/20 text-emerald-400" :
+                step.priceType === "hangar" ? "bg-emerald-500/20 text-emerald-400" :
+                step.priceType === "buyback-token" ? "bg-violet-500/20 text-violet-400" :
+                step.priceType === "buyback-cash" ? "bg-orange-500/20 text-orange-400" :
                 step.priceType === "warbond" ? "bg-cyan-500/20 text-cyan-400" :
                 "bg-zinc-700/30 text-zinc-400"
               }`}>
@@ -209,9 +226,18 @@ function ChainStepCard({ step, index, isLast }: { step: ChainStep; index: number
           {/* Price */}
           <div className="text-right flex-shrink-0">
             <p className={`text-lg font-mono font-bold ${priceColor}`}>
-              {step.priceType === "owned" ? "$0" : `$${step.effectivePrice.toFixed(2)}`}
+              {step.priceType === "hangar" ? (
+                <span title={`Ya pagado: $${step.pricePaid.toFixed(2)}`}>$0</span>
+              ) : (
+                <span>{paymentIcon}{step.effectivePrice.toFixed(2)}</span>
+              )}
             </p>
-            {step.priceType !== "standard" && step.standardPrice !== step.effectivePrice && (
+            {step.priceType === "hangar" && step.pricePaid > 0 && (
+              <p className="text-[10px] text-emerald-500/60 font-mono">
+                Ya pagado: ${step.pricePaid.toFixed(2)}
+              </p>
+            )}
+            {step.priceType !== "standard" && step.priceType !== "hangar" && step.standardPrice !== step.effectivePrice && (
               <p className="text-[10px] text-zinc-500 line-through font-mono">
                 ${step.standardPrice.toFixed(2)}
               </p>
@@ -236,43 +262,65 @@ function SavingsSummary({ chain }: { chain: ChainResult }) {
     ? ((chain.totalSavingsVsDirect / chain.directUpgradeCost) * 100).toFixed(1)
     : "0";
 
+  const bd = chain.costBreakdown;
+
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-      <div className="bg-zinc-900/60 border border-zinc-800/50 rounded-sm p-3">
-        <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Chain Cost</p>
-        <p className="text-xl font-mono font-bold text-amber-400 mt-1">${chain.totalCost.toFixed(2)}</p>
+    <div className="space-y-4">
+      {/* Cost breakdown: Efectivo / Créditos / En Hangar */}
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-zinc-900/60 border border-amber-500/30 rounded-sm p-3">
+          <p className="text-[10px] text-amber-400 uppercase tracking-widest">Efectivo Necesario</p>
+          <p className="text-xl font-mono font-bold text-amber-400 mt-1">${bd.cashTotal.toFixed(2)}</p>
+          <p className="text-[10px] text-zinc-500 mt-1">
+            {bd.warbondCount > 0 && <span className="text-cyan-400">{bd.warbondCount} WB</span>}
+            {bd.warbondCount > 0 && bd.standardCount > 0 && " · "}
+            {bd.standardCount > 0 && <span>{bd.standardCount} STD</span>}
+            {bd.buybackCashCount > 0 && " · "}
+            {bd.buybackCashCount > 0 && <span className="text-orange-400">{bd.buybackCashCount} BB</span>}
+          </p>
+        </div>
+        <div className="bg-zinc-900/60 border border-violet-500/30 rounded-sm p-3">
+          <p className="text-[10px] text-violet-400 uppercase tracking-widest">Créditos (Buyback)</p>
+          <p className="text-xl font-mono font-bold text-violet-400 mt-1">${bd.creditsTotal.toFixed(2)}</p>
+          {bd.buybackTokenCount > 0 && (
+            <p className="text-[10px] text-zinc-500 mt-1">{bd.buybackTokenCount} CCU con token</p>
+          )}
+        </div>
+        <div className="bg-zinc-900/60 border border-emerald-500/30 rounded-sm p-3">
+          <p className="text-[10px] text-emerald-400 uppercase tracking-widest">Ya en Hangar</p>
+          <p className="text-xl font-mono font-bold text-emerald-400 mt-1">${bd.hangarValue.toFixed(2)}</p>
+          {bd.hangarCount > 0 && (
+            <p className="text-[10px] text-zinc-500 mt-1">{bd.hangarCount} CCU listos para aplicar</p>
+          )}
+        </div>
       </div>
-      <div className="bg-zinc-900/60 border border-zinc-800/50 rounded-sm p-3">
-        <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Direct CCU</p>
-        <p className="text-xl font-mono font-bold text-zinc-400 mt-1">${chain.directUpgradeCost.toFixed(2)}</p>
-      </div>
-      <div className="bg-zinc-900/60 border border-emerald-500/20 rounded-sm p-3">
-        <p className="text-[10px] text-emerald-400 uppercase tracking-widest">Total Savings</p>
-        <p className={`text-xl font-mono font-bold mt-1 ${
-          chain.totalSavingsVsDirect > 0 ? "text-emerald-400" : "text-red-400"
-        }`}>
-          {chain.totalSavingsVsDirect > 0 ? "-" : "+"}${Math.abs(chain.totalSavingsVsDirect).toFixed(2)}
-        </p>
-      </div>
-      <div className="bg-zinc-900/60 border border-zinc-800/50 rounded-sm p-3">
-        <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Savings %</p>
-        <p className={`text-xl font-mono font-bold mt-1 ${
-          chain.totalSavingsVsDirect > 0 ? "text-emerald-400" : "text-red-400"
-        }`}>
-          {savingsPercent}%
-        </p>
-      </div>
-      <div className="bg-zinc-900/60 border border-zinc-800/50 rounded-sm p-3 col-span-2 sm:col-span-1">
-        <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Steps</p>
-        <p className="text-lg font-mono text-zinc-300 mt-1">{chain.stepsCount}</p>
-      </div>
-      <div className="bg-zinc-900/60 border border-emerald-500/10 rounded-sm p-3">
-        <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Owned</p>
-        <p className="text-lg font-mono text-emerald-400 mt-1">{chain.ownedStepsCount}</p>
-      </div>
-      <div className="bg-zinc-900/60 border border-cyan-500/10 rounded-sm p-3">
-        <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Warbond</p>
-        <p className="text-lg font-mono text-cyan-400 mt-1">{chain.warbondStepsCount}</p>
+
+      {/* Summary row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="bg-zinc-900/60 border border-zinc-800/50 rounded-sm p-3">
+          <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Costo Total Cadena</p>
+          <p className="text-xl font-mono font-bold text-amber-400 mt-1">${chain.totalCost.toFixed(2)}</p>
+        </div>
+        <div className="bg-zinc-900/60 border border-zinc-800/50 rounded-sm p-3">
+          <p className="text-[10px] text-zinc-500 uppercase tracking-widest">CCU Directo</p>
+          <p className="text-xl font-mono font-bold text-zinc-400 mt-1">${chain.directUpgradeCost.toFixed(2)}</p>
+        </div>
+        <div className="bg-zinc-900/60 border border-emerald-500/20 rounded-sm p-3">
+          <p className="text-[10px] text-emerald-400 uppercase tracking-widest">Ahorro Total</p>
+          <p className={`text-xl font-mono font-bold mt-1 ${
+            chain.totalSavingsVsDirect > 0 ? "text-emerald-400" : "text-red-400"
+          }`}>
+            {chain.totalSavingsVsDirect > 0 ? "-" : "+"}${Math.abs(chain.totalSavingsVsDirect).toFixed(2)}
+          </p>
+        </div>
+        <div className="bg-zinc-900/60 border border-zinc-800/50 rounded-sm p-3">
+          <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Ahorro %</p>
+          <p className={`text-xl font-mono font-bold mt-1 ${
+            chain.totalSavingsVsDirect > 0 ? "text-emerald-400" : "text-red-400"
+          }`}>
+            {savingsPercent}%
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -289,6 +337,8 @@ export function CCUChainCalculator() {
 
   const [preferWarbond, setPreferWarbond] = useState(true);
   const [useOwnedCCUs, setUseOwnedCCUs] = useState(true);
+  const [hasBuybackToken, setHasBuybackToken] = useState(false);
+  const [onlyAvailableNow, setOnlyAvailableNow] = useState(true); // true = armarla ya, false = esperar mejores precios
   const [maxSteps, setMaxSteps] = useState(15);
 
   const [chain, setChain] = useState<ChainResult | null>(null);
@@ -318,12 +368,13 @@ export function CCUChainCalculator() {
     setAlternatives([]);
 
     try {
-      // Build owned CCUs list from hangar store
+      // Build owned CCUs list from hangar store (with location!)
       const ownedCCUs = useOwnedCCUs
         ? ccus.map((ccu: HangarCCU) => ({
             fromShip: ccu.fromShip,
             toShip: ccu.toShip,
             pricePaid: ccu.pricePaid,
+            location: ccu.location, // "hangar" | "buyback"
           }))
         : [];
 
@@ -335,6 +386,8 @@ export function CCUChainCalculator() {
           toShipId: toShip.id,
           ownedCCUs,
           preferWarbond,
+          hasBuybackToken,
+          onlyAvailable: onlyAvailableNow,
           maxSteps,
           includeAlternatives: true,
         }),
@@ -354,7 +407,7 @@ export function CCUChainCalculator() {
     } finally {
       setCalculating(false);
     }
-  }, [fromShip, toShip, preferWarbond, useOwnedCCUs, maxSteps, ccus]);
+  }, [fromShip, toShip, preferWarbond, useOwnedCCUs, hasBuybackToken, onlyAvailableNow, maxSteps, ccus]);
 
   // ── Auto-calculate when ships change ──
   useEffect(() => {
@@ -364,7 +417,7 @@ export function CCUChainCalculator() {
       setChain(null);
       setAlternatives([]);
     }
-  }, [fromShip, toShip, preferWarbond, useOwnedCCUs, maxSteps]);
+  }, [fromShip, toShip, preferWarbond, useOwnedCCUs, hasBuybackToken, onlyAvailableNow, maxSteps]);
 
   return (
     <div className="space-y-6">
@@ -409,6 +462,29 @@ export function CCUChainCalculator() {
 
       {/* ── Options ── */}
       <div className="flex flex-wrap items-center gap-4 py-2 px-3 bg-zinc-900/40 border border-zinc-800/30 rounded-sm">
+        {/* Modo: Ya vs Esperar */}
+        <div className="flex items-center gap-1 bg-zinc-800/60 rounded-sm p-0.5">
+          <button
+            onClick={() => setOnlyAvailableNow(true)}
+            className={`px-2.5 py-1 text-[11px] rounded-sm transition-all ${
+              onlyAvailableNow
+                ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                : "text-zinc-500 hover:text-zinc-400"
+            }`}
+          >
+            Armarla Ya
+          </button>
+          <button
+            onClick={() => setOnlyAvailableNow(false)}
+            className={`px-2.5 py-1 text-[11px] rounded-sm transition-all ${
+              !onlyAvailableNow
+                ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                : "text-zinc-500 hover:text-zinc-400"
+            }`}
+          >
+            Esperar y Ahorrar
+          </button>
+        </div>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
@@ -416,7 +492,7 @@ export function CCUChainCalculator() {
             onChange={(e) => setPreferWarbond(e.target.checked)}
             className="rounded border-zinc-600 bg-zinc-800 text-amber-500 focus:ring-amber-500/30"
           />
-          <span className="text-xs text-zinc-400">Prefer Warbond</span>
+          <span className="text-xs text-zinc-400">Preferir Warbond</span>
         </label>
         <label className="flex items-center gap-2 cursor-pointer">
           <input
@@ -426,9 +502,22 @@ export function CCUChainCalculator() {
             className="rounded border-zinc-600 bg-zinc-800 text-emerald-500 focus:ring-emerald-500/30"
           />
           <span className="text-xs text-zinc-400">
-            Use my CCUs ({ccus.length})
+            Usar mis CCUs ({ccus.length})
           </span>
         </label>
+        {useOwnedCCUs && ccus.some(c => c.location === "buyback") && (
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={hasBuybackToken}
+              onChange={(e) => setHasBuybackToken(e.target.checked)}
+              className="rounded border-zinc-600 bg-zinc-800 text-violet-500 focus:ring-violet-500/30"
+            />
+            <span className="text-xs text-zinc-400">
+              Tengo token de buyback
+            </span>
+          </label>
+        )}
         <div className="flex items-center gap-2">
           <span className="text-xs text-zinc-500">Max steps:</span>
           <select
@@ -543,7 +632,9 @@ export function CCUChainCalculator() {
                       <span key={si} className="flex items-center gap-1">
                         <span className="text-zinc-600">→</span>
                         <span className={`text-[11px] ${
-                          step.priceType === "owned" ? "text-emerald-400" :
+                          step.priceType === "hangar" ? "text-emerald-400" :
+                          step.priceType === "buyback-token" ? "text-violet-400" :
+                          step.priceType === "buyback-cash" ? "text-orange-400" :
                           step.priceType === "warbond" ? "text-cyan-400" :
                           "text-zinc-400"
                         }`}>

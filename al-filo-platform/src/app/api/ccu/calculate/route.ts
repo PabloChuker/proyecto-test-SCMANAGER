@@ -34,6 +34,8 @@ export async function POST(request: NextRequest) {
       toShipId,
       ownedCCUs = [],
       preferWarbond = true,
+      hasBuybackToken = false,
+      onlyAvailable = true,
       maxSteps = 15,
       excludeShipIds = [],
       includeAlternatives = true,
@@ -81,12 +83,15 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 2. Load CCU prices ──
-    const ccuRows: any[] = await prisma.$queryRawUnsafe(`
-      SELECT from_ship_id, to_ship_id, standard_price, warbond_price,
-             is_available, is_warbond_available, is_limited
-      FROM ccu_prices
-      WHERE is_available = true
-    `);
+    // If onlyAvailable=false ("Esperar y Ahorrar"), load ALL CCU prices including unavailable
+    const ccuQuery = onlyAvailable
+      ? `SELECT from_ship_id, to_ship_id, standard_price, warbond_price,
+               is_available, is_warbond_available, is_limited
+         FROM ccu_prices WHERE is_available = true`
+      : `SELECT from_ship_id, to_ship_id, standard_price, warbond_price,
+               is_available, is_warbond_available, is_limited
+         FROM ccu_prices`;
+    const ccuRows: any[] = await prisma.$queryRawUnsafe(ccuQuery);
 
     let edges: CCUEdge[] = ccuRows.map((row) => ({
       fromShipId: String(row.from_ship_id),
@@ -95,6 +100,8 @@ export async function POST(request: NextRequest) {
       warbondPrice: row.warbond_price ? Number(row.warbond_price) : null,
       isWarbondAvailable: row.is_warbond_available === true,
       isOwned: false,
+      ownedLocation: null,
+      ownedPricePaid: 0,
       isLimited: row.is_limited === true,
     }));
 
@@ -111,9 +118,10 @@ export async function POST(request: NextRequest) {
     const options: Partial<CalculateOptions> = {
       preferWarbond,
       includeOwned: true,
+      hasBuybackToken,
       maxSteps,
       excludeShipIds: excludeShipIds.map(String),
-      onlyAvailable: true,
+      onlyAvailable,
     };
 
     const chain = findCheapestChain(
