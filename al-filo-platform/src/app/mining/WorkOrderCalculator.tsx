@@ -104,31 +104,64 @@ function padZero(n: number): string {
   return n.toString().padStart(2, "0");
 }
 
-// ─── Timer Hook ──────────────────────────────────────────────────────────────
+// ─── Countdown Timer Hook ────────────────────────────────────────────────────
 
-function useTimer() {
-  const [seconds, setSeconds] = useState(0);
+function useCountdown() {
+  // Input fields (what the user types)
+  const [inputH, setInputH] = useState(0);
+  const [inputM, setInputM] = useState(0);
+  const [inputS, setInputS] = useState(0);
+
+  // Countdown state
+  const [remaining, setRemaining] = useState(0); // seconds left
   const [running, setRunning] = useState(false);
+  const [finished, setFinished] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const totalInputSeconds = inputH * 3600 + inputM * 60 + inputS;
+
   useEffect(() => {
-    if (running) {
-      intervalRef.current = setInterval(() => setSeconds((s) => s + 1), 1000);
+    if (running && remaining > 0) {
+      intervalRef.current = setInterval(() => {
+        setRemaining((r) => {
+          if (r <= 1) {
+            setRunning(false);
+            setFinished(true);
+            return 0;
+          }
+          return r - 1;
+        });
+      }, 1000);
     } else if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [running]);
+  }, [running, remaining]);
 
-  const toggle = () => setRunning((r) => !r);
-  const reset = () => { setRunning(false); setSeconds(0); };
+  const start = () => {
+    if (totalInputSeconds > 0 && !running) {
+      setRemaining(totalInputSeconds);
+      setFinished(false);
+      setRunning(true);
+    }
+  };
 
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
+  const pause = () => setRunning(false);
+  const resume = () => { if (remaining > 0) setRunning(true); };
+  const reset = () => { setRunning(false); setRemaining(0); setFinished(false); };
+
+  const h = Math.floor(remaining / 3600);
+  const m = Math.floor((remaining % 3600) / 60);
+  const s = remaining % 60;
   const display = `${padZero(h)}:${padZero(m)}:${padZero(s)}`;
 
-  return { display, running, toggle, reset };
+  return {
+    inputH, inputM, inputS,
+    setInputH, setInputM, setInputS,
+    totalInputSeconds,
+    remaining, running, finished, display,
+    start, pause, resume, reset,
+  };
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -172,8 +205,8 @@ export default function WorkOrderCalculator() {
   ]);
   const [newMemberName, setNewMemberName] = useState("");
 
-  // ── Timer ──
-  const timer = useTimer();
+  // ── Countdown Timer ──
+  const timer = useCountdown();
 
   // ── Derived minerals for current tab ──
   const tabMinerals = useMemo(() => {
@@ -350,6 +383,7 @@ export default function WorkOrderCalculator() {
     addOrder({
       sessionId,
       type: mode,
+      status: timer.totalInputSeconds > 0 && mode === "ship" ? "in_progress" : "completed",
       refinery: mode === "ship" ? refinery?.name : undefined,
       method: mode === "ship" ? method?.name : undefined,
       ores,
@@ -361,7 +395,8 @@ export default function WorkOrderCalculator() {
       netProfit,
       crew: crewPayouts.map((c) => ({ name: c.name, share: c.share, payout: c.payout })),
       sellPrice: effectiveSellPrice,
-      timer: 0,
+      countdownSeconds: mode === "ship" ? timer.totalInputSeconds : 0,
+      countdownEndsAt: null, // store will calculate this
     });
 
     setSubmitted(true);
@@ -543,21 +578,80 @@ export default function WorkOrderCalculator() {
                 </div>
               )}
 
-              {/* ── Timer (ship mining only) ── */}
+              {/* ── Countdown Timer (ship mining) ── */}
               {mode === "ship" && (
-                <div className="mt-4">
-                  <div
-                    className={`w-full rounded-lg py-3 text-center font-mono text-2xl font-bold cursor-pointer select-none transition-all
-                      ${timer.running
-                        ? "bg-emerald-500 text-zinc-900 shadow-[0_0_15px_rgba(16,185,129,0.4)]"
-                        : "bg-amber-500 text-zinc-900 shadow-[0_0_10px_rgba(245,158,11,0.3)]"
-                      }`}
-                    onClick={timer.toggle}
-                    onContextMenu={(e) => { e.preventDefault(); timer.reset(); }}
-                    title="Click to start/stop — Right-click to reset"
-                  >
-                    {timer.display}
+                <div className="mt-4 space-y-2">
+                  <div className="text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold">
+                    Refinery Timer (from game order):
                   </div>
+
+                  {/* Input row — hidden when running */}
+                  {!timer.running && !timer.finished && (
+                    <div className="flex items-center gap-1 justify-center">
+                      <input
+                        type="number" min="0" max="99"
+                        value={timer.inputH || ""}
+                        onChange={(e) => timer.setInputH(Math.max(0, parseInt(e.target.value) || 0))}
+                        className="w-14 bg-zinc-800/70 border border-zinc-700 rounded px-2 py-1.5 text-center text-lg font-mono text-zinc-100 focus:outline-none focus:border-amber-500"
+                        placeholder="HH"
+                      />
+                      <span className="text-zinc-500 font-mono text-lg font-bold">:</span>
+                      <input
+                        type="number" min="0" max="59"
+                        value={timer.inputM || ""}
+                        onChange={(e) => timer.setInputM(Math.min(59, Math.max(0, parseInt(e.target.value) || 0)))}
+                        className="w-14 bg-zinc-800/70 border border-zinc-700 rounded px-2 py-1.5 text-center text-lg font-mono text-zinc-100 focus:outline-none focus:border-amber-500"
+                        placeholder="MM"
+                      />
+                      <span className="text-zinc-500 font-mono text-lg font-bold">:</span>
+                      <input
+                        type="number" min="0" max="59"
+                        value={timer.inputS || ""}
+                        onChange={(e) => timer.setInputS(Math.min(59, Math.max(0, parseInt(e.target.value) || 0)))}
+                        className="w-14 bg-zinc-800/70 border border-zinc-700 rounded px-2 py-1.5 text-center text-lg font-mono text-zinc-100 focus:outline-none focus:border-amber-500"
+                        placeholder="SS"
+                      />
+                      <button
+                        onClick={timer.start}
+                        disabled={timer.totalInputSeconds <= 0}
+                        className="ml-2 px-4 py-1.5 bg-amber-500 text-zinc-900 rounded font-bold text-sm hover:bg-amber-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        ▶ Start
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Countdown display */}
+                  {(timer.running || timer.finished) && (
+                    <div
+                      className={`w-full rounded-lg py-3 text-center font-mono text-2xl font-bold select-none transition-all
+                        ${timer.finished
+                          ? "bg-emerald-500 text-zinc-900 shadow-[0_0_20px_rgba(16,185,129,0.5)] animate-pulse"
+                          : "bg-amber-500 text-zinc-900 shadow-[0_0_10px_rgba(245,158,11,0.3)]"
+                        }`}
+                    >
+                      {timer.finished ? "✓ READY TO COLLECT" : timer.display}
+                    </div>
+                  )}
+
+                  {/* Controls when running/finished */}
+                  {(timer.running || timer.finished) && (
+                    <div className="flex justify-center gap-2">
+                      {timer.running && (
+                        <button onClick={timer.pause} className="px-3 py-1 bg-zinc-700 text-zinc-300 rounded text-xs font-bold hover:bg-zinc-600">
+                          ⏸ Pause
+                        </button>
+                      )}
+                      {!timer.running && timer.remaining > 0 && (
+                        <button onClick={timer.resume} className="px-3 py-1 bg-amber-500/80 text-zinc-900 rounded text-xs font-bold hover:bg-amber-400">
+                          ▶ Resume
+                        </button>
+                      )}
+                      <button onClick={timer.reset} className="px-3 py-1 bg-zinc-800 text-zinc-400 rounded text-xs font-bold hover:bg-zinc-700">
+                        ↺ Reset
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
