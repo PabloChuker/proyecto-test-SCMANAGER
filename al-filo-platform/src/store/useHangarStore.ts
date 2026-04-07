@@ -249,20 +249,85 @@ function parseSCLabsItems(items: any[], location: ItemLocation): {
  * Detect the item category from name and raw category
  */
 function detectItemCategory(name: string, rawCategory: string): ItemCategory {
-  const n = name.toLowerCase();
+  // If the extension already classified it, trust that
   if (rawCategory === "standalone_ship") return "standalone_ship";
   if (rawCategory === "game_package") return "game_package";
+  if (rawCategory === "paint") return "paint";
+  if (rawCategory === "gear") return "gear";
   if (rawCategory === "flair") return "flair";
+  if (rawCategory === "subscriber") return "subscriber";
   if (rawCategory === "upgrade") return "upgrade";
 
-  // Name-based detection for items with "no_category" or empty category
+  // Name-based detection for items with empty/unknown category
+  const n = name.toLowerCase();
+
+  // CCU / Upgrades
+  if (n.startsWith("upgrade -") || n.startsWith("upgrade –") || n.startsWith("ship upgrades -") || n.startsWith("ship upgrade")) return "upgrade";
+
+  // Ships
   if (n.startsWith("standalone ship")) return "standalone_ship";
-  if (n.startsWith("package -") || n.includes("starter pack")) return "game_package";
-  if (n.startsWith("paints -") || n.startsWith("paint -") || n.includes("paint")) return "paint";
-  if (n.startsWith("gear -") || n.includes("armor") || n.includes("helmet") || n.includes("jacket") || n.includes("backpack") || n.includes("undersuit")) return "gear";
-  if (n.startsWith("subscribers ") || n.includes("subscriber")) return "subscriber";
-  if (n.includes("flair")) return "flair";
-  if (n.includes("upgrade -") || n.includes(" to ")) return "upgrade";
+
+  // Game packages
+  if (n.startsWith("package -") || n.startsWith("package –") || n.includes("starter pack") || n.includes("game package") || n.includes("squadron 42")) return "game_package";
+
+  // Paints / Skins / Liveries
+  if (n.startsWith("paints -") || n.startsWith("paint -") || n.includes(" paint") ||
+      n.includes("skin -") || n.includes("livery") || n.includes("coloration")) return "paint";
+
+  // Gear / Armor / Weapons / Tools / Suits
+  if (n.startsWith("gear -") || n.startsWith("add-ons -") ||
+      n.includes("armor") || n.includes("helmet") || n.includes("undersuit") ||
+      n.includes("backpack") || n.includes("jacket") || n.includes("weapons pack") || n.includes("weapon pack") ||
+      n.includes("multi-tool") || n.includes("knife") || n.includes("combat knife") ||
+      n.includes("pistol") || n.includes("rifle") || n.includes("shotgun") || n.includes("smg") || n.includes("lmg") ||
+      n.includes("grenade launcher") || n.includes("tractor beam") || n.includes("mining gadget") ||
+      n.includes("repeater") || n.includes("cannon") || n.includes("laser cannon") ||
+      n.includes("hazard suit") || n.includes("refinery suit") || n.includes("service uniform") ||
+      n.includes("medical device") || n.includes("mask") || n.includes("flight blades") ||
+      n.includes("bomb rack") || n.includes("weapon kit") || n.includes("upgrade kit") ||
+      n.includes("quikflare") || n.includes("medivac") || n.includes("purifier")) return "gear";
+
+  // Subscriber items
+  if (n.startsWith("subscribers ") || n.startsWith("subscriber ") || n.includes("subscribers exclusive") ||
+      n.includes("imperator reward") || n.includes("centurion reward") ||
+      n.includes("vip grand admiral") || n.includes("vip high admiral")) return "subscriber";
+
+  // Flair — decorations, trophies, rewards, coins, collectibles, event items
+  if (n.includes("flair") || n.includes("trophy") || n.includes("pennant") ||
+      n.includes("charm") || n.includes("plushie") || n.includes("figurine") || n.includes("poster") ||
+      n.includes("calendar") || n.includes("statue") || n.includes("diorama") ||
+      n.includes("bis ") || n.includes("best in show") ||
+      n.includes("festival") || n.includes("citizencon") ||
+      n.includes("holiday") || n.includes("hangar decoration") || n.includes("flower") ||
+      n.includes("pet") || n.includes("stuffed") || n.includes("bobblehead") ||
+      n.includes("space globe") || n.includes("display case") || n.includes("lamp") ||
+      n.includes("rug") || n.includes("towel") || n.includes("mug") || n.includes("cup") ||
+      n.includes("action figure") || n.includes("badge") || n.includes("pin") ||
+      n.includes("challenge coin") || n.includes("coin") || n.includes("envelope") ||
+      n.includes("year of the") || n.includes("coramor") ||
+      n.includes("reward") || n.includes("goodies") || n.includes("t-shirt") ||
+      n.includes("luminalia") || n.includes("invictus") ||
+      n.includes("advent") || n.includes("referral bonus") ||
+      n.includes("chair") || n.includes("couch") || n.includes("lounge") || n.includes("throne") ||
+      n.includes("nightstand") || n.includes("loveseat") || n.includes("cushion") ||
+      n.includes("vase") || n.includes("plant pot") || n.includes("bust") ||
+      n.includes("banner") || n.includes("specimen tank") || n.includes("cargo collection") ||
+      n.includes("display") || n.includes("die ship") || n.includes("toy pistol") ||
+      n.includes("resource drive") || n.includes("salvaged") ||
+      n.includes("pirate week") || n.includes("xenothreat") ||
+      n.includes("birthday goodies") || n.includes("digital goodies") ||
+      n.includes("killer creature") || n.includes("brands of the") ||
+      n.includes("cold front") || n.includes("cuddly cargo") || n.includes("decorative cargo") ||
+      n.includes("explorer") || n.includes("adventurer") ||
+      n.includes("big winner") || n.includes("completion package") ||
+      n.includes("patch collection") || n.includes("resupply") ||
+      n.includes("academy") || n.includes("grx prototype") ||
+      n.includes("coupon") || n.includes("gourd") || n.includes("ornate")) return "flair";
+
+  // Packs / Bundles
+  if (n.includes("packs -") || n.includes("bundle") || n.includes("combo") ||
+      n.includes("collection") || n.includes("master set") ||
+      n.includes("gear pack") || n.includes("hydration pack")) return "gear";
 
   return "other";
 }
