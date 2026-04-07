@@ -54,7 +54,7 @@ export function ImportModal({ onClose }: ImportModalProps) {
         // Clear existing data before importing new file
         clearAll();
 
-        // Guildswarm v1.1 format: pass the whole object
+        // SC Labs format: pass the whole object
         if (data && !Array.isArray(data) && (data.myHangar || data.myBuyBack)) {
           const result = importFromJSON(data);
           setImportResult(result);
@@ -69,14 +69,14 @@ export function ImportModal({ onClose }: ImportModalProps) {
           return;
         }
 
-        // Array format (legacy guildswarm, CCU Game, etc.)
+        // Array format (legacy, CCU Game, etc.)
         if (Array.isArray(data)) {
           const result = importFromJSON(data);
           setImportResult(result);
           return;
         }
 
-        setParseError("Unrecognized file format. Expected Guildswarm, CCU Game, or SC Labs backup JSON.");
+        setParseError("Unrecognized file format. Expected SC Labs Hangar Importer, CCU Game, or SC Labs backup JSON.");
       } catch (err) {
         setParseError(err instanceof Error ? err.message : "Failed to parse JSON file");
       }
@@ -252,8 +252,8 @@ export function ImportModal({ onClose }: ImportModalProps) {
                 </p>
                 <div className="space-y-2">
                   <FormatItem
-                    name="Guildswarm v1.1"
-                    desc="Extension download from RSI hangar"
+                    name="SC Labs Hangar Importer"
+                    desc="Our Chrome extension — downloads hangar + buyback directly"
                     recommended
                   />
                   <FormatItem
@@ -273,10 +273,10 @@ export function ImportModal({ onClose }: ImportModalProps) {
                   HOW TO GET YOUR HANGAR DATA
                 </p>
                 <ol className="text-[11px] text-zinc-500 space-y-1.5 list-decimal ml-4">
-                  <li>Install the <span className="text-cyan-400">Guild Swarm</span> Chrome extension</li>
-                  <li>Go to <span className="text-zinc-300">robertsspaceindustries.com</span> → My Hangar</li>
-                  <li>Click <span className="text-zinc-300">&quot;Download Hangar data&quot;</span></li>
-                  <li>Drop the downloaded JSON file here</li>
+                  <li>Install the <span className="text-amber-400">SC Labs Hangar Importer</span> Chrome extension</li>
+                  <li>Go to <span className="text-zinc-300">robertsspaceindustries.com</span> and log in</li>
+                  <li>Click the SC Labs extension icon → <span className="text-zinc-300">&quot;Export Hangar&quot;</span></li>
+                  <li>Download the JSON and drop it here</li>
                 </ol>
               </div>
 

@@ -95,6 +95,7 @@ export function AddShipModal({ onClose }: AddShipModalProps) {
         pledgePrice: price,
         insuranceType,
         location,
+        itemCategory: "standalone_ship",
         isGiftable,
         isMeltable,
         purchasedDate: null,

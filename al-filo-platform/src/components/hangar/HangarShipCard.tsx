@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useHangarStore, type HangarShip } from "@/store/useHangarStore";
+import { useHangarStore, type HangarShip, type ItemCategory } from "@/store/useHangarStore";
 import { EditShipModal } from "./EditShipModal";
 
 const INSURANCE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -14,6 +14,28 @@ const INSURANCE_COLORS: Record<string, { bg: string; text: string; border: strin
   "6_months": { bg: "bg-violet-500/20", text: "text-violet-400", border: "border-violet-500/30" },
   "3_months": { bg: "bg-rose-500/20", text: "text-rose-400", border: "border-rose-500/30" },
   unknown: { bg: "bg-zinc-500/20", text: "text-zinc-400", border: "border-zinc-500/30" },
+};
+
+const CATEGORY_ICONS: Record<ItemCategory, string> = {
+  standalone_ship: "🚀",
+  game_package: "📦",
+  paint: "🎨",
+  flair: "✨",
+  gear: "🛡️",
+  subscriber: "⭐",
+  upgrade: "⬆️",
+  other: "📋",
+};
+
+const CATEGORY_BADGE: Record<ItemCategory, { bg: string; text: string; border: string; label: string }> = {
+  standalone_ship: { bg: "bg-cyan-500/20", text: "text-cyan-400", border: "border-cyan-500/30", label: "Ship" },
+  game_package: { bg: "bg-indigo-500/20", text: "text-indigo-400", border: "border-indigo-500/30", label: "Package" },
+  paint: { bg: "bg-pink-500/20", text: "text-pink-400", border: "border-pink-500/30", label: "Paint" },
+  flair: { bg: "bg-yellow-500/20", text: "text-yellow-400", border: "border-yellow-500/30", label: "Flair" },
+  gear: { bg: "bg-teal-500/20", text: "text-teal-400", border: "border-teal-500/30", label: "Gear" },
+  subscriber: { bg: "bg-violet-500/20", text: "text-violet-400", border: "border-violet-500/30", label: "Sub" },
+  upgrade: { bg: "bg-sky-500/20", text: "text-sky-400", border: "border-sky-500/30", label: "CCU" },
+  other: { bg: "bg-zinc-500/20", text: "text-zinc-400", border: "border-zinc-500/30", label: "Other" },
 };
 
 const LOCATION_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -33,7 +55,7 @@ const INSURANCE_LABELS: Record<string, string> = {
   unknown: "—",
 };
 
-// Common name corrections: Guild Swarm name → image file slug
+// Common name corrections: display name → image file slug
 const SLUG_FIXES: Record<string, string> = {
   "gladiator": "t8c-gladiator",
   "c8r pisces": "c8r-pisces-rescue",
@@ -74,10 +96,22 @@ export function HangarShipCard({ ship }: { ship: HangarShip }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [imgError, setImgError] = useState(false);
   const removeShip = useHangarStore((state) => state.removeShip);
+  const updateShip = useHangarStore((state) => state.updateShip);
 
-  // Resolve ship display name: shipName → notes "Ship: X" / "Part of package" → pledge name extraction
+  const handleMoveLocation = () => {
+    const newLocation = ship.location === "hangar" ? "buyback" : "hangar";
+    updateShip(ship.id, { location: newLocation });
+  };
+
+  // Resolve category — backward compat for items missing itemCategory
+  const category: ItemCategory = ship.itemCategory || "standalone_ship";
+  const isShip = category === "standalone_ship" || category === "game_package";
+  const catBadge = CATEGORY_BADGE[category] || CATEGORY_BADGE.other;
+  const catIcon = CATEGORY_ICONS[category] || "📋";
+
+  // Resolve display name
   const displayName = resolveDisplayName(ship);
-  const localThumb = getShipThumbUrl(displayName);
+  const localThumb = isShip ? getShipThumbUrl(displayName) : "";
   const fallbackImg = ship.imageUrl && !ship.imageUrl.includes("default-image") ? ship.imageUrl : "";
 
   const insuranceColor = INSURANCE_COLORS[ship.insuranceType] || INSURANCE_COLORS.unknown;
@@ -91,24 +125,25 @@ export function HangarShipCard({ ship }: { ship: HangarShip }) {
   return (
     <>
       <article className="relative overflow-hidden rounded-sm bg-zinc-900/60 backdrop-blur-sm border border-zinc-800/50 transition-all duration-300 hover:border-cyan-500/40 hover:bg-zinc-900/80 hover:shadow-[0_0_30px_-8px_rgba(6,182,212,0.15)] group">
-        {/* ── Ship Image ── */}
+        {/* ── Image / Icon Area ── */}
         <div className="relative h-36 overflow-hidden bg-zinc-900">
-          {!imgError && localThumb ? (
+          {isShip && !imgError && localThumb ? (
             <img
               src={localThumb}
               alt={displayName}
               className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
               onError={() => setImgError(true)}
             />
-          ) : fallbackImg ? (
+          ) : fallbackImg && !imgError ? (
             <img
               src={fallbackImg}
               alt={displayName}
               className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-all duration-500"
+              onError={() => setImgError(true)}
             />
           ) : (
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-3xl text-zinc-700">🚀</span>
+              <span className="text-4xl opacity-40">{catIcon}</span>
             </div>
           )}
           {/* Gradient overlay */}
@@ -116,6 +151,12 @@ export function HangarShipCard({ ship }: { ship: HangarShip }) {
 
           {/* Badges overlaid on image */}
           <div className="absolute top-2 left-2 flex gap-1.5 z-10">
+            {/* Category badge for non-ships */}
+            {!isShip && (
+              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm ${catBadge.bg} ${catBadge.text} border ${catBadge.border}`}>
+                {catBadge.label}
+              </span>
+            )}
             <span
               className={`text-[10px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm ${insuranceColor.bg} ${insuranceColor.text} border ${insuranceColor.border}`}
             >
@@ -141,14 +182,14 @@ export function HangarShipCard({ ship }: { ship: HangarShip }) {
               <button
                 onClick={() => setShowDeleteConfirm(true)}
                 className="text-xs text-zinc-400 hover:text-red-400 transition-colors duration-300 opacity-0 group-hover:opacity-100 bg-zinc-900/60 backdrop-blur-sm rounded-full w-6 h-6 flex items-center justify-center"
-                title="Delete ship"
+                title="Delete item"
               >
                 ✕
               </button>
             )}
           </div>
 
-          {/* Ship name overlaid at bottom of image */}
+          {/* Name overlaid at bottom of image */}
           <div className="absolute bottom-2 left-3 right-3 z-10">
             <p className="text-[13px] font-semibold text-white drop-shadow-lg truncate">
               {displayName}
@@ -161,7 +202,7 @@ export function HangarShipCard({ ship }: { ship: HangarShip }) {
           {/* Top line accent */}
           <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-zinc-700/50 to-transparent group-hover:via-cyan-500/60 transition-all duration-500" />
 
-          {/* Pledge name (if different from ship name) */}
+          {/* Pledge name (if different from display name) */}
           {ship.pledgeName !== displayName && (
             <p className="text-[10px] text-zinc-500 truncate">{ship.pledgeName}</p>
           )}
@@ -169,7 +210,9 @@ export function HangarShipCard({ ship }: { ship: HangarShip }) {
           {/* Price */}
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[10px] text-zinc-500 tracking-[0.12em] uppercase">Pledge</p>
+              <p className="text-[10px] text-zinc-500 tracking-[0.12em] uppercase">
+                {isShip ? "Pledge" : "Value"}
+              </p>
               <p className="text-[14px] text-zinc-200 font-mono font-medium">
                 ${ship.pledgePrice.toLocaleString()}
               </p>
@@ -197,18 +240,37 @@ export function HangarShipCard({ ship }: { ship: HangarShip }) {
 
           {/* Footer */}
           <div className="flex items-center justify-between pt-2 border-t border-zinc-800/50">
-            <Link
-              href={`/ships/${ship.shipReference}`}
-              className="text-[11px] text-zinc-500 hover:text-cyan-400 transition-colors duration-300"
-            >
-              View Details
-            </Link>
-            <button
-              onClick={() => setShowEditModal(true)}
-              className="text-[11px] text-zinc-500 hover:text-amber-400 transition-colors duration-300"
-            >
-              Edit
-            </button>
+            {isShip && ship.shipReference ? (
+              <Link
+                href={`/ships/${ship.shipReference}`}
+                className="text-[11px] text-zinc-500 hover:text-cyan-400 transition-colors duration-300"
+              >
+                View Details
+              </Link>
+            ) : (
+              <span className={`text-[11px] ${catBadge.text} opacity-60`}>
+                {catBadge.label}
+              </span>
+            )}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleMoveLocation}
+                className={`text-[11px] transition-colors duration-300 ${
+                  ship.location === "buyback"
+                    ? "text-zinc-500 hover:text-cyan-400"
+                    : "text-zinc-500 hover:text-orange-400"
+                }`}
+                title={ship.location === "buyback" ? "Move to My Fleet" : "Move to Buyback"}
+              >
+                {ship.location === "buyback" ? "→ Fleet" : "→ Buyback"}
+              </button>
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="text-[11px] text-zinc-500 hover:text-amber-400 transition-colors duration-300"
+              >
+                Edit
+              </button>
+            </div>
           </div>
         </div>
 

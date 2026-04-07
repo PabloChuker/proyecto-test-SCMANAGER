@@ -28,6 +28,16 @@ export type InsuranceType =
 
 export type ItemLocation = "hangar" | "buyback" | "ccu_chain";
 
+export type ItemCategory =
+  | "standalone_ship"
+  | "game_package"
+  | "paint"
+  | "flair"
+  | "gear"
+  | "subscriber"
+  | "upgrade"
+  | "other";
+
 export interface HangarShip {
   id: string; // UUID generated on add
   shipReference: string; // matches ships table reference
@@ -36,10 +46,11 @@ export interface HangarShip {
   pledgePrice: number; // USD
   insuranceType: InsuranceType;
   location: ItemLocation;
+  itemCategory: ItemCategory; // what kind of pledge item this is
   isGiftable: boolean;
   isMeltable: boolean;
   purchasedDate: string | null; // ISO date
-  imageUrl: string; // RSI CDN image URL from Guild Swarm
+  imageUrl: string; // RSI CDN image URL
   notes: string;
 }
 
@@ -121,13 +132,13 @@ function generateUUID(): string {
 }
 
 /**
- * Parse Guildswarm v1.1 format JSON
- * Real structure: { version, myHangar: [...], myBuyBack: [...] }
+ * Parse SC Labs Hangar Importer format JSON
+ * Structure: { version, myHangar: [...], myBuyBack: [...] }
  * Each item: { id, name, image, lastModification, contained, link, available, category,
  *              elementData?: { price, shipInThisPackData, alsoContainData },
  *              ccuInfo?: { toSkuId, fromShipData, toShipData, price } }
  */
-function parseGuildswarmV1(items: any[], location: ItemLocation): {
+function parseSCLabsItems(items: any[], location: ItemLocation): {
   ships: Omit<HangarShip, "id">[];
   ccus: Omit<HangarCCU, "id">[];
   skipped: number;
@@ -136,7 +147,7 @@ function parseGuildswarmV1(items: any[], location: ItemLocation): {
   const ships: Omit<HangarShip, "id">[] = [];
   const ccus: Omit<HangarCCU, "id">[] = [];
   const errors: string[] = [];
-  let skipped = 0;
+  const skipped = 0;
 
   for (const item of items) {
     try {
@@ -159,8 +170,8 @@ function parseGuildswarmV1(items: any[], location: ItemLocation): {
         if (ccu.fromShip && ccu.toShip) {
           ccus.push(ccu);
         }
-      } else if (category === "standalone_ship" || category === "game_package") {
-        // Parse as ship(s) — packages can contain multiple ships
+      } else {
+        // Parse as item (ship, paint, flair, gear, subscriber, etc.)
         const ed = item.elementData || {};
         const shipList = ed.shipInThisPackData || [];
         const price = ed.price || 0;
@@ -182,7 +193,10 @@ function parseGuildswarmV1(items: any[], location: ItemLocation): {
           if (extraLower.includes("3 month")) { insurance = "3_months"; break; }
         }
 
-        if (shipList.length > 0) {
+        // Determine item category
+        const itemCat = detectItemCategory(name, category);
+
+        if ((itemCat === "standalone_ship" || itemCat === "game_package") && shipList.length > 0) {
           for (const shipInfo of shipList) {
             const sName = shipInfo.name || "";
             ships.push({
@@ -192,16 +206,19 @@ function parseGuildswarmV1(items: any[], location: ItemLocation): {
               pledgePrice: shipList.length === 1 ? price : 0,
               insuranceType: insurance,
               location,
-              isGiftable: false,
-              isMeltable: true,
+              itemCategory: itemCat,
+              isGiftable: item.isGiftable || false,
+              isMeltable: item.isExchangeable || true,
               purchasedDate: item.lastModification ? parseDateString(item.lastModification) : null,
               imageUrl,
               notes: shipList.length > 1 ? `Part of package: ${name}` : "",
             });
           }
         } else {
-          // No ship data in elementData — extract ship name from pledge name
-          const extractedName = extractShipNameFromPledge(name);
+          // Single item (ship without detailed data, paint, gear, flair, etc.)
+          const extractedName = (itemCat === "standalone_ship" || itemCat === "game_package")
+            ? extractShipNameFromPledge(name)
+            : extractItemName(name);
           ships.push({
             shipReference: "",
             shipName: extractedName,
@@ -209,16 +226,14 @@ function parseGuildswarmV1(items: any[], location: ItemLocation): {
             pledgePrice: price,
             insuranceType: insurance,
             location,
-            isGiftable: false,
-            isMeltable: true,
+            itemCategory: itemCat,
+            isGiftable: item.isGiftable || false,
+            isMeltable: item.isExchangeable || true,
             purchasedDate: item.lastModification ? parseDateString(item.lastModification) : null,
             imageUrl,
             notes: "",
           });
         }
-      } else {
-        // flair, paints, no_category — skip
-        skipped++;
       }
     } catch (err) {
       errors.push(
@@ -228,6 +243,40 @@ function parseGuildswarmV1(items: any[], location: ItemLocation): {
   }
 
   return { ships, ccus, skipped, errors };
+}
+
+/**
+ * Detect the item category from name and raw category
+ */
+function detectItemCategory(name: string, rawCategory: string): ItemCategory {
+  const n = name.toLowerCase();
+  if (rawCategory === "standalone_ship") return "standalone_ship";
+  if (rawCategory === "game_package") return "game_package";
+  if (rawCategory === "flair") return "flair";
+  if (rawCategory === "upgrade") return "upgrade";
+
+  // Name-based detection for items with "no_category" or empty category
+  if (n.startsWith("standalone ship")) return "standalone_ship";
+  if (n.startsWith("package -") || n.includes("starter pack")) return "game_package";
+  if (n.startsWith("paints -") || n.startsWith("paint -") || n.includes("paint")) return "paint";
+  if (n.startsWith("gear -") || n.includes("armor") || n.includes("helmet") || n.includes("jacket") || n.includes("backpack") || n.includes("undersuit")) return "gear";
+  if (n.startsWith("subscribers ") || n.includes("subscriber")) return "subscriber";
+  if (n.includes("flair")) return "flair";
+  if (n.includes("upgrade -") || n.includes(" to ")) return "upgrade";
+
+  return "other";
+}
+
+/**
+ * Extract clean item name from pledge names like "Paints - Hermes - Tripline Paint"
+ */
+function extractItemName(pledgeName: string): string {
+  let name = pledgeName;
+  const prefixes = ["Paints - ", "Paint - ", "Gear - ", "Subscribers Store - ", "Subscribers - "];
+  for (const p of prefixes) {
+    if (name.startsWith(p)) { name = name.slice(p.length); break; }
+  }
+  return name.trim();
 }
 
 /**
@@ -258,9 +307,9 @@ function parseDateString(dateStr: string): string | null {
 }
 
 /**
- * Legacy Guildswarm format parser (older format with kind/title/value)
+ * Legacy format parser (older format with kind/title/value)
  */
-function parseGuildswarmLegacy(data: any[]): {
+function parseLegacyFormat(data: any[]): {
   ships: Omit<HangarShip, "id">[];
   ccus: Omit<HangarCCU, "id">[];
   errors: string[];
@@ -282,6 +331,7 @@ function parseGuildswarmLegacy(data: any[]): {
           pledgePrice: parseFloat(item.value) || 0,
           insuranceType: parseInsuranceType(item.insurance),
           location: "hangar",
+          itemCategory: "standalone_ship",
           isGiftable: item.isGiftable === true,
           isMeltable: item.isReclaimable === true,
           purchasedDate: item.date ? new Date(item.date).toISOString() : null,
@@ -347,6 +397,7 @@ function parseCCUGameFormat(data: any[]): {
             item.insurance || item.insuranceType
           ),
           location: "hangar",
+          itemCategory: "standalone_ship",
           isGiftable: item.giftable === true || item.giftable === "true",
           isMeltable: item.meltable === true || item.meltable === "true",
           purchasedDate: item.purchasedDate
@@ -409,7 +460,7 @@ function parseInsuranceType(value: any): InsuranceType {
 
 /**
  * Detect format of imported data and parse accordingly.
- * Supports: Guildswarm v1.1, Guildswarm legacy, CCU Game, SC Labs backup
+ * Supports: SC Labs Hangar Importer, CCU Game, SC Labs backup, legacy formats
  */
 function detectAndParseFormat(data: any): {
   ships: Omit<HangarShip, "id">[];
@@ -417,7 +468,7 @@ function detectAndParseFormat(data: any): {
   summary: ImportSummary | null;
   errors: string[];
 } {
-  // ── Guildswarm v1.1 format: { version, myHangar: [...], myBuyBack: [...] }
+  // ── SC Labs / myHangar+myBuyBack format: { version, myHangar: [...], myBuyBack: [...] }
   if (data && !Array.isArray(data) && (data.myHangar || data.myBuyBack)) {
     const allShips: Omit<HangarShip, "id">[] = [];
     const allCCUs: Omit<HangarCCU, "id">[] = [];
@@ -427,7 +478,7 @@ function detectAndParseFormat(data: any): {
     // Parse hangar items (location = "hangar")
     const hangarItems = data.myHangar || [];
     if (hangarItems.length > 0) {
-      const h = parseGuildswarmV1(hangarItems, "hangar");
+      const h = parseSCLabsItems(hangarItems, "hangar");
       allShips.push(...h.ships);
       allCCUs.push(...h.ccus);
       allErrors.push(...h.errors);
@@ -437,15 +488,16 @@ function detectAndParseFormat(data: any): {
     // Parse buyback items (location = "buyback")
     const buybackItems = data.myBuyBack || [];
     if (buybackItems.length > 0) {
-      const b = parseGuildswarmV1(buybackItems, "buyback");
+      const b = parseSCLabsItems(buybackItems, "buyback");
       allShips.push(...b.ships);
       allCCUs.push(...b.ccus);
       allErrors.push(...b.errors);
       totalSkipped += b.skipped;
     }
 
+    const isSCLabs = data.exportedBy && String(data.exportedBy).includes("SC Labs");
     const summary: ImportSummary = {
-      format: "Guildswarm v" + (data.version || "1.0"),
+      format: isSCLabs ? "SC Labs Hangar Importer" : "SC Labs v" + (data.version || "1.0"),
       hangarItemCount: hangarItems.length,
       buybackItemCount: buybackItems.length,
       shipsFound: allShips.length,
@@ -462,7 +514,7 @@ function detectAndParseFormat(data: any): {
   if (!Array.isArray(data) || data.length === 0) {
     return {
       ships: [], ccus: [], summary: null,
-      errors: ["Invalid data format: expected Guildswarm JSON or array"],
+      errors: ["Invalid data format: expected SC Labs JSON or array"],
     };
   }
 
@@ -481,10 +533,10 @@ function detectAndParseFormat(data: any): {
     return { ...result, summary: { format: "CCU Game", hangarItemCount: data.length, buybackItemCount: 0, shipsFound: result.ships.length, ccusFound: result.ccus.length, skippedItems: 0, totalValue: 0 } };
   }
 
-  // ── Legacy Guildswarm format (has 'kind' or 'title')
+  // ── Legacy format (has 'kind' or 'title')
   if (firstItem.kind || firstItem.title) {
-    const result = parseGuildswarmLegacy(data);
-    return { ...result, summary: { format: "Guildswarm (legacy)", hangarItemCount: data.length, buybackItemCount: 0, shipsFound: result.ships.length, ccusFound: result.ccus.length, skippedItems: 0, totalValue: 0 } };
+    const result = parseLegacyFormat(data);
+    return { ...result, summary: { format: "Legacy format", hangarItemCount: data.length, buybackItemCount: 0, shipsFound: result.ships.length, ccusFound: result.ccus.length, skippedItems: 0, totalValue: 0 } };
   }
 
   return { ships: [], ccus: [], summary: null, errors: ["Unrecognized format"] };
@@ -659,6 +711,22 @@ export const useHangarStore = create<HangarStoreState>()(
     }),
     {
       name: "sc-labs-hangar", // localStorage key
+      onRehydrateStorage: () => (state) => {
+        // Backward compatibility: assign itemCategory to old items that lack it
+        if (state && state.ships) {
+          let needsUpdate = false;
+          const patched = state.ships.map((ship) => {
+            if (!ship.itemCategory) {
+              needsUpdate = true;
+              return { ...ship, itemCategory: detectItemCategory(ship.pledgeName || ship.shipName || "", "") as ItemCategory };
+            }
+            return ship;
+          });
+          if (needsUpdate) {
+            state.ships = patched;
+          }
+        }
+      },
     }
   )
 );

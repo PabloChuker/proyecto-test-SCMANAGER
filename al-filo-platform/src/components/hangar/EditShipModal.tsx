@@ -1,29 +1,42 @@
 "use client";
 
 import { useState } from "react";
-import { useHangarStore, type HangarShip, type InsuranceType, type ItemLocation } from "@/store/useHangarStore";
+import { useHangarStore, type HangarShip, type InsuranceType, type ItemLocation, type ItemCategory } from "@/store/useHangarStore";
 
 interface EditShipModalProps {
   ship: HangarShip;
   onClose: () => void;
 }
 
+const CATEGORY_LABELS: Record<ItemCategory, string> = {
+  standalone_ship: "Ship",
+  game_package: "Package",
+  paint: "Paint",
+  flair: "Flair",
+  gear: "Gear / Armor",
+  subscriber: "Subscriber Item",
+  upgrade: "CCU / Upgrade",
+  other: "Other",
+};
+
 export function EditShipModal({ ship, onClose }: EditShipModalProps) {
   const [pledgeName, setPledgeName] = useState(ship.pledgeName);
   const [pledgePrice, setPledgePrice] = useState(ship.pledgePrice.toString());
   const [insuranceType, setInsuranceType] = useState<InsuranceType>(ship.insuranceType);
   const [location, setLocation] = useState<ItemLocation>(ship.location);
+  const [itemCategory, setItemCategory] = useState<ItemCategory>(ship.itemCategory || "standalone_ship");
   const [isGiftable, setIsGiftable] = useState(ship.isGiftable);
   const [isMeltable, setIsMeltable] = useState(ship.isMeltable);
   const [notes, setNotes] = useState(ship.notes);
   const [error, setError] = useState("");
 
+  const isShip = itemCategory === "standalone_ship" || itemCategory === "game_package";
   const updateShip = useHangarStore((state) => state.updateShip);
 
   const handleSave = () => {
     const price = parseFloat(pledgePrice);
     if (isNaN(price) || price < 0) {
-      setError("Please enter a valid pledge price");
+      setError("Please enter a valid price");
       return;
     }
 
@@ -32,6 +45,7 @@ export function EditShipModal({ ship, onClose }: EditShipModalProps) {
       pledgePrice: price,
       insuranceType,
       location,
+      itemCategory,
       isGiftable,
       isMeltable,
       notes,
@@ -44,7 +58,9 @@ export function EditShipModal({ ship, onClose }: EditShipModalProps) {
       <div className="bg-zinc-900 border border-zinc-800/50 rounded-sm max-w-lg w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="sticky top-0 bg-zinc-900/95 border-b border-zinc-800/50 p-6 flex items-center justify-between">
-          <h2 className="text-lg font-medium tracking-wide text-zinc-100">Edit Ship</h2>
+          <h2 className="text-lg font-medium tracking-wide text-zinc-100">
+            Edit {CATEGORY_LABELS[itemCategory] || "Item"}
+          </h2>
           <button
             onClick={onClose}
             className="text-zinc-400 hover:text-zinc-300 transition-colors"
@@ -58,7 +74,7 @@ export function EditShipModal({ ship, onClose }: EditShipModalProps) {
         <div className="p-6 space-y-4">
           <div>
             <label className="block text-[11px] text-zinc-500 tracking-[0.12em] uppercase mb-2">
-              Ship Name
+              {isShip ? "Ship Name" : "Item Name"}
             </label>
             <input
               type="text"
@@ -70,7 +86,22 @@ export function EditShipModal({ ship, onClose }: EditShipModalProps) {
 
           <div>
             <label className="block text-[11px] text-zinc-500 tracking-[0.12em] uppercase mb-2">
-              Pledge Price (USD)
+              Category
+            </label>
+            <select
+              value={itemCategory}
+              onChange={(e) => setItemCategory(e.target.value as ItemCategory)}
+              className="w-full px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm focus:outline-none focus:border-amber-500/50 transition-all duration-300"
+            >
+              {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] text-zinc-500 tracking-[0.12em] uppercase mb-2">
+              {isShip ? "Pledge Price (USD)" : "Value (USD)"}
             </label>
             <input
               type="number"
