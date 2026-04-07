@@ -29,7 +29,7 @@ const SORT_MAP: Record<string, string> = {
   scmSpeed: "fs.scm_speed",
   maxSpeed: "fs.max_speed",
   cargo: "s.cargo_capacity",
-  maxCrew: "s.max_crew",
+  maxCrew: "s.\"maxCrew\"",
   afterburnerSpeed: "fs.max_speed",
   manufacturer: "s.manufacturer",
   size: "s.size",
@@ -108,7 +108,7 @@ async function handleShipsQuery(params: ShipsQueryParams) {
     const joinClause = `LEFT JOIN ship_flight_stats fs ON fs.ship_id = s.id`;
     const ships: any[] = await prisma.$queryRawUnsafe(
       `SELECT s.id, s.reference, s.name, s.manufacturer, s.role, s.size,
-              s.max_crew, s.mass, s.cargo_capacity, s.game_version,
+              s."maxCrew" as max_crew, s.mass, s.cargo_capacity, s.game_version,
               s.msrp_usd, s.warbond_usd,
               fs.scm_speed, fs.max_speed as afterburner_speed
        FROM ships s

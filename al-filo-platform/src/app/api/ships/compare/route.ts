@@ -249,8 +249,8 @@ async function compareShips(ids: string[]) {
         msrpUsd: numOrNull(ship.msrp_usd),
         warbondUsd: numOrNull(ship.warbond_usd),
         ship: {
-          maxCrew: numOrNull(ship.max_crew),
-          cargo: numOrNull(ship.cargo_capacity),
+          maxCrew: numOrNull(ship.maxCrew ?? ship.max_crew),
+          cargo: numOrNull(ship.cargo ?? ship.cargo_capacity),
           mass: numOrNull(ship.mass),
           scmSpeed: numOrNull(fs?.scm_speed ?? ship.scm_speed),
           afterburnerSpeed: numOrNull(fs?.max_speed ?? ship.afterburner_speed),
