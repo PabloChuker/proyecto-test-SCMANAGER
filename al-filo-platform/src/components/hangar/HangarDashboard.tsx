@@ -9,6 +9,7 @@ import { CCUGrid } from "./CCUGrid";
 import { AddCCUModal } from "./AddCCUModal";
 import { ChainList } from "./ChainList";
 import { ChainBuilder } from "./ChainBuilder";
+import { CCUChainCalculator } from "./CCUChainCalculator";
 
 type TabType = "My Fleet" | "Buyback" | "CCU Chains";
 
@@ -318,17 +319,31 @@ export function HangarDashboard() {
          CCU CHAINS TAB
          ════════════════════════════════════════════════════════════════════════ */}
       {activeTab === "CCU Chains" && (
-        <div className="space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard label="Total Chains" value={chains.length.toString()} accent="purple" />
-            <StatCard label="Total Chain Cost" value={`$${chains.reduce((sum, chain) => sum + chain.steps.reduce((s, step) => s + step.ccuPrice, 0), 0).toLocaleString()}`} />
-            <StatCard label="Status" value={`Active: ${chains.filter((c) => c.status === "in_progress").length} | Done: ${chains.filter((c) => c.status === "completed").length}`} />
-            <StatCard label="Planning" value={`${chains.filter((c) => c.status === "planning").length} chains`} />
+        <div className="space-y-8">
+          {/* ── Chain Calculator (Pathfinding) ── */}
+          <CCUChainCalculator />
+
+          {/* ── Separator ── */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-800/50" /></div>
+            <div className="relative flex justify-center">
+              <span className="bg-zinc-950 px-4 text-[10px] text-zinc-600 uppercase tracking-widest">Manual Chains</span>
+            </div>
           </div>
-          <div className="flex gap-3">
-            <button onClick={() => handleOpenChainBuilder()} className="px-4 py-2 bg-amber-500/20 border border-amber-500/50 rounded-sm text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-all duration-300">New Chain</button>
+
+          {/* ── Manual Chain Builder (existing) ── */}
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard label="Total Chains" value={chains.length.toString()} accent="purple" />
+              <StatCard label="Total Chain Cost" value={`$${chains.reduce((sum, chain) => sum + chain.steps.reduce((s, step) => s + step.ccuPrice, 0), 0).toLocaleString()}`} />
+              <StatCard label="Status" value={`Active: ${chains.filter((c) => c.status === "in_progress").length} | Done: ${chains.filter((c) => c.status === "completed").length}`} />
+              <StatCard label="Planning" value={`${chains.filter((c) => c.status === "planning").length} chains`} />
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => handleOpenChainBuilder()} className="px-4 py-2 bg-amber-500/20 border border-amber-500/50 rounded-sm text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-all duration-300">New Chain</button>
+            </div>
+            <ChainList chains={chains} onEditChain={handleOpenChainBuilder} />
           </div>
-          <ChainList chains={chains} onEditChain={handleOpenChainBuilder} />
         </div>
       )}
 
