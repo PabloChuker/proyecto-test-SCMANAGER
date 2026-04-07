@@ -274,7 +274,7 @@ function detectItemCategory(name: string, rawCategory: string): ItemCategory {
   if (n.startsWith("paints -") || n.startsWith("paint -") || n.includes(" paint") ||
       n.includes("skin -") || n.includes("livery") || n.includes("coloration")) return "paint";
 
-  // Gear / Armor / Weapons / Tools / Suits
+  // Gear / Armor / Weapons / Tools / Suits / Packs
   if (n.startsWith("gear -") || n.startsWith("add-ons -") ||
       n.includes("armor") || n.includes("helmet") || n.includes("undersuit") ||
       n.includes("backpack") || n.includes("jacket") || n.includes("weapons pack") || n.includes("weapon pack") ||
@@ -285,7 +285,8 @@ function detectItemCategory(name: string, rawCategory: string): ItemCategory {
       n.includes("hazard suit") || n.includes("refinery suit") || n.includes("service uniform") ||
       n.includes("medical device") || n.includes("mask") || n.includes("flight blades") ||
       n.includes("bomb rack") || n.includes("weapon kit") || n.includes("upgrade kit") ||
-      n.includes("quikflare") || n.includes("medivac") || n.includes("purifier")) return "gear";
+      n.includes("quikflare") || n.includes("medivac") || n.includes("purifier") ||
+      n.includes("gear pack") || n.includes("hydration pack")) return "gear";
 
   // Subscriber items
   if (n.startsWith("subscribers ") || n.startsWith("subscriber ") || n.includes("subscribers exclusive") ||
@@ -326,8 +327,7 @@ function detectItemCategory(name: string, rawCategory: string): ItemCategory {
 
   // Packs / Bundles
   if (n.includes("packs -") || n.includes("bundle") || n.includes("combo") ||
-      n.includes("collection") || n.includes("master set") ||
-      n.includes("gear pack") || n.includes("hydration pack")) return "gear";
+      n.includes("master set")) return "gear";
 
   return "other";
 }
