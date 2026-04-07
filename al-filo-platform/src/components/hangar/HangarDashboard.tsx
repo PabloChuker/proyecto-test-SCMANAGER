@@ -19,6 +19,7 @@ export function HangarDashboard() {
   const [showAddCCUModal, setShowAddCCUModal] = useState(false);
   const [showChainBuilder, setShowChainBuilder] = useState(false);
   const [editingChain, setEditingChain] = useState<CCUChain | undefined>(undefined);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   // Shared filters
   const [searchQuery, setSearchQuery] = useState("");
@@ -35,6 +36,7 @@ export function HangarDashboard() {
   const ccus = useHangarStore((state) => state.ccus);
   const chains = useHangarStore((state) => state.chains);
   const exportToJSON = useHangarStore((state) => state.exportToJSON);
+  const clearAll = useHangarStore((state) => state.clearAll);
 
   // ── Split ships by location ──
   const fleetShips = ships.filter((s) => s.location === "hangar");
@@ -154,8 +156,8 @@ export function HangarDashboard() {
           </button>
         ))}
 
-        {/* Import / Export buttons — right side */}
-        <div className="ml-auto flex gap-2 pl-4">
+        {/* Import / Export / Clear — right side */}
+        <div className="ml-auto flex gap-2 pl-4 items-center">
           <button
             onClick={() => setShowImportModal(true)}
             className="px-3 py-1.5 bg-amber-500/20 border border-amber-500/50 rounded-sm text-amber-400 text-[12px] font-medium hover:bg-amber-500/30 transition-all duration-300"
@@ -168,6 +170,30 @@ export function HangarDashboard() {
           >
             Export
           </button>
+          {showClearConfirm ? (
+            <div className="flex gap-1.5 items-center">
+              <span className="text-[11px] text-red-400">Clear all?</span>
+              <button
+                onClick={() => { clearAll(); setShowClearConfirm(false); }}
+                className="px-2 py-1 bg-red-500/30 border border-red-500/50 rounded-sm text-red-400 text-[11px] font-medium hover:bg-red-500/40 transition-all duration-300"
+              >
+                Yes
+              </button>
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="px-2 py-1 bg-zinc-800/50 border border-zinc-700/50 rounded-sm text-zinc-400 text-[11px] hover:bg-zinc-800 transition-all duration-300"
+              >
+                No
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowClearConfirm(true)}
+              className="px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded-sm text-red-400/70 text-[12px] font-medium hover:bg-red-500/20 hover:text-red-400 transition-all duration-300"
+            >
+              Clear
+            </button>
+          )}
         </div>
       </div>
 

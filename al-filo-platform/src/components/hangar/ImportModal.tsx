@@ -20,6 +20,7 @@ export function ImportModal({ onClose }: ImportModalProps) {
   const [parseError, setParseError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const importFromJSON = useHangarStore((state) => state.importFromJSON);
+  const clearAll = useHangarStore((state) => state.clearAll);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -49,6 +50,9 @@ export function ImportModal({ onClose }: ImportModalProps) {
       try {
         const content = e.target?.result as string;
         const data = JSON.parse(content);
+
+        // Clear existing data before importing new file
+        clearAll();
 
         // Guildswarm v1.1 format: pass the whole object
         if (data && !Array.isArray(data) && (data.myHangar || data.myBuyBack)) {
