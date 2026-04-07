@@ -102,7 +102,7 @@ export interface HangarStoreState {
   // Import/Export
   importFromJSON: (
     data: any
-  ) => { ships: number; ccus: number; errors: string[] };
+  ) => { ships: number; ccus: number; summary: ImportSummary | null; errors: string[] };
   exportToJSON: () => string;
   clearAll: () => void;
 }
@@ -119,10 +119,125 @@ function generateUUID(): string {
 }
 
 /**
- * Parse Guildswarm format JSON
- * Expected structure: array of items with fields like "title", "value", "insurance", "kind", "isGiftable", "isReclaimable", "date", "items"
+ * Parse Guildswarm v1.1 format JSON
+ * Real structure: { version, myHangar: [...], myBuyBack: [...] }
+ * Each item: { id, name, image, lastModification, contained, link, available, category,
+ *              elementData?: { price, shipInThisPackData, alsoContainData },
+ *              ccuInfo?: { toSkuId, fromShipData, toShipData, price } }
  */
-function parseGuildswarmFormat(data: any[]): {
+function parseGuildswarmV1(items: any[], location: ItemLocation): {
+  ships: Omit<HangarShip, "id">[];
+  ccus: Omit<HangarCCU, "id">[];
+  skipped: number;
+  errors: string[];
+} {
+  const ships: Omit<HangarShip, "id">[] = [];
+  const ccus: Omit<HangarCCU, "id">[] = [];
+  const errors: string[] = [];
+  let skipped = 0;
+
+  for (const item of items) {
+    try {
+      const category = item.category || "";
+      const name = item.name || "";
+
+      if (category === "upgrade" && item.ccuInfo) {
+        // Parse as CCU upgrade
+        const ci = item.ccuInfo;
+        const ccu: Omit<HangarCCU, "id"> = {
+          fromShip: ci.fromShipData?.name || "",
+          fromShipReference: "",
+          toShip: ci.toShipData?.name || "",
+          toShipReference: "",
+          pricePaid: ci.price || 0,
+          isWarbond: false,
+          location: location === "ccu_chain" ? "hangar" : location,
+          notes: "",
+        };
+        if (ccu.fromShip && ccu.toShip) {
+          ccus.push(ccu);
+        }
+      } else if (category === "standalone_ship" || category === "game_package") {
+        // Parse as ship(s) — packages can contain multiple ships
+        const ed = item.elementData || {};
+        const shipList = ed.shipInThisPackData || [];
+        const price = ed.price || 0;
+        const alsoContains = ed.alsoContainData || [];
+
+        // Detect insurance from alsoContains
+        let insurance: InsuranceType = "unknown";
+        for (const extra of alsoContains) {
+          const extraLower = String(extra).toLowerCase();
+          if (extraLower.includes("lifetime")) { insurance = "LTI"; break; }
+          if (extraLower.includes("120")) { insurance = "120_months"; break; }
+          if (extraLower.includes("72")) { insurance = "72_months"; break; }
+          if (extraLower.includes("48")) { insurance = "48_months"; break; }
+          if (extraLower.includes("24")) { insurance = "24_months"; break; }
+          if (extraLower.includes("10 year") || extraLower.includes("10year")) { insurance = "120_months"; break; }
+          if (extraLower.includes("6 month")) { insurance = "6_months"; break; }
+          if (extraLower.includes("3 month")) { insurance = "3_months"; break; }
+        }
+
+        if (shipList.length > 0) {
+          // Split price evenly across ships in package (rough estimate)
+          const perShipPrice = shipList.length > 1 ? price : price;
+          for (const shipInfo of shipList) {
+            ships.push({
+              shipReference: "",
+              pledgeName: name,
+              pledgePrice: shipList.length === 1 ? price : 0,
+              insuranceType: insurance,
+              location,
+              isGiftable: false,
+              isMeltable: true,
+              purchasedDate: item.lastModification ? parseDateString(item.lastModification) : null,
+              notes: shipList.length > 1 ? `Ship: ${shipInfo.name} (part of package)` : "",
+            });
+          }
+        } else {
+          // No ship data in elementData, use pledge name
+          ships.push({
+            shipReference: "",
+            pledgeName: name,
+            pledgePrice: price,
+            insuranceType: insurance,
+            location,
+            isGiftable: false,
+            isMeltable: true,
+            purchasedDate: item.lastModification ? parseDateString(item.lastModification) : null,
+            notes: "",
+          });
+        }
+      } else {
+        // flair, paints, no_category — skip
+        skipped++;
+      }
+    } catch (err) {
+      errors.push(
+        `Failed to parse "${item.name || "unknown"}": ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  return { ships, ccus, skipped, errors };
+}
+
+/**
+ * Parse date strings like "March 15, 2026" to ISO
+ */
+function parseDateString(dateStr: string): string | null {
+  try {
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Legacy Guildswarm format parser (older format with kind/title/value)
+ */
+function parseGuildswarmLegacy(data: any[]): {
   ships: Omit<HangarShip, "id">[];
   ccus: Omit<HangarCCU, "id">[];
   errors: string[];
@@ -131,54 +246,39 @@ function parseGuildswarmFormat(data: any[]): {
   const ccus: Omit<HangarCCU, "id">[] = [];
   const errors: string[] = [];
 
-  if (!Array.isArray(data)) {
-    errors.push("Guildswarm format: expected an array");
-    return { ships, ccus, errors };
-  }
-
   for (const item of data) {
     try {
       const kind = item.kind || "";
       const title = item.title || "";
-      const value = item.value || "";
 
       if (kind === "Standalone Ship" || kind.includes("Standalone")) {
-        // Parse as ship
-        const ship: Omit<HangarShip, "id"> = {
-          shipReference: item.shipReference || value,
+        ships.push({
+          shipReference: item.shipReference || "",
           pledgeName: title,
           pledgePrice: parseFloat(item.value) || 0,
           insuranceType: parseInsuranceType(item.insurance),
           location: "hangar",
-          isGiftable: item.isGiftable === true || item.isGiftable === "true",
-          isMeltable: item.isReclaimable === true || item.isReclaimable === "true",
+          isGiftable: item.isGiftable === true,
+          isMeltable: item.isReclaimable === true,
           purchasedDate: item.date ? new Date(item.date).toISOString() : null,
-          notes: item.notes || "",
-        };
-        ships.push(ship);
+          notes: "",
+        });
       } else if (kind === "CCU" || kind.includes("Upgrade")) {
-        // Parse as CCU
-        const fromShip = item.fromShip || "";
-        const toShip = item.toShip || "";
-
-        if (fromShip && toShip) {
-          const ccu: Omit<HangarCCU, "id"> = {
-            fromShip: fromShip,
+        if (item.fromShip && item.toShip) {
+          ccus.push({
+            fromShip: item.fromShip,
             fromShipReference: item.fromShipReference || "",
-            toShip: toShip,
+            toShip: item.toShip,
             toShipReference: item.toShipReference || "",
             pricePaid: parseFloat(item.pricePaid || item.value) || 0,
-            isWarbond: item.isWarbond === true || item.isWarbond === "true",
+            isWarbond: item.isWarbond === true,
             location: "hangar",
-            notes: item.notes || "",
-          };
-          ccus.push(ccu);
+            notes: "",
+          });
         }
       }
     } catch (err) {
-      errors.push(
-        `Failed to parse item "${item.title || "unknown"}": ${err instanceof Error ? err.message : String(err)}`
-      );
+      errors.push(`Failed to parse "${item.title || "unknown"}"`);
     }
   }
 
@@ -281,48 +381,99 @@ function parseInsuranceType(value: any): InsuranceType {
 }
 
 /**
- * Detect format of imported data and parse accordingly
+ * Detect format of imported data and parse accordingly.
+ * Supports: Guildswarm v1.1, Guildswarm legacy, CCU Game, SC Labs backup
  */
 function detectAndParseFormat(data: any): {
   ships: Omit<HangarShip, "id">[];
   ccus: Omit<HangarCCU, "id">[];
+  summary: ImportSummary | null;
   errors: string[];
 } {
+  // ── Guildswarm v1.1 format: { version, myHangar: [...], myBuyBack: [...] }
+  if (data && !Array.isArray(data) && (data.myHangar || data.myBuyBack)) {
+    const allShips: Omit<HangarShip, "id">[] = [];
+    const allCCUs: Omit<HangarCCU, "id">[] = [];
+    const allErrors: string[] = [];
+    let totalSkipped = 0;
+
+    // Parse hangar items (location = "hangar")
+    const hangarItems = data.myHangar || [];
+    if (hangarItems.length > 0) {
+      const h = parseGuildswarmV1(hangarItems, "hangar");
+      allShips.push(...h.ships);
+      allCCUs.push(...h.ccus);
+      allErrors.push(...h.errors);
+      totalSkipped += h.skipped;
+    }
+
+    // Parse buyback items (location = "buyback")
+    const buybackItems = data.myBuyBack || [];
+    if (buybackItems.length > 0) {
+      const b = parseGuildswarmV1(buybackItems, "buyback");
+      allShips.push(...b.ships);
+      allCCUs.push(...b.ccus);
+      allErrors.push(...b.errors);
+      totalSkipped += b.skipped;
+    }
+
+    const summary: ImportSummary = {
+      format: "Guildswarm v" + (data.version || "1.0"),
+      hangarItemCount: hangarItems.length,
+      buybackItemCount: buybackItems.length,
+      shipsFound: allShips.length,
+      ccusFound: allCCUs.length,
+      skippedItems: totalSkipped,
+      totalValue: allShips.reduce((s, sh) => s + sh.pledgePrice, 0) +
+                  allCCUs.reduce((s, c) => s + c.pricePaid, 0),
+    };
+
+    return { ships: allShips, ccus: allCCUs, summary, errors: allErrors };
+  }
+
+  // From here on, data should be an array
   if (!Array.isArray(data) || data.length === 0) {
     return {
-      ships: [],
-      ccus: [],
-      errors: ["Invalid data format: expected non-empty array"],
+      ships: [], ccus: [], summary: null,
+      errors: ["Invalid data format: expected Guildswarm JSON or array"],
     };
   }
 
-  // Check first item to detect format
   const firstItem = data[0];
 
-  // Check for our own backup format (has id, shipReference, pledgeName)
-  if (
-    firstItem.id &&
-    (firstItem.pledgeName || firstItem.fromShip) &&
-    !firstItem.kind &&
-    !firstItem.type
-  ) {
-    // Our own format - just filter ships and ccus
-    const ships = data.filter(
-      (item) => item.pledgeName && !item.fromShip
-    ) as Omit<HangarShip, "id">[];
-    const ccus = data.filter(
-      (item) => item.fromShip && item.toShip
-    ) as Omit<HangarCCU, "id">[];
-    return { ships, ccus, errors: [] };
+  // ── SC Labs own backup format (has id, pledgeName)
+  if (firstItem.id && (firstItem.pledgeName || firstItem.fromShip) && !firstItem.kind && !firstItem.type) {
+    const ships = data.filter((item) => item.pledgeName && !item.fromShip) as Omit<HangarShip, "id">[];
+    const ccus = data.filter((item) => item.fromShip && item.toShip) as Omit<HangarCCU, "id">[];
+    return { ships, ccus, summary: { format: "SC Labs backup", hangarItemCount: data.length, buybackItemCount: 0, shipsFound: ships.length, ccusFound: ccus.length, skippedItems: 0, totalValue: 0 }, errors: [] };
   }
 
-  // Check for CCU Game format (has 'type' or 'reference' fields)
+  // ── CCU Game format (has 'type' or 'reference')
   if (firstItem.type || firstItem.reference) {
-    return parseCCUGameFormat(data);
+    const result = parseCCUGameFormat(data);
+    return { ...result, summary: { format: "CCU Game", hangarItemCount: data.length, buybackItemCount: 0, shipsFound: result.ships.length, ccusFound: result.ccus.length, skippedItems: 0, totalValue: 0 } };
   }
 
-  // Default to Guildswarm format
-  return parseGuildswarmFormat(data);
+  // ── Legacy Guildswarm format (has 'kind' or 'title')
+  if (firstItem.kind || firstItem.title) {
+    const result = parseGuildswarmLegacy(data);
+    return { ...result, summary: { format: "Guildswarm (legacy)", hangarItemCount: data.length, buybackItemCount: 0, shipsFound: result.ships.length, ccusFound: result.ccus.length, skippedItems: 0, totalValue: 0 } };
+  }
+
+  return { ships: [], ccus: [], summary: null, errors: ["Unrecognized format"] };
+}
+
+/**
+ * Import summary for UI display
+ */
+export interface ImportSummary {
+  format: string;
+  hangarItemCount: number;
+  buybackItemCount: number;
+  shipsFound: number;
+  ccusFound: number;
+  skippedItems: number;
+  totalValue: number;
 }
 
 // =============================================================================
@@ -431,7 +582,7 @@ export const useHangarStore = create<HangarStoreState>()(
       // =========================================================================
 
       importFromJSON: (data) => {
-        const { ships: parsedShips, ccus: parsedCCUs, errors } =
+        const { ships: parsedShips, ccus: parsedCCUs, summary, errors } =
           detectAndParseFormat(data);
 
         set((state) => ({
@@ -454,6 +605,7 @@ export const useHangarStore = create<HangarStoreState>()(
         return {
           ships: parsedShips.length,
           ccus: parsedCCUs.length,
+          summary,
           errors,
         };
       },
