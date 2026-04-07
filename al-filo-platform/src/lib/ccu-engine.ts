@@ -276,21 +276,28 @@ function determinePriceType(edge: CCUEdge, opts: CalculateOptions): PriceType {
 /**
  * Get the effective price for a CCU edge based on options.
  *
- * - Hangar: $0 additional cost (already owned and paid)
- * - Buyback + token: price in credits (still a cost, but not cash)
- * - Buyback - token: price in cash (must pay real money)
- * - Warbond: discounted cash price
- * - Standard: full cash price
+ * - Hangar: $0 additional cost (already owned and in hand)
+ * - Buyback + token: reclaim with store credits at standardPrice
+ * - Buyback - no token: reclaim with real cash at standardPrice
+ * - Warbond: discounted cash price for new purchase
+ * - Standard: full cash price for new purchase
  *
- * For Dijkstra, hangar = 0, buyback-token = pricePaid (credits count as cost),
- * buyback-cash = pricePaid, warbond/standard = respective prices.
+ * IMPORTANT: Buyback always costs the standardPrice of the CCU to reclaim,
+ * regardless of what the user originally paid. RSI charges full price on buyback.
+ * The difference is payment method: with token → credits, without → cash.
  */
 function getEffectivePrice(edge: CCUEdge, opts: CalculateOptions): number {
   if (opts.includeOwned && edge.isOwned) {
     if (edge.ownedLocation === "hangar") return 0; // Already have it
+
     if (edge.ownedLocation === "buyback") {
-      // Buyback always has a cost — either credits or cash
-      return edge.ownedPricePaid;
+      // Buyback costs the standard CCU price to reclaim.
+      // With token, paid in credits — give slight preference over buying new
+      // (credits are cheaper since they come from melted pledges)
+      if (opts.hasBuybackToken) {
+        return edge.standardPrice * 0.95; // slight Dijkstra preference for credits
+      }
+      return edge.standardPrice;
     }
     return 0; // fallback for legacy
   }
@@ -325,7 +332,18 @@ function reconstructPath(
     const toShip = ships.get(entry.edge.toShipId);
     if (!fromShip || !toShip) return null;
 
-    const effectivePrice = getEffectivePrice(entry.edge, opts);
+    // Calculate the DISPLAY price (without Dijkstra preference factor)
+    let effectivePrice: number;
+    if (entry.priceType === "hangar") {
+      effectivePrice = 0;
+    } else if (entry.priceType === "buyback-token" || entry.priceType === "buyback-cash") {
+      // Buyback always costs the standard price to reclaim
+      effectivePrice = entry.edge.standardPrice;
+    } else if (entry.priceType === "warbond") {
+      effectivePrice = entry.edge.warbondPrice ?? entry.edge.standardPrice;
+    } else {
+      effectivePrice = entry.edge.standardPrice;
+    }
 
     // Determine payment method
     let paymentMethod: "cash" | "credits" | "none" = "cash";
