@@ -90,6 +90,7 @@ export function AddShipModal({ onClose }: AddShipModalProps) {
     try {
       addShip({
         shipReference: selectedShip.reference,
+        shipName: selectedShip.name || pledgeName,
         pledgeName,
         pledgePrice: price,
         insuranceType,
@@ -97,6 +98,7 @@ export function AddShipModal({ onClose }: AddShipModalProps) {
         isGiftable,
         isMeltable,
         purchasedDate: null,
+        imageUrl: "",
         notes,
       });
       onClose();

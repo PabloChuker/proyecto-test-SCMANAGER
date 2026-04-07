@@ -31,6 +31,7 @@ export type ItemLocation = "hangar" | "buyback" | "ccu_chain";
 export interface HangarShip {
   id: string; // UUID generated on add
   shipReference: string; // matches ships table reference
+  shipName: string; // actual ship name ("Gladius", "Perseus") for image lookup
   pledgeName: string; // "Standalone Ships - Cutlass Black"
   pledgePrice: number; // USD
   insuranceType: InsuranceType;
@@ -38,6 +39,7 @@ export interface HangarShip {
   isGiftable: boolean;
   isMeltable: boolean;
   purchasedDate: string | null; // ISO date
+  imageUrl: string; // RSI CDN image URL from Guild Swarm
   notes: string;
 }
 
@@ -163,27 +165,29 @@ function parseGuildswarmV1(items: any[], location: ItemLocation): {
         const shipList = ed.shipInThisPackData || [];
         const price = ed.price || 0;
         const alsoContains = ed.alsoContainData || [];
+        const imageUrl = item.image || "";
 
-        // Detect insurance from alsoContains
+        // Detect insurance from alsoContains and pledge name
         let insurance: InsuranceType = "unknown";
-        for (const extra of alsoContains) {
+        const allTexts = [...alsoContains, name];
+        for (const extra of allTexts) {
           const extraLower = String(extra).toLowerCase();
           if (extraLower.includes("lifetime")) { insurance = "LTI"; break; }
           if (extraLower.includes("120")) { insurance = "120_months"; break; }
           if (extraLower.includes("72")) { insurance = "72_months"; break; }
           if (extraLower.includes("48")) { insurance = "48_months"; break; }
           if (extraLower.includes("24")) { insurance = "24_months"; break; }
-          if (extraLower.includes("10 year") || extraLower.includes("10year")) { insurance = "120_months"; break; }
+          if (extraLower.includes("10 year") || extraLower.includes("10year") || extraLower.includes("10-year")) { insurance = "120_months"; break; }
           if (extraLower.includes("6 month")) { insurance = "6_months"; break; }
           if (extraLower.includes("3 month")) { insurance = "3_months"; break; }
         }
 
         if (shipList.length > 0) {
-          // Split price evenly across ships in package (rough estimate)
-          const perShipPrice = shipList.length > 1 ? price : price;
           for (const shipInfo of shipList) {
+            const sName = shipInfo.name || "";
             ships.push({
               shipReference: "",
+              shipName: sName,
               pledgeName: name,
               pledgePrice: shipList.length === 1 ? price : 0,
               insuranceType: insurance,
@@ -191,13 +195,16 @@ function parseGuildswarmV1(items: any[], location: ItemLocation): {
               isGiftable: false,
               isMeltable: true,
               purchasedDate: item.lastModification ? parseDateString(item.lastModification) : null,
-              notes: shipList.length > 1 ? `Ship: ${shipInfo.name} (part of package)` : "",
+              imageUrl,
+              notes: shipList.length > 1 ? `Part of package: ${name}` : "",
             });
           }
         } else {
-          // No ship data in elementData, use pledge name
+          // No ship data in elementData — extract ship name from pledge name
+          const extractedName = extractShipNameFromPledge(name);
           ships.push({
             shipReference: "",
+            shipName: extractedName,
             pledgeName: name,
             pledgePrice: price,
             insuranceType: insurance,
@@ -205,6 +212,7 @@ function parseGuildswarmV1(items: any[], location: ItemLocation): {
             isGiftable: false,
             isMeltable: true,
             purchasedDate: item.lastModification ? parseDateString(item.lastModification) : null,
+            imageUrl,
             notes: "",
           });
         }
@@ -220,6 +228,21 @@ function parseGuildswarmV1(items: any[], location: ItemLocation): {
   }
 
   return { ships, ccus, skipped, errors };
+}
+
+/**
+ * Extract ship name from pledge name like "Standalone Ships - Perseus - 10 Year"
+ */
+function extractShipNameFromPledge(pledgeName: string): string {
+  let name = pledgeName;
+  // Remove prefixes
+  const prefixes = ["Standalone Ships - ", "Package - "];
+  for (const p of prefixes) {
+    if (name.startsWith(p)) { name = name.slice(p.length); break; }
+  }
+  // Remove suffixes like "- 10 Year", "- Best in Show 2955 Edition", "- upgraded"
+  name = name.replace(/\s*-\s*(10 Year|Best in Show.*|upgraded|Warbond.*|Standard Edition.*|IAE.*|Invictus.*)$/i, "");
+  return name.trim();
 }
 
 /**
@@ -254,6 +277,7 @@ function parseGuildswarmLegacy(data: any[]): {
       if (kind === "Standalone Ship" || kind.includes("Standalone")) {
         ships.push({
           shipReference: item.shipReference || "",
+          shipName: extractShipNameFromPledge(title),
           pledgeName: title,
           pledgePrice: parseFloat(item.value) || 0,
           insuranceType: parseInsuranceType(item.insurance),
@@ -261,6 +285,7 @@ function parseGuildswarmLegacy(data: any[]): {
           isGiftable: item.isGiftable === true,
           isMeltable: item.isReclaimable === true,
           purchasedDate: item.date ? new Date(item.date).toISOString() : null,
+          imageUrl: "",
           notes: "",
         });
       } else if (kind === "CCU" || kind.includes("Upgrade")) {
@@ -315,6 +340,7 @@ function parseCCUGameFormat(data: any[]): {
       ) {
         const ship: Omit<HangarShip, "id"> = {
           shipReference: item.reference || item.shipReference || "",
+          shipName: item.shipName || extractShipNameFromPledge(name),
           pledgeName: name,
           pledgePrice: parseFloat(item.price || item.value) || 0,
           insuranceType: parseInsuranceType(
@@ -326,6 +352,7 @@ function parseCCUGameFormat(data: any[]): {
           purchasedDate: item.purchasedDate
             ? new Date(item.purchasedDate).toISOString()
             : null,
+          imageUrl: item.imageUrl || "",
           notes: item.notes || item.description || "",
         };
         ships.push(ship);

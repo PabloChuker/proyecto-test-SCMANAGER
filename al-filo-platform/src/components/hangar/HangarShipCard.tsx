@@ -13,7 +13,7 @@ const INSURANCE_COLORS: Record<string, { bg: string; text: string; border: strin
   "24_months": { bg: "bg-orange-500/20", text: "text-orange-400", border: "border-orange-500/30" },
   "6_months": { bg: "bg-violet-500/20", text: "text-violet-400", border: "border-violet-500/30" },
   "3_months": { bg: "bg-rose-500/20", text: "text-rose-400", border: "border-rose-500/30" },
-  "unknown": { bg: "bg-zinc-500/20", text: "text-zinc-400", border: "border-zinc-500/30" },
+  unknown: { bg: "bg-zinc-500/20", text: "text-zinc-400", border: "border-zinc-500/30" },
 };
 
 const LOCATION_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -22,27 +22,44 @@ const LOCATION_COLORS: Record<string, { bg: string; text: string; border: string
   ccu_chain: { bg: "bg-purple-500/20", text: "text-purple-400", border: "border-purple-500/30" },
 };
 
-function getShipThumbUrl(name: string): string {
-  let n = name || "";
-  const MFR_PREFIXES = [
-    "Aegis", "RSI", "Drake", "MISC", "Anvil", "Origin", "Crusader", "Argo",
-    "Aopoa", "Consolidated Outland", "Esperia", "Gatac", "Greycat", "Kruger",
-    "Musashi Industrial", "Tumbril", "Banu", "Vanduul", "Roberts Space Industries",
-    "Crusader Industries", "Musashi", "CO",
-  ];
-  for (const m of MFR_PREFIXES) {
-    if (n.startsWith(m + " ")) { n = n.slice(m.length + 1); break; }
-  }
-  const slug = n.toLowerCase().replace(/[''()]/g, "").replace(/\s+/g, "-").replace(/[^a-z0-9._-]/g, "-").replace(/-+/g, "-").replace(/-$/, "");
+const INSURANCE_LABELS: Record<string, string> = {
+  LTI: "LTI",
+  "120_months": "120m",
+  "72_months": "72m",
+  "48_months": "48m",
+  "24_months": "24m",
+  "6_months": "6m",
+  "3_months": "3m",
+  unknown: "—",
+};
+
+/**
+ * Build a local ship thumbnail URL from the ship name.
+ * Maps "Gladius" → "/ships/gladius.jpg", "Zeus Mk II ES" → "/ships/zeus-mk-ii-es.jpg"
+ */
+function getShipThumbUrl(shipName: string): string {
+  if (!shipName) return "";
+  const slug = shipName
+    .toLowerCase()
+    .replace(/[''()]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/-$/, "");
   return `/ships/${slug}.jpg`;
 }
 
 export function HangarShipCard({ ship }: { ship: HangarShip }) {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [imgError, setImgError] = useState(false);
   const removeShip = useHangarStore((state) => state.removeShip);
 
-  const thumbUrl = getShipThumbUrl(ship.pledgeName);
+  // Use shipName for local image, fallback to RSI CDN imageUrl, then pledge name
+  const displayName = ship.shipName || extractNameFromPledge(ship.pledgeName);
+  const localThumb = getShipThumbUrl(displayName);
+  const fallbackImg = ship.imageUrl && !ship.imageUrl.includes("default-image") ? ship.imageUrl : "";
+
   const insuranceColor = INSURANCE_COLORS[ship.insuranceType] || INSURANCE_COLORS.unknown;
   const locationColor = LOCATION_COLORS[ship.location];
 
@@ -54,94 +71,152 @@ export function HangarShipCard({ ship }: { ship: HangarShip }) {
   return (
     <>
       <article className="relative overflow-hidden rounded-sm bg-zinc-900/60 backdrop-blur-sm border border-zinc-800/50 transition-all duration-300 hover:border-cyan-500/40 hover:bg-zinc-900/80 hover:shadow-[0_0_30px_-8px_rgba(6,182,212,0.15)] group">
-        {/* Background ship image */}
-        <div
-          className="absolute inset-0 bg-cover bg-center opacity-[0.22] group-hover:opacity-[0.35] transition-opacity duration-500 pointer-events-none"
-          style={{ backgroundImage: `url(${thumbUrl})` }}
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/80 to-zinc-900/40 pointer-events-none" />
-        <div className="relative z-10">
-          <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-zinc-700/50 to-transparent group-hover:via-cyan-500/60 transition-all duration-500" />
-          <div className="p-4">
-            {/* Header with delete button */}
-            <div className="flex items-start justify-between gap-2 mb-3">
-              <Link href={`/ships/${ship.shipReference}`} className="flex-1 min-w-0 group/link hover:opacity-80 transition-opacity">
-                <h3 className="font-medium tracking-wide text-zinc-100 truncate text-[14px] group-hover/link:text-cyan-50 transition-colors">
-                  {ship.pledgeName}
-                </h3>
-              </Link>
-              {showDeleteConfirm ? (
-                <button
-                  onClick={handleDelete}
-                  className="text-[11px] px-1.5 py-0.5 bg-red-500/30 border border-red-500/50 rounded-sm text-red-400 hover:bg-red-500/40 transition-all duration-300"
-                >
-                  Confirm
-                </button>
-              ) : (
-                <button
-                  onClick={() => setShowDeleteConfirm(true)}
-                  className="text-xs text-zinc-400 hover:text-red-400 transition-colors duration-300 opacity-0 group-hover:opacity-100"
-                  title="Delete ship"
-                >
-                  ✕
-                </button>
+        {/* ── Ship Image ── */}
+        <div className="relative h-36 overflow-hidden bg-zinc-900">
+          {!imgError && localThumb ? (
+            <img
+              src={localThumb}
+              alt={displayName}
+              className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-500"
+              onError={() => setImgError(true)}
+            />
+          ) : fallbackImg ? (
+            <img
+              src={fallbackImg}
+              alt={displayName}
+              className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-all duration-500"
+            />
+          ) : (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-3xl text-zinc-700">🚀</span>
+            </div>
+          )}
+          {/* Gradient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/50 to-transparent" />
+
+          {/* Badges overlaid on image */}
+          <div className="absolute top-2 left-2 flex gap-1.5 z-10">
+            <span
+              className={`text-[10px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm ${insuranceColor.bg} ${insuranceColor.text} border ${insuranceColor.border}`}
+            >
+              {INSURANCE_LABELS[ship.insuranceType] || "—"}
+            </span>
+            <span
+              className={`text-[10px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm ${locationColor.bg} ${locationColor.text} border ${locationColor.border}`}
+            >
+              {ship.location === "hangar" ? "Hangar" : ship.location === "buyback" ? "Buyback" : "CCU"}
+            </span>
+          </div>
+
+          {/* Delete button */}
+          <div className="absolute top-2 right-2 z-10">
+            {showDeleteConfirm ? (
+              <button
+                onClick={handleDelete}
+                className="text-[11px] px-1.5 py-0.5 bg-red-500/30 backdrop-blur-sm border border-red-500/50 rounded-sm text-red-400 hover:bg-red-500/40 transition-all duration-300"
+              >
+                Confirm
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="text-xs text-zinc-400 hover:text-red-400 transition-colors duration-300 opacity-0 group-hover:opacity-100 bg-zinc-900/60 backdrop-blur-sm rounded-full w-6 h-6 flex items-center justify-center"
+                title="Delete ship"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+
+          {/* Ship name overlaid at bottom of image */}
+          <div className="absolute bottom-2 left-3 right-3 z-10">
+            <p className="text-[13px] font-semibold text-white drop-shadow-lg truncate">
+              {displayName}
+            </p>
+          </div>
+        </div>
+
+        {/* ── Card Body ── */}
+        <div className="relative z-10 p-3 space-y-2.5">
+          {/* Top line accent */}
+          <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-zinc-700/50 to-transparent group-hover:via-cyan-500/60 transition-all duration-500" />
+
+          {/* Pledge name (if different from ship name) */}
+          {ship.pledgeName !== displayName && (
+            <p className="text-[10px] text-zinc-500 truncate">{ship.pledgeName}</p>
+          )}
+
+          {/* Price */}
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[10px] text-zinc-500 tracking-[0.12em] uppercase">Pledge</p>
+              <p className="text-[14px] text-zinc-200 font-mono font-medium">
+                ${ship.pledgePrice.toLocaleString()}
+              </p>
+            </div>
+            <div className="flex gap-1.5">
+              {ship.isGiftable && (
+                <span className="px-1.5 py-0.5 bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 rounded text-[9px]">
+                  Gift
+                </span>
+              )}
+              {ship.isMeltable && (
+                <span className="px-1.5 py-0.5 bg-amber-500/15 text-amber-400 border border-amber-500/25 rounded text-[9px]">
+                  Melt
+                </span>
               )}
             </div>
-
-            {/* Insurance Badge */}
-            <div className="mb-3 flex flex-wrap gap-2">
-              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${insuranceColor.bg} ${insuranceColor.text} border ${insuranceColor.border}`}>
-                {ship.insuranceType === "LTI" ? "LTI" : ship.insuranceType === "120_months" ? "120m" : ship.insuranceType === "72_months" ? "72m" : ship.insuranceType === "48_months" ? "48m" : ship.insuranceType === "24_months" ? "24m" : ship.insuranceType === "6_months" ? "6m" : ship.insuranceType === "3_months" ? "3m" : "Unknown"}
-              </span>
-              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${locationColor.bg} ${locationColor.text} border ${locationColor.border}`}>
-                {ship.location === "hangar" ? "Hangar" : ship.location === "buyback" ? "Buyback" : "CCU"}
-              </span>
-            </div>
-
-            {/* Price */}
-            <div className="mb-3 p-2 bg-zinc-800/30 rounded-sm">
-              <p className="text-[11px] text-zinc-500 tracking-[0.12em] uppercase">Pledge Price</p>
-              <p className="text-[13px] text-zinc-300 font-mono mt-0.5">${ship.pledgePrice.toLocaleString()}</p>
-            </div>
-
-            {/* Giftable/Meltable indicators */}
-            {(ship.isGiftable || ship.isMeltable) && (
-              <div className="mb-3 flex gap-2 text-[10px]">
-                {ship.isGiftable && <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-sm">Giftable</span>}
-                {ship.isMeltable && <span className="px-2 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-sm">Meltable</span>}
-              </div>
-            )}
-
-            {/* Notes preview */}
-            {ship.notes && (
-              <div className="mb-3 p-2 bg-zinc-800/20 rounded-sm border border-zinc-800/30">
-                <p className="text-[10px] text-zinc-400 line-clamp-2">{ship.notes}</p>
-              </div>
-            )}
-
-            {/* Footer actions */}
-            <div className="flex items-center justify-between pt-3 border-t border-zinc-800/50">
-              <Link
-                href={`/ships/${ship.shipReference}`}
-                className="text-xs text-zinc-500 hover:text-cyan-400 transition-colors duration-300"
-              >
-                View Details
-              </Link>
-              <button
-                onClick={() => setShowEditModal(true)}
-                className="text-xs text-zinc-500 hover:text-amber-400 transition-colors duration-300"
-              >
-                Edit
-              </button>
-            </div>
           </div>
-          <div className="absolute bottom-0 right-0 w-8 h-8 border-b border-r border-transparent group-hover:border-cyan-500/30 transition-colors duration-500" />
-          <div className="absolute top-0 left-0 w-8 h-8 border-t border-l border-transparent group-hover:border-cyan-500/20 transition-colors duration-500" />
+
+          {/* Notes */}
+          {ship.notes && (
+            <p className="text-[10px] text-zinc-500 line-clamp-1 bg-zinc-800/30 rounded px-2 py-1">
+              {ship.notes}
+            </p>
+          )}
+
+          {/* Footer */}
+          <div className="flex items-center justify-between pt-2 border-t border-zinc-800/50">
+            <Link
+              href={`/ships/${ship.shipReference}`}
+              className="text-[11px] text-zinc-500 hover:text-cyan-400 transition-colors duration-300"
+            >
+              View Details
+            </Link>
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="text-[11px] text-zinc-500 hover:text-amber-400 transition-colors duration-300"
+            >
+              Edit
+            </button>
+          </div>
         </div>
+
+        {/* Corner accents */}
+        <div className="absolute bottom-0 right-0 w-6 h-6 border-b border-r border-transparent group-hover:border-cyan-500/30 transition-colors duration-500" />
+        <div className="absolute top-0 left-0 w-6 h-6 border-t border-l border-transparent group-hover:border-cyan-500/20 transition-colors duration-500" />
       </article>
 
-      {/* Edit Modal */}
       {showEditModal && <EditShipModal ship={ship} onClose={() => setShowEditModal(false)} />}
     </>
   );
+}
+
+/**
+ * Quick helper to extract ship name from pledge name if shipName is empty
+ */
+function extractNameFromPledge(pledgeName: string): string {
+  let name = pledgeName;
+  const prefixes = ["Standalone Ships - ", "Package - "];
+  for (const p of prefixes) {
+    if (name.startsWith(p)) {
+      name = name.slice(p.length);
+      break;
+    }
+  }
+  name = name.replace(
+    /\s*-\s*(10 Year|Best in Show.*|upgraded|Warbond.*|Standard Edition.*|IAE.*|Invictus.*)$/i,
+    ""
+  );
+  return name.trim();
 }
