@@ -148,29 +148,127 @@ const SLUG_FIXES: Record<string, string> = {
   "e1 spirit": "e1-spirit",
   "scorpius antares": "scorpius-antares",
   "ironclad assault": "ironclad-assault",
+  // Hawk variants
+  "hawk": "hawk",
+  "hawk iii": "hawk",
+  "hawk ii": "hawk",
+  // F7C-M without Mk suffix
+  "f7c m super hornet": "f7c-m-super-hornet-mk-ii",
+  "f7c-m super hornet": "f7c-m-super-hornet-mk-ii",
+  "f7c hornet": "f7c-hornet-mk-ii",
+  "f7c-r hornet tracker": "f7c-r-hornet-tracker-mk-ii",
+  "f7c-s hornet ghost": "f7c-s-hornet-ghost-mk-ii",
+  // Prowler
+  "prowler": "prowler",
+  "prowler utility": "prowler-utility",
+  // Ranger
+  "ranger rc": "ranger-rc",
+  "ranger cv": "ranger-cv",
+  "ranger tr": "ranger-tr",
+  // Razor
+  "razor": "razor",
+  "razor ex": "razor-ex",
+  "razor lx": "razor-lx",
+  // SRV
+  "srv": "srv",
+  // Misc fixes
+  "c8r pisces rescue": "c8r-pisces-rescue",
+  "prospector": "prospector",
+  "salvation": "salvation",
+  "freelancer": "freelancer",
+  "freelancer max": "freelancer-max",
+  "freelancer mis": "freelancer-mis",
+  "freelancer dur": "freelancer-dur",
+  "caterpillar": "caterpillar",
+  "vulture": "vulture",
+  "vulcan": "vulcan",
+  "reclaimer": "reclaimer",
+  "retaliator bomber": "retaliator-bomber",
+  "retaliator base": "retaliator-base",
+  "sabre": "sabre",
+  "sabre comet": "sabre-comet",
+  "gladius": "gladius",
+  "gladius valiant": "gladius-valiant",
+  "harbinger": "vanguard-harbinger",
+  "warden": "vanguard-warden",
+  "sentinel": "vanguard-sentinel",
+  "hoplite": "vanguard-hoplite",
+  "andromeda": "constellation-andromeda",
+  "aquila": "constellation-aquila",
+  "phoenix": "constellation-phoenix",
+  "taurus": "constellation-taurus",
+  "carrack": "carrack",
+  "carrack expedition": "carrack-expedition",
+  "perseus": "perseus",
+  "polaris": "polaris",
+  "idris-m": "idris-m",
+  "idris-p": "idris-p",
+  "javelin": "javelin",
+  "kraken": "kraken",
+  "kraken privateer": "kraken-privateer",
+  "pioneer": "pioneer",
+  "endeavor": "endeavor",
+  "orion": "orion",
+  "bmm": "merchantman",
+  "merchantman": "merchantman",
+  "banu merchantman": "merchantman",
+  "defender": "defender",
+  "banu defender": "defender",
+  "blade": "blade",
+  "glaive": "glaive",
+  "scythe": "scythe",
+  "nox": "nox",
+  "nox kue": "nox-kue",
+  "khartu-al": "khartu-al",
+  "santokyai": "santok.y-i",
 };
 
+// Manufacturer prefixes to strip from ship names when building image slugs
+const MFR_PREFIXES = [
+  "Aegis Dynamics", "Aegis", "Anvil Aerospace", "Anvil", "Argo Astronautics", "Argo",
+  "Aopoa", "Banu", "BIRC", "C.O.", "CO", "Consolidated Outland",
+  "Crusader Industries", "Crusader", "Drake Interplanetary", "Drake",
+  "Esperia", "Gatac", "Greycat Industrial", "Greycat",
+  "Kruger Intergalactic", "Kruger", "MISC", "Musashi Industrial",
+  "Origin Jumpworks", "Origin", "Roberts Space Industries", "RSI",
+  "Tumbril Land Systems", "Tumbril", "Vanduul", "mirai",
+];
+
 /**
- * Clean ship name by removing edition suffixes (Standard Edition, Warbond Edition, etc.)
+ * Clean ship name by removing edition suffixes and manufacturer prefixes
  */
 function cleanShipName(name: string): string {
-  return name
+  let cleaned = name
     .replace(/\s*[-–]?\s*(Standard|Warbond)\s*(Edition)?.*$/i, "")
     .replace(/\s*[-–]\s*(LTI|IAE|Invictus|BIS|Best in Show|Anniversary|Citizencon).*$/i, "")
     .trim();
+
+  // Strip manufacturer prefix (case-insensitive)
+  for (const mfr of MFR_PREFIXES) {
+    if (cleaned.toLowerCase().startsWith(mfr.toLowerCase() + " ")) {
+      cleaned = cleaned.slice(mfr.length + 1).trim();
+      break;
+    }
+  }
+
+  return cleaned;
 }
 
 /**
  * Build a local ship thumbnail URL from the ship name.
- * Maps "Gladius" → "/ships/gladius.jpg", "Zeus Mk II ES" → "/ships/zeus-mk-ii-es.jpg"
+ * Maps "Gladius" → "/ships/gladius.jpg", "Anvil F7C Hornet Mk II" → "/ships/f7c-hornet-mk-ii.jpg"
  */
 function getShipThumbUrl(shipName: string): string {
   if (!shipName) return "";
   const cleaned = cleanShipName(shipName);
   const lower = cleaned.toLowerCase().trim();
 
-  // Check fixed mappings first
+  // Check fixed mappings first (try with and without manufacturer)
   if (SLUG_FIXES[lower]) return `/ships/${SLUG_FIXES[lower]}.jpg`;
+
+  // Also try the original name lowercased (in case SLUG_FIXES has the full name)
+  const originalLower = shipName.toLowerCase().trim();
+  if (SLUG_FIXES[originalLower]) return `/ships/${SLUG_FIXES[originalLower]}.jpg`;
 
   const slug = lower
     .replace(/[''()]/g, "")
