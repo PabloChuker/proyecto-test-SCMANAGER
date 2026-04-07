@@ -415,14 +415,23 @@ export async function GET(
   try {
     const { id } = await params;
 
-    // ── 1. Find the ship ──
+    // ── 1. Find the ship (exact matches prioritized over partial) ──
     const shipRows: any[] = await prisma.$queryRawUnsafe(
-      `SELECT * FROM ships
+      `SELECT *,
+         CASE
+           WHEN reference = $1 THEN 0
+           WHEN reference ILIKE $1 THEN 1
+           WHEN id::text = $1 THEN 2
+           WHEN name ILIKE $1 THEN 3
+           WHEN reference ILIKE '%' || $1 || '%' THEN 4
+         END AS match_rank
+       FROM ships
        WHERE reference = $1
           OR reference ILIKE $1
           OR name ILIKE $1
           OR id::text = $1
           OR reference ILIKE '%' || $1 || '%'
+       ORDER BY match_rank ASC
        LIMIT 1`,
       String(id),
     );
