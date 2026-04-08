@@ -165,6 +165,18 @@ export default function Header({ subtitle }: HeaderProps) {
                     Party
                   </Link>
                   <div className="my-1 border-t border-zinc-800/50" />
+                  <Link
+                    href="/my-account"
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800/60 hover:text-zinc-100 transition-colors"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M20 7h-3a2 2 0 0 1-2-2V2" /><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+                      <path d="M12 18v-6" /><path d="M9 15h6" />
+                    </svg>
+                    Mi Cuenta
+                  </Link>
+                  <div className="my-1 border-t border-zinc-800/50" />
                   <button
                     onClick={() => { setMenuOpen(false); signOut(); }}
                     className="flex items-center gap-2.5 px-3 py-2 text-xs text-red-400/80 hover:bg-red-500/10 hover:text-red-400 transition-colors w-full text-left"

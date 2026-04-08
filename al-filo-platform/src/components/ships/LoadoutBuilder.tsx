@@ -18,6 +18,8 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLoadoutStore } from "@/store/useLoadoutStore";
 import type { ResolvedHardpoint, EquippedItem } from "@/store/useLoadoutStore";
+import { useAuth } from "@/contexts/AuthContext";
+import { createClient } from "@/lib/supabase/client";
 import { HardpointSlot, isUsefulSlot } from "./HardpointSlot";
 import { ComponentPicker } from "./ComponentPicker";
 import { PowerManagementPanel } from "./PowerManagementPanel";
@@ -331,6 +333,10 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 
   const [pickerHp, setPickerHp] = useState<ResolvedHardpoint | null>(null);
   const [copied, setCopied] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveModal, setSaveModal] = useState(false);
+  const [saveName, setSaveName] = useState("");
   const mountedRef = useRef(false);
   const overrideCountRef = useRef(0);
 
@@ -403,9 +409,67 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const cmDecoyCount = cmHps.filter(hp => hp.hardpointName.toLowerCase().includes("decoy")).length;
   const cmNoiseCount = cmHps.filter(hp => hp.hardpointName.toLowerCase().includes("noise")).length;
 
+  const { user } = useAuth();
+  const supabaseClient = createClient();
+
   const handleSelect = useCallback((item: EquippedItem) => { if (!pickerHp) return; equipItem(pickerHp.id, item); setPickerHp(null); }, [pickerHp, equipItem]);
   const handleClear = useCallback(() => { if (!pickerHp) return; clearSlot(pickerHp.id); setPickerHp(null); }, [pickerHp, clearSlot]);
   const handleCopyLink = useCallback(() => { navigator.clipboard.writeText(window.location.href).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }, []);
+
+  const handleSaveLoadout = useCallback(async () => {
+    if (!user || !shipInfo || !saveName.trim()) return;
+    setSaving(true);
+    const buildCode = encodeBuild();
+
+    // Save loadout
+    const { data: loadout } = await supabaseClient.from("user_loadouts").insert({
+      user_id: user.id,
+      ship_id: shipInfo.reference,
+      ship_name: shipInfo.name,
+      name: saveName.trim(),
+      build_code: buildCode,
+    }).select().single();
+
+    if (loadout) {
+      // Save individual components
+      const items: { loadout_id: string; hardpoint_name: string; item_reference: string; item_name: string; item_type: string; item_size: number | null }[] = [];
+      for (const hp of hardpoints) {
+        const item = getEffectiveItem(hp.id);
+        if (item && item.type !== "FLIGHT_CONTROLLER" && item.type !== "SELF_DESTRUCT") {
+          items.push({
+            loadout_id: loadout.id,
+            hardpoint_name: hp.hardpointName,
+            item_reference: item.reference,
+            item_name: item.name,
+            item_type: item.type,
+            item_size: item.size,
+          });
+        }
+        // Also children (turret sub-weapons)
+        for (const child of hp.children) {
+          if (child.equippedItem) {
+            items.push({
+              loadout_id: loadout.id,
+              hardpoint_name: child.hardpointName,
+              item_reference: child.equippedItem.reference,
+              item_name: child.equippedItem.name,
+              item_type: child.equippedItem.type,
+              item_size: child.equippedItem.size,
+            });
+          }
+        }
+      }
+      if (items.length > 0) {
+        await supabaseClient.from("loadout_items").insert(items);
+      }
+    }
+
+    setSaving(false);
+    setSaved(true);
+    setSaveModal(false);
+    setSaveName("");
+    setTimeout(() => setSaved(false), 3000);
+  }, [user, shipInfo, saveName, encodeBuild, hardpoints, getEffectiveItem, supabaseClient]);
 
   if (isLoading) return (<div className="flex items-center justify-center py-20"><div className="w-4 h-4 border-2 border-zinc-800 border-t-yellow-500 rounded-full animate-spin mr-3" /><span className="text-xs text-zinc-600 font-mono uppercase tracking-widest">Loading...</span></div>);
   if (error) return <div className="border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-400 font-mono">{error}</div>;
@@ -429,6 +493,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
         </div>
         <div className="flex items-center gap-1.5">
           <button onClick={handleCopyLink} className={copied ? "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border bg-green-950/30 text-green-500 border-green-800/50" : "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-yellow-500 hover:border-yellow-800/50 transition-colors"}>{copied ? "COPIED" : "SHARE"}</button>
+          {user && (saved ? <span className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border bg-green-950/30 text-green-500 border-green-800/50">SAVED ✓</span> : <button onClick={() => { setSaveName(shipInfo?.name ? `${shipInfo.name} Build` : "Mi Build"); setSaveModal(true); }} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-emerald-500 hover:border-emerald-800/50 transition-colors">SAVE</button>)}
           {hasChanges() && <button onClick={resetAll} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-orange-500/80 border-zinc-800 hover:border-orange-800/50 transition-colors">RESET</button>}
           <button onClick={handleResetLayout} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-600 border-zinc-800 hover:text-cyan-500 hover:border-cyan-800/50 transition-colors" title="Reset panel layout to default">⟲ LAYOUT</button>
         </div>
@@ -444,6 +509,39 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
       </div>
 
       {pickerHp && <ComponentPicker hardpoint={pickerHp} currentItemId={getEffectiveItem(pickerHp.id)?.id ?? null} onSelect={handleSelect} onClear={handleClear} onClose={() => setPickerHp(null)} />}
+
+      {/* Save Loadout Modal */}
+      {saveModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setSaveModal(false)}>
+          <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4 w-80 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm text-zinc-200 font-medium">Guardar Loadout</h3>
+            <input
+              type="text"
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSaveLoadout()}
+              placeholder="Nombre del loadout..."
+              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
+              autoFocus
+            />
+            <div className="text-xs text-zinc-500">
+              {shipInfo?.name} • {overrides.size} componentes modificados
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveLoadout}
+                disabled={saving || !saveName.trim()}
+                className="flex-1 py-1.5 bg-emerald-600/80 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-950 text-sm font-medium rounded transition-colors"
+              >
+                {saving ? "Guardando..." : "Guardar"}
+              </button>
+              <button onClick={() => setSaveModal(false)} className="px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-sm rounded transition-colors">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

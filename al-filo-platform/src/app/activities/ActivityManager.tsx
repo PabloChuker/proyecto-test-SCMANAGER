@@ -364,9 +364,31 @@ export default function ActivityManager() {
     setLootEntries((prev) => prev.filter((e) => e.id !== id));
   }, []);
 
-  // ── Lottery ──
-  const runLottery = useCallback(() => {
+  // ── Lottery (wishlist-aware) ──
+  const runLottery = useCallback(async () => {
     if (participants.length === 0 || flatLoot.length === 0) return;
+
+    // Pre-load wishlists for party-based participants (they have real user IDs)
+    const partyParticipantIds = participants.filter((p) => p.isFromParty).map((p) => p.id);
+    let wishlists: Record<string, Set<string>> = {};
+
+    if (partyParticipantIds.length > 0) {
+      try {
+        const { data } = await supabase
+          .from("user_wishlist")
+          .select("user_id, item_name, priority")
+          .in("user_id", partyParticipantIds);
+        if (data) {
+          for (const row of data) {
+            if (!wishlists[row.user_id]) wishlists[row.user_id] = new Set();
+            wishlists[row.user_id].add(row.item_name.toLowerCase());
+          }
+        }
+      } catch {
+        // If wishlist fetch fails, proceed without — pure lottery
+      }
+    }
+
     setIsRolling(true);
     setSaved(false);
     let rollCount = 0;
@@ -377,21 +399,55 @@ export default function ActivityManager() {
         if (rollRef.current) clearInterval(rollRef.current);
         setIsRolling(false);
         setRollingName("");
-        const shuffledItems = shuffleArray(flatLoot);
+
         const resultMap: Record<string, { participantName: string; items: typeof flatLoot }> = {};
         for (const p of participants) resultMap[p.id] = { participantName: p.name, items: [] };
+
         const ordered = weightedShuffle(participants);
-        shuffledItems.forEach((item, idx) => {
+        const maxPerPerson = Math.ceil(flatLoot.length / participants.length);
+
+        // Separate wishlisted items from generic items
+        const wishlistedItems: { item: (typeof flatLoot)[0]; wanters: string[] }[] = [];
+        const genericItems: (typeof flatLoot)[0][] = [];
+
+        for (const item of shuffleArray(flatLoot)) {
+          const wanters = ordered
+            .filter((p) => wishlists[p.id]?.has(item.itemName.toLowerCase()))
+            .map((p) => p.id);
+          if (wanters.length > 0) {
+            wishlistedItems.push({ item, wanters });
+          } else {
+            genericItems.push(item);
+          }
+        }
+
+        // Distribute wishlisted items first — give to the wanter who has fewest items so far
+        for (const { item, wanters } of wishlistedItems) {
+          const eligible = wanters
+            .filter((id) => resultMap[id].items.length < maxPerPerson)
+            .sort((a, b) => resultMap[a].items.length - resultMap[b].items.length);
+          if (eligible.length > 0) {
+            resultMap[eligible[0]].items.push(item);
+          } else {
+            genericItems.push(item); // Nobody can take it, fallback to generic
+          }
+        }
+
+        // Distribute remaining generic items round-robin
+        let idx = 0;
+        for (const item of shuffleArray(genericItems)) {
           const p = ordered[idx % ordered.length];
           resultMap[p.id].items.push(item);
-        });
+          idx++;
+        }
+
         setResults(Object.entries(resultMap).map(([pid, data]) => ({
           participantId: pid, participantName: data.participantName, items: data.items,
         })));
         setDraftResults(null);
       }
     }, 100);
-  }, [participants, flatLoot]);
+  }, [participants, flatLoot, supabase]);
 
   // ── Draft ──
   const runDraft = useCallback(() => {
