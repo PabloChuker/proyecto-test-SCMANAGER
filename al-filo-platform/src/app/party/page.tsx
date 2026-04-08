@@ -40,25 +40,16 @@ export default function PartyPage() {
 
   const [myParty, setMyParty] = useState<Party | null>(null);
   const [partyMembers, setPartyMembers] = useState<PartyMember[]>([]);
-  const [publicParties, setPublicParties] = useState<(Party & { memberCount: number; leaderName: string })[]>([]);
   const [activities, setActivities] = useState<ActivityType[]>(activityTypesFallback as ActivityType[]);
-  const [tab, setTab] = useState<"party" | "create" | "browse">("party");
-
-  // Create form
-  const [partyName, setPartyName] = useState("");
-  const [partyActivity, setPartyActivity] = useState("");
-  const [partyMax, setPartyMax] = useState(4);
   const [creating, setCreating] = useState(false);
 
-  // Invite
-  const [inviteSearch, setInviteSearch] = useState("");
-  const [inviteResults, setInviteResults] = useState<Profile[]>([]);
+  // Online friends for quick invite
+  const [onlineFriends, setOnlineFriends] = useState<Profile[]>([]);
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
   }, [user, loading, router]);
 
-  // Load activities
   useEffect(() => {
     fetch("/api/activities/types")
       .then((r) => r.json())
@@ -66,10 +57,33 @@ export default function PartyPage() {
       .catch(() => {});
   }, []);
 
+  // Load online friends
+  const loadOnlineFriends = useCallback(async () => {
+    if (!user) return;
+    // Get accepted friendships
+    const { data: friendships } = await supabase
+      .from("friendships")
+      .select("requester_id, addressee_id")
+      .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
+      .eq("status", "accepted");
+
+    if (!friendships || friendships.length === 0) { setOnlineFriends([]); return; }
+
+    const friendIds = friendships.map((f) =>
+      f.requester_id === user.id ? f.addressee_id : f.requester_id
+    );
+
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("*")
+      .in("id", friendIds)
+      .eq("is_online", true);
+
+    setOnlineFriends((profiles ?? []) as Profile[]);
+  }, [user, supabase]);
+
   const loadMyParty = useCallback(async () => {
     if (!user) return;
-
-    // Check if user is in any party
     const { data: membership } = await supabase
       .from("party_members")
       .select("party_id")
@@ -91,8 +105,6 @@ export default function PartyPage() {
 
     if (party) {
       setMyParty(party as Party);
-
-      // Load members
       const { data: members } = await supabase
         .from("party_members")
         .select("*")
@@ -117,76 +129,34 @@ export default function PartyPage() {
     }
   }, [user, supabase]);
 
-  const loadPublicParties = useCallback(async () => {
-    const { data: parties } = await supabase
-      .from("parties")
-      .select("*")
-      .eq("status", "forming")
-      .order("created_at", { ascending: false })
-      .limit(20);
-
-    if (parties && parties.length > 0) {
-      // Get member counts and leader names
-      const results = await Promise.all(
-        (parties as Party[]).map(async (p) => {
-          const { count } = await supabase
-            .from("party_members")
-            .select("*", { count: "exact", head: true })
-            .eq("party_id", p.id);
-
-          const { data: leader } = await supabase
-            .from("profiles")
-            .select("display_name, username")
-            .eq("id", p.leader_id)
-            .single();
-
-          return {
-            ...p,
-            memberCount: count ?? 0,
-            leaderName: leader?.display_name ?? leader?.username ?? "Unknown",
-          };
-        })
-      );
-
-      setPublicParties(results);
-    }
-  }, [supabase]);
-
   useEffect(() => {
     loadMyParty();
-    loadPublicParties();
-  }, [loadMyParty, loadPublicParties]);
+    loadOnlineFriends();
+  }, [loadMyParty, loadOnlineFriends]);
 
-  // Realtime for party changes
+  // Realtime
   useEffect(() => {
     if (!user) return;
-
     const channel = supabase
       .channel("party-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "party_members" }, () => {
-        loadMyParty();
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "parties" }, () => {
-        loadMyParty();
-        loadPublicParties();
-      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "party_members" }, () => { loadMyParty(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "parties" }, () => { loadMyParty(); })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, () => { loadOnlineFriends(); })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
-  }, [user, supabase, loadMyParty, loadPublicParties]);
+  }, [user, supabase, loadMyParty, loadOnlineFriends]);
 
+  // Create party — volatile session, no name needed
   const createParty = useCallback(async () => {
-    if (!user || !partyName.trim()) return;
+    if (!user) return;
     setCreating(true);
-
     const { data: newParty } = await supabase
       .from("parties")
       .insert({
-        name: partyName.trim(),
+        name: `Party de ${user.user_metadata?.full_name ?? "Jugador"}`,
         leader_id: user.id,
-        activity_type: partyActivity || null,
-        max_members: partyMax,
-        status: "forming",
+        max_members: 8,
+        status: "active",
       })
       .select()
       .single();
@@ -198,81 +168,56 @@ export default function PartyPage() {
         role: "leader",
       });
       await loadMyParty();
-      setTab("party");
     }
     setCreating(false);
-  }, [user, partyName, partyActivity, partyMax, supabase, loadMyParty]);
-
-  const joinParty = useCallback(
-    async (partyId: string) => {
-      if (!user) return;
-      await supabase.from("party_members").insert({
-        party_id: partyId,
-        user_id: user.id,
-        role: "member",
-      });
-      await loadMyParty();
-      setTab("party");
-    },
-    [user, supabase, loadMyParty]
-  );
+  }, [user, supabase, loadMyParty]);
 
   const leaveParty = useCallback(async () => {
     if (!user || !myParty) return;
+    await supabase.from("party_members").delete().eq("party_id", myParty.id).eq("user_id", user.id);
 
-    await supabase
+    // Check remaining members
+    const { count } = await supabase
       .from("party_members")
-      .delete()
-      .eq("party_id", myParty.id)
-      .eq("user_id", user.id);
+      .select("*", { count: "exact", head: true })
+      .eq("party_id", myParty.id);
 
-    // If leader leaves, disband
-    if (myParty.leader_id === user.id) {
-      await supabase.from("party_members").delete().eq("party_id", myParty.id);
+    // If no one left, delete the party (volatile)
+    if (!count || count === 0) {
       await supabase.from("parties").delete().eq("id", myParty.id);
+    } else if (myParty.leader_id === user.id) {
+      // Transfer leadership to first remaining member
+      const { data: next } = await supabase
+        .from("party_members")
+        .select("user_id")
+        .eq("party_id", myParty.id)
+        .limit(1)
+        .single();
+      if (next) {
+        await supabase.from("parties").update({ leader_id: next.user_id }).eq("id", myParty.id);
+        await supabase.from("party_members").update({ role: "leader" }).eq("party_id", myParty.id).eq("user_id", next.user_id);
+      }
     }
 
     setMyParty(null);
     setPartyMembers([]);
   }, [user, myParty, supabase]);
 
-  const removeMember = useCallback(
-    async (userId: string) => {
-      if (!myParty) return;
-      await supabase
-        .from("party_members")
-        .delete()
-        .eq("party_id", myParty.id)
-        .eq("user_id", userId);
-      loadMyParty();
-    },
-    [myParty, supabase, loadMyParty]
-  );
+  const removeMember = useCallback(async (userId: string) => {
+    if (!myParty) return;
+    await supabase.from("party_members").delete().eq("party_id", myParty.id).eq("user_id", userId);
+    loadMyParty();
+  }, [myParty, supabase, loadMyParty]);
 
-  const searchFriends = useCallback(async () => {
-    if (!inviteSearch.trim() || !user) return;
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .or(`username.ilike.%${inviteSearch}%,display_name.ilike.%${inviteSearch}%`)
-      .neq("id", user.id)
-      .limit(10);
-    setInviteResults((data ?? []) as Profile[]);
-  }, [inviteSearch, user, supabase]);
-
-  const inviteToParty = useCallback(
-    async (userId: string) => {
-      if (!myParty) return;
-      await supabase.from("party_members").insert({
-        party_id: myParty.id,
-        user_id: userId,
-        role: "member",
-      });
-      loadMyParty();
-      setInviteResults((prev) => prev.filter((p) => p.id !== userId));
-    },
-    [myParty, supabase, loadMyParty]
-  );
+  const inviteToParty = useCallback(async (userId: string) => {
+    if (!myParty) return;
+    await supabase.from("party_members").insert({
+      party_id: myParty.id,
+      user_id: userId,
+      role: "member",
+    });
+    loadMyParty();
+  }, [myParty, supabase, loadMyParty]);
 
   if (loading || !user) {
     return (
@@ -284,6 +229,10 @@ export default function PartyPage() {
 
   const isLeader = myParty?.leader_id === user.id;
   const activityName = activities.find((a) => a.id === myParty?.activity_type)?.name;
+  // Friends not already in party
+  const invitableFriends = onlineFriends.filter(
+    (f) => !partyMembers.some((m) => m.user_id === f.id)
+  );
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
@@ -304,150 +253,129 @@ export default function PartyPage() {
 
         <div className="flex-1 z-10 relative px-4 py-6 overflow-y-auto">
           <div className="max-w-2xl mx-auto space-y-6">
-            {/* Tabs */}
-            <div className="flex gap-2 border-b border-zinc-800/60 pb-2">
-              <button onClick={() => setTab("party")} className={`px-4 py-2 text-sm tracking-wider uppercase transition-all ${tab === "party" ? "text-amber-400 border-b-2 border-amber-500" : "text-zinc-500 hover:text-zinc-400 border-b-2 border-transparent"}`}>
-                🎮 Mi Party
-              </button>
-              {!myParty && (
-                <>
-                  <button onClick={() => setTab("create")} className={`px-4 py-2 text-sm tracking-wider uppercase transition-all ${tab === "create" ? "text-amber-400 border-b-2 border-amber-500" : "text-zinc-500 hover:text-zinc-400 border-b-2 border-transparent"}`}>
-                    + Crear
-                  </button>
-                  <button onClick={() => { setTab("browse"); loadPublicParties(); }} className={`px-4 py-2 text-sm tracking-wider uppercase transition-all ${tab === "browse" ? "text-amber-400 border-b-2 border-amber-500" : "text-zinc-500 hover:text-zinc-400 border-b-2 border-transparent"}`}>
-                    🔍 Buscar
-                  </button>
-                </>
-              )}
-            </div>
 
-            {/* My Party */}
-            {tab === "party" && (
-              <>
-                {!myParty ? (
-                  <div className="text-center text-zinc-500 py-8">
-                    <div className="text-4xl mb-3">🎮</div>
-                    <p>No estas en ninguna party.</p>
-                    <p className="text-xs mt-1">Crea una nueva o busca una publica.</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="p-4 rounded-lg border border-amber-500/20 bg-zinc-900/40">
-                      <div className="flex items-center gap-3 mb-2">
-                        <div className="text-2xl">🎮</div>
-                        <div className="flex-1">
-                          <h2 className="text-lg text-zinc-100">{myParty.name}</h2>
-                          <div className="text-xs text-zinc-500">
-                            {activityName ?? "Sin actividad"} • {partyMembers.length}/{myParty.max_members} miembros • {myParty.status}
-                          </div>
-                        </div>
-                        <button onClick={leaveParty} className="px-3 py-1 text-xs bg-zinc-700 hover:bg-red-600/80 text-zinc-300 rounded transition-colors">
-                          {isLeader ? "Disolver" : "Salir"}
-                        </button>
-                      </div>
-                    </div>
+            {/* ═══ NO PARTY — Create or wait ═══ */}
+            {!myParty ? (
+              <div className="space-y-6">
+                <div className="text-center py-6">
+                  <div className="text-5xl mb-3">🎮</div>
+                  <p className="text-zinc-400">No estas en ninguna party</p>
+                  <button
+                    onClick={createParty}
+                    disabled={creating}
+                    className="mt-4 px-6 py-3 bg-amber-600/80 hover:bg-amber-600 disabled:bg-zinc-800 text-zinc-950 font-medium rounded-lg transition-colors text-sm"
+                  >
+                    {creating ? "Creando..." : "Crear Party"}
+                  </button>
+                </div>
 
-                    {/* Members */}
-                    <div className="space-y-2">
-                      <h3 className="text-xs text-zinc-500 uppercase tracking-wider">Miembros</h3>
-                      {partyMembers.map((m) => (
-                        <div key={m.user_id} className="flex items-center gap-3 p-2 rounded border border-zinc-800/40 bg-zinc-900/30">
+                {/* Online friends — quick invite after creating */}
+                {onlineFriends.length > 0 && (
+                  <div className="p-4 rounded-lg border border-zinc-800/50 bg-zinc-900/40">
+                    <h3 className="text-xs text-emerald-400 uppercase tracking-wider mb-3">
+                      Amigos Conectados ({onlineFriends.length})
+                    </h3>
+                    <div className="space-y-1.5">
+                      {onlineFriends.map((f) => (
+                        <div key={f.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-zinc-800/30">
                           <div className="relative">
-                            {m.profile.avatar_url ? (
-                              <img src={m.profile.avatar_url} alt="" className="w-8 h-8 rounded-full" />
+                            {f.avatar_url ? (
+                              <img src={f.avatar_url} alt="" className="w-7 h-7 rounded-full" />
                             ) : (
-                              <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center">👤</div>
+                              <div className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center text-xs">👤</div>
                             )}
-                            {m.profile.is_online && <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-zinc-900" />}
+                            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-zinc-900" />
                           </div>
-                          <span className="text-sm text-zinc-200 flex-1">{m.profile.display_name ?? m.profile.username}</span>
-                          <span className={`text-xs ${m.role === "leader" ? "text-amber-400" : "text-zinc-600"}`}>{m.role}</span>
-                          {isLeader && m.user_id !== user.id && (
-                            <button onClick={() => removeMember(m.user_id)} className="text-zinc-600 hover:text-red-400 text-xs">✕</button>
-                          )}
+                          <span className="text-sm text-zinc-300 flex-1">{f.display_name ?? f.username}</span>
                         </div>
                       ))}
                     </div>
-
-                    {/* Invite */}
-                    {isLeader && partyMembers.length < myParty.max_members && (
-                      <div className="p-3 rounded border border-zinc-800/50 bg-zinc-900/30 space-y-2">
-                        <h3 className="text-xs text-zinc-500 uppercase tracking-wider">Invitar</h3>
-                        <div className="flex gap-2">
-                          <input type="text" value={inviteSearch} onChange={(e) => setInviteSearch(e.target.value)} onKeyDown={(e) => e.key === "Enter" && searchFriends()} placeholder="Buscar amigo..." className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none" />
-                          <button onClick={searchFriends} className="px-3 py-1.5 bg-amber-600/80 hover:bg-amber-600 text-zinc-950 text-sm rounded">Buscar</button>
-                        </div>
-                        {inviteResults.map((p) => {
-                          const alreadyInParty = partyMembers.some((m) => m.user_id === p.id);
-                          return (
-                            <div key={p.id} className="flex items-center gap-2 p-1.5">
-                              <span className="text-sm text-zinc-300 flex-1">{p.display_name ?? p.username}</span>
-                              {alreadyInParty ? (
-                                <span className="text-xs text-zinc-500">Ya en party</span>
-                              ) : (
-                                <button onClick={() => inviteToParty(p.id)} className="px-2 py-0.5 text-xs bg-emerald-600/80 text-zinc-950 rounded">+ Invitar</button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
                   </div>
                 )}
-              </>
-            )}
-
-            {/* Create Party */}
-            {tab === "create" && (
-              <div className="p-4 rounded-lg border border-zinc-800/50 bg-zinc-900/40 space-y-4">
-                <h2 className="text-sm text-zinc-400 uppercase tracking-wider">Crear Party</h2>
-                <div>
-                  <label className="text-xs text-zinc-500 block mb-1">Nombre *</label>
-                  <input type="text" value={partyName} onChange={(e) => setPartyName(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:border-amber-500 focus:outline-none" placeholder="Ej: Contested Zone Run" />
-                </div>
-                <div>
-                  <label className="text-xs text-zinc-500 block mb-1">Actividad</label>
-                  <select value={partyActivity} onChange={(e) => setPartyActivity(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:border-amber-500 focus:outline-none">
-                    <option value="">Sin actividad especifica</option>
-                    {activities.map((a) => (
-                      <option key={a.id} value={a.id}>{a.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs text-zinc-500 block mb-1">Max miembros</label>
-                  <input type="number" min={2} max={50} value={partyMax} onChange={(e) => setPartyMax(parseInt(e.target.value) || 4)} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:border-amber-500 focus:outline-none" />
-                </div>
-                <button onClick={createParty} disabled={!partyName.trim() || creating} className="w-full py-2 bg-amber-600/80 hover:bg-amber-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-950 font-medium rounded transition-colors">
-                  {creating ? "Creando..." : "Crear Party"}
-                </button>
               </div>
-            )}
-
-            {/* Browse Parties */}
-            {tab === "browse" && (
-              <div className="space-y-3">
-                <h2 className="text-xs text-zinc-500 uppercase tracking-wider">Parties Abiertas</h2>
-                {publicParties.length === 0 ? (
-                  <div className="text-center text-zinc-500 py-8">No hay parties abiertas en este momento.</div>
-                ) : (
-                  publicParties.map((p) => (
-                    <div key={p.id} className="flex items-center gap-3 p-3 rounded border border-zinc-800/50 bg-zinc-900/40">
-                      <div className="text-xl">🎮</div>
-                      <div className="flex-1">
-                        <div className="text-sm text-zinc-200">{p.name}</div>
-                        <div className="text-xs text-zinc-500">
-                          Lider: {p.leaderName} • {p.memberCount}/{p.max_members} • {activities.find((a) => a.id === p.activity_type)?.name ?? "General"}
-                        </div>
+            ) : (
+              /* ═══ ACTIVE PARTY ═══ */
+              <div className="space-y-4">
+                {/* Party header */}
+                <div className="p-4 rounded-lg border border-amber-500/20 bg-zinc-900/40">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-xl">🎮</div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-amber-400 font-medium">Party Activa</span>
+                        <span className="text-xs text-zinc-600">•</span>
+                        <span className="text-xs text-zinc-500">{activityName ?? "General"}</span>
                       </div>
-                      {p.memberCount < p.max_members && (
-                        <button onClick={() => joinParty(p.id)} className="px-3 py-1 text-xs bg-emerald-600/80 text-zinc-950 rounded">Unirse</button>
+                      <div className="text-xs text-zinc-500 mt-0.5">
+                        {partyMembers.length}/{myParty.max_members} miembros
+                      </div>
+                    </div>
+                    <button onClick={leaveParty} className="px-3 py-1.5 text-xs bg-zinc-700 hover:bg-red-600/80 text-zinc-300 rounded transition-colors">
+                      {isLeader ? "Disolver" : "Salir"}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Members */}
+                <div className="space-y-1.5">
+                  <h3 className="text-xs text-zinc-500 uppercase tracking-wider">Miembros</h3>
+                  {partyMembers.map((m) => (
+                    <div key={m.user_id} className="flex items-center gap-3 p-2.5 rounded border border-zinc-800/40 bg-zinc-900/30">
+                      <div className="relative">
+                        {m.profile.avatar_url ? (
+                          <img src={m.profile.avatar_url} alt="" className="w-8 h-8 rounded-full" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center">👤</div>
+                        )}
+                        {m.profile.is_online && <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-zinc-900" />}
+                      </div>
+                      <span className="text-sm text-zinc-200 flex-1">{m.profile.display_name ?? m.profile.username}</span>
+                      {m.role === "leader" && <span className="text-[10px] text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">LIDER</span>}
+                      {isLeader && m.user_id !== user.id && (
+                        <button onClick={() => removeMember(m.user_id)} className="text-zinc-600 hover:text-red-400 text-xs">✕</button>
                       )}
                     </div>
-                  ))
+                  ))}
+                </div>
+
+                {/* Quick invite — online friends */}
+                {partyMembers.length < myParty.max_members && invitableFriends.length > 0 && (
+                  <div className="p-3 rounded-lg border border-emerald-800/30 bg-emerald-900/10">
+                    <h3 className="text-xs text-emerald-400 uppercase tracking-wider mb-2">
+                      Invitar Amigos Conectados
+                    </h3>
+                    <div className="space-y-1">
+                      {invitableFriends.map((f) => (
+                        <div key={f.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-zinc-800/30">
+                          <div className="relative">
+                            {f.avatar_url ? (
+                              <img src={f.avatar_url} alt="" className="w-7 h-7 rounded-full" />
+                            ) : (
+                              <div className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center text-xs">👤</div>
+                            )}
+                            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-zinc-900" />
+                          </div>
+                          <span className="text-sm text-zinc-300 flex-1">{f.display_name ?? f.username}</span>
+                          <button
+                            onClick={() => inviteToParty(f.id)}
+                            className="px-2.5 py-1 text-xs bg-emerald-600/80 hover:bg-emerald-600 text-zinc-950 rounded transition-colors"
+                          >
+                            + Invitar
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {invitableFriends.length === 0 && partyMembers.length < myParty.max_members && (
+                  <div className="text-xs text-zinc-600 text-center py-2">
+                    No hay amigos conectados para invitar
+                  </div>
                 )}
               </div>
             )}
+
           </div>
         </div>
       </div>
