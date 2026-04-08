@@ -1,7 +1,7 @@
 // =============================================================================
 // AL FILO — GET /api/mining/lasers
 //
-// Returns all mining lasers with their stats joined from mining_stats table.
+// Returns all mining lasers from the mining_lasers table.
 // Used by the Mining Loadout Calculator.
 // =============================================================================
 
@@ -14,25 +14,21 @@ export async function GET(request: NextRequest) {
   try {
     const rows: any[] = await prisma.$queryRawUnsafe(`
       SELECT
-        i.id,
-        i.name,
-        i.reference,
-        i.class_name,
-        i.size,
-        i.grade,
-        i.manufacturer,
-        ms.mining_power   AS "miningPower",
-        ms.resistance,
-        ms.instability,
-        ms.optimal_range  AS "optimalRange",
-        ms.max_range      AS "maxRange",
-        ms.throttle_rate  AS "throttleRate",
-        ms.power_draw     AS "powerDraw",
-        ms.thermal_output AS "thermalOutput"
-      FROM items i
-      LEFT JOIN mining_stats ms ON ms.item_id = i.id
-      WHERE i.type = 'MINING_LASER'
-      ORDER BY i.size ASC, i.name ASC
+        id,
+        name,
+        manufacturer,
+        size,
+        mining_power   AS "miningPower",
+        resistance,
+        instability,
+        optimal_range  AS "optimalRange",
+        max_range      AS "maxRange",
+        throttle_rate  AS "throttleRate",
+        throttle_min   AS "throttleMin",
+        heat_output    AS "heatOutput",
+        shatter_damage AS "shatterDamage"
+      FROM mining_lasers
+      ORDER BY size ASC, name ASC
     `);
 
     // Convert BigInt/Decimal to number for JSON serialization

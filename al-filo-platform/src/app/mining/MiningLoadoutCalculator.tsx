@@ -1,33 +1,34 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import miningModules from "@/data/mining/mining-modules.json";
 
 interface Laser {
   id: string;
   name: string;
-  class_name?: string;
-  min_power?: number;
-  max_power?: number;
-  optimal_range?: number;
-  max_range?: number;
+  manufacturer?: string;
+  size?: number;
+  miningPower?: number;
   resistance?: number;
   instability?: number;
-  optimal_charge_rate?: number;
-  optimal_charge_window?: number;
-  inert_material_filter?: number;
-  shockwave?: number;
-  power_ramp_rate?: number;
-  heat_dissipation?: number;
+  optimalRange?: number;
+  maxRange?: number;
+  throttleRate?: number;
+  throttleMin?: number;
+  heatOutput?: number;
+  shatterDamage?: number;
 }
 
 interface ShipConfig {
   name: string;
   turrets: number;
   cargo: number;
+  laserSize: number;
   activeSlotsPerTurret: number;
   passiveSlotsPerTurret: number;
   gadgetSlotsPerTurret: number;
+  supportsBagSwap?: boolean;
+  cargoWithSwap?: number;
 }
 
 interface Module {
@@ -54,28 +55,33 @@ interface TurretLoadout {
 }
 
 const SHIP_CONFIGS: Record<string, ShipConfig> = {
+  golem: {
+    name: "Golem",
+    turrets: 1,
+    cargo: 16,
+    laserSize: 1,
+    activeSlotsPerTurret: 0,
+    passiveSlotsPerTurret: 1,
+    gadgetSlotsPerTurret: 1,
+  },
   prospector: {
     name: "Prospector",
     turrets: 1,
     cargo: 32,
+    laserSize: 1,
     activeSlotsPerTurret: 2,
     passiveSlotsPerTurret: 2,
     gadgetSlotsPerTurret: 1,
+    supportsBagSwap: true,
+    cargoWithSwap: 48,
   },
   mole: {
     name: "MOLE",
     turrets: 3,
     cargo: 96,
+    laserSize: 2,
     activeSlotsPerTurret: 2,
     passiveSlotsPerTurret: 2,
-    gadgetSlotsPerTurret: 1,
-  },
-  golem: {
-    name: "Golem",
-    turrets: 1,
-    cargo: 240,
-    activeSlotsPerTurret: 0,
-    passiveSlotsPerTurret: 1,
     gadgetSlotsPerTurret: 1,
   },
 };
@@ -85,12 +91,26 @@ export default function MiningLoadoutCalculator() {
   const [lasers, setLasers] = useState<Laser[]>([]);
   const [loading, setLoading] = useState(true);
   const [turrets, setTurrets] = useState<TurretLoadout[]>([]);
+  const [useMoleBags, setUseMoleBags] = useState(false);
 
   const shipConfig = SHIP_CONFIGS[ship];
   const typedModules = miningModules as Module[];
-  const activeModules = typedModules.filter(m => m.category === "active");
-  const passiveModules = typedModules.filter(m => m.category === "passive");
-  const gadgets = typedModules.filter(m => m.category === "gadget");
+  const activeModules = typedModules.filter((m) => m.category === "active");
+  const passiveModules = typedModules.filter((m) => m.category === "passive");
+  const gadgets = typedModules.filter((m) => m.category === "gadget");
+
+  // Effective cargo considering bag swap
+  const effectiveCargo = useMemo(() => {
+    if (ship === "prospector" && useMoleBags && shipConfig.cargoWithSwap) {
+      return shipConfig.cargoWithSwap;
+    }
+    return shipConfig.cargo;
+  }, [ship, useMoleBags, shipConfig]);
+
+  // Filter lasers by ship's laser size
+  const availableLasers = useMemo(() => {
+    return lasers.filter((l) => !l.size || l.size <= shipConfig.laserSize);
+  }, [lasers, shipConfig.laserSize]);
 
   useEffect(() => {
     const fetchLasers = async () => {
@@ -99,25 +119,7 @@ export default function MiningLoadoutCalculator() {
         const res = await fetch("/api/mining/lasers");
         if (res.ok) {
           const data = await res.json();
-          // Map API field names to component interface
-          const mapped = (data.data || []).map((l: any) => ({
-            id: l.id,
-            name: l.name,
-            class_name: l.class_name,
-            min_power: (l.miningPower ?? 0) * 0.3,
-            max_power: l.miningPower ?? 0,
-            optimal_range: l.optimalRange ?? 0,
-            max_range: l.maxRange ?? 0,
-            resistance: l.resistance ?? 0,
-            instability: l.instability ?? 0,
-            optimal_charge_rate: l.throttleRate ?? 0,
-            optimal_charge_window: 0,
-            inert_material_filter: 0,
-            shockwave: 0,
-            power_ramp_rate: 0,
-            heat_dissipation: l.thermalOutput ?? 0,
-          }));
-          setLasers(mapped);
+          setLasers(data.data || []);
         }
       } catch (error) {
         console.error("Error fetching lasers:", error);
@@ -140,6 +142,7 @@ export default function MiningLoadoutCalculator() {
       });
     }
     setTurrets(newTurrets);
+    setUseMoleBags(false);
   }, [ship, shipConfig.turrets, shipConfig.activeSlotsPerTurret, shipConfig.passiveSlotsPerTurret]);
 
   const updateTurret = (turretIdx: number, field: string, value: any) => {
@@ -161,62 +164,62 @@ export default function MiningLoadoutCalculator() {
   };
 
   const calculateStats = () => {
-    let totalMinPower = 0;
-    let totalMaxPower = 0;
+    let totalMiningPower = 0;
+    let totalResistance = 0;
+    let totalInstability = 0;
     let optimalRange = 0;
     let maxRange = 0;
-    let resistance = 0;
-    let instability = 0;
     let optChargeRate = 0;
     let optChargeWindow = 0;
     let inertFilter = 0;
     let overchargeRate = 0;
     let extractPower = 0;
+    let heatOutput = 0;
+    let shatterDamage = 0;
 
     turrets.forEach((turret) => {
-      const laser = lasers.find(l => l.id === turret.laserId);
+      const laser = lasers.find((l) => l.id === turret.laserId);
       if (laser) {
-        totalMinPower += laser.min_power || 0;
-        totalMaxPower += laser.max_power || 0;
-        optimalRange = Math.max(optimalRange, laser.optimal_range || 0);
-        maxRange = Math.max(maxRange, laser.max_range || 0);
-        resistance += laser.resistance || 0;
-        instability += laser.instability || 0;
-        optChargeRate += laser.optimal_charge_rate || 0;
-        optChargeWindow += laser.optimal_charge_window || 0;
-        inertFilter += laser.inert_material_filter || 0;
-        overchargeRate += laser.power_ramp_rate || 0;
+        totalMiningPower += laser.miningPower || 0;
+        totalResistance += laser.resistance || 0;
+        totalInstability += laser.instability || 0;
+        optimalRange = Math.max(optimalRange, laser.optimalRange || 0);
+        maxRange = Math.max(maxRange, laser.maxRange || 0);
+        heatOutput += laser.heatOutput || 0;
+        shatterDamage += laser.shatterDamage || 0;
       }
 
-      [...turret.activeModules, ...turret.passiveModules, turret.gadget].forEach((moduleId) => {
-        if (!moduleId) return;
-        const mod = typedModules.find(m => m.id === moduleId);
-        if (mod) {
-          totalMinPower += mod.effects.laserPower * 0.5;
-          totalMaxPower += mod.effects.laserPower;
-          resistance += mod.effects.resistance;
-          instability += mod.effects.instability;
-          optChargeRate += mod.effects.optChargeRate;
-          optChargeWindow += mod.effects.optChargeWindow;
-          inertFilter += mod.effects.inertFilter;
-          overchargeRate += mod.effects.overchargeRate;
-          extractPower += mod.effects.extractPower;
+      [...turret.activeModules, ...turret.passiveModules, turret.gadget].forEach(
+        (moduleId) => {
+          if (!moduleId) return;
+          const mod = typedModules.find((m) => m.id === moduleId);
+          if (mod) {
+            totalMiningPower += mod.effects.laserPower;
+            totalResistance += mod.effects.resistance;
+            totalInstability += mod.effects.instability;
+            optChargeRate += mod.effects.optChargeRate;
+            optChargeWindow += mod.effects.optChargeWindow;
+            inertFilter += mod.effects.inertFilter;
+            overchargeRate += mod.effects.overchargeRate;
+            extractPower += mod.effects.extractPower;
+          }
         }
-      });
+      );
     });
 
     return {
-      minPower: Math.round(totalMinPower * 100) / 100,
-      maxPower: Math.round(totalMaxPower * 100) / 100,
+      miningPower: Math.round(totalMiningPower * 100) / 100,
+      resistance: Math.round(totalResistance * 100) / 100,
+      instability: Math.round(totalInstability * 100) / 100,
       optimalRange: Math.round(optimalRange * 100) / 100,
       maxRange: Math.round(maxRange * 100) / 100,
-      resistance: Math.round(resistance * 100) / 100,
-      instability: Math.round(instability * 100) / 100,
       optChargeRate: Math.round(optChargeRate * 100) / 100,
       optChargeWindow: Math.round(optChargeWindow * 100) / 100,
       inertFilter: Math.round(inertFilter * 100) / 100,
       overchargeRate: Math.round(overchargeRate * 100) / 100,
       extractPower: Math.round(extractPower * 100) / 100,
+      heatOutput: Math.round(heatOutput * 100) / 100,
+      shatterDamage: Math.round(shatterDamage * 100) / 100,
     };
   };
 
@@ -224,10 +227,11 @@ export default function MiningLoadoutCalculator() {
 
   return (
     <div className="space-y-6 max-w-7xl">
+      {/* Ship Selection + Info */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-4">
           <label className="text-xs tracking-[0.1em] uppercase text-zinc-400 block mb-2">
-            Select Ship
+            Nave Minera
           </label>
           <select
             value={ship}
@@ -236,139 +240,279 @@ export default function MiningLoadoutCalculator() {
           >
             {Object.entries(SHIP_CONFIGS).map(([key, cfg]) => (
               <option key={key} value={key}>
-                {cfg.name} ({cfg.cargo} SCU)
+                {cfg.name} — {cfg.cargo} SCU · {cfg.turrets} torreta{cfg.turrets > 1 ? "s" : ""} · Láser S{cfg.laserSize}
               </option>
             ))}
           </select>
         </div>
 
-        <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-4">
-          <div className="text-xs tracking-[0.1em] uppercase text-zinc-500">
-            <div>Turrets: {shipConfig.turrets}</div>
-            <div>Cargo: {shipConfig.cargo} SCU</div>
+        <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-4 space-y-2">
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <div className="text-[10px] tracking-[0.1em] uppercase text-zinc-500">Torretas</div>
+              <div className="text-lg font-mono font-bold text-amber-400">
+                {shipConfig.turrets}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] tracking-[0.1em] uppercase text-zinc-500">Cargo</div>
+              <div className="text-lg font-mono font-bold text-cyan-400">
+                {effectiveCargo} <span className="text-xs text-zinc-600">SCU</span>
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] tracking-[0.1em] uppercase text-zinc-500">Láser</div>
+              <div className="text-lg font-mono font-bold text-emerald-400">
+                S{shipConfig.laserSize}
+              </div>
+            </div>
           </div>
+
+          {/* Prospector Bag Swap Toggle */}
+          {shipConfig.supportsBagSwap && (
+            <div className="pt-2 border-t border-zinc-800/40">
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <div
+                  className={`relative w-10 h-5 rounded-full transition-colors ${
+                    useMoleBags ? "bg-amber-500/60" : "bg-zinc-700"
+                  }`}
+                  onClick={() => setUseMoleBags(!useMoleBags)}
+                >
+                  <div
+                    className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+                      useMoleBags ? "translate-x-5" : "translate-x-0.5"
+                    }`}
+                  />
+                </div>
+                <div onClick={() => setUseMoleBags(!useMoleBags)}>
+                  <span className="text-xs text-zinc-300 group-hover:text-zinc-100 transition-colors">
+                    Sacos MOLE en Prospector
+                  </span>
+                  <span className="text-[10px] text-zinc-600 block">
+                    Reemplaza 4 sacos de 8 SCU por 4 de 12 SCU → 48 SCU total
+                  </span>
+                </div>
+              </label>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Turret Loadouts */}
       {loading ? (
-        <div className="text-center py-8 text-zinc-400">Loading lasers...</div>
+        <div className="flex items-center justify-center py-12">
+          <div className="w-4 h-4 border-2 border-zinc-800 border-t-amber-500 rounded-full animate-spin mr-3" />
+          <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest">
+            Cargando lásers...
+          </span>
+        </div>
       ) : (
         <div className="space-y-4">
-          {turrets.map((turret, turretIdx) => (
-            <div
-              key={turretIdx}
-              className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-4 space-y-3"
-            >
-              <div className="text-xs font-mono text-amber-400">Turret {turretIdx + 1}</div>
-
-              <div>
-                <label className="text-xs tracking-[0.1em] uppercase text-zinc-400 block mb-2">
-                  Laser
-                </label>
-                <select
-                  value={turret.laserId || ""}
-                  onChange={(e) => updateTurret(turretIdx, "laserId", e.target.value || null)}
-                  className="w-full bg-zinc-800/50 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500/50"
-                >
-                  <option value="">-- Select Laser --</option>
-                  {lasers.map((laser) => (
-                    <option key={laser.id} value={laser.id}>
-                      {laser.name} ({laser.class_name})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {shipConfig.activeSlotsPerTurret > 0 && (
-                <div>
-                  <label className="text-xs tracking-[0.1em] uppercase text-zinc-400 block mb-2">
-                    Active Modules ({shipConfig.activeSlotsPerTurret})
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {turret.activeModules.map((moduleId, slotIdx) => (
-                      <select
-                        key={slotIdx}
-                        value={moduleId || ""}
-                        onChange={(e) =>
-                          updateTurretModule(turretIdx, "activeModules", slotIdx, e.target.value || null)
-                        }
-                        className="bg-zinc-800/50 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-100 focus:outline-none focus:border-amber-500/50"
-                      >
-                        <option value="">-- Empty --</option>
-                        {activeModules.map((mod) => (
-                          <option key={mod.id} value={mod.id}>
-                            {mod.name}
-                          </option>
-                        ))}
-                      </select>
-                    ))}
+          {turrets.map((turret, turretIdx) => {
+            const selectedLaser = lasers.find((l) => l.id === turret.laserId);
+            return (
+              <div
+                key={turretIdx}
+                className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-4 space-y-4"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-mono text-amber-400 uppercase tracking-wider">
+                    Torreta {turretIdx + 1}
                   </div>
+                  {selectedLaser && (
+                    <span className="text-[10px] text-zinc-600">
+                      {selectedLaser.manufacturer}
+                    </span>
+                  )}
                 </div>
-              )}
 
-              {shipConfig.passiveSlotsPerTurret > 0 && (
+                {/* Laser selector */}
                 <div>
                   <label className="text-xs tracking-[0.1em] uppercase text-zinc-400 block mb-2">
-                    Passive Modules ({shipConfig.passiveSlotsPerTurret})
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    {turret.passiveModules.map((moduleId, slotIdx) => (
-                      <select
-                        key={slotIdx}
-                        value={moduleId || ""}
-                        onChange={(e) =>
-                          updateTurretModule(turretIdx, "passiveModules", slotIdx, e.target.value || null)
-                        }
-                        className="bg-zinc-800/50 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-100 focus:outline-none focus:border-amber-500/50"
-                      >
-                        <option value="">-- Empty --</option>
-                        {passiveModules.map((mod) => (
-                          <option key={mod.id} value={mod.id}>
-                            {mod.name}
-                          </option>
-                        ))}
-                      </select>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {shipConfig.gadgetSlotsPerTurret > 0 && (
-                <div>
-                  <label className="text-xs tracking-[0.1em] uppercase text-zinc-400 block mb-2">
-                    Gadget
+                    Láser
                   </label>
                   <select
-                    value={turret.gadget || ""}
-                    onChange={(e) => updateTurret(turretIdx, "gadget", e.target.value || null)}
+                    value={turret.laserId || ""}
+                    onChange={(e) =>
+                      updateTurret(turretIdx, "laserId", e.target.value || null)
+                    }
                     className="w-full bg-zinc-800/50 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500/50"
                   >
-                    <option value="">-- Empty --</option>
-                    {gadgets.map((mod) => (
-                      <option key={mod.id} value={mod.id}>
-                        {mod.name}
+                    <option value="">-- Seleccionar Láser --</option>
+                    {availableLasers.map((laser) => (
+                      <option key={laser.id} value={laser.id}>
+                        {laser.name} (S{laser.size}) — Power: {laser.miningPower}
                       </option>
                     ))}
                   </select>
                 </div>
-              )}
-            </div>
-          ))}
+
+                {/* Laser quick stats */}
+                {selectedLaser && (
+                  <div className="grid grid-cols-4 gap-2 bg-zinc-950/40 rounded p-2">
+                    <MiniStat
+                      label="Power"
+                      value={selectedLaser.miningPower || 0}
+                    />
+                    <MiniStat
+                      label="Resist."
+                      value={selectedLaser.resistance || 0}
+                    />
+                    <MiniStat
+                      label="Instab."
+                      value={selectedLaser.instability || 0}
+                      negative
+                    />
+                    <MiniStat
+                      label="Calor"
+                      value={selectedLaser.heatOutput || 0}
+                      negative
+                    />
+                  </div>
+                )}
+
+                {/* Active Modules */}
+                {shipConfig.activeSlotsPerTurret > 0 && (
+                  <div>
+                    <label className="text-xs tracking-[0.1em] uppercase text-zinc-400 block mb-2">
+                      Módulos Activos ({shipConfig.activeSlotsPerTurret})
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {turret.activeModules.map((moduleId, slotIdx) => (
+                        <select
+                          key={slotIdx}
+                          value={moduleId || ""}
+                          onChange={(e) =>
+                            updateTurretModule(
+                              turretIdx,
+                              "activeModules",
+                              slotIdx,
+                              e.target.value || null
+                            )
+                          }
+                          className="bg-zinc-800/50 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-amber-500/50"
+                        >
+                          <option value="">-- Vacío --</option>
+                          {activeModules.map((mod) => (
+                            <option key={mod.id} value={mod.id}>
+                              {mod.name}
+                            </option>
+                          ))}
+                        </select>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Passive Modules */}
+                {shipConfig.passiveSlotsPerTurret > 0 && (
+                  <div>
+                    <label className="text-xs tracking-[0.1em] uppercase text-zinc-400 block mb-2">
+                      Módulos Pasivos ({shipConfig.passiveSlotsPerTurret})
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {turret.passiveModules.map((moduleId, slotIdx) => (
+                        <select
+                          key={slotIdx}
+                          value={moduleId || ""}
+                          onChange={(e) =>
+                            updateTurretModule(
+                              turretIdx,
+                              "passiveModules",
+                              slotIdx,
+                              e.target.value || null
+                            )
+                          }
+                          className="bg-zinc-800/50 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-amber-500/50"
+                        >
+                          <option value="">-- Vacío --</option>
+                          {passiveModules.map((mod) => (
+                            <option key={mod.id} value={mod.id}>
+                              {mod.name}
+                            </option>
+                          ))}
+                        </select>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Gadget */}
+                {shipConfig.gadgetSlotsPerTurret > 0 && (
+                  <div>
+                    <label className="text-xs tracking-[0.1em] uppercase text-zinc-400 block mb-2">
+                      Gadget
+                    </label>
+                    <select
+                      value={turret.gadget || ""}
+                      onChange={(e) =>
+                        updateTurret(
+                          turretIdx,
+                          "gadget",
+                          e.target.value || null
+                        )
+                      }
+                      className="w-full bg-zinc-800/50 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500/50"
+                    >
+                      <option value="">-- Vacío --</option>
+                      {gadgets.map((mod) => (
+                        <option key={mod.id} value={mod.id}>
+                          {mod.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-        <StatBox label="Min Power" value={stats.minPower} unit="%" />
-        <StatBox label="Max Power" value={stats.maxPower} unit="%" />
-        <StatBox label="Optimal Range" value={stats.optimalRange} unit="m" />
-        <StatBox label="Max Range" value={stats.maxRange} unit="m" />
-        <StatBox label="Resistance" value={stats.resistance} unit="%" color={stats.resistance >= 0 ? "emerald" : "red"} />
-        <StatBox label="Instability" value={stats.instability} unit="%" color={stats.instability <= 0 ? "emerald" : "red"} />
-        <StatBox label="Opt Charge Rate" value={stats.optChargeRate} unit="%" />
-        <StatBox label="Opt Charge Window" value={stats.optChargeWindow} unit="%" />
-        <StatBox label="Inert Filter" value={stats.inertFilter} unit="%" />
-        <StatBox label="Overcharge Rate" value={stats.overchargeRate} unit="%" />
-        <StatBox label="Extract Power" value={stats.extractPower} unit="%" />
+      {/* Stats Summary */}
+      <div>
+        <h3 className="text-xs tracking-[0.1em] uppercase text-zinc-500 mb-3 font-mono">
+          Estadísticas Combinadas
+        </h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <StatBox label="Mining Power" value={stats.miningPower} unit="" />
+          <StatBox label="Resistencia" value={stats.resistance} unit="" color={stats.resistance > 0 ? "emerald" : "zinc"} />
+          <StatBox label="Inestabilidad" value={stats.instability} unit="" color={stats.instability <= 0 ? "emerald" : "red"} />
+          <StatBox label="Rango Óptimo" value={stats.optimalRange} unit="m" />
+          <StatBox label="Rango Máximo" value={stats.maxRange} unit="m" />
+          <StatBox label="Opt Charge Rate" value={stats.optChargeRate} unit="%" color={stats.optChargeRate > 0 ? "emerald" : "zinc"} />
+          <StatBox label="Opt Charge Window" value={stats.optChargeWindow} unit="%" />
+          <StatBox label="Inert Filter" value={stats.inertFilter} unit="%" color={stats.inertFilter < 0 ? "emerald" : "zinc"} />
+          <StatBox label="Overcharge Rate" value={stats.overchargeRate} unit="%" />
+          <StatBox label="Extract Power" value={stats.extractPower} unit="%" color={stats.extractPower > 0 ? "emerald" : "zinc"} />
+          <StatBox label="Calor Generado" value={stats.heatOutput} unit="" color={stats.heatOutput > 0 ? "red" : "zinc"} />
+          <StatBox label="Shatter Damage" value={stats.shatterDamage} unit="" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({
+  label,
+  value,
+  negative = false,
+}: {
+  label: string;
+  value: number;
+  negative?: boolean;
+}) {
+  return (
+    <div className="text-center">
+      <div className="text-[9px] tracking-wider uppercase text-zinc-600">
+        {label}
+      </div>
+      <div
+        className={`text-sm font-mono font-semibold ${
+          negative ? "text-red-400/80" : "text-emerald-400/80"
+        }`}
+      >
+        {value}
       </div>
     </div>
   );
@@ -399,7 +543,7 @@ function StatBox({
       </div>
       <div className={`text-lg font-mono font-bold ${colorClass}`}>
         {value}
-        <span className="text-xs text-zinc-600">{unit}</span>
+        {unit && <span className="text-xs text-zinc-600">{unit}</span>}
       </div>
     </div>
   );
