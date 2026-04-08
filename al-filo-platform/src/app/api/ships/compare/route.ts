@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { sql } from "@/lib/db";
 import { validateIds, parsePostBody, secureHeaders } from "@/lib/api-security";
 
 function numOrNull(v: any): number | null {
@@ -30,9 +30,9 @@ async function compareShips(ids: string[]) {
     // ── 1. Fetch ships by ID ──
     // Build parameterized query for multiple IDs
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
-    const ships: any[] = await prisma.$queryRawUnsafe(
+    const ships: any[] = await sql.unsafe(
       `SELECT * FROM ships WHERE id::text IN (${placeholders})`,
-      ...ids,
+      ids,
     );
 
     if (ships.length === 0) {
@@ -46,26 +46,26 @@ async function compareShips(ids: string[]) {
     const flightPlaceholders = shipIds.map((_, i) => `$${i + 1}`).join(", ");
     let flightRows: any[] = [];
     try {
-      flightRows = await prisma.$queryRawUnsafe(
+      flightRows = await sql.unsafe(
         `SELECT * FROM ship_flight_stats WHERE ship_id::text IN (${flightPlaceholders})`,
-        ...shipIds,
+        shipIds,
       ) as any[];
     } catch {}
 
     let fuelRows: any[] = [];
     try {
-      fuelRows = await prisma.$queryRawUnsafe(
+      fuelRows = await sql.unsafe(
         `SELECT * FROM ship_fuel WHERE ship_id::text IN (${flightPlaceholders})`,
-        ...shipIds,
+        shipIds,
       ) as any[];
     } catch {}
 
     // ── 3. Fetch hardpoints for all ships ──
     const refPlaceholders = shipRefs.map((_, i) => `$${i + 1}`).join(", ");
-    const allHardpoints: any[] = await prisma.$queryRawUnsafe(
+    const allHardpoints: any[] = await sql.unsafe(
       `SELECT * FROM ship_hardpoints WHERE ship_reference IN (${refPlaceholders})
        ORDER BY ship_reference, hardpoint_type, max_size DESC`,
-      ...shipRefs,
+      shipRefs,
     );
 
     // ── 4. Batch-load all component data ──
@@ -92,8 +92,8 @@ async function compareShips(ids: string[]) {
     if (uniqueClasses.length > 0) {
       const classPlaceholders = uniqueClasses.map((_, i) => `$${i + 1}`).join(", ");
 
-      const safeQuery = async (sql: string, params: string[]): Promise<any[]> => {
-        try { return await prisma.$queryRawUnsafe(sql, ...params) as any[]; }
+      const safeQuery = async (query: string, params: string[]): Promise<any[]> => {
+        try { return await sql.unsafe(query, params) as any[]; }
         catch { return []; }
       };
 

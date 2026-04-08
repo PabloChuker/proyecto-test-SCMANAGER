@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { sql } from "@/lib/db";
 
 export async function GET() {
   try {
-    const rows = await prisma.$queryRaw<
+    const rows = await sql<
       {
         id: string;
         name: string;

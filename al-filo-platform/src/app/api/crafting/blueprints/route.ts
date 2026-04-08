@@ -9,7 +9,7 @@
 // =============================================================================
 
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { sql } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -76,16 +76,16 @@ interface Category {
 export async function GET() {
   try {
     // ── 1. Load all blueprints ──
-    const bpRows: any[] = await prisma.$queryRawUnsafe(`
+    const bpRows: any[] = await sql.unsafe(`
       SELECT uuid, key, kind, category_uuid, output_uuid,
              output_class, output_type, output_subtype, output_grade,
              output_name, tier_index, craft_time_seconds, "default"
       FROM blueprints
       ORDER BY output_type, output_subtype, output_name
-    `);
+    `, []);
 
     // ── 2. Load all materials (grouped) ──
-    const matRows: any[] = await prisma.$queryRawUnsafe(`
+    const matRows: any[] = await sql.unsafe(`
       SELECT id, blueprint_uuid, group_key, group_name, required_count,
              resource_uuid, resource_name, quantity_scu, min_quality,
              modifier_property_uuid, modifier_property_key,
@@ -93,14 +93,14 @@ export async function GET() {
              modifier_at_min_quality, modifier_at_max_quality
       FROM blueprint_materials
       ORDER BY blueprint_uuid, group_key, resource_name
-    `);
+    `, []);
 
     // ── 3. Load reward pools ──
-    const poolRows: any[] = await prisma.$queryRawUnsafe(`
+    const poolRows: any[] = await sql.unsafe(`
       SELECT id, blueprint_uuid, pool_uuid, pool_key
       FROM blueprint_rewardpool
       ORDER BY blueprint_uuid
-    `);
+    `, []);
 
     // ── 4. Index materials by blueprint_uuid ──
     const matByBp = new Map<string, any[]>();

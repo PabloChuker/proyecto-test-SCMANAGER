@@ -1,0 +1,42 @@
+{
+  "manifest_version": 3,
+  "name": "SC Labs Hangar Importer",
+  "version": "1.0.0",
+  "description": "Export your Star Citizen hangar and buyback pledges for use in SC Labs fleet management tools.",
+  "permissions": [
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://robertsspaceindustries.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://robertsspaceindustries.com/account/pledges*",
+        "https://robertsspaceindustries.com/en/account/pledges*",
+        "https://robertsspaceindustries.com/account/buy-back-pledges*",
+        "https://robertsspaceindustries.com/en/account/buy-back-pledges*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

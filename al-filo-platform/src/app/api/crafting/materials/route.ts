@@ -5,14 +5,14 @@
 // =============================================================================
 
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { sql } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
     // Get distinct resources with usage counts
-    const rows: any[] = await prisma.$queryRawUnsafe(`
+    const rows: any[] = await sql.unsafe(`
       SELECT
         bm.resource_uuid,
         bm.resource_name,
@@ -21,7 +21,7 @@ export async function GET() {
       FROM blueprint_materials bm
       GROUP BY bm.resource_uuid, bm.resource_name
       ORDER BY bm.resource_name
-    `);
+    `, []);
 
     const materials = rows.map((r) => ({
       resourceUuid: String(r.resource_uuid),

@@ -6,13 +6,13 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { sql } from "@/lib/db";
 
 export const revalidate = 300;
 
 export async function GET(request: NextRequest) {
   try {
-    const rows: any[] = await prisma.$queryRawUnsafe(`
+    const rows: any[] = await sql.unsafe(`
       SELECT
         id,
         name,
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
         module_slots   AS "moduleSlots"
       FROM mining_lasers
       ORDER BY size ASC, name ASC
-    `);
+    `, []);
 
     // Convert BigInt/Decimal to number for JSON serialization
     const data = rows.map((r: any) => {

@@ -4,35 +4,29 @@
 // Sin saltos de línea en className strings (hydration-safe).
 // =============================================================================
 
-import type { Prisma } from "@prisma/client";
+// ── Ship list ──
 
-// ── Ship list (sin cambios) ──
-
-export type ShipListItem = Prisma.ItemGetPayload<{
-  select: {
-    id: true;
-    reference: true;
-    name: true;
-    localizedName: true;
-    type: true;
-    size: true;
-    manufacturer: true;
-    gameVersion: true;
-    ship: {
-      select: {
-        maxCrew: true;
-        cargo: true;
-        maxSpeed: true;
-        role: true;
-        focus: true;
-        career: true;
-        lengthMeters: true;
-        beamMeters: true;
-        heightMeters: true;
-      };
-    };
-  };
-}>;
+export interface ShipListItem {
+  id: string;
+  reference: string;
+  name: string;
+  localizedName: string | null;
+  type: string;
+  size: number;
+  manufacturer: string | null;
+  gameVersion: string;
+  ship: {
+    maxCrew: number;
+    cargo: number;
+    maxSpeed: number;
+    role: string;
+    focus: string;
+    career: string;
+    lengthMeters: number;
+    beamMeters: number;
+    heightMeters: number;
+  } | null;
+}
 
 export interface ShipListResponse {
   data: ShipListItem[];

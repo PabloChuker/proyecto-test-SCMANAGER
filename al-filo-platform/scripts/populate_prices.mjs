@@ -124,16 +124,74 @@ const WIKI_PRICES = {
 
   // Origin (vehicles)
   "G12": 60, "G12a": 65, "G12r": 60,
-  "Lynx Rover": 60, "X1 Base": 40, "X1 Force": 50, "X1 Velocity": 45,
+  "Lynx Rover": 60, "Lynx": 60, "X1 Base": 40, "X1": 40, "X1 Force": 50, "X1 Velocity": 45,
 
   // Misc others
-  "Fury": 55, "Nautilus": 725, "Odyssey": 700,
+  "Fury": 55, "Fury LX": 55, "Fury MX": 65,
+  "Nautilus": 725, "Odyssey": 700,
   "Orion": 575, "Endeavor": 350, "Vulcan": 200,
-  "Pioneer": 850, "Ursa Rover": 50, "Ursa Rover Fortuna": 55,
-  "ATLS": 25,
+  "Pioneer": 850, "Ursa Rover": 50, "Ursa": 50, "Ursa Rover Fortuna": 55, "Ursa Fortuna": 55,
+  "Ursa Medivac": 60,
+  "ATLS": 25, "ATLS GEO": 25,
 
   // Apollo
   "Apollo Medivac": 275, "Apollo Triage": 250,
+
+  // ─── Additional entries for better matching ───
+  // Anvil Hornets (Mk I = same price as base, Mk II variants)
+  "F7A Hornet Mk I": 250, "F7C Hornet Mk I": 110,
+  "F7C-M Super Hornet Mk I": 180, "F7C-M Super Hornet Mk II": 220,
+  "F7C-M Hornet Heartseeker Mk I": 195, "F7C-M Hornet Heartseeker Mk II": 220,
+  "F7C-R Hornet Tracker Mk I": 140, "F7C-R Hornet Tracker Mk II": 170,
+  "F7C-S Hornet Ghost Mk I": 125, "F7C-S Hornet Ghost Mk II": 150,
+  "F8A Lightning": 400, "F8C Lightning": 400, "F8C Lightning Executive Edition": 600,
+  "Paladin": 250,
+
+  // Crusader (with full names in DB)
+  "Ares Star Fighter Inferno": 250, "Ares Star Fighter Ion": 250,
+  "Intrepid": 120,
+
+  // Drake extras
+  "Clipper": 110, "Cutter": 40, "Cutter Rambler": 45, "Cutter Scout": 45,
+  "Dragonfly": 40, "Dragonfly Star Kitten": 40,
+  "Golem": 475, "Golem OX": 475,
+
+  // Esperia
+  "Prowler": 440, "Prowler Utility": 440,
+  "Stinger": 120,
+
+  // Mirai
+  "Razor": 150, "Razor EX": 165, "Razor LX": 135,
+  "Guardian": 220, "Guardian MX": 235, "Guardian QI": 235,
+  "Pulse": 120, "Pulse LX": 120,
+
+  // MISC extras
+  "Fortune": 200, "Starlancer TAC": 350,
+
+  // Origin extras
+  "600i": 475, "M50 Interceptor": 100, "85X Limited": 50,
+
+  // RSI extras
+  "Aurora Mk I LX": 35, "Aurora Mk I CL": 45, "Aurora Mk I ES": 20,
+  "Aurora Mk I LN": 40, "Aurora Mk I MR": 30, "Aurora Mk I SE": 30,
+  "Aurora Mk II": 45,
+  "Constellation Phoenix Emerald": 350,
+  "Perseus": 675, "Hermes": 250, "Salvation": 750,
+  "Lynx Rover": 60, "Meteor": 225,
+
+  // Tumbril (without hyphens — DB uses space)
+  "Cyclone AA": 80, "Cyclone MT": 75, "Cyclone RC": 65,
+  "Cyclone RN": 65, "Cyclone TR": 65,
+
+  // Kruger
+  "L-21 Wolf": 75, "L-22 Alpha Wolf": 90,
+
+  // Argo extras
+  "CSV-SM": 100, "MOLE Carbon": 315, "MOLE Talus": 315,
+  "MOTH": 120, "MPUV Tractor": 40,
+
+  // Greycat
+  "MDC": 60, "MTC": 80,
 };
 
 // ─── Strip manufacturer prefix from DB name ─────────────────────────────────
@@ -212,7 +270,9 @@ async function main() {
       const cleaned = norm
         .replace(/\s*2949\s*/g, " ")
         .replace(/\s*2950\s*/g, " ")
+        .replace(/\s*2951\s*/g, " ")
         .replace(/\s*best\s*in\s*show\s*/g, "")
+        .replace(/\s*bis\s*/g, "")
         .replace(/\s*teach'?s?\s*special\s*/g, "")
         .replace(/\s*wikelo\s*\w+\s*special\s*/g, "")
         .replace(/\s*pirate\s*/g, "")
@@ -221,14 +281,31 @@ async function main() {
         .replace(/\s*dunlevy\s*/g, "")
         .replace(/\s*peregrine\s*/g, "")
         .replace(/\s*raven\s*/g, "")
+        .replace(/\s*ikti\s*/g, "")
+        .replace(/\s*rad\s*/g, "")
+        .replace(/\s*executive\s*/g, "")
+        .replace(/\s*star\s*kitten\s*/g, "")
         .replace(/\s+/g, " ")
         .trim();
       price = wikiLookup.get(cleaned);
     }
 
-    // Try just the last part (e.g., "Cyclone" from "Cyclone-AA")
+    // Try replacing spaces with hyphens (e.g., "Cyclone AA" → "cyclone-aa")
     if (!price) {
-      // Try partial match - check if any wiki key ends with our stripped name
+      const hyphenated = norm.replace(/\s+/g, "-");
+      price = wikiLookup.get(hyphenated);
+    }
+
+    // Try removing "mk i" / "mk ii" suffix and check base model
+    if (!price) {
+      const noMk = norm.replace(/\s*mk\s*(i{1,3}|[12])\s*$/g, "").trim();
+      if (noMk !== norm) {
+        price = wikiLookup.get(noMk);
+      }
+    }
+
+    // Try partial match - check if any wiki key ends with our stripped name or vice versa
+    if (!price) {
       for (const [wikiNorm, wikiPrice] of wikiLookup) {
         if (wikiNorm === norm || norm.endsWith(wikiNorm) || wikiNorm.endsWith(norm)) {
           price = wikiPrice;
@@ -260,7 +337,7 @@ async function main() {
   for (const upd of updates) {
     try {
       await prisma.$executeRawUnsafe(
-        `UPDATE ships SET msrp_usd = $1 WHERE id = $2`,
+        `UPDATE ships SET msrp_usd = $1 WHERE id::text = $2`,
         upd.msrp,
         upd.id,
       );

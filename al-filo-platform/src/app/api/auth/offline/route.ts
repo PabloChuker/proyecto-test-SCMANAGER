@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { sql } from "@/lib/db";
 
 export async function POST(request: Request) {
   try {
     const { userId } = await request.json();
     if (!userId) return NextResponse.json({ error: "Missing userId" }, { status: 400 });
 
-    await prisma.$executeRaw`
+    await sql`
       UPDATE profiles SET is_online = false, last_seen = now() WHERE id = ${userId}::uuid
     `;
 

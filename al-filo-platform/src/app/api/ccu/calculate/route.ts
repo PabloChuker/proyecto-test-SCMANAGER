@@ -16,7 +16,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { sql } from "@/lib/db";
 import {
   findCheapestChain,
   findAlternativeChains,
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 1. Load all ships with MSRP ──
-    const shipRows: any[] = await prisma.$queryRawUnsafe(`
+    const shipRows: any[] = await sql.unsafe(`
       SELECT id, reference, name, manufacturer, msrp_usd, warbond_usd,
              COALESCE(is_ccu_eligible, true) AS is_ccu_eligible,
              COALESCE(is_limited, false) AS is_limited,
@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
       FROM ships
       WHERE msrp_usd IS NOT NULL AND msrp_usd > 0
       ORDER BY msrp_usd ASC
-    `);
+    `, []);
 
     const ships = new Map<string, ShipNode>();
     for (const row of shipRows) {
@@ -92,11 +92,11 @@ export async function POST(request: NextRequest) {
       // ═══════════════════════════════════════════════════════════════════
       // MODE: "Armarla Ya" — only load existing available CCU prices
       // ═══════════════════════════════════════════════════════════════════
-      const ccuRows: any[] = await prisma.$queryRawUnsafe(`
+      const ccuRows: any[] = await sql.unsafe(`
         SELECT from_ship_id, to_ship_id, standard_price, warbond_price,
                is_available, is_warbond_available, is_limited
         FROM ccu_prices WHERE is_available = true
-      `);
+      `, []);
 
       edges = ccuRows.map((row) => ({
         fromShipId: String(row.from_ship_id),
@@ -139,11 +139,11 @@ export async function POST(request: NextRequest) {
       eligibleShips.sort((a, b) => a.msrpUsd - b.msrpUsd);
 
       // Also load existing CCU prices for reference (to get any custom prices)
-      const existingCcuRows: any[] = await prisma.$queryRawUnsafe(`
+      const existingCcuRows: any[] = await sql.unsafe(`
         SELECT from_ship_id, to_ship_id, standard_price, warbond_price,
                is_warbond_available
         FROM ccu_prices
-      `);
+      `, []);
       const existingPrices = new Map<string, { standard: number; warbond: number | null; wbAvail: boolean }>();
       for (const row of existingCcuRows) {
         const key = `${String(row.from_ship_id)}->${String(row.to_ship_id)}`;

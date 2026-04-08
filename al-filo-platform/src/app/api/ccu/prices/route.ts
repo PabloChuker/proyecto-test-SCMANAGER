@@ -6,7 +6,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { sql } from "@/lib/db";
 
 export const revalidate = 300;
 
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 
     query += ` ORDER BY cp.standard_price ASC LIMIT 500`;
 
-    const rows: any[] = await prisma.$queryRawUnsafe(query, ...params);
+    const rows: any[] = await sql.unsafe(query, params);
 
     const prices = rows.map((row) => ({
       id: row.id,
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Find ship IDs by reference
-        const result: any[] = await prisma.$queryRawUnsafe(`
+        const result: any[] = await sql.unsafe(`
           UPDATE ccu_prices
           SET warbond_price = $1,
               is_warbond_available = $2,
@@ -124,7 +124,7 @@ export async function POST(request: NextRequest) {
           WHERE from_ship_id = (SELECT id FROM ships WHERE reference ILIKE $3 LIMIT 1)
             AND to_ship_id = (SELECT id FROM ships WHERE reference ILIKE $4 LIMIT 1)
           RETURNING id
-        `, warbondPrice, isWarbondAvailable, fromShipRef, toShipRef);
+        `, [warbondPrice, isWarbondAvailable, fromShipRef, toShipRef]);
 
         if (result.length > 0) {
           updated++;

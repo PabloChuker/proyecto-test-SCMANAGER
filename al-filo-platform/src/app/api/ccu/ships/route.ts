@@ -7,7 +7,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { sql } from "@/lib/db";
 
 export const revalidate = 300; // Cache for 5 minutes
 
@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
 
     query += ` ORDER BY msrp_usd ASC, name ASC`;
 
-    const rows: any[] = await prisma.$queryRawUnsafe(query, ...params);
+    const rows: any[] = await sql.unsafe(query, params);
 
     const ships = rows.map((row) => ({
       id: String(row.id),

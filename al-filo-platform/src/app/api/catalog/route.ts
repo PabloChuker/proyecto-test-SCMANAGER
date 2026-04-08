@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { sql } from "@/lib/db";
 import {
   sanitizeString,
   validateInt,
@@ -189,19 +189,18 @@ async function queryCatalog(params: CatalogParams) {
       const orderCol = def.sizeCol ? `${def.sizeCol} DESC NULLS LAST, ` : "";
 
       // Count
-      const countRows: any[] = await prisma.$queryRawUnsafe(
+      const countRows: any[] = await sql.unsafe(
         `SELECT COUNT(*)::int as total FROM ${def.table} ${where}`,
-        ...params,
+        params,
       );
       const count = countRows[0]?.total ?? 0;
       totalCount += count;
 
       // Fetch
       if (count > 0) {
-        const rows: any[] = await prisma.$queryRawUnsafe(
+        const rows: any[] = await sql.unsafe(
           `SELECT * FROM ${def.table} ${where} ORDER BY ${orderCol}${def.nameCol} ASC LIMIT $${idx}`,
-          ...params,
-          limit,
+          [...params, limit],
         );
         for (const row of rows) {
           allItems.push(mapRow(row, def));

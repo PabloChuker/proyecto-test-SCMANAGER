@@ -8,7 +8,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { sql } from "@/lib/db";
 import powerNetworkLookup from "@/data/power-network-lookup.json";
 import shipPowerData from "@/data/ship-power-data.json";
 
@@ -416,7 +416,7 @@ export async function GET(
     const { id } = await params;
 
     // ── 1. Find the ship (exact matches prioritized over partial) ──
-    const shipRows: any[] = await prisma.$queryRawUnsafe(
+    const shipRows: any[] = await sql.unsafe(
       `SELECT *,
          CASE
            WHEN reference = $1 THEN 0
@@ -433,7 +433,7 @@ export async function GET(
           OR reference ILIKE '%' || $1 || '%'
        ORDER BY match_rank ASC
        LIMIT 1`,
-      String(id),
+      [String(id)],
     );
 
     if (shipRows.length === 0) {
@@ -447,9 +447,9 @@ export async function GET(
     let fuelStats: any = null;
 
     try {
-      const fsRows: any[] = await prisma.$queryRawUnsafe(
+      const fsRows: any[] = await sql.unsafe(
         `SELECT * FROM ship_flight_stats WHERE ship_id::text = $1 LIMIT 1`,
-        String(ship.id),
+        [String(ship.id)],
       );
       if (fsRows.length > 0) flightStats = fsRows[0];
     } catch (e) {
@@ -457,9 +457,9 @@ export async function GET(
     }
 
     try {
-      const fRows: any[] = await prisma.$queryRawUnsafe(
+      const fRows: any[] = await sql.unsafe(
         `SELECT * FROM ship_fuel WHERE ship_id::text = $1 LIMIT 1`,
-        String(ship.id),
+        [String(ship.id)],
       );
       if (fRows.length > 0) fuelStats = fRows[0];
     } catch (e) {
@@ -467,11 +467,11 @@ export async function GET(
     }
 
     // ── 3. Get hardpoints from NEW schema (match by ship reference) ──
-    const hardpointRows: any[] = await prisma.$queryRawUnsafe(
+    const hardpointRows: any[] = await sql.unsafe(
       `SELECT * FROM ship_hardpoints
        WHERE ship_reference = $1
        ORDER BY hardpoint_type, max_size DESC, hardpoint_name ASC`,
-      String(ship.reference),
+      [String(ship.reference)],
     );
 
     // ── 4. Collect all default_item_class values for batch lookup ──
@@ -511,9 +511,9 @@ export async function GET(
       if (classes.length === 0) return;
       try {
         const placeholders = classes.map((_, i) => `$${i + 1}`).join(",");
-        const rows: any[] = await prisma.$queryRawUnsafe(
+        const rows: any[] = await sql.unsafe(
           `SELECT * FROM ${table} WHERE ${classCol} IN (${placeholders})`,
-          ...classes,
+          classes,
         );
         for (const row of rows) {
           componentMap.set(row[classCol], { table, row });
