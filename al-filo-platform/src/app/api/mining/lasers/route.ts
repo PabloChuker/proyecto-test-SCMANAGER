@@ -26,7 +26,8 @@ export async function GET(request: NextRequest) {
         throttle_rate  AS "throttleRate",
         throttle_min   AS "throttleMin",
         heat_output    AS "heatOutput",
-        shatter_damage AS "shatterDamage"
+        shatter_damage AS "shatterDamage",
+        module_slots   AS "moduleSlots"
       FROM mining_lasers
       ORDER BY size ASC, name ASC
     `);
