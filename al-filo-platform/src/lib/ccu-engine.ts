@@ -85,10 +85,16 @@ export interface ChainResult {
   warbondStepsCount: number;
 }
 
+export type PaymentPriority =
+  | "balanced"         // Default: slight preference for credits over cash
+  | "prefer-cash"      // Minimize credit usage, prefer buying with cash
+  | "prefer-credits";  // Maximize credit usage, prefer buyback-token over new purchases
+
 export interface CalculateOptions {
   preferWarbond: boolean;       // Prefer warbond prices when available
   includeOwned: boolean;        // Include user's owned CCUs
   hasBuybackToken: boolean;     // User has a buyback token available
+  paymentPriority: PaymentPriority; // Cash vs credits priority
   maxSteps: number;             // Maximum chain length (default 15)
   excludeShipIds: string[];     // Ships to avoid in the chain
   onlyAvailable: boolean;       // Only use currently available CCUs
@@ -98,6 +104,7 @@ const DEFAULT_OPTIONS: CalculateOptions = {
   preferWarbond: true,
   includeOwned: true,
   hasBuybackToken: false,
+  paymentPriority: "balanced",
   maxSteps: 15,
   excludeShipIds: [],
   onlyAvailable: true,
@@ -285,6 +292,12 @@ function determinePriceType(edge: CCUEdge, opts: CalculateOptions): PriceType {
  * IMPORTANT: Buyback always costs the standardPrice of the CCU to reclaim,
  * regardless of what the user originally paid. RSI charges full price on buyback.
  * The difference is payment method: with token → credits, without → cash.
+ *
+ * Payment Priority affects Dijkstra edge weights (NOT display prices):
+ * - "balanced": slight 5% preference for credits over cash
+ * - "prefer-cash": credits cost 1.15x in Dijkstra (discourage credits)
+ * - "prefer-credits": credits cost 0.80x in Dijkstra (strongly prefer credits),
+ *                     cash edges (warbond/standard) cost 1.10x (discourage cash)
  */
 function getEffectivePrice(edge: CCUEdge, opts: CalculateOptions): number {
   if (opts.includeOwned && edge.isOwned) {
@@ -292,22 +305,32 @@ function getEffectivePrice(edge: CCUEdge, opts: CalculateOptions): number {
 
     if (edge.ownedLocation === "buyback") {
       // Buyback costs the standard CCU price to reclaim.
-      // With token, paid in credits — give slight preference over buying new
-      // (credits are cheaper since they come from melted pledges)
       if (opts.hasBuybackToken) {
-        return edge.standardPrice * 0.95; // slight Dijkstra preference for credits
+        // With token → paid in credits. Apply priority factor:
+        const creditFactor =
+          opts.paymentPriority === "prefer-credits" ? 0.80 :
+          opts.paymentPriority === "prefer-cash" ? 1.15 :
+          0.95; // balanced
+        return edge.standardPrice * creditFactor;
       }
-      return edge.standardPrice;
+      // Without token → paid in cash, apply cash factor
+      const cashFactor =
+        opts.paymentPriority === "prefer-credits" ? 1.10 : 1.0;
+      return edge.standardPrice * cashFactor;
     }
     return 0; // fallback for legacy
   }
 
+  // Cash purchases (warbond / standard): apply cash penalty when preferring credits
+  const cashFactor =
+    opts.paymentPriority === "prefer-credits" ? 1.10 : 1.0;
+
   // Prefer warbond if available and cheaper
   if (opts.preferWarbond && edge.warbondPrice != null && edge.isWarbondAvailable) {
-    return edge.warbondPrice;
+    return edge.warbondPrice * cashFactor;
   }
 
-  return edge.standardPrice;
+  return edge.standardPrice * cashFactor;
 }
 
 /**

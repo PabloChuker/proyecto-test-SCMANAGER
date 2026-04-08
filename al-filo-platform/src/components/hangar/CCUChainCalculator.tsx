@@ -15,7 +15,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useHangarStore, type HangarCCU, type HangarShip } from "@/store/useHangarStore";
-import type { ChainResult, ChainStep, PriceType, CostBreakdown } from "@/lib/ccu-engine";
+import type { ChainResult, ChainStep, PriceType, CostBreakdown, PaymentPriority } from "@/lib/ccu-engine";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -338,6 +338,7 @@ export function CCUChainCalculator() {
   const [preferWarbond, setPreferWarbond] = useState(true);
   const [useOwnedCCUs, setUseOwnedCCUs] = useState(true);
   const [hasBuybackToken, setHasBuybackToken] = useState(false);
+  const [paymentPriority, setPaymentPriority] = useState<PaymentPriority>("balanced");
   const [onlyAvailableNow, setOnlyAvailableNow] = useState(true); // true = armarla ya, false = esperar mejores precios
   const [maxSteps, setMaxSteps] = useState(15);
 
@@ -420,6 +421,7 @@ export function CCUChainCalculator() {
           ownedCCUs,
           preferWarbond,
           hasBuybackToken,
+          paymentPriority,
           onlyAvailable: onlyAvailableNow,
           maxSteps,
           includeAlternatives: true,
@@ -440,7 +442,7 @@ export function CCUChainCalculator() {
     } finally {
       setCalculating(false);
     }
-  }, [fromShip, toShip, preferWarbond, useOwnedCCUs, hasBuybackToken, onlyAvailableNow, maxSteps, ccus]);
+  }, [fromShip, toShip, preferWarbond, useOwnedCCUs, hasBuybackToken, paymentPriority, onlyAvailableNow, maxSteps, ccus]);
 
   // ── Auto-calculate when ships change ──
   useEffect(() => {
@@ -450,7 +452,7 @@ export function CCUChainCalculator() {
       setChain(null);
       setAlternatives([]);
     }
-  }, [fromShip, toShip, preferWarbond, useOwnedCCUs, hasBuybackToken, onlyAvailableNow, maxSteps]);
+  }, [fromShip, toShip, preferWarbond, useOwnedCCUs, hasBuybackToken, paymentPriority, onlyAvailableNow, maxSteps]);
 
   return (
     <div className="space-y-6">
@@ -576,6 +578,42 @@ export function CCUChainCalculator() {
             </span>
           </label>
         )}
+        {/* Prioridad de pago */}
+        <div className="flex items-center gap-1 bg-zinc-800/60 rounded-sm p-0.5">
+          <button
+            onClick={() => setPaymentPriority("prefer-cash")}
+            className={`px-2 py-1 text-[11px] rounded-sm transition-all ${
+              paymentPriority === "prefer-cash"
+                ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                : "text-zinc-500 hover:text-zinc-400"
+            }`}
+            title="Minimizar uso de créditos, priorizar efectivo"
+          >
+            $ Efectivo
+          </button>
+          <button
+            onClick={() => setPaymentPriority("balanced")}
+            className={`px-2 py-1 text-[11px] rounded-sm transition-all ${
+              paymentPriority === "balanced"
+                ? "bg-zinc-600/30 text-zinc-300 border border-zinc-500/30"
+                : "text-zinc-500 hover:text-zinc-400"
+            }`}
+            title="Balance entre efectivo y créditos"
+          >
+            Balance
+          </button>
+          <button
+            onClick={() => setPaymentPriority("prefer-credits")}
+            className={`px-2 py-1 text-[11px] rounded-sm transition-all ${
+              paymentPriority === "prefer-credits"
+                ? "bg-violet-500/20 text-violet-400 border border-violet-500/30"
+                : "text-zinc-500 hover:text-zinc-400"
+            }`}
+            title="Maximizar uso de créditos (buyback), minimizar efectivo"
+          >
+            SC$ Créditos
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-zinc-500">Max steps:</span>
           <select
@@ -709,18 +747,16 @@ export function CCUChainCalculator() {
       )}
 
       {/* ── Empty state ── */}
-      {!chain && !calculating && !error && fromShip && toShip && fromShip.msrpUsd < toShip.msrpUsd && (
-        <div className="text-center py-12">
-          <p className="text-zinc-500 text-sm">Click "Recalculate" to find the cheapest path</p>
+      {!chain && !calculating && fromShip && toShip && fromShip.msrpUsd < toShip.msrpUsd && !error && (
+        <div className="text-center py-8 text-zinc-600 text-sm">
+          Searching for optimal path...
         </div>
       )}
-      {!fromShip && !toShip && (
-        <div className="text-center py-16">
-          <div className="text-4xl mb-3 opacity-20">⬆️</div>
-          <p className="text-zinc-500 text-sm">Select a base ship and target ship to calculate the cheapest upgrade chain</p>
-          <p className="text-zinc-600 text-xs mt-1">The calculator will use Warbond discounts and your owned CCUs to minimize cost</p>
+      {!fromShip || !toShip ? (
+        <div className="text-center py-12 text-zinc-600 text-sm">
+          Seleccioná una nave base y una nave objetivo para calcular la cadena de CCU más barata.
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
