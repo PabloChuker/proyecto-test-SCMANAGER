@@ -215,11 +215,7 @@ export default function PartyPage() {
   const inviteToParty = useCallback(async (userId: string) => {
     if (!myParty || !user) return;
     setInvitingIds((prev) => new Set(prev).add(userId));
-    await supabase.from("party_members").insert({
-      party_id: myParty.id,
-      user_id: userId,
-      role: "member",
-    });
+    // Solo enviamos la notificacion — el usuario se une cuando ACEPTA
     const myName = profile?.display_name ?? user.user_metadata?.full_name ?? "Alguien";
     await sendNotification({
       supabase,
@@ -233,8 +229,7 @@ export default function PartyPage() {
     });
     setInvitingIds((prev) => { const s = new Set(prev); s.delete(userId); return s; });
     setInvitedIds((prev) => new Set(prev).add(userId));
-    loadMyParty();
-  }, [myParty, user, profile, supabase, loadMyParty]);
+  }, [myParty, user, profile, supabase]);
 
   if (loading || !user) {
     return (

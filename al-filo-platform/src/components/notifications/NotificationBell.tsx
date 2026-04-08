@@ -145,20 +145,59 @@ export default function NotificationBell() {
         }
       }
 
-      if (n.type === "party_invite") {
-        // User is already added to party by the invite action,
-        // just navigate them to the party page
-        router.push("/party");
+      if (n.type === "party_invite" && n.metadata?.party_id) {
+        const partyId = n.metadata.party_id as string;
+        // Verify party still exists and is active
+        const { data: party } = await supabase
+          .from("parties")
+          .select("id, status, max_members")
+          .eq("id", partyId)
+          .eq("status", "active")
+          .single();
+
+        if (party) {
+          // Check not already a member
+          const { data: existing } = await supabase
+            .from("party_members")
+            .select("user_id")
+            .eq("party_id", partyId)
+            .eq("user_id", user.id)
+            .limit(1);
+
+          if (!existing || existing.length === 0) {
+            await supabase.from("party_members").insert({
+              party_id: partyId,
+              user_id: user.id,
+              role: "member",
+            });
+          }
+          router.push("/party");
+        }
       }
 
-      if (n.type === "org_invite") {
-        // User is already added to org by the invite action,
-        // refresh profile and navigate
+      if (n.type === "org_invite" && n.metadata?.org_id) {
+        const orgId = n.metadata.org_id as string;
+        // Check not already a member
+        const { data: existing } = await supabase
+          .from("org_members")
+          .select("user_id")
+          .eq("org_id", orgId)
+          .eq("user_id", user.id)
+          .limit(1);
+
+        if (!existing || existing.length === 0) {
+          await supabase.from("org_members").insert({
+            org_id: orgId,
+            user_id: user.id,
+            role: "member",
+          });
+          await supabase.from("profiles").update({ org_id: orgId }).eq("id", user.id);
+        }
         await refreshProfile();
         router.push("/org");
       }
 
-      // Mark notification as read and update its metadata to show it was accepted
+      // Mark notification as accepted
       await supabase
         .from("notifications")
         .update({ is_read: true, metadata: { ...n.metadata, action_taken: "accepted" } })
@@ -190,26 +229,8 @@ export default function NotificationBell() {
           .eq("status", "pending");
       }
 
-      if (n.type === "party_invite") {
-        // Leave the party if already added
-        const { data: membership } = await supabase
-          .from("party_members")
-          .select("party_id")
-          .eq("user_id", user.id)
-          .limit(1);
-
-        if (membership && membership.length > 0) {
-          const partyId = membership[0].party_id;
-          await supabase.from("party_members").delete().eq("party_id", partyId).eq("user_id", user.id);
-        }
-      }
-
-      if (n.type === "org_invite" && n.metadata?.org_id) {
-        // Leave the org
-        await supabase.from("org_members").delete().eq("org_id", n.metadata.org_id as string).eq("user_id", user.id);
-        await supabase.from("profiles").update({ org_id: null }).eq("id", user.id);
-        await refreshProfile();
-      }
+      // party_invite y org_invite: simplemente rechazar
+      // El usuario nunca fue agregado, solo se descarta la invitacion
 
       // Mark as read with rejected status
       await supabase
@@ -225,7 +246,7 @@ export default function NotificationBell() {
     } finally {
       setActingOn((prev) => { const s = new Set(prev); s.delete(n.id); return s; });
     }
-  }, [user, supabase, refreshProfile]);
+  }, [user, supabase]);
 
   if (!user) return null;
 

@@ -194,15 +194,7 @@ export default function OrgPage() {
     async (userId: string) => {
       if (!profile?.org_id || !user) return;
       setInvitingIds((prev) => new Set(prev).add(userId));
-      await supabase.from("org_members").insert({
-        org_id: profile.org_id,
-        user_id: userId,
-        role: "member",
-      });
-      await supabase
-        .from("profiles")
-        .update({ org_id: profile.org_id })
-        .eq("id", userId);
+      // Solo enviamos la notificacion — el usuario se une cuando ACEPTA
       const orgNameStr = org?.name ?? "una organizacion";
       await sendNotification({
         supabase,
@@ -216,9 +208,8 @@ export default function OrgPage() {
       });
       setInvitingIds((prev) => { const s = new Set(prev); s.delete(userId); return s; });
       setInvitedIds((prev) => new Set(prev).add(userId));
-      loadOrg();
     },
-    [profile, user, org, supabase, loadOrg]
+    [profile, user, org, supabase]
   );
 
   const removeMember = useCallback(
