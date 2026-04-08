@@ -133,6 +133,7 @@ const DIFFICULTY_COLORS: Record<string, string> = {
 };
 
 const STORAGE_KEY = "sc-labs-activity-history";
+const AUTOSAVE_DELAY = 1500; // ms debounce for DB autosave
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -231,7 +232,16 @@ export default function ActivityManager() {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const skipBroadcastRef = useRef(false);
 
+  // ── Persistence state ──
+  const [dbSessionId, setDbSessionId] = useState<string | null>(null);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"" | "saving" | "saved">("");
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const skipAutoSaveRef = useRef(false);
+
   const canManage = sessionRole === "host" || sessionRole === "cohost";
+  const hasActiveSession = selectedActivity !== "" || lootEntries.length > 0 || (results !== null) || (draftResults !== null);
 
   // ── Load data ──
   useEffect(() => {
@@ -263,6 +273,7 @@ export default function ActivityManager() {
         setPartyId(null);
         setSessionRole("host"); // No party = solo host
         setLoadingParty(false);
+        setSessionLoaded(true);
         return;
       }
 
@@ -277,7 +288,6 @@ export default function ActivityManager() {
 
       if (party) {
         setPartyName(party.name);
-        // Party leader = host, others = viewer by default
         if (party.leader_id === user.id) {
           setSessionRole("host");
         } else {
@@ -305,6 +315,49 @@ export default function ActivityManager() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PERSISTENCE: Load active session from DB
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  useEffect(() => {
+    if (!partyId || !user || loadingParty) return;
+
+    async function loadActiveSession() {
+      const { data } = await supabase
+        .from("activity_sessions")
+        .select("*")
+        .eq("party_id", partyId)
+        .eq("status", "active")
+        .limit(1)
+        .single();
+
+      if (data) {
+        skipAutoSaveRef.current = true;
+        skipBroadcastRef.current = true;
+        setDbSessionId(data.id);
+        setSelectedActivity(data.selected_activity ?? "");
+        setParticipants(data.participants as Participant[] ?? []);
+        setLootEntries(data.loot_entries as LootEntry[] ?? []);
+        setRaffleMode((data.raffle_mode as "lottery" | "draft") ?? "lottery");
+        setResults(data.results as RaffleResult[] | null ?? null);
+        setDraftResults(data.draft_results as DraftResult | null ?? null);
+        setCoHostIds(new Set(data.co_host_ids ?? []));
+        // Check if current user is a co-host
+        if ((data.co_host_ids ?? []).includes(user!.id)) {
+          setSessionRole("cohost");
+        }
+        setTimeout(() => {
+          skipAutoSaveRef.current = false;
+          skipBroadcastRef.current = false;
+        }, 200);
+      }
+      setSessionLoaded(true);
+    }
+
+    loadActiveSession();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partyId, loadingParty]);
+
   // ── Auto-load party members as participants ──
   const loadPartyAsParticipants = useCallback(() => {
     if (partyMembers.length === 0) return;
@@ -323,10 +376,63 @@ export default function ActivityManager() {
   }, [partyMembers]);
 
   useEffect(() => {
-    if (!loadingParty && partyMembers.length > 0 && participants.length === 0) {
+    if (!loadingParty && sessionLoaded && partyMembers.length > 0 && participants.length === 0) {
       loadPartyAsParticipants();
     }
-  }, [loadingParty, partyMembers, participants.length, loadPartyAsParticipants]);
+  }, [loadingParty, sessionLoaded, partyMembers, participants.length, loadPartyAsParticipants]);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PERSISTENCE: Auto-save to DB (debounced)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  useEffect(() => {
+    if (!canManage || !partyId || !user || !sessionLoaded || skipAutoSaveRef.current || isRolling) return;
+    // Don't save if nothing meaningful exists
+    if (!selectedActivity && lootEntries.length === 0 && !results && !draftResults) return;
+
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+
+    autoSaveTimerRef.current = setTimeout(async () => {
+      setAutoSaveStatus("saving");
+
+      const sessionData = {
+        party_id: partyId,
+        host_id: user.id,
+        selected_activity: selectedActivity,
+        participants,
+        loot_entries: lootEntries,
+        raffle_mode: raffleMode,
+        results,
+        draft_results: draftResults,
+        co_host_ids: Array.from(coHostIds),
+        updated_at: new Date().toISOString(),
+      };
+
+      if (dbSessionId) {
+        // Update existing
+        await supabase
+          .from("activity_sessions")
+          .update(sessionData)
+          .eq("id", dbSessionId);
+      } else {
+        // Create new
+        const { data } = await supabase
+          .from("activity_sessions")
+          .insert({ ...sessionData, status: "active" })
+          .select("id")
+          .single();
+        if (data) setDbSessionId(data.id);
+      }
+
+      setAutoSaveStatus("saved");
+      setTimeout(() => setAutoSaveStatus(""), 2000);
+    }, AUTOSAVE_DELAY);
+
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedActivity, lootEntries, participants, raffleMode, results, draftResults, coHostIds]);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // REAL-TIME BROADCAST CHANNEL
@@ -339,7 +445,6 @@ export default function ActivityManager() {
       config: { broadcast: { self: false } },
     });
 
-    // ── Presence: who is connected ──
     channel.on("presence", { event: "sync" }, () => {
       const state = channel.presenceState();
       const users: ConnectedUser[] = [];
@@ -353,9 +458,9 @@ export default function ActivityManager() {
       setConnectedUsers(users);
     });
 
-    // ── Broadcast: state sync from host/cohost ──
     channel.on("broadcast", { event: "state_sync" }, ({ payload }: { payload: SyncPayload }) => {
       skipBroadcastRef.current = true;
+      skipAutoSaveRef.current = true;
       setSelectedActivity(payload.selectedActivity);
       setLootEntries(payload.lootEntries);
       setParticipants(payload.participants);
@@ -365,15 +470,44 @@ export default function ActivityManager() {
       setIsRolling(payload.isRolling);
       setRollingName(payload.rollingName);
       setSaved(false);
-      setTimeout(() => { skipBroadcastRef.current = false; }, 100);
+      setTimeout(() => {
+        skipBroadcastRef.current = false;
+        skipAutoSaveRef.current = false;
+      }, 100);
     });
 
-    // ── Broadcast: role changes ──
     channel.on("broadcast", { event: "role_change" }, ({ payload }: { payload: { userId: string; newRole: SessionRole; allCoHostIds: string[] } }) => {
       if (payload.userId === user.id) {
         setSessionRole(payload.newRole);
       }
       setCoHostIds(new Set(payload.allCoHostIds));
+    });
+
+    // Session cancelled broadcast
+    channel.on("broadcast", { event: "session_cancelled" }, () => {
+      skipBroadcastRef.current = true;
+      skipAutoSaveRef.current = true;
+      setSelectedActivity("");
+      setLootEntries([]);
+      setResults(null);
+      setDraftResults(null);
+      setRollingName("");
+      setDbSessionId(null);
+      setSaved(false);
+      // Reload party participants
+      if (partyMembers.length > 0) {
+        const partyP: Participant[] = partyMembers.map((m) => ({
+          id: m.id, name: m.display_name ?? m.username ?? "Jugador",
+          avatarUrl: m.avatar_url, contributed: false, weight: 1, isFromParty: true,
+        }));
+        setParticipants(partyP);
+      } else {
+        setParticipants([]);
+      }
+      setTimeout(() => {
+        skipBroadcastRef.current = false;
+        skipAutoSaveRef.current = false;
+      }, 200);
     });
 
     channel.subscribe(async (status) => {
@@ -395,7 +529,7 @@ export default function ActivityManager() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partyId, user, profile]);
 
-  // ── Re-track presence when role changes ──
+  // Re-track presence when role changes
   useEffect(() => {
     if (!channelRef.current || !user || !profile) return;
     channelRef.current.track({
@@ -406,7 +540,7 @@ export default function ActivityManager() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionRole]);
 
-  // ── Auto-broadcast state changes if host/cohost ──
+  // Auto-broadcast state changes if host/cohost
   useEffect(() => {
     if (!channelRef.current || !canManage || skipBroadcastRef.current) return;
     channelRef.current.send({
@@ -436,7 +570,6 @@ export default function ActivityManager() {
       } else {
         next.add(userId);
       }
-      // Broadcast role change
       if (channelRef.current) {
         channelRef.current.send({
           type: "broadcast",
@@ -451,6 +584,52 @@ export default function ActivityManager() {
       return next;
     });
   }, [sessionRole]);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CANCEL ACTIVITY SESSION
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  const cancelSession = useCallback(async () => {
+    // Delete from DB
+    if (dbSessionId) {
+      await supabase
+        .from("activity_sessions")
+        .delete()
+        .eq("id", dbSessionId);
+    }
+
+    // Broadcast cancellation to all viewers
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "session_cancelled",
+        payload: {},
+      });
+    }
+
+    // Reset local state
+    skipAutoSaveRef.current = true;
+    setDbSessionId(null);
+    setSelectedActivity("");
+    setLootEntries([]);
+    setResults(null);
+    setDraftResults(null);
+    setRollingName("");
+    setSaved(false);
+    setShowCancelConfirm(false);
+
+    if (partyMembers.length > 0) {
+      const partyP: Participant[] = partyMembers.map((m) => ({
+        id: m.id, name: m.display_name ?? m.username ?? "Jugador",
+        avatarUrl: m.avatar_url, contributed: false, weight: 1, isFromParty: true,
+      }));
+      setParticipants(partyP);
+    } else {
+      setParticipants([]);
+    }
+
+    setTimeout(() => { skipAutoSaveRef.current = false; }, 300);
+  }, [dbSessionId, supabase, partyMembers]);
 
   // ═══════════════════════════════════════════════════════════════════════════
   // DERIVED
@@ -635,7 +814,7 @@ export default function ActivityManager() {
     }, 100);
   }, [participants]);
 
-  // ── Save ──
+  // ── Save to local history ──
   const saveSession = useCallback(() => {
     const session: ActivitySession = {
       id: uid(), date: new Date().toISOString(),
@@ -649,8 +828,56 @@ export default function ActivityManager() {
     setSaved(true);
   }, [activity, selectedActivity, participants, lootEntries, raffleMode, results, draftResults, history]);
 
-  // ── Reset ──
-  const resetSession = useCallback(() => {
+  // ── Finish + close: save to history then cancel DB session ──
+  const finishSession = useCallback(async () => {
+    // Save to local history first
+    saveSession();
+    // Mark DB session as completed and clean up
+    if (dbSessionId) {
+      await supabase
+        .from("activity_sessions")
+        .update({ status: "completed" })
+        .eq("id", dbSessionId);
+    }
+    // Broadcast cancellation so viewers see it's done
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: "broadcast",
+        event: "session_cancelled",
+        payload: {},
+      });
+    }
+    skipAutoSaveRef.current = true;
+    setDbSessionId(null);
+    setSelectedActivity("");
+    setLootEntries([]);
+    setResults(null);
+    setDraftResults(null);
+    setRollingName("");
+    setSaved(false);
+    if (partyMembers.length > 0) {
+      const partyP: Participant[] = partyMembers.map((m) => ({
+        id: m.id, name: m.display_name ?? m.username ?? "Jugador",
+        avatarUrl: m.avatar_url, contributed: false, weight: 1, isFromParty: true,
+      }));
+      setParticipants(partyP);
+    } else {
+      setParticipants([]);
+    }
+    setTimeout(() => { skipAutoSaveRef.current = false; }, 300);
+  }, [saveSession, dbSessionId, supabase, partyMembers]);
+
+  // ── Reset (new activity, same session concept) ──
+  const resetSession = useCallback(async () => {
+    // Delete DB session to start fresh
+    if (dbSessionId) {
+      await supabase
+        .from("activity_sessions")
+        .delete()
+        .eq("id", dbSessionId);
+      setDbSessionId(null);
+    }
+    skipAutoSaveRef.current = true;
     setResults(null);
     setDraftResults(null);
     setRollingName("");
@@ -666,7 +893,8 @@ export default function ActivityManager() {
     } else {
       setParticipants([]);
     }
-  }, [partyMembers]);
+    setTimeout(() => { skipAutoSaveRef.current = false; }, 300);
+  }, [partyMembers, dbSessionId, supabase]);
 
   const deleteHistoryItem = useCallback((id: string) => {
     const updated = history.filter((s) => s.id !== id);
@@ -687,6 +915,33 @@ export default function ActivityManager() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
+
+      {/* ── Cancel confirmation modal ── */}
+      {showCancelConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-6 max-w-sm w-full mx-4 space-y-4 shadow-2xl">
+            <h3 className="text-lg text-zinc-200 font-medium">Cancelar actividad?</h3>
+            <p className="text-sm text-zinc-400">
+              Se perdera todo el progreso actual: loot cargado, configuracion de participantes y resultados.
+              {connectedUsers.length > 1 && " Todos los usuarios conectados veran la sesion cerrada."}
+            </p>
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => setShowCancelConfirm(false)}
+                className="flex-1 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 text-sm font-medium rounded transition-colors"
+              >
+                Volver
+              </button>
+              <button
+                onClick={cancelSession}
+                className="flex-1 py-2 bg-red-600/80 hover:bg-red-600 text-white text-sm font-medium rounded transition-colors active:scale-[0.98]"
+              >
+                Si, cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Connected users bar ── */}
       {partyId && connectedUsers.length > 0 && (
@@ -709,8 +964,16 @@ export default function ActivityManager() {
               </div>
             ))}
           </div>
-          <div className={`text-[10px] px-2 py-0.5 rounded-full border ${roleBg}`}>
-            {roleLabel}
+          <div className="flex items-center gap-2">
+            {/* Auto-save indicator */}
+            {autoSaveStatus && (
+              <span className={`text-[10px] ${autoSaveStatus === "saving" ? "text-amber-400/60" : "text-emerald-400/60"}`}>
+                {autoSaveStatus === "saving" ? "Guardando..." : "Guardado ✓"}
+              </span>
+            )}
+            <div className={`text-[10px] px-2 py-0.5 rounded-full border ${roleBg}`}>
+              {roleLabel}
+            </div>
           </div>
         </div>
       )}
@@ -736,6 +999,15 @@ export default function ActivityManager() {
         >
           📜 Historial ({history.length})
         </button>
+        {/* Cancel activity — visible when there's an active session */}
+        {tab === "activity" && hasActiveSession && canManage && !isRolling && (
+          <button
+            onClick={() => setShowCancelConfirm(true)}
+            className="ml-auto px-3 py-1.5 text-xs text-red-400/70 hover:text-red-400 border border-red-500/20 hover:border-red-500/40 rounded transition-all hover:bg-red-500/5"
+          >
+            ✕ Cancelar Actividad
+          </button>
+        )}
       </div>
 
       {/* ═══ HISTORY ═══ */}
@@ -814,7 +1086,7 @@ export default function ActivityManager() {
             </div>
           )}
 
-          {/* Results block (at top when available) */}
+          {/* Results block */}
           {hasResults && !isRolling && (
             <div className="space-y-4 p-4 rounded-lg border border-amber-500/20 bg-zinc-900/40">
               <h2 className="text-lg text-amber-400 tracking-wider uppercase text-center">🏆 Resultados</h2>
@@ -838,16 +1110,25 @@ export default function ActivityManager() {
               )}
 
               <div className="flex gap-3">
-                <button
-                  onClick={saveSession}
-                  disabled={saved}
-                  className={`flex-1 py-2 font-medium rounded transition-all duration-200 ${saved ? "bg-emerald-800/30 text-emerald-400 border border-emerald-600/30 cursor-default" : "bg-emerald-600/80 hover:bg-emerald-600 active:scale-[0.98] text-zinc-950"}`}
-                >
-                  {saved ? "Guardado ✓" : "💾 Guardar en Historial"}
-                </button>
-                {canManage && (
-                  <button onClick={resetSession} className="flex-1 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 font-medium rounded transition-colors">
-                    🔄 Nueva Actividad
+                {canManage ? (
+                  <>
+                    <button
+                      onClick={finishSession}
+                      className="flex-1 py-2 bg-emerald-600/80 hover:bg-emerald-600 active:scale-[0.98] text-zinc-950 font-medium rounded transition-all"
+                    >
+                      💾 Guardar y Finalizar
+                    </button>
+                    <button onClick={resetSession} className="flex-1 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 font-medium rounded transition-colors">
+                      🔄 Nueva Actividad
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={saveSession}
+                    disabled={saved}
+                    className={`flex-1 py-2 font-medium rounded transition-all duration-200 ${saved ? "bg-emerald-800/30 text-emerald-400 border border-emerald-600/30 cursor-default" : "bg-emerald-600/80 hover:bg-emerald-600 active:scale-[0.98] text-zinc-950"}`}
+                  >
+                    {saved ? "Guardado ✓" : "💾 Guardar en mi Historial"}
                   </button>
                 )}
               </div>
@@ -942,7 +1223,6 @@ export default function ActivityManager() {
                         <span className="flex-1 text-sm text-zinc-200">{p.name}</span>
                         {p.isFromParty && <span className="text-[9px] text-amber-500/50 bg-amber-500/10 px-1 rounded">PARTY</span>}
 
-                        {/* Co-host toggle (only host can promote party members) */}
                         {sessionRole === "host" && p.isFromParty && p.id !== user?.id && (
                           <button
                             onClick={() => toggleCoHost(p.id)}
