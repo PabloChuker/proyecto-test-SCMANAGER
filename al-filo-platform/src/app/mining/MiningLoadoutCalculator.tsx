@@ -29,6 +29,8 @@ interface ShipConfig {
   gadgetSlotsPerTurret: number;
   supportsBagSwap?: boolean;
   cargoWithSwap?: number;
+  fixedLaser?: boolean;
+  fixedLaserName?: string;
 }
 
 interface Module {
@@ -63,6 +65,8 @@ const SHIP_CONFIGS: Record<string, ShipConfig> = {
     activeSlotsPerTurret: 0,
     passiveSlotsPerTurret: 1,
     gadgetSlotsPerTurret: 1,
+    fixedLaser: true,
+    fixedLaserName: "Pitman",
   },
   prospector: {
     name: "Prospector",
@@ -131,11 +135,29 @@ export default function MiningLoadoutCalculator() {
     fetchLasers();
   }, []);
 
+  // Auto-assign fixed laser when lasers are loaded and ship has fixedLaser
+  useEffect(() => {
+    if (shipConfig.fixedLaser && lasers.length > 0) {
+      const fixedLaser = lasers.find(
+        (l) => l.name === shipConfig.fixedLaserName
+      );
+      if (fixedLaser) {
+        setTurrets((prev) =>
+          prev.map((t) => ({ ...t, laserId: fixedLaser.id }))
+        );
+      }
+    }
+  }, [lasers, shipConfig.fixedLaser, shipConfig.fixedLaserName]);
+
   useEffect(() => {
     const newTurrets: TurretLoadout[] = [];
+    const fixedLaser =
+      shipConfig.fixedLaser && lasers.length > 0
+        ? lasers.find((l) => l.name === shipConfig.fixedLaserName)
+        : null;
     for (let i = 0; i < shipConfig.turrets; i++) {
       newTurrets.push({
-        laserId: null,
+        laserId: fixedLaser ? fixedLaser.id : null,
         activeModules: Array(shipConfig.activeSlotsPerTurret).fill(null),
         passiveModules: Array(shipConfig.passiveSlotsPerTurret).fill(null),
         gadget: null,
@@ -330,21 +352,34 @@ export default function MiningLoadoutCalculator() {
                 <div>
                   <label className="text-xs tracking-[0.1em] uppercase text-zinc-400 block mb-2">
                     Láser
+                    {shipConfig.fixedLaser && (
+                      <span className="ml-2 text-[10px] text-zinc-600 normal-case tracking-normal">
+                        (fijo — no intercambiable en esta nave)
+                      </span>
+                    )}
                   </label>
-                  <select
-                    value={turret.laserId || ""}
-                    onChange={(e) =>
-                      updateTurret(turretIdx, "laserId", e.target.value || null)
-                    }
-                    className="w-full bg-zinc-800/50 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500/50"
-                  >
-                    <option value="">-- Seleccionar Láser --</option>
-                    {availableLasers.map((laser) => (
-                      <option key={laser.id} value={laser.id}>
-                        {laser.name} (S{laser.size}) — Power: {laser.miningPower}
-                      </option>
-                    ))}
-                  </select>
+                  {shipConfig.fixedLaser ? (
+                    <div className="w-full bg-zinc-800/30 border border-zinc-700/50 rounded px-3 py-2 text-sm text-zinc-400 cursor-not-allowed">
+                      {selectedLaser
+                        ? `${selectedLaser.name} (S${selectedLaser.size}) — Power: ${selectedLaser.miningPower}`
+                        : shipConfig.fixedLaserName || "Láser fijo"}
+                    </div>
+                  ) : (
+                    <select
+                      value={turret.laserId || ""}
+                      onChange={(e) =>
+                        updateTurret(turretIdx, "laserId", e.target.value || null)
+                      }
+                      className="w-full bg-zinc-800/50 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500/50"
+                    >
+                      <option value="">-- Seleccionar Láser --</option>
+                      {availableLasers.map((laser) => (
+                        <option key={laser.id} value={laser.id}>
+                          {laser.name} (S{laser.size}) — Power: {laser.miningPower}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
 
                 {/* Laser quick stats */}
