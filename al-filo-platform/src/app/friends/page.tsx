@@ -35,6 +35,8 @@ export default function FriendsPage() {
   const [searchResults, setSearchResults] = useState<Profile[]>([]);
   const [searching, setSearching] = useState(false);
   const [tab, setTab] = useState<"friends" | "pending" | "search">("friends");
+  const [sendingIds, setSendingIds] = useState<Set<string>>(new Set());
+  const [sentIds, setSentIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -154,12 +156,12 @@ export default function FriendsPage() {
   const sendRequest = useCallback(
     async (targetId: string) => {
       if (!user) return;
+      setSendingIds((prev) => new Set(prev).add(targetId));
       await supabase.from("friendships").insert({
         requester_id: user.id,
         addressee_id: targetId,
         status: "pending",
       });
-      // Notify the target user
       const myName = profile?.display_name ?? user.user_metadata?.full_name ?? "Alguien";
       await sendNotification({
         supabase,
@@ -170,8 +172,9 @@ export default function FriendsPage() {
         message: `${myName} quiere ser tu amigo`,
         link: "/friends",
       });
+      setSendingIds((prev) => { const s = new Set(prev); s.delete(targetId); return s; });
+      setSentIds((prev) => new Set(prev).add(targetId));
       loadFriends();
-      setSearchResults((prev) => prev.filter((p) => p.id !== targetId));
     },
     [user, profile, supabase, loadFriends]
   );
@@ -411,14 +414,19 @@ export default function FriendsPage() {
                         <span className="text-xs text-emerald-400">
                           Ya son amigos
                         </span>
-                      ) : alreadyPending ? (
-                        <span className="text-xs text-amber-400">Pendiente</span>
+                      ) : alreadyPending || sentIds.has(p.id) ? (
+                        <span className="text-xs text-amber-400/80 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">Enviado ✓</span>
                       ) : (
                         <button
                           onClick={() => sendRequest(p.id)}
-                          className="px-3 py-1 text-xs bg-amber-600/80 hover:bg-amber-600 text-zinc-950 rounded transition-colors"
+                          disabled={sendingIds.has(p.id)}
+                          className={`px-3 py-1 text-xs rounded transition-all duration-200 ${
+                            sendingIds.has(p.id)
+                              ? "bg-zinc-700 text-zinc-400 cursor-wait"
+                              : "bg-amber-600/80 hover:bg-amber-600 active:scale-95 text-zinc-950"
+                          }`}
                         >
-                          + Agregar
+                          {sendingIds.has(p.id) ? "Enviando..." : "+ Agregar"}
                         </button>
                       )}
                     </div>

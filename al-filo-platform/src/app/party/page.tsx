@@ -46,6 +46,8 @@ export default function PartyPage() {
 
   // Online friends for quick invite
   const [onlineFriends, setOnlineFriends] = useState<Profile[]>([]);
+  const [invitingIds, setInvitingIds] = useState<Set<string>>(new Set());
+  const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -212,12 +214,12 @@ export default function PartyPage() {
 
   const inviteToParty = useCallback(async (userId: string) => {
     if (!myParty || !user) return;
+    setInvitingIds((prev) => new Set(prev).add(userId));
     await supabase.from("party_members").insert({
       party_id: myParty.id,
       user_id: userId,
       role: "member",
     });
-    // Notify invited user
     const myName = profile?.display_name ?? user.user_metadata?.full_name ?? "Alguien";
     await sendNotification({
       supabase,
@@ -227,7 +229,10 @@ export default function PartyPage() {
       title: "Invitacion a Party",
       message: `${myName} te invito a su party`,
       link: "/party",
+      metadata: { party_id: myParty.id },
     });
+    setInvitingIds((prev) => { const s = new Set(prev); s.delete(userId); return s; });
+    setInvitedIds((prev) => new Set(prev).add(userId));
     loadMyParty();
   }, [myParty, user, profile, supabase, loadMyParty]);
 
@@ -370,9 +375,16 @@ export default function PartyPage() {
                           <span className="text-sm text-zinc-300 flex-1">{f.display_name ?? f.username}</span>
                           <button
                             onClick={() => inviteToParty(f.id)}
-                            className="px-2.5 py-1 text-xs bg-emerald-600/80 hover:bg-emerald-600 text-zinc-950 rounded transition-colors"
+                            disabled={invitingIds.has(f.id) || invitedIds.has(f.id)}
+                            className={`px-2.5 py-1 text-xs rounded transition-all duration-200 ${
+                              invitedIds.has(f.id)
+                                ? "bg-emerald-800/40 text-emerald-400 border border-emerald-600/30 cursor-default"
+                                : invitingIds.has(f.id)
+                                ? "bg-zinc-700 text-zinc-400 cursor-wait"
+                                : "bg-emerald-600/80 hover:bg-emerald-600 active:scale-95 text-zinc-950"
+                            }`}
                           >
-                            + Invitar
+                            {invitedIds.has(f.id) ? "Enviado ✓" : invitingIds.has(f.id) ? "Enviando..." : "+ Invitar"}
                           </button>
                         </div>
                       ))}

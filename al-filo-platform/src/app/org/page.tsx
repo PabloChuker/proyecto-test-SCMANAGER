@@ -48,6 +48,8 @@ export default function OrgPage() {
   // Invite
   const [inviteSearch, setInviteSearch] = useState("");
   const [inviteResults, setInviteResults] = useState<Profile[]>([]);
+  const [invitingIds, setInvitingIds] = useState<Set<string>>(new Set());
+  const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -191,6 +193,7 @@ export default function OrgPage() {
   const inviteToOrg = useCallback(
     async (userId: string) => {
       if (!profile?.org_id || !user) return;
+      setInvitingIds((prev) => new Set(prev).add(userId));
       await supabase.from("org_members").insert({
         org_id: profile.org_id,
         user_id: userId,
@@ -200,19 +203,20 @@ export default function OrgPage() {
         .from("profiles")
         .update({ org_id: profile.org_id })
         .eq("id", userId);
-      // Notify invited user
-      const orgName = org?.name ?? "una organizacion";
+      const orgNameStr = org?.name ?? "una organizacion";
       await sendNotification({
         supabase,
         recipientId: userId,
         fromUserId: user.id,
         type: "org_invite",
         title: "Invitacion a Organizacion",
-        message: `Te invitaron a unirte a ${orgName}`,
+        message: `Te invitaron a unirte a ${orgNameStr}`,
         link: "/org",
+        metadata: { org_id: profile.org_id },
       });
+      setInvitingIds((prev) => { const s = new Set(prev); s.delete(userId); return s; });
+      setInvitedIds((prev) => new Set(prev).add(userId));
       loadOrg();
-      setInviteResults((prev) => prev.filter((p) => p.id !== userId));
     },
     [profile, user, org, supabase, loadOrg]
   );
@@ -355,7 +359,19 @@ export default function OrgPage() {
                         {inviteResults.map((p) => (
                           <div key={p.id} className="flex items-center gap-2 p-1.5">
                             <span className="text-sm text-zinc-300 flex-1">{p.display_name ?? p.username}</span>
-                            <button onClick={() => inviteToOrg(p.id)} className="px-2 py-0.5 text-xs bg-emerald-600/80 text-zinc-950 rounded">+ Invitar</button>
+                            <button
+                              onClick={() => inviteToOrg(p.id)}
+                              disabled={invitingIds.has(p.id) || invitedIds.has(p.id)}
+                              className={`px-2 py-0.5 text-xs rounded transition-all duration-200 ${
+                                invitedIds.has(p.id)
+                                  ? "bg-emerald-800/40 text-emerald-400 border border-emerald-600/30 cursor-default"
+                                  : invitingIds.has(p.id)
+                                  ? "bg-zinc-700 text-zinc-400 cursor-wait"
+                                  : "bg-emerald-600/80 hover:bg-emerald-600 active:scale-95 text-zinc-950"
+                              }`}
+                            >
+                              {invitedIds.has(p.id) ? "Enviado ✓" : invitingIds.has(p.id) ? "Enviando..." : "+ Invitar"}
+                            </button>
                           </div>
                         ))}
                       </div>
