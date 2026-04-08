@@ -155,8 +155,25 @@ export async function POST(request: NextRequest) {
 
       edges = [];
 
+      // ── Realistic warbond discount caps ──
+      // CIG warbond CCU discounts are modest and scale with ship price.
+      // Based on real store data:
+      //   - Ships <$100:  ~$5 discount  (e.g. Titan $55→$50)
+      //   - Ships $100-200: ~$10 discount (e.g. Prospector $155→$145, Wolf $120→$110)
+      //   - Ships $200-400: ~$15-25 discount (e.g. Valkyrie $375→$350)
+      //   - Ships $400-700: ~$25-40 discount
+      //   - Ships $700+: ~$40-75 discount
+      function getMaxWarbondDiscount(targetMsrp: number): number {
+        if (targetMsrp < 80) return 5;
+        if (targetMsrp < 150) return 10;
+        if (targetMsrp < 300) return 15;
+        if (targetMsrp < 500) return 25;
+        if (targetMsrp < 800) return 40;
+        return 75; // Capital ships
+      }
+
       // Generate edges for all pairs where target MSRP > source MSRP
-      // This is O(n²) but n ~280 so ~78k pairs max — manageable
+      // This is O(n²) but n ~230 so ~26k pairs — manageable
       for (let i = 0; i < eligibleShips.length; i++) {
         const from = eligibleShips[i];
         for (let j = i + 1; j < eligibleShips.length; j++) {
@@ -169,21 +186,26 @@ export async function POST(request: NextRequest) {
           // Standard price = target MSRP - source MSRP
           const standardPrice = existing?.standard || (to.msrpUsd - from.msrpUsd);
 
-          // Warbond price = target warbond - source MSRP (if target has warbond)
-          // This is the theoretical price RSI would charge for a warbond CCU
+          // Warbond price calculation with realistic caps
           let warbondPrice: number | null = null;
           let isWarbondAvailable = false;
 
           if (existing?.warbond != null && existing.warbond > 0) {
-            // Use existing DB warbond price if available
+            // Use existing DB warbond price (real data)
             warbondPrice = existing.warbond;
             isWarbondAvailable = true;
-          } else if (to.warbondUsd != null && to.warbondUsd > 0) {
-            // Calculate theoretical warbond: target's warbond MSRP - source's MSRP
-            const theoreticalWB = to.warbondUsd - from.msrpUsd;
-            if (theoreticalWB > 0) {
+          } else if (to.warbondUsd != null && to.warbondUsd > 0 && standardPrice > 0) {
+            // Calculate theoretical warbond CCU with realistic discount cap
+            // The raw ship discount is: target.msrp - target.warbond
+            const rawShipDiscount = to.msrpUsd - to.warbondUsd;
+            // Cap to realistic CCU warbond discount
+            const maxDiscount = getMaxWarbondDiscount(to.msrpUsd);
+            const cappedDiscount = Math.min(rawShipDiscount, maxDiscount);
+            const theoreticalWB = standardPrice - cappedDiscount;
+
+            if (theoreticalWB > 0 && cappedDiscount > 0) {
               warbondPrice = theoreticalWB;
-              isWarbondAvailable = true; // Mark available for "Esperar" mode
+              isWarbondAvailable = true;
             }
           }
 
