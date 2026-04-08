@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useAuth, type Profile } from "@/contexts/AuthContext";
 import { createClient } from "@/lib/supabase/client";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import activityTypesFallback from "@/data/activities/activity-types.json";
 import lootItemsFallback from "@/data/activities/loot-items.json";
 
@@ -66,6 +67,25 @@ interface ActivitySession {
   loot: LootEntry[];
   mode: "lottery" | "draft";
   results: RaffleResult[] | DraftResult | null;
+}
+
+type SessionRole = "host" | "cohost" | "viewer";
+
+interface ConnectedUser {
+  id: string;
+  name: string;
+  role: SessionRole;
+}
+
+interface SyncPayload {
+  selectedActivity: string;
+  lootEntries: LootEntry[];
+  participants: Participant[];
+  raffleMode: "lottery" | "draft";
+  results: RaffleResult[] | null;
+  draftResults: DraftResult | null;
+  isRolling: boolean;
+  rollingName: string;
 }
 
 // ─── Constants ──────────────────────────────────────────────────────────────
@@ -203,6 +223,16 @@ export default function ActivityManager() {
   const [partyName, setPartyName] = useState<string | null>(null);
   const [loadingParty, setLoadingParty] = useState(true);
 
+  // ── Real-time sync state ──
+  const [partyId, setPartyId] = useState<string | null>(null);
+  const [sessionRole, setSessionRole] = useState<SessionRole>("viewer");
+  const [coHostIds, setCoHostIds] = useState<Set<string>>(new Set());
+  const [connectedUsers, setConnectedUsers] = useState<ConnectedUser[]>([]);
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const skipBroadcastRef = useRef(false);
+
+  const canManage = sessionRole === "host" || sessionRole === "cohost";
+
   // ── Load data ──
   useEffect(() => {
     fetch("/api/activities/types")
@@ -230,24 +260,35 @@ export default function ActivityManager() {
       if (!membership || membership.length === 0) {
         setPartyMembers([]);
         setPartyName(null);
+        setPartyId(null);
+        setSessionRole("host"); // No party = solo host
         setLoadingParty(false);
         return;
       }
 
-      const partyId = membership[0].party_id;
+      const pid = membership[0].party_id;
+      setPartyId(pid);
 
       const { data: party } = await supabase
         .from("parties")
-        .select("name")
-        .eq("id", partyId)
+        .select("name, leader_id")
+        .eq("id", pid)
         .single();
 
-      if (party) setPartyName(party.name);
+      if (party) {
+        setPartyName(party.name);
+        // Party leader = host, others = viewer by default
+        if (party.leader_id === user.id) {
+          setSessionRole("host");
+        } else {
+          setSessionRole("viewer");
+        }
+      }
 
       const { data: members } = await supabase
         .from("party_members")
         .select("user_id")
-        .eq("party_id", partyId);
+        .eq("party_id", pid);
 
       if (members && members.length > 0) {
         const userIds = members.map((m) => m.user_id);
@@ -261,9 +302,10 @@ export default function ActivityManager() {
       setLoadingParty(false);
     }
     loadParty();
-  }, [user, supabase]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
-  // Auto-load party members as participants when party loads
+  // ── Auto-load party members as participants ──
   const loadPartyAsParticipants = useCallback(() => {
     if (partyMembers.length === 0) return;
     const partyParticipants: Participant[] = partyMembers.map((m) => ({
@@ -274,21 +316,146 @@ export default function ActivityManager() {
       weight: 1,
       isFromParty: true,
     }));
-    // Merge: keep existing non-party participants, replace party ones
     setParticipants((prev) => {
       const manual = prev.filter((p) => !p.isFromParty);
       return [...partyParticipants, ...manual];
     });
   }, [partyMembers]);
 
-  // Auto-load on first render if there's a party
   useEffect(() => {
     if (!loadingParty && partyMembers.length > 0 && participants.length === 0) {
       loadPartyAsParticipants();
     }
   }, [loadingParty, partyMembers, participants.length, loadPartyAsParticipants]);
 
-  // ── Derived ──
+  // ═══════════════════════════════════════════════════════════════════════════
+  // REAL-TIME BROADCAST CHANNEL
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  useEffect(() => {
+    if (!partyId || !user || !profile) return;
+
+    const channel = supabase.channel(`activity-session:${partyId}`, {
+      config: { broadcast: { self: false } },
+    });
+
+    // ── Presence: who is connected ──
+    channel.on("presence", { event: "sync" }, () => {
+      const state = channel.presenceState();
+      const users: ConnectedUser[] = [];
+      for (const key of Object.keys(state)) {
+        for (const p of state[key] as unknown as { user_id: string; display_name: string; role: SessionRole }[]) {
+          if (!users.find((u) => u.id === p.user_id)) {
+            users.push({ id: p.user_id, name: p.display_name, role: p.role });
+          }
+        }
+      }
+      setConnectedUsers(users);
+    });
+
+    // ── Broadcast: state sync from host/cohost ──
+    channel.on("broadcast", { event: "state_sync" }, ({ payload }: { payload: SyncPayload }) => {
+      skipBroadcastRef.current = true;
+      setSelectedActivity(payload.selectedActivity);
+      setLootEntries(payload.lootEntries);
+      setParticipants(payload.participants);
+      setRaffleMode(payload.raffleMode);
+      setResults(payload.results);
+      setDraftResults(payload.draftResults);
+      setIsRolling(payload.isRolling);
+      setRollingName(payload.rollingName);
+      setSaved(false);
+      setTimeout(() => { skipBroadcastRef.current = false; }, 100);
+    });
+
+    // ── Broadcast: role changes ──
+    channel.on("broadcast", { event: "role_change" }, ({ payload }: { payload: { userId: string; newRole: SessionRole; allCoHostIds: string[] } }) => {
+      if (payload.userId === user.id) {
+        setSessionRole(payload.newRole);
+      }
+      setCoHostIds(new Set(payload.allCoHostIds));
+    });
+
+    channel.subscribe(async (status) => {
+      if (status === "SUBSCRIBED") {
+        await channel.track({
+          user_id: user.id,
+          display_name: profile.display_name ?? profile.username ?? "Jugador",
+          role: sessionRole,
+        });
+      }
+    });
+
+    channelRef.current = channel;
+
+    return () => {
+      supabase.removeChannel(channel);
+      channelRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [partyId, user, profile]);
+
+  // ── Re-track presence when role changes ──
+  useEffect(() => {
+    if (!channelRef.current || !user || !profile) return;
+    channelRef.current.track({
+      user_id: user.id,
+      display_name: profile.display_name ?? profile.username ?? "Jugador",
+      role: sessionRole,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionRole]);
+
+  // ── Auto-broadcast state changes if host/cohost ──
+  useEffect(() => {
+    if (!channelRef.current || !canManage || skipBroadcastRef.current) return;
+    channelRef.current.send({
+      type: "broadcast",
+      event: "state_sync",
+      payload: {
+        selectedActivity,
+        lootEntries,
+        participants,
+        raffleMode,
+        results,
+        draftResults,
+        isRolling,
+        rollingName,
+      } as SyncPayload,
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedActivity, lootEntries, participants, raffleMode, results, draftResults, isRolling, rollingName]);
+
+  // ── Promote / demote co-host ──
+  const toggleCoHost = useCallback((userId: string) => {
+    if (sessionRole !== "host") return;
+    setCoHostIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) {
+        next.delete(userId);
+      } else {
+        next.add(userId);
+      }
+      // Broadcast role change
+      if (channelRef.current) {
+        channelRef.current.send({
+          type: "broadcast",
+          event: "role_change",
+          payload: {
+            userId,
+            newRole: next.has(userId) ? "cohost" : "viewer",
+            allCoHostIds: Array.from(next),
+          },
+        });
+      }
+      return next;
+    });
+  }, [sessionRole]);
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // DERIVED
+  // ═══════════════════════════════════════════════════════════════════════════
+
   const activity = activityTypes.find((a) => a.id === selectedActivity);
 
   const groupedCatalog = useMemo(() => {
@@ -323,7 +490,10 @@ export default function ActivityManager() {
 
   const hasResults = results !== null || draftResults !== null;
 
-  // ── Participants ──
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ACTIONS
+  // ═══════════════════════════════════════════════════════════════════════════
+
   const addParticipant = useCallback(() => {
     const name = newName.trim();
     if (!name || participants.some((p) => p.name === name)) return;
@@ -368,7 +538,6 @@ export default function ActivityManager() {
   const runLottery = useCallback(async () => {
     if (participants.length === 0 || flatLoot.length === 0) return;
 
-    // Pre-load wishlists for party-based participants (they have real user IDs)
     const partyParticipantIds = participants.filter((p) => p.isFromParty).map((p) => p.id);
     let wishlists: Record<string, Set<string>> = {};
 
@@ -385,7 +554,7 @@ export default function ActivityManager() {
           }
         }
       } catch {
-        // If wishlist fetch fails, proceed without — pure lottery
+        // If wishlist fetch fails, proceed without
       }
     }
 
@@ -406,7 +575,6 @@ export default function ActivityManager() {
         const ordered = weightedShuffle(participants);
         const maxPerPerson = Math.ceil(flatLoot.length / participants.length);
 
-        // Separate wishlisted items from generic items
         const wishlistedItems: { item: (typeof flatLoot)[0]; wanters: string[] }[] = [];
         const genericItems: (typeof flatLoot)[0][] = [];
 
@@ -421,7 +589,6 @@ export default function ActivityManager() {
           }
         }
 
-        // Distribute wishlisted items first — give to the wanter who has fewest items so far
         for (const { item, wanters } of wishlistedItems) {
           const eligible = wanters
             .filter((id) => resultMap[id].items.length < maxPerPerson)
@@ -429,11 +596,10 @@ export default function ActivityManager() {
           if (eligible.length > 0) {
             resultMap[eligible[0]].items.push(item);
           } else {
-            genericItems.push(item); // Nobody can take it, fallback to generic
+            genericItems.push(item);
           }
         }
 
-        // Distribute remaining generic items round-robin
         let idx = 0;
         for (const item of shuffleArray(genericItems)) {
           const p = ordered[idx % ordered.length];
@@ -491,7 +657,6 @@ export default function ActivityManager() {
     setLootEntries([]);
     setSelectedActivity("");
     setSaved(false);
-    // Re-load party members
     if (partyMembers.length > 0) {
       const partyP: Participant[] = partyMembers.map((m) => ({
         id: m.id, name: m.display_name ?? m.username ?? "Jugador",
@@ -517,8 +682,46 @@ export default function ActivityManager() {
   // RENDER
   // ═══════════════════════════════════════════════════════════════════════════
 
+  const roleLabel = sessionRole === "host" ? "HOST" : sessionRole === "cohost" ? "CO-HOST" : "VIEWER";
+  const roleBg = sessionRole === "host" ? "bg-amber-500/20 text-amber-400 border-amber-500/30" : sessionRole === "cohost" ? "bg-sky-500/20 text-sky-400 border-sky-500/30" : "bg-zinc-700/30 text-zinc-400 border-zinc-600/30";
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
+
+      {/* ── Connected users bar ── */}
+      {partyId && connectedUsers.length > 0 && (
+        <div className="flex items-center gap-3 px-3 py-2 rounded-lg border border-zinc-800/50 bg-zinc-900/40">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[11px] text-zinc-500 uppercase tracking-wider">En vivo</span>
+          </div>
+          <div className="flex items-center gap-2 flex-1 overflow-x-auto">
+            {connectedUsers.map((u) => (
+              <div key={u.id} className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-zinc-800/60 border border-zinc-700/40 shrink-0">
+                <span className="text-xs text-zinc-300">{u.name}</span>
+                <span className={`text-[9px] px-1 rounded ${
+                  u.role === "host" ? "bg-amber-500/20 text-amber-400" :
+                  u.role === "cohost" ? "bg-sky-500/20 text-sky-400" :
+                  "bg-zinc-700/40 text-zinc-500"
+                }`}>
+                  {u.role === "host" ? "HOST" : u.role === "cohost" ? "CO-HOST" : ""}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className={`text-[10px] px-2 py-0.5 rounded-full border ${roleBg}`}>
+            {roleLabel}
+          </div>
+        </div>
+      )}
+
+      {/* ── Viewer banner ── */}
+      {partyId && !canManage && (
+        <div className="px-3 py-2 rounded-lg border border-sky-500/20 bg-sky-500/5 text-sm text-sky-400/80 text-center">
+          👁 Modo espectador — solo el host y co-hosts pueden gestionar la actividad
+        </div>
+      )}
+
       {/* ── Tabs ── */}
       <div className="flex items-center gap-3 border-b border-zinc-800/60 pb-3">
         <button
@@ -642,9 +845,11 @@ export default function ActivityManager() {
                 >
                   {saved ? "Guardado ✓" : "💾 Guardar en Historial"}
                 </button>
-                <button onClick={resetSession} className="flex-1 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 font-medium rounded transition-colors">
-                  🔄 Nueva Actividad
-                </button>
+                {canManage && (
+                  <button onClick={resetSession} className="flex-1 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 font-medium rounded transition-colors">
+                    🔄 Nueva Actividad
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -661,7 +866,8 @@ export default function ActivityManager() {
                 <select
                   value={selectedActivity}
                   onChange={(e) => setSelectedActivity(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:border-amber-500 focus:outline-none"
+                  disabled={!canManage}
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:border-amber-500 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <option value="">— Elegir actividad —</option>
                   {Object.entries(
@@ -693,7 +899,7 @@ export default function ActivityManager() {
                   <h2 className="text-xs text-zinc-500 uppercase tracking-wider">
                     Participantes ({participants.length})
                   </h2>
-                  {partyMembers.length > 0 && (
+                  {partyMembers.length > 0 && canManage && (
                     <button
                       onClick={loadPartyAsParticipants}
                       className="text-[10px] text-amber-500/70 hover:text-amber-400 transition-colors"
@@ -703,25 +909,25 @@ export default function ActivityManager() {
                   )}
                 </div>
 
-                {/* Party auto-loaded banner */}
                 {partyMembers.length > 0 && participants.some((p) => p.isFromParty) && (
                   <div className="px-2.5 py-1.5 rounded bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-400/80">
                     🎮 Miembros de <span className="font-medium">{partyName ?? "tu party"}</span> cargados automaticamente
                   </div>
                 )}
 
-                {/* Add manual participant */}
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={newName}
-                    onChange={(e) => setNewName(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && addParticipant()}
-                    placeholder="Agregar jugador manual..."
-                    className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
-                  />
-                  <button onClick={addParticipant} className="px-3 py-1.5 bg-amber-600/80 hover:bg-amber-600 active:scale-95 text-zinc-950 text-sm rounded transition-all">+</button>
-                </div>
+                {canManage && (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newName}
+                      onChange={(e) => setNewName(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && addParticipant()}
+                      placeholder="Agregar jugador manual..."
+                      className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
+                    />
+                    <button onClick={addParticipant} className="px-3 py-1.5 bg-amber-600/80 hover:bg-amber-600 active:scale-95 text-zinc-950 text-sm rounded transition-all">+</button>
+                  </div>
+                )}
 
                 {participants.length > 0 && (
                   <div className="space-y-1 max-h-64 overflow-y-auto">
@@ -735,19 +941,39 @@ export default function ActivityManager() {
                         )}
                         <span className="flex-1 text-sm text-zinc-200">{p.name}</span>
                         {p.isFromParty && <span className="text-[9px] text-amber-500/50 bg-amber-500/10 px-1 rounded">PARTY</span>}
-                        <label className="flex items-center gap-1 text-[10px] text-zinc-500 cursor-pointer">
-                          <input type="checkbox" checked={p.contributed} onChange={() => toggleContributed(p.id)} className="accent-amber-500 w-3 h-3" />
-                          Aporto
-                        </label>
-                        <div className="flex items-center gap-0.5">
-                          <span className="text-[10px] text-zinc-600">x</span>
-                          <input
-                            type="number" min={1} max={5} value={p.weight}
-                            onChange={(e) => setWeight(p.id, parseInt(e.target.value) || 1)}
-                            className="w-8 bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-[10px] text-center text-zinc-300 focus:border-amber-500 focus:outline-none"
-                          />
-                        </div>
-                        <button onClick={() => removeParticipant(p.id)} className="text-zinc-600 hover:text-red-400 text-xs">✕</button>
+
+                        {/* Co-host toggle (only host can promote party members) */}
+                        {sessionRole === "host" && p.isFromParty && p.id !== user?.id && (
+                          <button
+                            onClick={() => toggleCoHost(p.id)}
+                            className={`text-[9px] px-1.5 py-0.5 rounded border transition-colors ${
+                              coHostIds.has(p.id)
+                                ? "bg-sky-500/20 text-sky-400 border-sky-500/30 hover:bg-sky-500/10"
+                                : "bg-zinc-800/60 text-zinc-500 border-zinc-700/40 hover:text-sky-400 hover:border-sky-500/30"
+                            }`}
+                            title={coHostIds.has(p.id) ? "Quitar co-host" : "Hacer co-host"}
+                          >
+                            {coHostIds.has(p.id) ? "CO-HOST ✓" : "→ Co-host"}
+                          </button>
+                        )}
+
+                        {canManage && (
+                          <>
+                            <label className="flex items-center gap-1 text-[10px] text-zinc-500 cursor-pointer">
+                              <input type="checkbox" checked={p.contributed} onChange={() => toggleContributed(p.id)} className="accent-amber-500 w-3 h-3" />
+                              Aporto
+                            </label>
+                            <div className="flex items-center gap-0.5">
+                              <span className="text-[10px] text-zinc-600">x</span>
+                              <input
+                                type="number" min={1} max={5} value={p.weight}
+                                onChange={(e) => setWeight(p.id, parseInt(e.target.value) || 1)}
+                                className="w-8 bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-[10px] text-center text-zinc-300 focus:border-amber-500 focus:outline-none"
+                              />
+                            </div>
+                            <button onClick={() => removeParticipant(p.id)} className="text-zinc-600 hover:text-red-400 text-xs">✕</button>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -765,15 +991,15 @@ export default function ActivityManager() {
                 <h2 className="text-xs text-zinc-500 uppercase tracking-wider">Modo de Reparto</h2>
                 <div className="grid grid-cols-2 gap-2">
                   <button
-                    onClick={() => setRaffleMode("lottery")}
-                    className={`p-2.5 rounded border text-left transition-all ${raffleMode === "lottery" ? "border-amber-500 bg-amber-500/10 text-amber-300" : "border-zinc-700 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600"}`}
+                    onClick={() => canManage && setRaffleMode("lottery")}
+                    className={`p-2.5 rounded border text-left transition-all ${!canManage ? "opacity-50 cursor-not-allowed" : ""} ${raffleMode === "lottery" ? "border-amber-500 bg-amber-500/10 text-amber-300" : "border-zinc-700 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600"}`}
                   >
                     <div className="text-sm font-medium">🎰 Loteria</div>
                     <div className="text-[10px] mt-0.5 opacity-70">Reparto automatico ponderado</div>
                   </button>
                   <button
-                    onClick={() => setRaffleMode("draft")}
-                    className={`p-2.5 rounded border text-left transition-all ${raffleMode === "draft" ? "border-amber-500 bg-amber-500/10 text-amber-300" : "border-zinc-700 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600"}`}
+                    onClick={() => canManage && setRaffleMode("draft")}
+                    className={`p-2.5 rounded border text-left transition-all ${!canManage ? "opacity-50 cursor-not-allowed" : ""} ${raffleMode === "draft" ? "border-amber-500 bg-amber-500/10 text-amber-300" : "border-zinc-700 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600"}`}
                   >
                     <div className="text-sm font-medium">📋 Draft</div>
                     <div className="text-[10px] mt-0.5 opacity-70">Sortear orden, elegir por turno</div>
@@ -786,81 +1012,87 @@ export default function ActivityManager() {
             <div className="space-y-5">
               <div className="space-y-2">
                 <h2 className="text-xs text-zinc-500 uppercase tracking-wider">Cargar Botin</h2>
-                <div className="p-3 rounded border border-zinc-800/50 bg-zinc-900/30 space-y-2.5">
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="text-[10px] text-zinc-500 block mb-0.5">Categoria</label>
-                      <select
-                        value={selectedCategory}
-                        onChange={(e) => { setSelectedCategory(e.target.value); setSelectedItem(""); }}
-                        className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-200 focus:border-amber-500 focus:outline-none"
-                      >
-                        <option value="">Todas</option>
-                        {CATEGORY_ORDER.filter((c) => groupedCatalog[c]).map((c) => (
-                          <option key={c} value={c}>{CATEGORY_LABELS[c] ?? c}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-zinc-500 block mb-0.5">Item</label>
-                      <input
-                        type="text" value={lootSearch} onChange={(e) => setLootSearch(e.target.value)}
-                        placeholder="Buscar..."
-                        className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-zinc-500 block mb-0.5">Cant.</label>
-                      <input
-                        type="number" min={1} value={itemQty}
-                        onChange={(e) => setItemQty(parseInt(e.target.value) || 1)}
-                        className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-200 focus:border-amber-500 focus:outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  {(lootSearch || selectedCategory) && (
-                    <div className="max-h-36 overflow-y-auto space-y-0.5">
-                      {filteredItems.slice(0, 40).map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => { setSelectedItem(item.id); setLootSearch(item.name); }}
-                          className={`w-full text-left px-2 py-1 rounded text-xs transition-colors ${selectedItem === item.id ? "bg-amber-500/20 text-amber-300" : "hover:bg-zinc-800 text-zinc-300"}`}
+                {canManage ? (
+                  <div className="p-3 rounded border border-zinc-800/50 bg-zinc-900/30 space-y-2.5">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-[10px] text-zinc-500 block mb-0.5">Categoria</label>
+                        <select
+                          value={selectedCategory}
+                          onChange={(e) => { setSelectedCategory(e.target.value); setSelectedItem(""); }}
+                          className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-200 focus:border-amber-500 focus:outline-none"
                         >
-                          <span className={RARITY_COLORS[item.rarity] ?? ""}>{item.name}</span>
-                          <span className="text-[10px] text-zinc-600 ml-1.5">{CATEGORY_LABELS[item.category]?.split(" ")[1] ?? item.category}</span>
-                        </button>
-                      ))}
-                      {filteredItems.length === 0 && (
-                        <div className="text-[10px] text-zinc-600 py-1">Sin resultados — escribe un nombre personalizado</div>
-                      )}
+                          <option value="">Todas</option>
+                          {CATEGORY_ORDER.filter((c) => groupedCatalog[c]).map((c) => (
+                            <option key={c} value={c}>{CATEGORY_LABELS[c] ?? c}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 block mb-0.5">Item</label>
+                        <input
+                          type="text" value={lootSearch} onChange={(e) => setLootSearch(e.target.value)}
+                          placeholder="Buscar..."
+                          className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-zinc-500 block mb-0.5">Cant.</label>
+                        <input
+                          type="number" min={1} value={itemQty}
+                          onChange={(e) => setItemQty(parseInt(e.target.value) || 1)}
+                          className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-200 focus:border-amber-500 focus:outline-none"
+                        />
+                      </div>
                     </div>
-                  )}
 
-                  {!selectedItem && lootSearch && filteredItems.length === 0 && (
-                    <input
-                      type="text"
-                      value={customItemName || lootSearch}
-                      onChange={(e) => setCustomItemName(e.target.value)}
-                      placeholder="Nombre personalizado..."
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 focus:border-amber-500 focus:outline-none"
-                    />
-                  )}
+                    {(lootSearch || selectedCategory) && (
+                      <div className="max-h-36 overflow-y-auto space-y-0.5">
+                        {filteredItems.slice(0, 40).map((item) => (
+                          <button
+                            key={item.id}
+                            onClick={() => { setSelectedItem(item.id); setLootSearch(item.name); }}
+                            className={`w-full text-left px-2 py-1 rounded text-xs transition-colors ${selectedItem === item.id ? "bg-amber-500/20 text-amber-300" : "hover:bg-zinc-800 text-zinc-300"}`}
+                          >
+                            <span className={RARITY_COLORS[item.rarity] ?? ""}>{item.name}</span>
+                            <span className="text-[10px] text-zinc-600 ml-1.5">{CATEGORY_LABELS[item.category]?.split(" ")[1] ?? item.category}</span>
+                          </button>
+                        ))}
+                        {filteredItems.length === 0 && (
+                          <div className="text-[10px] text-zinc-600 py-1">Sin resultados — escribe un nombre personalizado</div>
+                        )}
+                      </div>
+                    )}
 
-                  <button
-                    onClick={() => {
-                      if (!selectedItem && !customItemName && lootSearch) setCustomItemName(lootSearch);
-                      addLootEntry();
-                    }}
-                    disabled={!selectedItem && !customItemName && !lootSearch}
-                    className="w-full py-1.5 bg-emerald-600/80 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-950 text-xs font-medium rounded transition-colors active:scale-[0.98]"
-                  >
-                    + Agregar al Botin
-                  </button>
-                </div>
+                    {!selectedItem && lootSearch && filteredItems.length === 0 && (
+                      <input
+                        type="text"
+                        value={customItemName || lootSearch}
+                        onChange={(e) => setCustomItemName(e.target.value)}
+                        placeholder="Nombre personalizado..."
+                        className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 focus:border-amber-500 focus:outline-none"
+                      />
+                    )}
+
+                    <button
+                      onClick={() => {
+                        if (!selectedItem && !customItemName && lootSearch) setCustomItemName(lootSearch);
+                        addLootEntry();
+                      }}
+                      disabled={!selectedItem && !customItemName && !lootSearch}
+                      className="w-full py-1.5 bg-emerald-600/80 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-950 text-xs font-medium rounded transition-colors active:scale-[0.98]"
+                    >
+                      + Agregar al Botin
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded border border-zinc-800/30 bg-zinc-900/20 text-xs text-zinc-500 text-center">
+                    Solo el host y co-hosts pueden cargar botin
+                  </div>
+                )}
               </div>
 
-              {/* Loot list */}
+              {/* Loot list — visible to everyone */}
               {lootEntries.length > 0 && (
                 <div className="space-y-1.5">
                   <h3 className="text-[10px] text-zinc-500 uppercase tracking-wider">
@@ -875,7 +1107,9 @@ export default function ActivityManager() {
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-zinc-400">x{entry.quantity}</span>
-                          <button onClick={() => removeLootEntry(entry.id)} className="text-zinc-600 hover:text-red-400 text-xs">✕</button>
+                          {canManage && (
+                            <button onClick={() => removeLootEntry(entry.id)} className="text-zinc-600 hover:text-red-400 text-xs">✕</button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -891,13 +1125,19 @@ export default function ActivityManager() {
               <div className="p-2.5 rounded border border-zinc-800/50 bg-zinc-900/30 text-sm text-zinc-400 text-center">
                 <span className="text-zinc-300">{participants.length}</span> participantes • <span className="text-zinc-300">{flatLoot.length}</span> items • <span className="text-amber-400">{raffleMode === "lottery" ? "Loteria" : "Draft"}</span>
               </div>
-              <button
-                onClick={() => raffleMode === "lottery" ? runLottery() : runDraft()}
-                disabled={(raffleMode === "lottery" && flatLoot.length === 0) || participants.length < 2 || isRolling}
-                className="w-full py-3 bg-amber-600/80 hover:bg-amber-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-950 text-lg font-bold rounded transition-all active:scale-[0.98] disabled:cursor-not-allowed"
-              >
-                🎲 SORTEAR
-              </button>
+              {canManage ? (
+                <button
+                  onClick={() => raffleMode === "lottery" ? runLottery() : runDraft()}
+                  disabled={(raffleMode === "lottery" && flatLoot.length === 0) || participants.length < 2 || isRolling}
+                  className="w-full py-3 bg-amber-600/80 hover:bg-amber-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-950 text-lg font-bold rounded transition-all active:scale-[0.98] disabled:cursor-not-allowed"
+                >
+                  🎲 SORTEAR
+                </button>
+              ) : (
+                <div className="w-full py-3 bg-zinc-800/60 text-zinc-500 text-lg font-bold rounded text-center">
+                  🎲 Esperando que el host inicie el sorteo...
+                </div>
+              )}
             </div>
           )}
         </>
