@@ -1,10 +1,11 @@
 // =============================================================================
 // AL FILO — Next.js Middleware
 //
-// Adds security headers to ALL responses and rate-limits API routes.
+// Adds security headers, rate-limits API routes, and refreshes Supabase sessions.
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { updateSession } from "@/lib/supabase/middleware";
 
 // ─── Simple in-memory rate limiter (per-IP, resets every window) ────────────
 
@@ -36,7 +37,7 @@ setInterval(() => {
 
 // ─── Middleware ──────────────────────────────────────────────────────────────
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const isApi = pathname.startsWith("/api/");
 
@@ -62,8 +63,8 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  // Continue with security headers on all responses
-  const response = NextResponse.next();
+  // Refresh Supabase auth session (handles token refresh via cookies)
+  const response = await updateSession(request);
 
   // Security headers
   response.headers.set("X-Content-Type-Options", "nosniff");
@@ -82,7 +83,6 @@ export function middleware(request: NextRequest) {
   // Prevent MIME sniffing on API responses
   if (isApi) {
     response.headers.set("Content-Type", "application/json");
-    // Prevent caching of POST responses
     if (request.method === "POST") {
       response.headers.set("Cache-Control", "no-store, no-cache, must-revalidate");
     }
