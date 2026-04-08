@@ -123,11 +123,17 @@ export async function POST(request: NextRequest) {
       // ═══════════════════════════════════════════════════════════════════
 
       // Gather CCU-eligible ships sorted by MSRP
+      // Extra safety: exclude known in-game variants that should never have CCUs
+      const EXCLUDE_PATTERNS = [
+        /wikelo/i, /teach.*special/i, /best in show/i, /pirate/i,
+        /executive edition/i, /citizencon.*edition/i, /\bOX$/i,
+        /star kitten/i, /ghoulish/i,
+      ];
       const eligibleShips: ShipNode[] = [];
       for (const ship of ships.values()) {
-        if (ship.isCcuEligible) {
-          eligibleShips.push(ship);
-        }
+        if (!ship.isCcuEligible) continue;
+        if (EXCLUDE_PATTERNS.some(p => p.test(ship.name))) continue;
+        eligibleShips.push(ship);
       }
       eligibleShips.sort((a, b) => a.msrpUsd - b.msrpUsd);
 
@@ -257,4 +263,4 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     );
   }
-}
+}
