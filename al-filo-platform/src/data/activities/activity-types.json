@@ -1,0 +1,175 @@
+[
+  {
+    "id": "bounty-hunting",
+    "name": "Bounty Hunting",
+    "category": "combat",
+    "description": "Caza de recompensas grupal",
+    "typicalLoot": [
+      "weapon",
+      "misc"
+    ],
+    "minPlayers": 2,
+    "maxPlayers": 6,
+    "difficulty": "hard"
+  },
+  {
+    "id": "bunker-raid",
+    "name": "Bunker Raid",
+    "category": "combat",
+    "description": "Asalto a bunkers - armas FPS y armaduras",
+    "typicalLoot": [
+      "fps_weapon",
+      "armor",
+      "material"
+    ],
+    "minPlayers": 1,
+    "maxPlayers": 4,
+    "difficulty": "medium"
+  },
+  {
+    "id": "contested-zone",
+    "name": "Contested Zone",
+    "category": "combat",
+    "description": "Zona de combate grupal - tarjetas ejecutivas y loot raro",
+    "typicalLoot": [
+      "card",
+      "weapon",
+      "armor",
+      "ship"
+    ],
+    "minPlayers": 4,
+    "maxPlayers": 8,
+    "difficulty": "hard"
+  },
+  {
+    "id": "executive-hangar",
+    "name": "Executive Hangar",
+    "category": "event",
+    "description": "Hangar ejecutivo (6 tarjetas) - nave + componentes random",
+    "typicalLoot": [
+      "ship",
+      "powerplant",
+      "shield",
+      "cooler",
+      "quantum_drive"
+    ],
+    "minPlayers": 1,
+    "maxPlayers": 8,
+    "difficulty": "extreme"
+  },
+  {
+    "id": "jumptown",
+    "name": "JumpTown Event",
+    "category": "event",
+    "description": "Evento dinamico JumpTown con carga de alto valor",
+    "typicalLoot": [
+      "material",
+      "misc"
+    ],
+    "minPlayers": 4,
+    "maxPlayers": 12,
+    "difficulty": "extreme"
+  },
+  {
+    "id": "nine-tails-lockdown",
+    "name": "Nine Tails Lockdown",
+    "category": "event",
+    "description": "Evento server-wide contra Nine Tails",
+    "typicalLoot": [
+      "weapon",
+      "armor",
+      "ship"
+    ],
+    "minPlayers": 8,
+    "maxPlayers": 50,
+    "difficulty": "extreme"
+  },
+  {
+    "id": "siege-of-orison",
+    "name": "Siege of Orison",
+    "category": "event",
+    "description": "Evento de asedio en Orison",
+    "typicalLoot": [
+      "weapon",
+      "armor",
+      "fps_weapon"
+    ],
+    "minPlayers": 4,
+    "maxPlayers": 20,
+    "difficulty": "hard"
+  },
+  {
+    "id": "xenothreat",
+    "name": "XenoThreat",
+    "category": "event",
+    "description": "Evento server-wide contra la amenaza Xeno",
+    "typicalLoot": [
+      "weapon",
+      "armor",
+      "ship",
+      "material"
+    ],
+    "minPlayers": 8,
+    "maxPlayers": 50,
+    "difficulty": "extreme"
+  },
+  {
+    "id": "cave-mining",
+    "name": "Cave Mining",
+    "category": "mining",
+    "description": "Mineria en cuevas FPS con gemas raras",
+    "typicalLoot": [
+      "material"
+    ],
+    "minPlayers": 1,
+    "maxPlayers": 4,
+    "difficulty": "easy"
+  },
+  {
+    "id": "group-mining",
+    "name": "Group Mining Op",
+    "category": "mining",
+    "description": "Operacion de mineria grupal con MOLE o flotilla",
+    "typicalLoot": [
+      "material"
+    ],
+    "minPlayers": 2,
+    "maxPlayers": 6,
+    "difficulty": "medium"
+  },
+  {
+    "id": "custom",
+    "name": "Custom Activity",
+    "category": "misc",
+    "description": "Actividad personalizada",
+    "typicalLoot": [],
+    "minPlayers": 1,
+    "maxPlayers": 50,
+    "difficulty": "medium"
+  },
+  {
+    "id": "cargo-run",
+    "name": "Cargo Run",
+    "category": "mission",
+    "description": "Transporte de carga grupal de alto valor",
+    "typicalLoot": [
+      "material",
+      "misc"
+    ],
+    "minPlayers": 1,
+    "maxPlayers": 4,
+    "difficulty": "medium"
+  },
+  {
+    "id": "salvage-op",
+    "name": "Salvage Operation",
+    "category": "salvage",
+    "description": "Operacion de salvamento grupal",
+    "typicalLoot": [
+      "material"
+    ],
+    "minPlayers": 1,
+    "maxPlayers": 4,
+    "difficulty": "easy"
+  }
+]

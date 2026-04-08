@@ -1,0 +1,1190 @@
+[
+  {
+    "id": "card-executive",
+    "name": "Executive Access Card",
+    "category": "card",
+    "subcategory": "contested_zone",
+    "rarity": "rare",
+    "estimatedValue": 50000,
+    "source": "contested-zone"
+  },
+  {
+    "id": "card-security",
+    "name": "Security Clearance Card",
+    "category": "card",
+    "subcategory": "bunker",
+    "rarity": "uncommon",
+    "estimatedValue": 20000,
+    "source": "bunker-raid"
+  },
+  {
+    "id": "cl-absolutezero",
+    "name": "AbsoluteZero (S2)",
+    "category": "cooler",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-aufeis",
+    "name": "Aufeis (S2)",
+    "category": "cooler",
+    "subcategory": "s2_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-avalanche",
+    "name": "Avalanche (S2)",
+    "category": "cooler",
+    "subcategory": "s2_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-blizzard",
+    "name": "Blizzard (S3)",
+    "category": "cooler",
+    "subcategory": "s3_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-chill-max",
+    "name": "Chill-Max (S3)",
+    "category": "cooler",
+    "subcategory": "s3_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-cryo-star",
+    "name": "Cryo-Star (S1)",
+    "category": "cooler",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-cryo-star-ex",
+    "name": "Cryo-Star EX (S2)",
+    "category": "cooler",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-cryo-star-sl",
+    "name": "Cryo-Star SL (S0)",
+    "category": "cooler",
+    "subcategory": "s0_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-cryo-star-xl",
+    "name": "Cryo-Star XL (S3)",
+    "category": "cooler",
+    "subcategory": "s3_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-eco-flow",
+    "name": "Eco-Flow (S1)",
+    "category": "cooler",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-elsen",
+    "name": "Elsen (S3)",
+    "category": "cooler",
+    "subcategory": "s3_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-endo",
+    "name": "Endo (S1)",
+    "category": "cooler",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-flashfreeze",
+    "name": "FlashFreeze (S1)",
+    "category": "cooler",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-frostbite",
+    "name": "FrostBite (S3)",
+    "category": "cooler",
+    "subcategory": "s3_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-fullfrost",
+    "name": "FullFrost (S2)",
+    "category": "cooler",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-gelid",
+    "name": "Gelid (S1)",
+    "category": "cooler",
+    "subcategory": "s1_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-glacier",
+    "name": "Glacier (S1)",
+    "category": "cooler",
+    "subcategory": "s1_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-ice-flush",
+    "name": "Ice-Flush (S3)",
+    "category": "cooler",
+    "subcategory": "s3_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-icebox",
+    "name": "IceBox (S2)",
+    "category": "cooler",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-kelvid",
+    "name": "Kelvid (S0)",
+    "category": "cooler",
+    "subcategory": "s0_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-kragen",
+    "name": "Kragen (S3)",
+    "category": "cooler",
+    "subcategory": "s3_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-nightfall",
+    "name": "NightFall (S2)",
+    "category": "cooler",
+    "subcategory": "s2_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-permafrost",
+    "name": "Permafrost (S2)",
+    "category": "cooler",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-polar",
+    "name": "Polar (S1)",
+    "category": "cooler",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-snowblind",
+    "name": "SnowBlind (S1)",
+    "category": "cooler",
+    "subcategory": "s1_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-snowfall",
+    "name": "Snowfall (S2)",
+    "category": "cooler",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-snowpack",
+    "name": "Snowpack (S2)",
+    "category": "cooler",
+    "subcategory": "s2_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-taiga",
+    "name": "Taiga (S2)",
+    "category": "cooler",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-tempest",
+    "name": "Tempest (S3)",
+    "category": "cooler",
+    "subcategory": "s3_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-tepilo",
+    "name": "Tepilo (S0)",
+    "category": "cooler",
+    "subcategory": "s0_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-ultra-flow",
+    "name": "Ultra-Flow (S1)",
+    "category": "cooler",
+    "subcategory": "s1_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-vaporblock",
+    "name": "VaporBlock (S1)",
+    "category": "cooler",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "cl-zerorush",
+    "name": "ZeroRush (S1)",
+    "category": "cooler",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "mat-bexalite",
+    "name": "Bexalite (raw ore)",
+    "category": "material",
+    "subcategory": "ore",
+    "rarity": "rare",
+    "estimatedValue": 44000,
+    "source": "group-mining"
+  },
+  {
+    "id": "mat-cmat",
+    "name": "Construction Materials",
+    "category": "material",
+    "subcategory": "salvage",
+    "rarity": "common",
+    "estimatedValue": 1800,
+    "source": "salvage-op"
+  },
+  {
+    "id": "mat-hadanite",
+    "name": "Hadanite (gem)",
+    "category": "material",
+    "subcategory": "gem",
+    "rarity": "rare",
+    "estimatedValue": 275000,
+    "source": "cave-mining"
+  },
+  {
+    "id": "mat-janalite",
+    "name": "Janalite (gem)",
+    "category": "material",
+    "subcategory": "gem",
+    "rarity": "epic",
+    "estimatedValue": 308000,
+    "source": "cave-mining"
+  },
+  {
+    "id": "mat-quantanium",
+    "name": "Quantanium (raw ore)",
+    "category": "material",
+    "subcategory": "ore",
+    "rarity": "rare",
+    "estimatedValue": 88000,
+    "source": "group-mining"
+  },
+  {
+    "id": "mat-rmc",
+    "name": "Recycled Material Composite",
+    "category": "material",
+    "subcategory": "salvage",
+    "rarity": "common",
+    "estimatedValue": 2700,
+    "source": "salvage-op"
+  },
+  {
+    "id": "auec-bounty-l",
+    "name": "Bounty Payment (Large)",
+    "category": "misc",
+    "subcategory": "auec",
+    "rarity": "rare",
+    "estimatedValue": 150000,
+    "source": "bounty-hunting"
+  },
+  {
+    "id": "auec-bounty-m",
+    "name": "Bounty Payment (Medium)",
+    "category": "misc",
+    "subcategory": "auec",
+    "rarity": "uncommon",
+    "estimatedValue": 50000,
+    "source": "bounty-hunting"
+  },
+  {
+    "id": "auec-bounty-s",
+    "name": "Bounty Payment (Small)",
+    "category": "misc",
+    "subcategory": "auec",
+    "rarity": "common",
+    "estimatedValue": 15000,
+    "source": "bounty-hunting"
+  },
+  {
+    "id": "pp-bolide",
+    "name": "Bolide (S2)",
+    "category": "powerplant",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-breton",
+    "name": "Breton (S1)",
+    "category": "powerplant",
+    "subcategory": "s1_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-celestial",
+    "name": "Celestial (S3)",
+    "category": "powerplant",
+    "subcategory": "s3_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-defiant",
+    "name": "Defiant (S0)",
+    "category": "powerplant",
+    "subcategory": "s0_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-deltamax",
+    "name": "DeltaMax (S1)",
+    "category": "powerplant",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-durango",
+    "name": "Durango (S3)",
+    "category": "powerplant",
+    "subcategory": "s3_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-dynaflux",
+    "name": "DynaFlux (S1)",
+    "category": "powerplant",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-eclipse",
+    "name": "Eclipse (S2)",
+    "category": "powerplant",
+    "subcategory": "s2_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-endurance",
+    "name": "Endurance (S1)",
+    "category": "powerplant",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-fierell-cascade",
+    "name": "Fierell Cascade (S1)",
+    "category": "powerplant",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-fulgur",
+    "name": "Fulgur (S3)",
+    "category": "powerplant",
+    "subcategory": "s3_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-gammamax",
+    "name": "GammaMax (S2)",
+    "category": "powerplant",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-genoa",
+    "name": "Genoa (S2)",
+    "category": "powerplant",
+    "subcategory": "s2_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-ionburst",
+    "name": "IonBurst (S1)",
+    "category": "powerplant",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-ionsurge",
+    "name": "IonSurge (S2)",
+    "category": "powerplant",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-ionsurge-pro",
+    "name": "IonSurge Pro (S3)",
+    "category": "powerplant",
+    "subcategory": "s3_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-ionwave",
+    "name": "IonWave (S0)",
+    "category": "powerplant",
+    "subcategory": "s0_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-js-300",
+    "name": "JS-300 (S1)",
+    "category": "powerplant",
+    "subcategory": "s1_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-js-400",
+    "name": "JS-400 (S2)",
+    "category": "powerplant",
+    "subcategory": "s2_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-js-500",
+    "name": "JS-500 (S3)",
+    "category": "powerplant",
+    "subcategory": "s3_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-lotus",
+    "name": "Lotus (S2)",
+    "category": "powerplant",
+    "subcategory": "s2_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-lumacore",
+    "name": "LumaCore (S1)",
+    "category": "powerplant",
+    "subcategory": "s1_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-luxcore",
+    "name": "LuxCore (S2)",
+    "category": "powerplant",
+    "subcategory": "s2_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-magnabloom",
+    "name": "MagnaBloom (S1)",
+    "category": "powerplant",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-megaflux",
+    "name": "MegaFlux (S3)",
+    "category": "powerplant",
+    "subcategory": "s3_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-quadracell",
+    "name": "QuadraCell (S1)",
+    "category": "powerplant",
+    "subcategory": "s1_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-quadracell-mt",
+    "name": "QuadraCell MT (S2)",
+    "category": "powerplant",
+    "subcategory": "s2_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-quadracell-mx",
+    "name": "QuadraCell MX (S3)",
+    "category": "powerplant",
+    "subcategory": "s3_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-radiance",
+    "name": "Radiance (S2)",
+    "category": "powerplant",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-reliance",
+    "name": "Reliance (S3)",
+    "category": "powerplant",
+    "subcategory": "s3_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-sedulity",
+    "name": "Sedulity (S2)",
+    "category": "powerplant",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-slipstream",
+    "name": "Slipstream (S1)",
+    "category": "powerplant",
+    "subcategory": "s1_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-starburn",
+    "name": "StarBurn (S2)",
+    "category": "powerplant",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-starheart",
+    "name": "StarHeart (S1)",
+    "category": "powerplant",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-tigerlilly",
+    "name": "TigerLilly (S3)",
+    "category": "powerplant",
+    "subcategory": "s3_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-ultraflux",
+    "name": "UltraFlux (S2)",
+    "category": "powerplant",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "pp-whiterose",
+    "name": "WhiteRose (S1)",
+    "category": "powerplant",
+    "subcategory": "s1_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "qd-allegro",
+    "name": "Allegro (S4)",
+    "category": "quantum_drive",
+    "subcategory": "s4",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "qd-atlas",
+    "name": "Atlas (S1)",
+    "category": "quantum_drive",
+    "subcategory": "s1",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "qd-erebos",
+    "name": "Erebos (S3)",
+    "category": "quantum_drive",
+    "subcategory": "s3",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "qd-frontline",
+    "name": "Frontline (S4)",
+    "category": "quantum_drive",
+    "subcategory": "s4",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "qd-hemera",
+    "name": "Hemera (S2)",
+    "category": "quantum_drive",
+    "subcategory": "s2",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "qd-qdrv-aegs-s04-javelin-scitem",
+    "name": "QDRV AEGS S04 Javelin SCItem (S4)",
+    "category": "quantum_drive",
+    "subcategory": "s4",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "qd-qdrv-s01-template",
+    "name": "QDRV S01 Template (S1)",
+    "category": "quantum_drive",
+    "subcategory": "s1",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "qd-qdrv-s02-template",
+    "name": "QDRV S02 Template (S2)",
+    "category": "quantum_drive",
+    "subcategory": "s2",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "qd-qdrv-s03-template",
+    "name": "QDRV S03 Template (S3)",
+    "category": "quantum_drive",
+    "subcategory": "s3",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "qd-qdrv-s04-template",
+    "name": "QDRV S04 Template (S4)",
+    "category": "quantum_drive",
+    "subcategory": "s4",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "qd-spectre",
+    "name": "Spectre (S1)",
+    "category": "quantum_drive",
+    "subcategory": "s1",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "qd-spicule",
+    "name": "Spicule (S2)",
+    "category": "quantum_drive",
+    "subcategory": "s2",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "qd-ts-2",
+    "name": "TS-2 (S3)",
+    "category": "quantum_drive",
+    "subcategory": "s3",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "qd-vk-00",
+    "name": "VK-00 (S1)",
+    "category": "quantum_drive",
+    "subcategory": "s1",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "qd-xl-1",
+    "name": "XL-1 (S2)",
+    "category": "quantum_drive",
+    "subcategory": "s2",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-6ca-bila",
+    "name": "6CA 'Bila' (S3)",
+    "category": "shield",
+    "subcategory": "s3_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-6ma-kozane",
+    "name": "6MA 'Kozane' (S2)",
+    "category": "shield",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-6sa-arbiter",
+    "name": "6SA 'Arbiter' (S1)",
+    "category": "shield",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-7ca-nargun",
+    "name": "7CA 'Nargun' (S3)",
+    "category": "shield",
+    "subcategory": "s3_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-7ma-lorica",
+    "name": "7MA 'Lorica' (S2)",
+    "category": "shield",
+    "subcategory": "s2_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-7sa-concord",
+    "name": "7SA 'Concord' (S1)",
+    "category": "shield",
+    "subcategory": "s1_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-armor",
+    "name": "ARMOR (S3)",
+    "category": "shield",
+    "subcategory": "s3_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-barbican",
+    "name": "Barbican (S3)",
+    "category": "shield",
+    "subcategory": "s3_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-bloc",
+    "name": "BLOC (S2)",
+    "category": "shield",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-citadel",
+    "name": "Citadel (S2)",
+    "category": "shield",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-coverall",
+    "name": "CoverAll (S2)",
+    "category": "shield",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-forcewall",
+    "name": "ForceWall (S1)",
+    "category": "shield",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-fr-66",
+    "name": "FR-66 (S1)",
+    "category": "shield",
+    "subcategory": "s1_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-fr-76",
+    "name": "FR-76 (S2)",
+    "category": "shield",
+    "subcategory": "s2_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-fr-86",
+    "name": "FR-86 (S3)",
+    "category": "shield",
+    "subcategory": "s3_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-fullblock",
+    "name": "FullBlock (S3)",
+    "category": "shield",
+    "subcategory": "s3_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-guardian",
+    "name": "Guardian (S1)",
+    "category": "shield",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-haltur",
+    "name": "Haltur (S2)",
+    "category": "shield",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-hex",
+    "name": "HEX (S1)",
+    "category": "shield",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-jaghte",
+    "name": "Jaghte (S1)",
+    "category": "shield",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-mirage",
+    "name": "Mirage (S1)",
+    "category": "shield",
+    "subcategory": "s1_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-palisade",
+    "name": "Palisade (S1)",
+    "category": "shield",
+    "subcategory": "s1_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-parapet",
+    "name": "Parapet (S3)",
+    "category": "shield",
+    "subcategory": "s3_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-rampart",
+    "name": "Rampart (S2)",
+    "category": "shield",
+    "subcategory": "s2_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-sheut",
+    "name": "Sheut (S2)",
+    "category": "shield",
+    "subcategory": "s2_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-umbra",
+    "name": "Umbra (S2)",
+    "category": "shield",
+    "subcategory": "s2_a",
+    "rarity": "uncommon",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "sh-veil",
+    "name": "Veil (S1)",
+    "category": "shield",
+    "subcategory": "s1_b",
+    "rarity": "common",
+    "estimatedValue": 0,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "ship-aurora-ln",
+    "name": "Aurora LN",
+    "category": "ship",
+    "subcategory": "starter",
+    "rarity": "common",
+    "estimatedValue": 350000,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "ship-aurora-mr",
+    "name": "Aurora MR",
+    "category": "ship",
+    "subcategory": "starter",
+    "rarity": "common",
+    "estimatedValue": 200000,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "ship-avenger-titan",
+    "name": "Avenger Titan",
+    "category": "ship",
+    "subcategory": "multi",
+    "rarity": "uncommon",
+    "estimatedValue": 785000,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "ship-constellation",
+    "name": "Constellation Andromeda",
+    "category": "ship",
+    "subcategory": "multi",
+    "rarity": "epic",
+    "estimatedValue": 3600000,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "ship-cutlass-black",
+    "name": "Cutlass Black",
+    "category": "ship",
+    "subcategory": "multi",
+    "rarity": "uncommon",
+    "estimatedValue": 1385000,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "ship-gladius",
+    "name": "Gladius",
+    "category": "ship",
+    "subcategory": "fighter",
+    "rarity": "uncommon",
+    "estimatedValue": 1100000,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "ship-hornet-f7c",
+    "name": "Hornet F7C",
+    "category": "ship",
+    "subcategory": "fighter",
+    "rarity": "rare",
+    "estimatedValue": 1500000,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "ship-mustang-alpha",
+    "name": "Mustang Alpha",
+    "category": "ship",
+    "subcategory": "starter",
+    "rarity": "common",
+    "estimatedValue": 200000,
+    "source": "executive-hangar"
+  },
+  {
+    "id": "ship-sabre",
+    "name": "Sabre",
+    "category": "ship",
+    "subcategory": "stealth",
+    "rarity": "rare",
+    "estimatedValue": 2000000,
+    "source": "executive-hangar"
+  }
+]

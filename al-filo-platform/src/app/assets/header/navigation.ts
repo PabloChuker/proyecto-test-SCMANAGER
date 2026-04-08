@@ -22,6 +22,7 @@ export const NAV_MODULES: NavModule[] = [
   { key: "components", label: "Components",       href: "/components" },
   { key: "mining",     label: "Mining",           href: "/mining" },
   { key: "crafting",   label: "Crafting",         href: "/crafting" },
+  { key: "activities", label: "Activities",       href: "/activities" },
   { key: "hangar",     label: "Hangar",           href: "/hangar" },
 ];
 
