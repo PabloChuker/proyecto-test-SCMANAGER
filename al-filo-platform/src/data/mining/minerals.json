@@ -1,40 +1,338 @@
 [
-  { "id": "SAVR", "name": "Savrinium", "type": "ship", "tier": "premium", "basePrice": 88.0, "abbr": "SAVR", "description": "Premium volatile ore" },
-  { "id": "QUAN", "name": "Quantanium", "type": "ship", "tier": "premium", "basePrice": 88.0, "abbr": "QUAN", "description": "Highly volatile, most valuable ore" },
-  { "id": "STIL", "name": "Stileron", "type": "ship", "tier": "high", "basePrice": 16.52, "abbr": "STIL", "description": "High-value ore" },
-  { "id": "RICC", "name": "Riccite", "type": "ship", "tier": "high", "basePrice": 7.94, "abbr": "RICC", "description": "Moderate-high value ore" },
-  { "id": "LIND", "name": "Lindinium", "type": "ship", "tier": "mid", "basePrice": 4.26, "abbr": "LIND", "description": "Mid-tier ore" },
-  { "id": "GOLD", "name": "Gold", "type": "ship", "tier": "premium", "basePrice": 6.08, "abbr": "GOLD", "description": "Stable high-value ore" },
-  { "id": "BEXA", "name": "Bexalite", "type": "ship", "tier": "premium", "basePrice": 44.5, "abbr": "BEX", "description": "Valuable tier-1 ore" },
-  { "id": "BORS", "name": "Borase", "type": "ship", "tier": "mid", "basePrice": 3.87, "abbr": "BORS", "description": "Mid-tier ore" },
-  { "id": "TARA", "name": "Taranite", "type": "ship", "tier": "high", "basePrice": 35.5, "abbr": "TARA", "description": "High-value ore" },
-  { "id": "BERL", "name": "Beryl", "type": "ship", "tier": "mid", "basePrice": 4.26, "abbr": "BERL", "description": "Mid-tier ore" },
-  { "id": "AGRI", "name": "Agricium", "type": "ship", "tier": "mid", "basePrice": 25.50, "abbr": "AGRI", "description": "Agricultural mineral" },
-  { "id": "TUNG", "name": "Tungsten", "type": "ship", "tier": "low", "basePrice": 3.95, "abbr": "TUNG", "description": "Heavy industrial metal" },
-  { "id": "TITA", "name": "Titanium", "type": "ship", "tier": "low", "basePrice": 8.62, "abbr": "TITA", "description": "Common industrial metal" },
-  { "id": "LARA", "name": "Laranite", "type": "ship", "tier": "high", "basePrice": 28.91, "abbr": "LARA", "description": "Premium ore found in asteroid belts" },
-  { "id": "DIAM", "name": "Diamond", "type": "ship", "tier": "low", "basePrice": 6.95, "abbr": "DIAM", "description": "Precious gemstone" },
-  { "id": "TORI", "name": "Torite", "type": "ship", "tier": "low", "basePrice": 1.0, "abbr": "TORI", "description": "Low-value ore" },
-  { "id": "ICE", "name": "Ice", "type": "ship", "tier": "low", "basePrice": 0.03, "abbr": "ICE", "description": "Frozen water" },
-  { "id": "QUAR", "name": "Quartz", "type": "ship", "tier": "low", "basePrice": 1.70, "abbr": "QUAR", "description": "Common mineral" },
-  { "id": "HEPH", "name": "Hephaestanite", "type": "ship", "tier": "mid", "basePrice": 14.0, "abbr": "HEPH", "description": "Industrial ore" },
-  { "id": "COPP", "name": "Copper", "type": "ship", "tier": "low", "basePrice": 5.71, "abbr": "COPP", "description": "Common conductor" },
-  { "id": "ALUM", "name": "Aluminum", "type": "ship", "tier": "low", "basePrice": 1.25, "abbr": "ALUM", "description": "Light metal" },
-  { "id": "TIN", "name": "Tin", "type": "ship", "tier": "low", "basePrice": 1.94, "abbr": "TIN", "description": "Soft metal" },
-  { "id": "CORU", "name": "Corundum", "type": "ship", "tier": "low", "basePrice": 2.53, "abbr": "CORU", "description": "Crystalline mineral" },
-  { "id": "IRON", "name": "Iron", "type": "ship", "tier": "low", "basePrice": 1.0, "abbr": "IRON", "description": "Most common ore" },
-  { "id": "SILI", "name": "Silicon", "type": "ship", "tier": "low", "basePrice": 1.66, "abbr": "SILI", "description": "Abundant semiconductor" },
-  { "id": "INER", "name": "Inert Material", "type": "ship", "tier": "none", "basePrice": 0.0, "abbr": "INER", "description": "Non-valuable byproduct" },
-  { "id": "JANA", "name": "Janalite", "type": "hand", "tier": "premium", "basePrice": 308.0, "abbr": "JANA", "description": "Rare cave mineral" },
-  { "id": "HADA", "name": "Hadanite", "type": "hand", "tier": "high", "basePrice": 275.0, "abbr": "HADA", "description": "Hand-mineable pink crystal" },
-  { "id": "FEYN", "name": "Feynmaline", "type": "hand", "tier": "mid", "basePrice": 100.0, "abbr": "FEYN", "description": "Surface hand-mineable crystal" },
-  { "id": "BERA", "name": "Berallium", "type": "hand", "tier": "mid", "basePrice": 89.0, "abbr": "BERA", "description": "Hand-mineable crystal" },
-  { "id": "DOLV", "name": "Dolivine", "type": "hand", "tier": "low", "basePrice": 130.0, "abbr": "DOLV", "description": "Green gem found on planet surfaces" },
-  { "id": "GLAC", "name": "Glacinium", "type": "hand", "tier": "low", "basePrice": 155.0, "abbr": "GLAC", "description": "Ice-crystal gem" },
-  { "id": "APHO", "name": "Aphorite", "type": "hand", "tier": "mid", "basePrice": 152.0, "abbr": "APHO", "description": "Blue hand-mineable crystal" },
-  { "id": "CARI", "name": "Carite", "type": "hand", "tier": "low", "basePrice": 105.0, "abbr": "CARI", "description": "Red-orange surface gem" },
-  { "id": "JACL", "name": "Jaclium", "type": "hand", "tier": "low", "basePrice": 78.0, "abbr": "JACL", "description": "Common green gem" },
-  { "id": "SALD", "name": "Saldantine", "type": "hand", "tier": "low", "basePrice": 65.0, "abbr": "SALD", "description": "Common surface crystal" },
-  { "id": "RMC", "name": "Recy. Material Composite", "type": "salvage", "tier": "mid", "basePrice": 1.59, "abbr": "RMC", "description": "Raw Materials Composite from salvage" },
-  { "id": "CMAT", "name": "Const. Materials", "type": "salvage", "tier": "mid", "basePrice": 18.84, "abbr": "CMAT", "description": "Composite Materials from salvage" }
+  {
+    "id": "QUAN",
+    "name": "Quantanium",
+    "type": "ship",
+    "tier": "premium",
+    "basePrice": 88.0,
+    "abbr": "QUAN"
+  },
+  {
+    "id": "BEXA",
+    "name": "Bexalite",
+    "type": "ship",
+    "tier": "premium",
+    "basePrice": 43.74,
+    "abbr": "BEXA"
+  },
+  {
+    "id": "JACL",
+    "name": "Jaclium",
+    "type": "ship",
+    "tier": "premium",
+    "basePrice": 22.5,
+    "abbr": "JACL"
+  },
+  {
+    "id": "SALDN",
+    "name": "Saldynium",
+    "type": "ship",
+    "tier": "premium",
+    "basePrice": 14.8,
+    "abbr": "SALDN"
+  },
+  {
+    "id": "HEPH",
+    "name": "Hephaestanite",
+    "type": "ship",
+    "tier": "premium",
+    "basePrice": 13.5,
+    "abbr": "HEPH"
+  },
+  {
+    "id": "LARA",
+    "name": "Laranite",
+    "type": "ship",
+    "tier": "high",
+    "basePrice": 27.76,
+    "abbr": "LARA"
+  },
+  {
+    "id": "AGRI",
+    "name": "Agricium",
+    "type": "ship",
+    "tier": "high",
+    "basePrice": 25.96,
+    "abbr": "AGRI"
+  },
+  {
+    "id": "TARA",
+    "name": "Taranite",
+    "type": "ship",
+    "tier": "high",
+    "basePrice": 15.75,
+    "abbr": "TARA"
+  },
+  {
+    "id": "LIND",
+    "name": "Lindinium",
+    "type": "ship",
+    "tier": "high",
+    "basePrice": 12.64,
+    "abbr": "LIND"
+  },
+  {
+    "id": "DIAM",
+    "name": "Diamond",
+    "type": "ship",
+    "tier": "high",
+    "basePrice": 6.93,
+    "abbr": "DIAM"
+  },
+  {
+    "id": "RICC",
+    "name": "Riccite",
+    "type": "ship",
+    "tier": "high",
+    "basePrice": 6.48,
+    "abbr": "RICC"
+  },
+  {
+    "id": "SAVR",
+    "name": "Savrilium",
+    "type": "ship",
+    "tier": "high",
+    "basePrice": 6.15,
+    "abbr": "SAVR"
+  },
+  {
+    "id": "BORS",
+    "name": "Borase",
+    "type": "ship",
+    "tier": "mid",
+    "basePrice": 7.75,
+    "abbr": "BORS"
+  },
+  {
+    "id": "OURA",
+    "name": "Ouratite",
+    "type": "ship",
+    "tier": "mid",
+    "basePrice": 6.25,
+    "abbr": "OURA"
+  },
+  {
+    "id": "ASLA",
+    "name": "Aslarite",
+    "type": "ship",
+    "tier": "mid",
+    "basePrice": 5.4,
+    "abbr": "ASLA"
+  },
+  {
+    "id": "GOLD",
+    "name": "Gold",
+    "type": "ship",
+    "tier": "mid",
+    "basePrice": 5.17,
+    "abbr": "GOLD"
+  },
+  {
+    "id": "BERL",
+    "name": "Beryl",
+    "type": "ship",
+    "tier": "mid",
+    "basePrice": 4.32,
+    "abbr": "BERL"
+  },
+  {
+    "id": "TORI",
+    "name": "Torite",
+    "type": "ship",
+    "tier": "mid",
+    "basePrice": 4.13,
+    "abbr": "TORI"
+  },
+  {
+    "id": "STIL",
+    "name": "Stileron",
+    "type": "ship",
+    "tier": "mid",
+    "basePrice": 3.98,
+    "abbr": "STIL"
+  },
+  {
+    "id": "TITA",
+    "name": "Titanium",
+    "type": "ship",
+    "tier": "low",
+    "basePrice": 4.27,
+    "abbr": "TITA"
+  },
+  {
+    "id": "CORU",
+    "name": "Corundum",
+    "type": "ship",
+    "tier": "low",
+    "basePrice": 2.75,
+    "abbr": "CORU"
+  },
+  {
+    "id": "COPP",
+    "name": "Copper",
+    "type": "ship",
+    "tier": "low",
+    "basePrice": 2.26,
+    "abbr": "COPP"
+  },
+  {
+    "id": "SILI",
+    "name": "Silicon",
+    "type": "ship",
+    "tier": "low",
+    "basePrice": 2.1,
+    "abbr": "SILI"
+  },
+  {
+    "id": "TUNG",
+    "name": "Tungsten",
+    "type": "ship",
+    "tier": "low",
+    "basePrice": 1.84,
+    "abbr": "TUNG"
+  },
+  {
+    "id": "QUAR",
+    "name": "Quartz",
+    "type": "ship",
+    "tier": "low",
+    "basePrice": 1.84,
+    "abbr": "QUAR"
+  },
+  {
+    "id": "TIN",
+    "name": "Tin",
+    "type": "ship",
+    "tier": "low",
+    "basePrice": 1.56,
+    "abbr": "TIN"
+  },
+  {
+    "id": "ALUM",
+    "name": "Aluminum",
+    "type": "ship",
+    "tier": "low",
+    "basePrice": 1.42,
+    "abbr": "ALUM"
+  },
+  {
+    "id": "IRON",
+    "name": "Iron",
+    "type": "ship",
+    "tier": "low",
+    "basePrice": 1.2,
+    "abbr": "IRON"
+  },
+  {
+    "id": "ICE",
+    "name": "Ice",
+    "type": "ship",
+    "tier": "low",
+    "basePrice": 0.85,
+    "abbr": "ICE"
+  },
+  {
+    "id": "INER",
+    "name": "Inert Material",
+    "type": "ship",
+    "tier": "none",
+    "basePrice": 0.0,
+    "abbr": "INER"
+  },
+  {
+    "id": "JANA",
+    "name": "Janalite",
+    "type": "hand",
+    "tier": "premium",
+    "basePrice": 308.0,
+    "abbr": "JANA"
+  },
+  {
+    "id": "HADA",
+    "name": "Hadanite",
+    "type": "hand",
+    "tier": "premium",
+    "basePrice": 275.0,
+    "abbr": "HADA"
+  },
+  {
+    "id": "GLAC",
+    "name": "Glacinium",
+    "type": "hand",
+    "tier": "high",
+    "basePrice": 155.0,
+    "abbr": "GLAC"
+  },
+  {
+    "id": "APHO",
+    "name": "Aphorite",
+    "type": "hand",
+    "tier": "high",
+    "basePrice": 152.0,
+    "abbr": "APHO"
+  },
+  {
+    "id": "DOLV",
+    "name": "Dolivine",
+    "type": "hand",
+    "tier": "mid",
+    "basePrice": 130.0,
+    "abbr": "DOLV"
+  },
+  {
+    "id": "CARI",
+    "name": "Carite",
+    "type": "hand",
+    "tier": "mid",
+    "basePrice": 105.0,
+    "abbr": "CARI"
+  },
+  {
+    "id": "FEYN",
+    "name": "Feynmaline",
+    "type": "hand",
+    "tier": "mid",
+    "basePrice": 100.0,
+    "abbr": "FEYN"
+  },
+  {
+    "id": "BERA",
+    "name": "Berallium",
+    "type": "hand",
+    "tier": "mid",
+    "basePrice": 89.0,
+    "abbr": "BERA"
+  },
+  {
+    "id": "SALD",
+    "name": "Saldantine",
+    "type": "hand",
+    "tier": "low",
+    "basePrice": 65.0,
+    "abbr": "SALD"
+  },
+  {
+    "id": "CMAT",
+    "name": "Const. Materials",
+    "type": "salvage",
+    "tier": "mid",
+    "basePrice": 2.1,
+    "abbr": "CMAT"
+  },
+  {
+    "id": "RMC",
+    "name": "Recy. Material Composite",
+    "type": "salvage",
+    "tier": "low",
+    "basePrice": 1.73,
+    "abbr": "RMC"
+  },
+  {
+    "id": "SCRP",
+    "name": "Scrap",
+    "type": "salvage",
+    "tier": "low",
+    "basePrice": 1.28,
+    "abbr": "SCRP"
+  }
 ]
