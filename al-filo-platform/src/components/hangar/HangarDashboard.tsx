@@ -10,6 +10,7 @@ import { AddCCUModal } from "./AddCCUModal";
 import { ChainList } from "./ChainList";
 import { ChainBuilder } from "./ChainBuilder";
 import { CCUChainCalculator } from "./CCUChainCalculator";
+import { QuickAddShip } from "./QuickAddShip";
 
 type TabType = "My Fleet" | "Buyback" | "CCU Chains";
 
@@ -214,6 +215,9 @@ export function HangarDashboard() {
               )}
             </div>
           )}
+
+          {/* Quick Add Ship — always visible for manual entry */}
+          <QuickAddShip defaultLocation={activeTab === "Buyback" ? "buyback" : "hangar"} />
 
           {/* Empty fleet → redirect to buyback */}
           {activeTab === "My Fleet" && fleetShips.length === 0 && fleetCCUs.length === 0 && (buybackShips.length > 0 || buybackCCUs.length > 0) && (
