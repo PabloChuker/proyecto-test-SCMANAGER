@@ -2,14 +2,17 @@
 // AL FILO — POST /api/ccu/calculate
 //
 // Calculates the cheapest CCU chain between two ships.
-// Loads all ships + CCU prices from DB, merges user's owned CCUs,
-// then runs Dijkstra's pathfinding algorithm.
+// Two modes:
+//   "Armarla Ya" (onlyAvailable=true): uses only available CCU prices
+//   "Esperar y Ahorrar" (onlyAvailable=false): generates ALL possible edges
+//     from ship MSRP/warbond data, maximizing warbond usage for max savings
 //
 // Request body:
-//   { fromShipId, toShipId, ownedCCUs?, preferWarbond?, maxSteps? }
+//   { fromShipId, toShipId, ownedCCUs?, preferWarbond?, hasBuybackToken?,
+//     onlyAvailable?, maxSteps?, excludeShipIds?, includeAlternatives? }
 //
 // Response:
-//   { chain: ChainResult, alternatives: ChainResult[] }
+//   { chain: ChainResult, alternatives: ChainResult[], meta }
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -82,28 +85,116 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── 2. Load CCU prices ──
-    // If onlyAvailable=false ("Esperar y Ahorrar"), load ALL CCU prices including unavailable
-    const ccuQuery = onlyAvailable
-      ? `SELECT from_ship_id, to_ship_id, standard_price, warbond_price,
-               is_available, is_warbond_available, is_limited
-         FROM ccu_prices WHERE is_available = true`
-      : `SELECT from_ship_id, to_ship_id, standard_price, warbond_price,
-               is_available, is_warbond_available, is_limited
-         FROM ccu_prices`;
-    const ccuRows: any[] = await prisma.$queryRawUnsafe(ccuQuery);
+    let edges: CCUEdge[];
 
-    let edges: CCUEdge[] = ccuRows.map((row) => ({
-      fromShipId: String(row.from_ship_id),
-      toShipId: String(row.to_ship_id),
-      standardPrice: Number(row.standard_price) || 0,
-      warbondPrice: row.warbond_price ? Number(row.warbond_price) : null,
-      isWarbondAvailable: row.is_warbond_available === true,
-      isOwned: false,
-      ownedLocation: null,
-      ownedPricePaid: 0,
-      isLimited: row.is_limited === true,
-    }));
+    if (onlyAvailable) {
+      // ═══════════════════════════════════════════════════════════════════
+      // MODE: "Armarla Ya" — only load existing available CCU prices
+      // ═══════════════════════════════════════════════════════════════════
+      const ccuRows: any[] = await prisma.$queryRawUnsafe(`
+        SELECT from_ship_id, to_ship_id, standard_price, warbond_price,
+               is_available, is_warbond_available, is_limited
+        FROM ccu_prices WHERE is_available = true
+      `);
+
+      edges = ccuRows.map((row) => ({
+        fromShipId: String(row.from_ship_id),
+        toShipId: String(row.to_ship_id),
+        standardPrice: Number(row.standard_price) || 0,
+        warbondPrice: row.warbond_price ? Number(row.warbond_price) : null,
+        isWarbondAvailable: row.is_warbond_available === true,
+        isOwned: false,
+        ownedLocation: null,
+        ownedPricePaid: 0,
+        isLimited: row.is_limited === true,
+      }));
+    } else {
+      // ═══════════════════════════════════════════════════════════════════
+      // MODE: "Esperar y Ahorrar" — generate ALL possible CCU edges from
+      // ship MSRP/warbond data. This creates theoretical warbond edges
+      // for every pair of CCU-eligible ships, maximizing savings.
+      //
+      // Rules:
+      // - Only use ships that ARE still sold (is_ccu_eligible = true)
+      // - Include limited ships (event/seasonal — they come back)
+      // - Include non-flight-ready ships (they're cheaper now, will rise)
+      // - Calculate warbond price as: target.warbondUsd - source.msrpUsd
+      // - Never include permanently discontinued ships (is_ccu_eligible=false)
+      // ═══════════════════════════════════════════════════════════════════
+
+      // Gather CCU-eligible ships sorted by MSRP
+      const eligibleShips: ShipNode[] = [];
+      for (const ship of ships.values()) {
+        if (ship.isCcuEligible) {
+          eligibleShips.push(ship);
+        }
+      }
+      eligibleShips.sort((a, b) => a.msrpUsd - b.msrpUsd);
+
+      // Also load existing CCU prices for reference (to get any custom prices)
+      const existingCcuRows: any[] = await prisma.$queryRawUnsafe(`
+        SELECT from_ship_id, to_ship_id, standard_price, warbond_price,
+               is_warbond_available
+        FROM ccu_prices
+      `);
+      const existingPrices = new Map<string, { standard: number; warbond: number | null; wbAvail: boolean }>();
+      for (const row of existingCcuRows) {
+        const key = `${String(row.from_ship_id)}->${String(row.to_ship_id)}`;
+        existingPrices.set(key, {
+          standard: Number(row.standard_price) || 0,
+          warbond: row.warbond_price ? Number(row.warbond_price) : null,
+          wbAvail: row.is_warbond_available === true,
+        });
+      }
+
+      edges = [];
+
+      // Generate edges for all pairs where target MSRP > source MSRP
+      // This is O(n²) but n ~280 so ~78k pairs max — manageable
+      for (let i = 0; i < eligibleShips.length; i++) {
+        const from = eligibleShips[i];
+        for (let j = i + 1; j < eligibleShips.length; j++) {
+          const to = eligibleShips[j];
+          if (to.msrpUsd <= from.msrpUsd) continue;
+
+          const key = `${from.id}->${to.id}`;
+          const existing = existingPrices.get(key);
+
+          // Standard price = target MSRP - source MSRP
+          const standardPrice = existing?.standard || (to.msrpUsd - from.msrpUsd);
+
+          // Warbond price = target warbond - source MSRP (if target has warbond)
+          // This is the theoretical price RSI would charge for a warbond CCU
+          let warbondPrice: number | null = null;
+          let isWarbondAvailable = false;
+
+          if (existing?.warbond != null && existing.warbond > 0) {
+            // Use existing DB warbond price if available
+            warbondPrice = existing.warbond;
+            isWarbondAvailable = true;
+          } else if (to.warbondUsd != null && to.warbondUsd > 0) {
+            // Calculate theoretical warbond: target's warbond MSRP - source's MSRP
+            const theoreticalWB = to.warbondUsd - from.msrpUsd;
+            if (theoreticalWB > 0) {
+              warbondPrice = theoreticalWB;
+              isWarbondAvailable = true; // Mark available for "Esperar" mode
+            }
+          }
+
+          edges.push({
+            fromShipId: from.id,
+            toShipId: to.id,
+            standardPrice,
+            warbondPrice,
+            isWarbondAvailable,
+            isOwned: false,
+            ownedLocation: null,
+            ownedPricePaid: 0,
+            isLimited: from.isLimited || to.isLimited,
+          });
+        }
+      }
+    }
 
     // ── 3. Merge user's owned CCUs ──
     if (ownedCCUs && ownedCCUs.length > 0) {
@@ -143,7 +234,6 @@ export async function POST(request: NextRequest) {
         options,
         3,
       );
-      // Remove the first result (same as main chain)
       if (alternatives.length > 0) {
         alternatives = alternatives.slice(1);
       }
@@ -157,6 +247,7 @@ export async function POST(request: NextRequest) {
         totalShips: ships.size,
         totalEdges: edges.length,
         ownedCCUsMatched: edges.filter(e => e.isOwned).length,
+        mode: onlyAvailable ? "available_now" : "wait_and_save",
       },
     });
   } catch (error: any) {

@@ -14,7 +14,7 @@
 // =============================================================================
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { useHangarStore, type HangarCCU } from "@/store/useHangarStore";
+import { useHangarStore, type HangarCCU, type HangarShip } from "@/store/useHangarStore";
 import type { ChainResult, ChainStep, PriceType, CostBreakdown } from "@/lib/ccu-engine";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -346,8 +346,41 @@ export function CCUChainCalculator() {
   const [calculating, setCalculating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Get user's owned CCUs from hangar store
+  const [fromSource, setFromSource] = useState<"store" | "fleet">("store");
+
+  // Get user's owned CCUs and ships from hangar store
   const ccus = useHangarStore((s) => s.ccus);
+  const hangarShips = useHangarStore((s) => s.ships);
+
+  // Build fleet ship options from user's hangar
+  const fleetShipOptions = useMemo(() => {
+    // Only standalone ships and game packages
+    const ownedNames = new Set<string>();
+    const results: ShipOption[] = [];
+
+    for (const hs of hangarShips) {
+      if (hs.itemCategory !== "standalone_ship" && hs.itemCategory !== "game_package") continue;
+      const name = hs.shipName.toLowerCase();
+      if (ownedNames.has(name)) continue;
+      ownedNames.add(name);
+
+      // Find matching ship in the ships DB list
+      const match = ships.find(s => {
+        const sName = s.name.toLowerCase();
+        return sName === name ||
+          sName.endsWith(" " + name) || // "Aegis Gladius" ends with "Gladius"
+          name.endsWith(" " + sName.split(" ").slice(1).join(" ").toLowerCase());
+      });
+      if (match) {
+        results.push({
+          ...match,
+          // Override with display info
+          name: `${match.name} (${hs.location === "buyback" ? "Buyback" : "Hangar"})`,
+        });
+      }
+    }
+    return results.sort((a, b) => a.msrpUsd - b.msrpUsd);
+  }, [hangarShips, ships]);
 
   // ── Load ships list ──
   useEffect(() => {
@@ -436,15 +469,40 @@ export function CCUChainCalculator() {
 
       {/* ── Ship Selection ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          {/* From Ship source toggle */}
+          <div className="flex items-center gap-1 mb-2">
+            <button
+              onClick={() => { setFromSource("fleet"); setFromShip(null); }}
+              className={`px-2.5 py-1 text-[11px] rounded-sm transition-all ${
+                fromSource === "fleet"
+                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                  : "text-zinc-500 hover:text-zinc-400 border border-transparent"
+              }`}
+            >
+              Mi Flota ({hangarShips.filter(s => s.itemCategory === "standalone_ship" || s.itemCategory === "game_package").length})
+            </button>
+            <button
+              onClick={() => { setFromSource("store"); setFromShip(null); }}
+              className={`px-2.5 py-1 text-[11px] rounded-sm transition-all ${
+                fromSource === "store"
+                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                  : "text-zinc-500 hover:text-zinc-400 border border-transparent"
+              }`}
+            >
+              Tienda
+            </button>
+          </div>
+          <ShipSearchSelect
+            label={fromSource === "fleet" ? "Nave Base (Mi Flota)" : "Nave Base (Tienda)"}
+            value={fromShip}
+            onChange={setFromShip}
+            ships={fromSource === "fleet" ? fleetShipOptions : ships}
+            excludeId={toShip?.id}
+          />
+        </div>
         <ShipSearchSelect
-          label="From Ship (Base)"
-          value={fromShip}
-          onChange={setFromShip}
-          ships={ships}
-          excludeId={toShip?.id}
-        />
-        <ShipSearchSelect
-          label="To Ship (Target)"
+          label="Nave Objetivo"
           value={toShip}
           onChange={setToShip}
           ships={ships}
