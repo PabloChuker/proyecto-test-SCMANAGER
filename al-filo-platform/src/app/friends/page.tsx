@@ -8,6 +8,7 @@ import Header from "@/app/assets/header/Header";
 import { SIDEBAR_ITEMS } from "@/app/assets/header/navigation";
 import { useAuth, type Profile } from "@/contexts/AuthContext";
 import { createClient } from "@/lib/supabase/client";
+import { sendNotification } from "@/lib/notifications";
 
 interface Friendship {
   id: string;
@@ -24,7 +25,7 @@ interface FriendDisplay {
 }
 
 export default function FriendsPage() {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
   const router = useRouter();
   const supabase = createClient();
 
@@ -158,11 +159,21 @@ export default function FriendsPage() {
         addressee_id: targetId,
         status: "pending",
       });
+      // Notify the target user
+      const myName = profile?.display_name ?? user.user_metadata?.full_name ?? "Alguien";
+      await sendNotification({
+        supabase,
+        recipientId: targetId,
+        fromUserId: user.id,
+        type: "friend_request",
+        title: "Solicitud de amistad",
+        message: `${myName} quiere ser tu amigo`,
+        link: "/friends",
+      });
       loadFriends();
-      // Remove from search results
       setSearchResults((prev) => prev.filter((p) => p.id !== targetId));
     },
-    [user, supabase, loadFriends]
+    [user, profile, supabase, loadFriends]
   );
 
   const acceptRequest = useCallback(

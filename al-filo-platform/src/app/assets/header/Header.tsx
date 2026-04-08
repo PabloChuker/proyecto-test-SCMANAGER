@@ -6,6 +6,7 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { NAV_MODULES } from "./navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import NotificationBell from "@/components/notifications/NotificationBell";
 
 interface HeaderProps {
   subtitle?: string;
@@ -98,7 +99,8 @@ export default function Header({ subtitle }: HeaderProps) {
           {loading ? (
             <div className="w-6 h-6 rounded-full bg-zinc-800 animate-pulse" />
           ) : user ? (
-            <div ref={menuRef} className="relative flex items-center">
+            <div ref={menuRef} className="relative flex items-center gap-1">
+              <NotificationBell />
               <button
                 onClick={() => setMenuOpen((v) => !v)}
                 className="flex items-center gap-1.5 hover:opacity-80 transition-opacity cursor-pointer"

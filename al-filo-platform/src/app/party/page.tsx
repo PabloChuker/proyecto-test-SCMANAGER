@@ -9,6 +9,7 @@ import { SIDEBAR_ITEMS } from "@/app/assets/header/navigation";
 import { useAuth, type Profile } from "@/contexts/AuthContext";
 import { createClient } from "@/lib/supabase/client";
 import activityTypesFallback from "@/data/activities/activity-types.json";
+import { sendNotification } from "@/lib/notifications";
 
 interface Party {
   id: string;
@@ -34,7 +35,7 @@ interface ActivityType {
 }
 
 export default function PartyPage() {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
   const router = useRouter();
   const supabase = createClient();
 
@@ -210,14 +211,25 @@ export default function PartyPage() {
   }, [myParty, supabase, loadMyParty]);
 
   const inviteToParty = useCallback(async (userId: string) => {
-    if (!myParty) return;
+    if (!myParty || !user) return;
     await supabase.from("party_members").insert({
       party_id: myParty.id,
       user_id: userId,
       role: "member",
     });
+    // Notify invited user
+    const myName = profile?.display_name ?? user.user_metadata?.full_name ?? "Alguien";
+    await sendNotification({
+      supabase,
+      recipientId: userId,
+      fromUserId: user.id,
+      type: "party_invite",
+      title: "Invitacion a Party",
+      message: `${myName} te invito a su party`,
+      link: "/party",
+    });
     loadMyParty();
-  }, [myParty, supabase, loadMyParty]);
+  }, [myParty, user, profile, supabase, loadMyParty]);
 
   if (loading || !user) {
     return (

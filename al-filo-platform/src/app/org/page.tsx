@@ -8,6 +8,7 @@ import Header from "@/app/assets/header/Header";
 import { SIDEBAR_ITEMS } from "@/app/assets/header/navigation";
 import { useAuth, type Profile } from "@/contexts/AuthContext";
 import { createClient } from "@/lib/supabase/client";
+import { sendNotification } from "@/lib/notifications";
 
 interface Organization {
   id: string;
@@ -189,7 +190,7 @@ export default function OrgPage() {
 
   const inviteToOrg = useCallback(
     async (userId: string) => {
-      if (!profile?.org_id) return;
+      if (!profile?.org_id || !user) return;
       await supabase.from("org_members").insert({
         org_id: profile.org_id,
         user_id: userId,
@@ -199,10 +200,21 @@ export default function OrgPage() {
         .from("profiles")
         .update({ org_id: profile.org_id })
         .eq("id", userId);
+      // Notify invited user
+      const orgName = org?.name ?? "una organizacion";
+      await sendNotification({
+        supabase,
+        recipientId: userId,
+        fromUserId: user.id,
+        type: "org_invite",
+        title: "Invitacion a Organizacion",
+        message: `Te invitaron a unirte a ${orgName}`,
+        link: "/org",
+      });
       loadOrg();
       setInviteResults((prev) => prev.filter((p) => p.id !== userId));
     },
-    [profile, supabase, loadOrg]
+    [profile, user, org, supabase, loadOrg]
   );
 
   const removeMember = useCallback(
