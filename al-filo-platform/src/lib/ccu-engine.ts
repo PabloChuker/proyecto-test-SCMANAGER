@@ -59,6 +59,9 @@ export interface ChainStep {
   savingsVsStandard: number; // How much saved vs standard price
   cumulativeCost: number;    // Running total up to this step
   cumulativeSavings: number; // Running savings total
+  targetMsrp: number;        // MSRP of the target ship at this step (store value)
+  acquiredCost: number;      // Total real cost to have this ship via chain (baseShipCost + cumulativeCCUs)
+  savingsVsMsrp: number;     // targetMsrp - acquiredCost (how much you save vs buying outright)
 }
 
 export interface CostBreakdown {
@@ -384,14 +387,21 @@ function reconstructPath(
       pricePaid: entry.edge.ownedPricePaid || 0,
       paymentMethod,
       savingsVsStandard: entry.edge.standardPrice - effectivePrice,
-      cumulativeCost: 0,    // Will be calculated below
-      cumulativeSavings: 0, // Will be calculated below
+      cumulativeCost: 0,     // Will be calculated below
+      cumulativeSavings: 0,  // Will be calculated below
+      targetMsrp: toShip.msrpUsd,
+      acquiredCost: 0,       // Will be calculated below
+      savingsVsMsrp: 0,      // Will be calculated below
     });
 
     current = entry.edge.fromShipId;
   }
 
-  // Calculate cumulative totals
+  const startShip = ships.get(startShipId)!;
+
+  // Calculate cumulative totals + acquired cost at each step
+  // acquiredCost = startShip.msrpUsd + sum of all CCU effective prices up to here
+  // This represents: "if I stopped here, how much did this ship cost me total?"
   let runningCost = 0;
   let runningSavings = 0;
   for (const step of steps) {
@@ -399,9 +409,10 @@ function reconstructPath(
     runningSavings += step.savingsVsStandard;
     step.cumulativeCost = runningCost;
     step.cumulativeSavings = runningSavings;
+    step.acquiredCost = startShip.msrpUsd + runningCost;
+    step.savingsVsMsrp = step.targetMsrp - step.acquiredCost;
   }
 
-  const startShip = ships.get(startShipId)!;
   const targetShip = ships.get(targetShipId)!;
   const directUpgradeCost = targetShip.msrpUsd - startShip.msrpUsd;
 

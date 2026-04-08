@@ -245,10 +245,31 @@ function ChainStepCard({ step, index, isLast }: { step: ChainStep; index: number
           </div>
         </div>
 
-        {/* Cumulative bar */}
-        <div className="mt-2 pt-2 border-t border-zinc-700/20 flex items-center justify-between">
-          <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Cumulative</span>
-          <span className="text-xs text-zinc-400 font-mono">${step.cumulativeCost.toFixed(2)}</span>
+        {/* Ship value comparison bar */}
+        <div className="mt-2 pt-2 border-t border-zinc-700/20">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Valor Tienda</span>
+              <span className="text-xs text-zinc-400 font-mono">${step.targetMsrp.toLocaleString()}</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Te sale</span>
+              <span className="text-xs text-amber-400 font-mono font-semibold">${step.acquiredCost.toFixed(2)}</span>
+            </div>
+            {step.savingsVsMsrp > 0 && (
+              <span className="text-[10px] text-emerald-400 font-mono font-medium">
+                -{((step.savingsVsMsrp / step.targetMsrp) * 100).toFixed(0)}%
+              </span>
+            )}
+          </div>
+          {step.savingsVsMsrp > 0 && (
+            <div className="mt-1 w-full bg-zinc-800/60 rounded-full h-1.5 overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-emerald-500/60 to-emerald-400/40 rounded-full transition-all"
+                style={{ width: `${Math.min(100, ((step.targetMsrp - step.savingsVsMsrp) / step.targetMsrp) * 100)}%` }}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
