@@ -659,7 +659,7 @@ export async function GET(
         focus: null,
         career: null,
         size: ship.size ?? null,
-        mass: numOrNull(ship.mass),
+        mass: numOrNull(ship.mass) ?? numOrNull(col(flightStats, "mass_total", "mass_loadout", "mass_empty")),
         boostSpeedForward: numOrNull(
           col(flightStats, "boost_speed_forward", "boostSpeedForward"),
         ),
