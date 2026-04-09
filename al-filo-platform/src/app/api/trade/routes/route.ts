@@ -60,47 +60,38 @@ async function handleTradeRoutesQuery(params: TradeRoutesQueryParams) {
     const sortOrder = validateSortDir(params.sortOrder);
     const sortCol = SORT_MAP[sortBy] || "profit";
 
-    // Build WHERE conditions for trade route calculation
-    const conditions: string[] = [];
+    // Build WHERE conditions
+    const extraConditions: string[] = [];
     const queryParams: any[] = [];
     let paramIdx = 1;
 
-    // Add filters for star system if provided
+    // Cargo SCU is always param $1
+    queryParams.push(cargo_scu);
+    const cargoParam = paramIdx;
+    paramIdx++;
+
     if (id_star_system !== null && id_star_system > 0) {
-      conditions.push(`buy_terminal.id_star_system = $${paramIdx}`);
+      extraConditions.push(`buy_terminal.id_star_system = $${paramIdx}`);
       queryParams.push(id_star_system);
       paramIdx++;
     }
 
-    // Add filters for commodity if provided
     if (id_commodity !== null && id_commodity > 0) {
-      conditions.push(`tc.id = $${paramIdx}`);
+      extraConditions.push(`tc.id = $${paramIdx}`);
       queryParams.push(id_commodity);
       paramIdx++;
     }
 
-    // Build the base query that finds buy/sell pairs
-    let whereClause = "";
-    if (conditions.length > 0) {
-      whereClause = "WHERE " + conditions.join(" AND ");
-    }
-
-    // Build the WHERE clause combining base conditions with optional filters
-    const baseConditions = [
+    // Combine base + optional conditions
+    const baseConds = [
       "bp.price_buy > 0",
       "sp.price_sell > 0",
       "bp.status_buy > 0",
       "sp.status_sell > 0",
       "bp.id_terminal != sp.id_terminal",
     ];
-    const allConditions = [...baseConditions, ...conditions];
-    const fullWhere = "WHERE " + allConditions.join(" AND ");
-
-    // Cargo SCU params
-    queryParams.push(cargo_scu, cargo_scu, cargo_scu);
-    const cargoIdx1 = paramIdx;
-    const cargoIdx2 = paramIdx + 1;
-    const cargoIdx3 = paramIdx + 2;
+    const allConds = [...baseConds, ...extraConditions];
+    const whereSQL = "WHERE " + allConds.join(" AND ");
 
     const allRoutes: any[] = await sql.unsafe(
       `SELECT
@@ -117,15 +108,17 @@ async function handleTradeRoutesQuery(params: TradeRoutesQueryParams) {
         sell_terminal.planet_name as sell_planet_name,
         bp.price_buy as price_buy,
         sp.price_sell as price_sell,
-        (sp.price_sell * $${cargoIdx1} - bp.price_buy * $${cargoIdx1}) as profit,
-        CASE WHEN bp.price_buy > 0 THEN ((sp.price_sell - bp.price_buy)::float / bp.price_buy) * 100 ELSE 0 END as roi,
-        (sp.price_sell - bp.price_buy) as profit_per_scu
+        (sp.price_sell - bp.price_buy) as profit_per_scu,
+        (sp.price_sell * $${cargoParam} - bp.price_buy * $${cargoParam}) as profit,
+        CASE WHEN bp.price_buy > 0
+             THEN ((sp.price_sell - bp.price_buy)::float / bp.price_buy) * 100
+             ELSE 0 END as roi
        FROM trade_commodities tc
        JOIN trade_prices bp ON bp.id_commodity = tc.id
        JOIN trade_terminals buy_terminal ON buy_terminal.id = bp.id_terminal
        JOIN trade_prices sp ON sp.id_commodity = tc.id
        JOIN trade_terminals sell_terminal ON sell_terminal.id = sp.id_terminal
-       ${fullWhere}
+       ${whereSQL}
        ORDER BY profit DESC
        LIMIT 5000`,
       queryParams,
