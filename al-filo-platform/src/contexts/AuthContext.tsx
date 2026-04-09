@@ -70,32 +70,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, fetchProfile]);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
+    // Listen for auth changes FIRST (catches token refresh events)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, s) => {
       setSession(s);
       setUser(s?.user ?? null);
       if (s?.user) {
         fetchProfile(s.user.id);
-        // Mark user online
-        supabase
-          .from("profiles")
-          .update({ is_online: true, last_seen: new Date().toISOString() })
-          .eq("id", s.user.id)
-          .then(() => {});
+        // Mark online on sign in or token refresh
+        if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+          supabase
+            .from("profiles")
+            .update({ is_online: true, last_seen: new Date().toISOString() })
+            .eq("id", s.user.id)
+            .then(() => {});
+        }
+      } else {
+        setProfile(null);
       }
       setLoading(false);
     });
 
-    // Listen for auth changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) {
-        fetchProfile(s.user.id);
+    // Then check for existing session — getUser() validates against server
+    // and triggers TOKEN_REFRESHED if the access token is expired but
+    // the refresh token is still valid (persisted in cookies)
+    supabase.auth.getUser().then(({ data: { user: u } }) => {
+      if (u) {
+        // getUser succeeded — session is valid, get the full session object
+        supabase.auth.getSession().then(({ data: { session: s } }) => {
+          setSession(s);
+          setUser(s?.user ?? u);
+          fetchProfile(u.id);
+          supabase
+            .from("profiles")
+            .update({ is_online: true, last_seen: new Date().toISOString() })
+            .eq("id", u.id)
+            .then(() => {});
+          setLoading(false);
+        });
       } else {
-        setProfile(null);
+        setLoading(false);
       }
     });
 
