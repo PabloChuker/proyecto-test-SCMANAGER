@@ -271,8 +271,8 @@ function renderWidget(
               <StatRow label="SCM BOOST FWD" value={fmtNum(si.boostSpeedForward)} unit="m/s" />
               <StatRow label="SCM BOOST BWD" value={fmtNum(si.boostSpeedBackward)} unit="m/s" />
               <StatRow label="NAV MAX SPEED" value={fmtNum(si.afterburnerSpeed)} unit="m/s" />
-              <StatRow label="PITCH/YAW/ROLL" value={`${fmtNum(si.pitchRate)} / ${fmtNum(si.yawRate)} / ${fmtNum(si.rollRate)}`} unit="┬░/s" />
-              {(si.boostedPitch || si.boostedYaw || si.boostedRoll) && <StatRow label="BOOSTED MAX" value={`${fmtNum(si.boostedPitch)} / ${fmtNum(si.boostedYaw)} / ${fmtNum(si.boostedRoll)}`} unit="┬░/s" />}
+              <StatRow label="PITCH/YAW/ROLL" value={`${fmtNum(si.pitchRate)} / ${fmtNum(si.yawRate)} / ${fmtNum(si.rollRate)}`} unit="°/s" />
+              {(si.boostedPitch || si.boostedYaw || si.boostedRoll) && <StatRow label="BOOSTED MAX" value={`${fmtNum(si.boostedPitch)} / ${fmtNum(si.boostedYaw)} / ${fmtNum(si.boostedRoll)}`} unit="°/s" />}
               <StatRow label="POWER CONSUMPTION" value={String(Math.round(stats.powerDraw))} />
               <StatRow label="CM DECOY/NOISE" value={`${cmDecoyCount} / ${cmNoiseCount}`} />
               <StatRow label="HP" value={si.hullHp ? fmtMass(si.hullHp) : (si.shieldHpTotal ? fmtStat(si.shieldHpTotal) : "—")} />
@@ -294,7 +294,7 @@ function renderWidget(
           <div className={flightMode === "NAV" ? "opacity-30" : ""}>
             <div className="text-[7px] font-mono text-zinc-600 tracking-wider uppercase mb-0.5">Sustained</div>
             <div className="flex items-baseline gap-3">
-              <span className="text-[11px]" style={{ color: "#ef4444", opacity: 0.5 }}>Ô¼í</span>
+              <img src="/icons/weapons.png" alt="" className="w-4 h-4" style={{ opacity: 0.5 }} />
               <span className="text-2xl font-mono font-bold tabular-nums text-red-500">{fmtDps(stats.totalDps)}</span>
               <span className="text-[10px] font-mono text-zinc-500">dps</span>
               <span className="text-lg font-mono font-bold tabular-nums text-red-400/70">{fmtStat(stats.totalAlpha)}</span>
@@ -310,7 +310,7 @@ function renderWidget(
           </div>
           <div>
             <div className="flex items-baseline gap-3">
-              <span className="text-[11px]" style={{ color: "#eab308", opacity: 0.5 }}>┬╗</span>
+              <span className="text-[11px]" style={{ color: "#eab308", opacity: 0.5 }}>⏱</span>
               <span className="text-lg font-mono font-bold tabular-nums text-amber-500">{stats.shieldRegen > 0 ? (stats.shieldHp / Math.max(stats.shieldRegen, 0.01)).toFixed(1) : "—"}</span>
               <span className="text-[10px] font-mono text-zinc-500">s full regen time</span>
             </div>

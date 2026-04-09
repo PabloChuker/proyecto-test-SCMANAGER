@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html><head><title>Chart Preview</title>
+<style>body{background:#18181b;display:flex;gap:24px;padding:24px;font-family:monospace;color:#a1a1aa}
+.card{background:#27272a;border:1px solid #3f3f46;border-radius:8px;padding:16px}
+h3{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#52525b;margin:0 0 12px 0;text-align:center}</style>
+</head><body>
+<div class="card"><h3>Strafe Profile - Gladius</h3><div id="sp"></div></div>
+<div class="card"><h3>G-Force Profile - Gladius</h3><div id="gf"></div></div>
+<script>
+// Gladius data
+const ship = { accelForward: 95.73, accelBackward: 3.95, accelUp: 26.43, accelDown: 22.47, accelStrafe: 25.11, scmSpeed: 226, boostSpeedForward: 520, boostSpeedBackward: 268, boostMultUp: 1.3, boostMultStrafe: 1.3 };
+
+function strafeProfile(sd) {
+  const fwd=sd.accelForward||0, bwd=sd.accelBackward||0, up=sd.accelUp||0, down=sd.accelDown||0, strafe=sd.accelStrafe||0;
+  const scmSpd=sd.scmSpeed||1, bfSpd=sd.boostSpeedForward||scmSpd, bbSpd=sd.boostSpeedBackward||scmSpd;
+  const rF=Math.min(bfSpd/scmSpd,3), rB=Math.min(bbSpd/scmSpd,3);
+  const bMU=sd.boostMultUp||1.3, bMS=sd.boostMultStrafe||1.3;
+  const aF=fwd*rF, aB=bwd*rB, aU=up*bMU, aD=down*bMU, aS=strafe*bMS;
+
+  const W=300,H=300,cx=W/2,cy=H/2+8;
+  const allV=[fwd,bwd,up,down,strafe,aF,aB,aU,aD,aS].filter(v=>v>0);
+  const maxV=Math.max(...allV,30);
+  const medV=allV.length>2?[...allV].sort((a,b)=>a-b)[Math.floor(allV.length/2)]:maxV;
+  const adaptive=maxV>medV*4;
+  const sRef=adaptive?Math.sqrt(maxV*medV):maxV;
+  const pxS=95/sRef;
+  const mv=v=>adaptive?Math.sqrt(v*sRef)*(v/maxV+0.5)*0.67:v;
+
+  const ix={x:Math.cos(Math.PI/6),y:Math.sin(Math.PI/6)};
+  const iz={x:-Math.cos(Math.PI/6),y:Math.sin(Math.PI/6)};
+  const iy={x:0,y:-1};
+  const proj=(x,y,z)=>({px:cx+(x*ix.x+z*iz.x+y*iy.x)*pxS,py:cy+(x*ix.y+z*iz.y+y*iy.y)*pxS});
+
+  const axL=mv(maxV)*1.3;
+  const gStep=maxV<=50?10:maxV<=150?25:maxV<=500?50:100;
+  const gLevels=Array.from({length:8},(_,i)=>(i+1)*gStep).filter(v=>mv(v)<axL);
+
+  const xP=proj(axL,0,0),xN=proj(-axL,0,0),yP=proj(0,axL,0),yN=proj(0,-axL,0),zP=proj(0,0,axL),zN=proj(0,0,-axL);
+  const sPts=[proj(mv(strafe),0,0),proj(0,mv(up),0),proj(0,0,mv(fwd)),proj(-mv(strafe),0,0),proj(0,-mv(down),0),proj(0,0,-mv(bwd))];
+  const aPts=[proj(mv(aS),0,0),proj(0,mv(aU),0),proj(0,0,mv(aF)),proj(-mv(aS),0,0),proj(0,-mv(aD),0),proj(0,0,-mv(aB))];
+
+  const faces=pts=>{const eq=[pts[0],pts[2],pts[3],pts[5]],t=pts[1],b=pts[4];return[[eq[0],t,eq[1]],[eq[1],t,eq[2]],[eq[2],t,eq[3]],[eq[3],t,eq[0]],[eq[0],b,eq[1]],[eq[1],b,eq[2]],[eq[2],b,eq[3]],[eq[3],b,eq[0]]]};
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="overflow:visible">`;
+  // Grid diamonds
+  gLevels.forEach(v=>{const r=mv(v);const p=[proj(r,0,0),proj(0,0,r),proj(-r,0,0),proj(0,0,-r)];svg+=`<polygon points="${p.map(p=>`${p.px},${p.py}`).join(' ')}" fill="none" stroke="#3f3f46" stroke-width="0.4" opacity="0.5"/>`;});
+  // Y grid
+  gLevels.forEach(v=>{const r=mv(v);const p=proj(0,r,0);svg+=`<line x1="${p.px-3}" y1="${p.py}" x2="${p.px+3}" y2="${p.py}" stroke="#52525b" stroke-width="0.6"/><text x="${p.px+6}" y="${p.py+3}" style="font-size:6px;font-family:monospace;fill:#52525b">${v}</text>`;});
+  // Axes
+  svg+=`<line x1="${xN.px}" y1="${xN.py}" x2="${xP.px}" y2="${xP.py}" stroke="#52525b" stroke-width="0.6" opacity="0.5"/>`;
+  svg+=`<line x1="${yN.px}" y1="${yN.py}" x2="${yP.px}" y2="${yP.py}" stroke="#52525b" stroke-width="0.6" opacity="0.5"/>`;
+  svg+=`<line x1="${zN.px}" y1="${zN.py}" x2="${zP.px}" y2="${zP.py}" stroke="#52525b" stroke-width="0.6" opacity="0.5"/>`;
+  // AFB shape
+  faces(aPts).forEach(f=>{svg+=`<polygon points="${f.map(p=>`${p.px},${p.py}`).join(' ')}" fill="#ef4444" fill-opacity="0.05" stroke="#ef4444" stroke-width="0.7" stroke-linejoin="round" stroke-dasharray="4,2" opacity="0.45"/>`;});
+  aPts.forEach(p=>{svg+=`<circle cx="${p.px}" cy="${p.py}" r="1.8" fill="#ef4444" opacity="0.45"/>`;});
+  // SCM shape
+  faces(sPts).forEach(f=>{svg+=`<polygon points="${f.map(p=>`${p.px},${p.py}`).join(' ')}" fill="#f59e0b" fill-opacity="0.12" stroke="#f59e0b" stroke-width="1" stroke-linejoin="round" opacity="0.75"/>`;});
+  sPts.forEach(p=>{svg+=`<circle cx="${p.px}" cy="${p.py}" r="2.5" fill="#f59e0b" stroke="#18181b" stroke-width="0.6"/>`;});
+  // Labels
+  [{p:xP,t:'Strafe R',dx:6,dy:3},{p:xN,t:'Strafe L',dx:-42,dy:3},{p:zP,t:'Fwd',dx:-10,dy:14},{p:zN,t:'Bwd',dx:4,dy:-5},{p:yP,t:'Up',dx:5,dy:3},{p:yN,t:'Down',dx:5,dy:4}].forEach(i=>{svg+=`<text x="${i.p.px+i.dx}" y="${i.p.py+i.dy}" style="font-size:8px;font-family:monospace;fill:#a1a1aa;font-weight:600">${i.t}</text>`;});
+  // Values
+  [{pt:sPts[2],val:fwd,dx:-30,dy:-10},{pt:sPts[5],val:bwd,dx:8,dy:-5},{pt:sPts[1],val:up,dx:10,dy:-3},{pt:sPts[4],val:down,dx:10,dy:6},{pt:sPts[0],val:strafe,dx:8,dy:-7}].forEach(i=>{if(i.val>0){svg+=`<rect x="${i.pt.px+i.dx-2}" y="${i.pt.py+i.dy-8}" width="42" height="11" rx="2" fill="#18181b" fill-opacity="0.85"/><text x="${i.pt.px+i.dx}" y="${i.pt.py+i.dy}" style="font-size:8px;font-family:monospace;fill:#f59e0b;font-weight:700">${Math.round(i.val)} m/s²</text>`;}});
+  // Legend
+  svg+=`<rect x="6" y="${H-18}" width="7" height="7" rx="1.5" fill="#f59e0b" opacity="0.85"/><text x="16" y="${H-11}" style="font-size:7px;font-family:monospace;fill:#71717a">SCM</text>`;
+  svg+=`<rect x="46" y="${H-18}" width="7" height="7" rx="1.5" fill="#ef4444" opacity="0.65"/><text x="56" y="${H-11}" style="font-size:7px;font-family:monospace;fill:#71717a">AFB</text>`;
+  if(adaptive) svg+=`<text x="90" y="${H-11}" style="font-size:5.5px;font-family:monospace;fill:#3f3f46;font-style:italic">adaptive scale</text>`;
+  svg+=`</svg>`;
+  return svg;
+}
+
+document.getElementById('sp').innerHTML = strafeProfile(ship);
+
+// Quick G-force version with same Gladius data
+const G=9.81;
+const gShip={...ship,fwdG:ship.accelForward/G,bwdG:ship.accelBackward/G,upG:ship.accelUp/G,downG:ship.accelDown/G,strafeG:ship.accelStrafe/G};
+document.getElementById('gf').innerHTML = `<div style="text-align:center;padding:20px;color:#52525b;font-size:12px">
+Fwd: ${gShip.fwdG.toFixed(1)}G | Bwd: ${gShip.bwdG.toFixed(1)}G<br>
+Up: ${gShip.upG.toFixed(1)}G | Down: ${gShip.downG.toFixed(1)}G<br>
+Strafe: ${gShip.strafeG.toFixed(1)}G<br><br>
+(Full 3D chart renders in React)
+</div>`;
+</script></body></html>
