@@ -78,6 +78,12 @@ function Row({ catColor, size, item, stat, isOn, isOverridden, onClick, onToggle
             <span className="text-[7px] text-zinc-600 uppercase">{stat.l}</span>
           </div>
         )}
+        {item?.componentStats?.penetrationDistance != null && item.componentStats.penetrationDistance > 0 && isOn && (
+          <div className="flex items-baseline gap-0.5 flex-shrink-0 ml-0.5">
+            <span className="text-[9px] font-mono font-medium text-emerald-400">{item.componentStats.penetrationDistance.toFixed(1)}</span>
+            <span className="text-[7px] text-zinc-600 uppercase">PEN</span>
+          </div>
+        )}
         {!indent && <svg className="w-2.5 h-2.5 text-zinc-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>}
       </button>
     </div>

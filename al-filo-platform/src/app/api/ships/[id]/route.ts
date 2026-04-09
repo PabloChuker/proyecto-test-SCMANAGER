@@ -132,6 +132,8 @@ function buildWeaponItem(row: any): any {
       fireMode: row.fire_mode ?? null,
       heatPerShot: numOrNull(row.heat_per_shot),
       emSignature: numOrNull(row.emission_em_max),
+      penetrationDistance: numOrNull(row.penetration_distance),
+      maxPenetrationThickness: numOrNull(row.max_penetration_thickness),
     },
     powerNetwork: getPowerNetworkInfo(row.class_name),
   };
@@ -706,6 +708,9 @@ export async function GET(
           col(fuelStats, "power_generation", "powerGeneration"),
         ),
         hullHp: numOrNull(col(fuelStats, "hull_hp", "hullHp")),
+        deflectionPhysical: numOrNull(ship.deflection_physical),
+        deflectionEnergy: numOrNull(ship.deflection_energy),
+        deflectionDistortion: numOrNull(ship.deflection_distortion),
       },
     };
 

@@ -68,6 +68,7 @@ export interface ShipInfo {
   boostedPitch: number | null; boostedYaw: number | null; boostedRoll: number | null;
   mass: number | null; hydrogenCapacity: number | null; quantumFuelCapacity: number | null;
   shieldHpTotal: number | null; powerGeneration: number | null; hullHp: number | null;
+  deflectionPhysical: number | null; deflectionEnergy: number | null; deflectionDistortion: number | null;
 }
 
 export type FlightMode = "SCM" | "NAV";
@@ -569,6 +570,9 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
         shieldHpTotal: toNumOrNull(sd?.shieldHpTotal),
         powerGeneration: toNumOrNull(sd?.powerGeneration),
         hullHp: toNumOrNull(sd?.hullHp),
+        deflectionPhysical: toNumOrNull(sd?.deflectionPhysical),
+        deflectionEnergy: toNumOrNull(sd?.deflectionEnergy),
+        deflectionDistortion: toNumOrNull(sd?.deflectionDistortion),
       };
 
       // Parse flatHardpoints with children

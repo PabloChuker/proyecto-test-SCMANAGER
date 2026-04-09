@@ -220,6 +220,16 @@ function renderWidget(
             <CompactStat label="SHIELD HP" value={fmtStat(stats.shieldHp)} color="#3b82f6" />
             <CompactStat label="SH REGEN" value={fmtStat(stats.shieldRegen)} color={flightMode === "NAV" ? "#52525b" : "#60a5fa"} />
           </div>
+          {(si.deflectionPhysical || si.deflectionEnergy || si.deflectionDistortion) ? (
+            <div className="border-t border-zinc-800/40 pt-1.5">
+              <div className="text-[8px] font-mono text-zinc-600 tracking-wider uppercase mb-1">Armor Deflection</div>
+              <div className="flex gap-3">
+                {si.deflectionPhysical ? <div className="flex items-center gap-1"><span className="text-[8px] font-mono text-zinc-500">PHY</span><span className="text-[11px] font-mono font-bold text-amber-400">{si.deflectionPhysical}</span></div> : null}
+                {si.deflectionEnergy ? <div className="flex items-center gap-1"><span className="text-[8px] font-mono text-zinc-500">ENG</span><span className="text-[11px] font-mono font-bold text-cyan-400">{si.deflectionEnergy}</span></div> : null}
+                {si.deflectionDistortion ? <div className="flex items-center gap-1"><span className="text-[8px] font-mono text-zinc-500">DST</span><span className="text-[11px] font-mono font-bold text-purple-400">{si.deflectionDistortion}</span></div> : null}
+              </div>
+            </div>
+          ) : null}
         </div>
       );
     case "power-grid":
