@@ -706,7 +706,7 @@ function DualRadarChart({ axes, size = 220, gridLevels = 5 }: {
   const boostColor = "#ef4444";
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, overflow: "visible" }}>
+    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, overflow: "hidden" }}>
       {/* Grid */}
       {grids.map((p, i) => <polygon key={i} points={p} fill="none" stroke="#3f3f46" strokeWidth={0.5} opacity={0.4} />)}
       {axes.map((_, i) => { const a = start + i * step; return <line key={i} x1={cx} y1={cy} x2={cx + radius * Math.cos(a)} y2={cy + radius * Math.sin(a)} stroke="#3f3f46" strokeWidth={0.5} opacity={0.3} />; })}
@@ -780,7 +780,7 @@ function StrafeProfile3D({ shipData }: { shipData: any }) {
   // Use sqrt scaling so the shape is more balanced when one axis dominates
   const useAdaptive = maxVal > medianVal * 4;
   const scaleRef = useAdaptive ? Math.sqrt(maxVal * medianVal) : maxVal;
-  const pixScale = 95 / scaleRef;
+  const pixScale = 80 / scaleRef;
 
   const mapVal = (v: number) => useAdaptive ? Math.sqrt(v * scaleRef) * (v / maxVal + 0.5) * 0.67 : v;
 
@@ -794,7 +794,7 @@ function StrafeProfile3D({ shipData }: { shipData: any }) {
     py: cy + (x * ix.y + z * iz.y + y * iy.y) * pixScale,
   });
 
-  const axLen = mapVal(maxVal) * 1.3;
+  const axLen = mapVal(maxVal) * 1.08;
   const xPos = project(axLen, 0, 0);
   const xNeg = project(-axLen, 0, 0);
   const yPos = project(0, axLen, 0);
@@ -832,7 +832,7 @@ function StrafeProfile3D({ shipData }: { shipData: any }) {
   const afbColor = "#ef4444";
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H, overflow: "visible" }}>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H, overflow: "hidden" }}>
       {/* Grid: concentric isometric diamonds on equatorial plane */}
       {gridLevels.map(v => {
         const r = mapVal(v);
@@ -973,7 +973,7 @@ function TurningProfileRadar({ shipData }: { shipData: any }) {
   const boostColor = "#ef4444";
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, overflow: "visible" }}>
+    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, overflow: "hidden" }}>
       {/* Grid polygons */}
       {grids.map((p, i) => <polygon key={i} points={p} fill="none" stroke="#3f3f46" strokeWidth={0.5} opacity={0.4} />)}
       {/* Axis lines */}
@@ -1059,12 +1059,13 @@ function GForce3DChart({ shipData }: { shipData: any }) {
   const medG = allG.length > 2 ? [...allG].sort((a, b) => a - b)[Math.floor(allG.length / 2)] : maxG;
   const useAdaptive = maxG > medG * 4;
   const scaleRefG = useAdaptive ? Math.sqrt(maxG * medG) : maxG;
-  const pixScale = 18;
-
   const mapG = (v: number) => {
     if (!useAdaptive) return v;
     return Math.sqrt(v * scaleRefG) * (v / maxG + 0.5) * 0.67;
   };
+  // Dynamic pixScale so the shape always fits within the SVG
+  const maxMappedG = mapG(maxG);
+  const pixScale = maxMappedG > 0 ? Math.min(18, 100 / maxMappedG) : 18;
 
   // Isometric basis vectors
   const ix = { x: Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) };
@@ -1076,7 +1077,7 @@ function GForce3DChart({ shipData }: { shipData: any }) {
     py: cy + (x * ix.y + z * iz.y + y * iy.y) * pixScale,
   });
 
-  const axLen = mapG(maxG) * 1.3;
+  const axLen = mapG(maxG) * 1.08;
   const xPos = project(axLen, 0, 0);
   const xNeg = project(-axLen, 0, 0);
   const yPos = project(0, axLen, 0);
@@ -1113,7 +1114,7 @@ function GForce3DChart({ shipData }: { shipData: any }) {
   const afbFaces = shapeFaces(afbPts);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H, overflow: "visible" }}>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H, overflow: "hidden" }}>
       {/* Grid: concentric equatorial diamonds at each G */}
       {gridMarks.map(g => {
         const r = mapG(g);
