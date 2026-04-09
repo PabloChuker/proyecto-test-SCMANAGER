@@ -677,6 +677,12 @@ export async function GET(
         boostSpeedBackward: numOrNull(
           col(flightStats, "boost_speed_backward", "boostSpeedBackward"),
         ),
+        boostMultUp: numOrNull(
+          col(flightStats, "boost_mult_up", "boostMultUp"),
+        ),
+        boostMultStrafe: numOrNull(
+          col(flightStats, "boost_mult_strafe", "boostMultStrafe"),
+        ),
         boostedPitch: numOrNull(
           col(flightStats, "pitch_boosted", "boosted_pitch", "boostedPitch"),
         ),

@@ -64,6 +64,7 @@ export interface ShipInfo {
   accelForward: number | null; accelBackward: number | null;
   accelUp: number | null; accelDown: number | null; accelStrafe: number | null;
   boostSpeedForward: number | null; boostSpeedBackward: number | null;
+  boostMultUp: number | null; boostMultStrafe: number | null;
   boostedPitch: number | null; boostedYaw: number | null; boostedRoll: number | null;
   mass: number | null; hydrogenCapacity: number | null; quantumFuelCapacity: number | null;
   shieldHpTotal: number | null; powerGeneration: number | null; hullHp: number | null;
@@ -557,6 +558,8 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
         accelStrafe: toNumOrNull(sd?.accelStrafe),
         boostSpeedForward: toNumOrNull(sd?.boostSpeedForward),
         boostSpeedBackward: toNumOrNull(sd?.boostSpeedBackward),
+        boostMultUp: toNumOrNull(sd?.boostMultUp),
+        boostMultStrafe: toNumOrNull(sd?.boostMultStrafe),
         boostedPitch: toNumOrNull(sd?.boostedPitch),
         boostedYaw: toNumOrNull(sd?.boostedYaw),
         boostedRoll: toNumOrNull(sd?.boostedRoll),

@@ -753,23 +753,36 @@ function StrafeProfile3D({ shipData }: { shipData: any }) {
   const down = shipData.accelDown ?? 0;
   const strafe = shipData.accelStrafe ?? 0;
 
-  // Afterburner estimates from boost speed ratios
+  // Afterburner estimates from boost speed ratios + per-axis multipliers
   const scmSpd = shipData.scmSpeed ?? 1;
   const boostFwdSpd = shipData.boostSpeedForward ?? scmSpd;
   const boostBwdSpd = shipData.boostSpeedBackward ?? scmSpd;
   const ratioF = scmSpd > 0 ? Math.min(boostFwdSpd / scmSpd, 3) : 1.5;
   const ratioB = scmSpd > 0 ? Math.min(boostBwdSpd / scmSpd, 3) : 1.3;
+  const boostMultUp = shipData.boostMultUp ?? 1.3;
+  const boostMultStrafe = shipData.boostMultStrafe ?? 1.3;
 
   const afbFwd = fwd * ratioF;
   const afbBwd = bwd * ratioB;
-  const afbUp = up;     // no boost data for vertical/lateral
-  const afbDown = down;
-  const afbStrafe = strafe;
+  const afbUp = up * boostMultUp;
+  const afbDown = down * boostMultUp;
+  const afbStrafe = strafe * boostMultStrafe;
 
-  const W = 260, H = 260;
-  const cx = W / 2, cy = H / 2 + 10;
-  const maxVal = Math.max(fwd, bwd, up, down, strafe, afbFwd, afbBwd, 30);
-  const scale = 80 / maxVal; // normalize so largest axis ≈ 80px
+  const W = 300, H = 300;
+  const cx = W / 2, cy = H / 2 + 8;
+
+  // Adaptive scale: compress the dominant axis to keep the shape readable
+  const allVals = [fwd, bwd, up, down, strafe, afbFwd, afbBwd, afbUp, afbDown, afbStrafe].filter(v => v > 0);
+  const maxVal = Math.max(...allVals, 30);
+  const medianVal = allVals.length > 2
+    ? [...allVals].sort((a, b) => a - b)[Math.floor(allVals.length / 2)]
+    : maxVal;
+  // Use sqrt scaling so the shape is more balanced when one axis dominates
+  const useAdaptive = maxVal > medianVal * 4;
+  const scaleRef = useAdaptive ? Math.sqrt(maxVal * medianVal) : maxVal;
+  const pixScale = 95 / scaleRef;
+
+  const mapVal = (v: number) => useAdaptive ? Math.sqrt(v * scaleRef) * (v / maxVal + 0.5) * 0.67 : v;
 
   // Isometric basis vectors
   const ix = { x: Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) };
@@ -777,11 +790,11 @@ function StrafeProfile3D({ shipData }: { shipData: any }) {
   const iy = { x: 0, y: -1 };
 
   const project = (x: number, y: number, z: number) => ({
-    px: cx + (x * ix.x + z * iz.x + y * iy.x) * scale,
-    py: cy + (x * ix.y + z * iz.y + y * iy.y) * scale,
+    px: cx + (x * ix.x + z * iz.x + y * iy.x) * pixScale,
+    py: cy + (x * ix.y + z * iz.y + y * iy.y) * pixScale,
   });
 
-  const axLen = maxVal * 1.35;
+  const axLen = mapVal(maxVal) * 1.3;
   const xPos = project(axLen, 0, 0);
   const xNeg = project(-axLen, 0, 0);
   const yPos = project(0, axLen, 0);
@@ -789,14 +802,19 @@ function StrafeProfile3D({ shipData }: { shipData: any }) {
   const zPos = project(0, 0, axLen);
   const zNeg = project(0, 0, -axLen);
 
+  // Grid: concentric isometric diamonds at fixed intervals
+  const gridStep = maxVal <= 50 ? 10 : maxVal <= 150 ? 25 : maxVal <= 500 ? 50 : 100;
+  const gridLevels = Array.from({ length: 8 }, (_, i) => (i + 1) * gridStep).filter(v => mapVal(v) < axLen);
+
   // SCM shape vertices: +X(strafe), +Y(up), +Z(fwd), -X(strafe), -Y(down), -Z(bwd)
+  const mv = mapVal;
   const scmPts = [
-    project(strafe, 0, 0), project(0, up, 0), project(0, 0, fwd),
-    project(-strafe, 0, 0), project(0, -down, 0), project(0, 0, -bwd),
+    project(mv(strafe), 0, 0), project(0, mv(up), 0), project(0, 0, mv(fwd)),
+    project(-mv(strafe), 0, 0), project(0, -mv(down), 0), project(0, 0, -mv(bwd)),
   ];
   const afbPts = [
-    project(afbStrafe, 0, 0), project(0, afbUp, 0), project(0, 0, afbFwd),
-    project(-afbStrafe, 0, 0), project(0, -afbDown, 0), project(0, 0, -afbBwd),
+    project(mv(afbStrafe), 0, 0), project(0, mv(afbUp), 0), project(0, 0, mv(afbFwd)),
+    project(-mv(afbStrafe), 0, 0), project(0, -mv(afbDown), 0), project(0, 0, -mv(afbBwd)),
   ];
 
   const shapeFaces = (pts: { px: number; py: number }[]) => {
@@ -813,71 +831,94 @@ function StrafeProfile3D({ shipData }: { shipData: any }) {
   const scmColor = "#f59e0b";
   const afbColor = "#ef4444";
 
-  // Grid ticks
-  const gridMarks = Array.from({ length: 8 }, (_, i) => i + 1).filter(g => g * (30 / maxVal) <= axLen / maxVal * 1.1);
-  const tickGap = Math.ceil(maxVal / 4);
-  const ticks = Array.from({ length: 6 }, (_, i) => (i + 1) * tickGap).filter(v => v < axLen);
-
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H, overflow: "visible" }}>
-      {/* Grid ticks on Y axis */}
-      {ticks.map(v => {
-        const p = project(0, v, 0);
-        return <g key={`t-${v}`} opacity={0.3}>
-          <line x1={p.px - 3} y1={p.py} x2={p.px + 3} y2={p.py} stroke="#71717a" strokeWidth={0.5} />
-          <text x={p.px + 6} y={p.py + 2} style={{ fontSize: "5px", fontFamily: "monospace", fill: "#52525b" }}>{Math.round(v)}</text>
+      {/* Grid: concentric isometric diamonds on equatorial plane */}
+      {gridLevels.map(v => {
+        const r = mapVal(v);
+        const pts = [project(r, 0, 0), project(0, 0, r), project(-r, 0, 0), project(0, 0, -r)];
+        return <polygon key={`geq-${v}`} points={pts.map(p => `${p.px},${p.py}`).join(" ")}
+          fill="none" stroke="#3f3f46" strokeWidth={0.4} opacity={0.5} />;
+      })}
+      {/* Grid ticks on Y (vertical) axis with labels */}
+      {gridLevels.map(v => {
+        const r = mapVal(v);
+        const p = project(0, r, 0);
+        return <g key={`yt-${v}`}>
+          <line x1={p.px - 3} y1={p.py} x2={p.px + 3} y2={p.py} stroke="#52525b" strokeWidth={0.6} />
+          <text x={p.px + 6} y={p.py + 3} style={{ fontSize: "6px", fontFamily: "monospace", fill: "#52525b" }}>{v}</text>
         </g>;
       })}
 
       {/* 3D axes */}
-      <line x1={xNeg.px} y1={xNeg.py} x2={xPos.px} y2={xPos.py} stroke="#71717a" strokeWidth={0.5} opacity={0.4} />
-      <line x1={yNeg.px} y1={yNeg.py} x2={yPos.px} y2={yPos.py} stroke="#71717a" strokeWidth={0.5} opacity={0.4} />
-      <line x1={zNeg.px} y1={zNeg.py} x2={zPos.px} y2={zPos.py} stroke="#71717a" strokeWidth={0.5} opacity={0.4} />
+      <line x1={xNeg.px} y1={xNeg.py} x2={xPos.px} y2={xPos.py} stroke="#52525b" strokeWidth={0.6} opacity={0.5} />
+      <line x1={yNeg.px} y1={yNeg.py} x2={yPos.px} y2={yPos.py} stroke="#52525b" strokeWidth={0.6} opacity={0.5} />
+      <line x1={zNeg.px} y1={zNeg.py} x2={zPos.px} y2={zPos.py} stroke="#52525b" strokeWidth={0.6} opacity={0.5} />
+      {/* Axis arrows */}
+      {[xPos, yPos, zPos].map((p, i) => (
+        <circle key={`arr-${i}`} cx={p.px} cy={p.py} r={1.5} fill="#52525b" opacity={0.6} />
+      ))}
 
       {/* AFB diamond (behind, dashed) */}
       {afbFaces.map((face, i) => (
-        <polygon key={`af-${i}`} points={face.map(p => `${p.px},${p.py}`).join(" ")} fill={afbColor} fillOpacity={0.06} stroke={afbColor} strokeWidth={0.6} strokeLinejoin="round" strokeDasharray="3,2" opacity={0.5} />
+        <polygon key={`af-${i}`} points={face.map(p => `${p.px},${p.py}`).join(" ")} fill={afbColor} fillOpacity={0.05} stroke={afbColor} strokeWidth={0.7} strokeLinejoin="round" strokeDasharray="4,2" opacity={0.45} />
       ))}
-      {afbPts.map((p, i) => <circle key={`av-${i}`} cx={p.px} cy={p.py} r={1.5} fill={afbColor} opacity={0.5} />)}
+      {afbPts.map((p, i) => <circle key={`av-${i}`} cx={p.px} cy={p.py} r={1.8} fill={afbColor} opacity={0.45} />)}
 
       {/* SCM diamond (front, solid) */}
       {scmFaces.map((face, i) => (
-        <polygon key={`sf-${i}`} points={face.map(p => `${p.px},${p.py}`).join(" ")} fill={scmColor} fillOpacity={0.1} stroke={scmColor} strokeWidth={0.8} strokeLinejoin="round" opacity={0.7} />
+        <polygon key={`sf-${i}`} points={face.map(p => `${p.px},${p.py}`).join(" ")} fill={scmColor} fillOpacity={0.12} stroke={scmColor} strokeWidth={1} strokeLinejoin="round" opacity={0.75} />
       ))}
-      {scmPts.map((p, i) => <circle key={`sv-${i}`} cx={p.px} cy={p.py} r={2} fill={scmColor} stroke="#18181b" strokeWidth={0.5} />)}
+      {scmPts.map((p, i) => <circle key={`sv-${i}`} cx={p.px} cy={p.py} r={2.5} fill={scmColor} stroke="#18181b" strokeWidth={0.6} />)}
 
-      {/* Axis labels */}
-      <text x={xPos.px + 4} y={xPos.py + 2} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Strafe R</text>
-      <text x={xNeg.px - 34} y={xNeg.py + 2} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Strafe L</text>
-      <text x={zPos.px - 18} y={zPos.py + 12} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Fwd</text>
-      <text x={zNeg.px + 4} y={zNeg.py - 4} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Bwd</text>
-      <text x={yPos.px + 4} y={yPos.py + 3} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Up</text>
-      <text x={yNeg.px + 4} y={yNeg.py + 3} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Down</text>
-
-      {/* SCM value labels */}
+      {/* Axis labels with background */}
       {[
-        { pt: scmPts[2], val: fwd, dx: -24, dy: -8 },
-        { pt: scmPts[5], val: bwd, dx: 8, dy: -4 },
-        { pt: scmPts[1], val: up, dx: 8, dy: -2 },
-        { pt: scmPts[4], val: down, dx: 8, dy: 4 },
-        { pt: scmPts[0], val: strafe, dx: 6, dy: -6 },
+        { p: xPos, text: "Strafe R", dx: 6, dy: 3 },
+        { p: xNeg, text: "Strafe L", dx: -42, dy: 3 },
+        { p: zPos, text: "Fwd", dx: -10, dy: 14 },
+        { p: zNeg, text: "Bwd", dx: 4, dy: -5 },
+        { p: yPos, text: "Up", dx: 5, dy: 3 },
+        { p: yNeg, text: "Down", dx: 5, dy: 4 },
+      ].map((item, i) => (
+        <text key={`axl-${i}`} x={item.p.px + item.dx} y={item.p.py + item.dy}
+          style={{ fontSize: "8px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>{item.text}</text>
+      ))}
+
+      {/* SCM value labels with pill background */}
+      {[
+        { pt: scmPts[2], val: fwd, dx: -30, dy: -10 },
+        { pt: scmPts[5], val: bwd, dx: 8, dy: -5 },
+        { pt: scmPts[1], val: up, dx: 10, dy: -3 },
+        { pt: scmPts[4], val: down, dx: 10, dy: 6 },
+        { pt: scmPts[0], val: strafe, dx: 8, dy: -7 },
       ].map((item, i) => item.val > 0 ? (
-        <text key={`sl-${i}`} x={item.pt.px + item.dx} y={item.pt.py + item.dy} style={{ fontSize: "7px", fontFamily: "monospace", fill: scmColor, fontWeight: 600 }}>{Math.round(item.val)} m/s²</text>
+        <g key={`sl-${i}`}>
+          <rect x={item.pt.px + item.dx - 2} y={item.pt.py + item.dy - 8} width={42} height={11} rx={2} fill="#18181b" fillOpacity={0.85} />
+          <text x={item.pt.px + item.dx} y={item.pt.py + item.dy}
+            style={{ fontSize: "8px", fontFamily: "monospace", fill: scmColor, fontWeight: 700 }}>{Math.round(item.val)} m/s²</text>
+        </g>
       ) : null)}
 
-      {/* AFB value labels (only show if different from SCM) */}
+      {/* AFB value labels (only show forward/backward if different) */}
       {[
-        { pt: afbPts[2], val: afbFwd, scmVal: fwd, dx: -24, dy: 4 },
-        { pt: afbPts[5], val: afbBwd, scmVal: bwd, dx: 8, dy: 8 },
-      ].map((item, i) => item.val > item.scmVal ? (
-        <text key={`al-${i}`} x={item.pt.px + item.dx} y={item.pt.py + item.dy} style={{ fontSize: "6.5px", fontFamily: "monospace", fill: afbColor, fontWeight: 500, opacity: 0.8 }}>{Math.round(item.val)} m/s²</text>
+        { pt: afbPts[2], val: afbFwd, scmVal: fwd, dx: -30, dy: 5 },
+        { pt: afbPts[5], val: afbBwd, scmVal: bwd, dx: 8, dy: 9 },
+      ].map((item, i) => item.val > item.scmVal * 1.05 ? (
+        <g key={`al-${i}`}>
+          <rect x={item.pt.px + item.dx - 2} y={item.pt.py + item.dy - 8} width={42} height={11} rx={2} fill="#18181b" fillOpacity={0.7} />
+          <text x={item.pt.px + item.dx} y={item.pt.py + item.dy}
+            style={{ fontSize: "7.5px", fontFamily: "monospace", fill: afbColor, fontWeight: 600, opacity: 0.85 }}>{Math.round(item.val)} m/s²</text>
+        </g>
       ) : null)}
 
       {/* Legend */}
-      <rect x={4} y={H - 16} width={6} height={6} rx={1} fill={scmColor} opacity={0.8} />
-      <text x={13} y={H - 10} style={{ fontSize: "6px", fontFamily: "monospace", fill: "#71717a" }}>SCM</text>
-      <rect x={40} y={H - 16} width={6} height={6} rx={1} fill={afbColor} opacity={0.6} />
-      <text x={49} y={H - 10} style={{ fontSize: "6px", fontFamily: "monospace", fill: "#71717a" }}>AFB</text>
+      <rect x={6} y={H - 18} width={7} height={7} rx={1.5} fill={scmColor} opacity={0.85} />
+      <text x={16} y={H - 11} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#71717a" }}>SCM</text>
+      <rect x={46} y={H - 18} width={7} height={7} rx={1.5} fill={afbColor} opacity={0.65} />
+      <text x={56} y={H - 11} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#71717a" }}>AFB</text>
+      {useAdaptive && (
+        <text x={90} y={H - 11} style={{ fontSize: "5.5px", fontFamily: "monospace", fill: "#3f3f46", fontStyle: "italic" }}>adaptive scale</text>
+      )}
     </svg>
   );
 }
@@ -988,179 +1029,168 @@ function TurningProfileRadar({ shipData }: { shipData: any }) {
 
 function GForce3DChart({ shipData }: { shipData: any }) {
   const G = 9.81;
-  // SCM accelerations ÔåÆ G
   const fwdG = (shipData.accelForward ?? 0) / G;
   const bwdG = (shipData.accelBackward ?? 0) / G;
   const upG = (shipData.accelUp ?? 0) / G;
   const downG = (shipData.accelDown ?? 0) / G;
   const strafeG = (shipData.accelStrafe ?? 0) / G;
 
-  // Afterburner: estimate boost acceleration from speed ratio
+  // Afterburner: boost ratios + per-axis multipliers
   const scmFwd = shipData.scmSpeed ?? 1;
   const boostFwd = shipData.boostSpeedForward ?? scmFwd;
-  const boostBwd = shipData.boostSpeedBackward ?? (shipData.scmSpeed ?? 1);
+  const boostBwd = shipData.boostSpeedBackward ?? scmFwd;
   const boostRatio = scmFwd > 0 ? boostFwd / scmFwd : 1.5;
   const boostRatioB = scmFwd > 0 ? boostBwd / scmFwd : 1.3;
+  const boostMultUp = shipData.boostMultUp ?? 1.3;
+  const boostMultStrafe = shipData.boostMultStrafe ?? 1.3;
 
   const afbFwdG = fwdG * Math.min(boostRatio, 3);
   const afbBwdG = bwdG * Math.min(boostRatioB, 3);
-  const afbUpG = upG * 1.0;   // no boost data for vertical/lateral
-  const afbDownG = downG * 1.0;
-  const afbStrafeG = strafeG * 1.0;
+  const afbUpG = upG * boostMultUp;
+  const afbDownG = downG * boostMultUp;
+  const afbStrafeG = strafeG * boostMultStrafe;
 
-  // Axes in 3D: X = Strafe, Y = Up/Down, Z = Forward/Back
-  // Isometric projection: xÔåÆ(cos30, sin30), zÔåÆ(-cos30, sin30), yÔåÆ(0,-1)
-  const W = 220, H = 220;
-  const cx = W / 2, cy = H / 2 + 10;
-  const scale = 18; // pixels per G
+  const W = 280, H = 280;
+  const cx = W / 2, cy = H / 2 + 8;
+
+  // Adaptive scale for G-forces
+  const allG = [fwdG, bwdG, upG, downG, strafeG, afbFwdG, afbBwdG, afbUpG, afbDownG, afbStrafeG].filter(v => v > 0);
+  const maxG = Math.max(...allG, 3);
+  const medG = allG.length > 2 ? [...allG].sort((a, b) => a - b)[Math.floor(allG.length / 2)] : maxG;
+  const useAdaptive = maxG > medG * 4;
+  const scaleRefG = useAdaptive ? Math.sqrt(maxG * medG) : maxG;
+  const pixScale = 18;
+
+  const mapG = (v: number) => {
+    if (!useAdaptive) return v;
+    return Math.sqrt(v * scaleRefG) * (v / maxG + 0.5) * 0.67;
+  };
 
   // Isometric basis vectors
-  const ix = { x: Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) };   // X axis ÔåÆ right-down
-  const iz = { x: -Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) };  // Z axis ÔåÆ left-down
-  const iy = { x: 0, y: -1 };                                           // Y axis ÔåÆ up
+  const ix = { x: Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) };
+  const iz = { x: -Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) };
+  const iy = { x: 0, y: -1 };
 
   const project = (x: number, y: number, z: number) => ({
-    px: cx + (x * ix.x + z * iz.x + y * iy.x) * scale,
-    py: cy + (x * ix.y + z * iz.y + y * iy.y) * scale,
+    px: cx + (x * ix.x + z * iz.x + y * iy.x) * pixScale,
+    py: cy + (x * ix.y + z * iz.y + y * iy.y) * pixScale,
   });
 
-  // Max G for axis length
-  const maxG = Math.max(fwdG, bwdG, upG, downG, strafeG, afbFwdG, afbBwdG, 3);
-  const axLen = maxG * 1.3;
-
-  // Axis endpoints
+  const axLen = mapG(maxG) * 1.3;
   const xPos = project(axLen, 0, 0);
   const xNeg = project(-axLen, 0, 0);
   const yPos = project(0, axLen, 0);
   const yNeg = project(0, -axLen, 0);
   const zPos = project(0, 0, axLen);
   const zNeg = project(0, 0, -axLen);
-  // Build 3D shapes for SCM and AFB
-  // SCM shape: a polyhedron projected to 2D (6 vertices: ┬▒X, ┬▒Y, ┬▒Z)
-  const scmPts = [
-    project(strafeG, 0, 0),    // +X (right strafe)
-    project(0, upG, 0),         // +Y (up)
-    project(0, 0, fwdG),        // +Z (forward)
-    project(-strafeG, 0, 0),   // -X (left strafe)
-    project(0, -downG, 0),      // -Y (down)
-    project(0, 0, -bwdG),       // -Z (backward)
-  ];
 
+  // Grid at each whole G
+  const gridMarks = Array.from({ length: 15 }, (_, i) => i + 1).filter(g => mapG(g) <= axLen);
+
+  const mg = mapG;
+  const scmPts = [
+    project(mg(strafeG), 0, 0), project(0, mg(upG), 0), project(0, 0, mg(fwdG)),
+    project(-mg(strafeG), 0, 0), project(0, -mg(downG), 0), project(0, 0, -mg(bwdG)),
+  ];
   const afbPts = [
-    project(afbStrafeG, 0, 0),
-    project(0, afbUpG, 0),
-    project(0, 0, afbFwdG),
-    project(-afbStrafeG, 0, 0),
-    project(0, -afbDownG, 0),
-    project(0, 0, -afbBwdG),
+    project(mg(afbStrafeG), 0, 0), project(0, mg(afbUpG), 0), project(0, 0, mg(afbFwdG)),
+    project(-mg(afbStrafeG), 0, 0), project(0, -mg(afbDownG), 0), project(0, 0, -mg(afbBwdG)),
   ];
 
   const scmColor = "#f59e0b";
   const afbColor = "#ef4444";
 
-  const shapePath = (pts: { px: number; py: number }[]) => {
-    // Draw diamond outline: +X ÔåÆ +Z ÔåÆ -X ÔåÆ -Z (equator), then connect top/bottom
-    const equator = [pts[0], pts[2], pts[3], pts[5]];
-    const top = pts[1];
-    const bottom = pts[4];
-    // Draw 8 triangular faces as a wireframe with fill
-    const faces = [
-      [equator[0], top, equator[1]],
-      [equator[1], top, equator[2]],
-      [equator[2], top, equator[3]],
-      [equator[3], top, equator[0]],
-      [equator[0], bottom, equator[1]],
-      [equator[1], bottom, equator[2]],
-      [equator[2], bottom, equator[3]],
-      [equator[3], bottom, equator[0]],
+  const shapeFaces = (pts: { px: number; py: number }[]) => {
+    const eq = [pts[0], pts[2], pts[3], pts[5]];
+    const top = pts[1], bottom = pts[4];
+    return [
+      [eq[0], top, eq[1]], [eq[1], top, eq[2]], [eq[2], top, eq[3]], [eq[3], top, eq[0]],
+      [eq[0], bottom, eq[1]], [eq[1], bottom, eq[2]], [eq[2], bottom, eq[3]], [eq[3], bottom, eq[0]],
     ];
-    return faces;
   };
 
-  const scmFaces = shapePath(scmPts);
-  const afbFaces = shapePath(afbPts);
-
-  // Grid lines along each axis
-  const gridMarks = [1, 2, 3, 4, 5, 6, 7, 8].filter(g => g <= axLen);
+  const scmFaces = shapeFaces(scmPts);
+  const afbFaces = shapeFaces(afbPts);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H }}>
-      {/* Grid tick marks on axes */}
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H, overflow: "visible" }}>
+      {/* Grid: concentric equatorial diamonds at each G */}
       {gridMarks.map(g => {
-        const tickSize = 0.15;
-        // X-axis ticks
-        const xp = project(g, 0, 0);
-        const xn = project(-g, 0, 0);
-        const xpT = project(g, tickSize, 0);
-        const xnT = project(-g, tickSize, 0);
-        // Z-axis ticks
-        const zp = project(0, 0, g);
-        const zn = project(0, 0, -g);
-        const zpT = project(0, tickSize, g);
-        const znT = project(0, tickSize, -g);
-        // Y-axis ticks
-        const yp = project(0, g, 0);
-        const yn = project(0, -g, 0);
-        const ypT = project(tickSize, g, 0);
-        const ynT = project(tickSize, -g, 0);
-        return (
-          <g key={`grid-${g}`} opacity={0.3}>
-            <line x1={xp.px} y1={xp.py} x2={xpT.px} y2={xpT.py} stroke="#71717a" strokeWidth={0.5} />
-            <line x1={xn.px} y1={xn.py} x2={xnT.px} y2={xnT.py} stroke="#71717a" strokeWidth={0.5} />
-            <line x1={zp.px} y1={zp.py} x2={zpT.px} y2={zpT.py} stroke="#71717a" strokeWidth={0.5} />
-            <line x1={zn.px} y1={zn.py} x2={znT.px} y2={znT.py} stroke="#71717a" strokeWidth={0.5} />
-            <line x1={yp.px} y1={yp.py} x2={ypT.px} y2={ypT.py} stroke="#71717a" strokeWidth={0.5} />
-            <line x1={yn.px} y1={yn.py} x2={ynT.px} y2={ynT.py} stroke="#71717a" strokeWidth={0.5} />
-            {g % 2 === 0 && (
-              <text x={yp.px + 6} y={yp.py + 2} style={{ fontSize: "5px", fontFamily: "monospace", fill: "#52525b" }}>{g}G</text>
-            )}
-          </g>
-        );
+        const r = mapG(g);
+        const pts = [project(r, 0, 0), project(0, 0, r), project(-r, 0, 0), project(0, 0, -r)];
+        return <polygon key={`geq-${g}`} points={pts.map(p => `${p.px},${p.py}`).join(" ")}
+          fill="none" stroke="#3f3f46" strokeWidth={0.4} opacity={g % 2 === 0 ? 0.6 : 0.3} />;
+      })}
+      {/* G labels on vertical axis */}
+      {gridMarks.filter(g => g % (maxG > 6 ? 2 : 1) === 0).map(g => {
+        const p = project(0, mapG(g), 0);
+        return <g key={`gl-${g}`}>
+          <line x1={p.px - 3} y1={p.py} x2={p.px + 3} y2={p.py} stroke="#52525b" strokeWidth={0.6} />
+          <text x={p.px + 6} y={p.py + 3} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#52525b", fontWeight: 600 }}>{g}G</text>
+        </g>;
       })}
 
+      {/* Human tolerance reference at 9G (approximate) */}
+      {maxG > 7 && (() => {
+        const r9 = mapG(9);
+        const pts9 = [project(r9, 0, 0), project(0, 0, r9), project(-r9, 0, 0), project(0, 0, -r9)];
+        return <polygon points={pts9.map(p => `${p.px},${p.py}`).join(" ")}
+          fill="none" stroke="#dc2626" strokeWidth={0.5} strokeDasharray="2,3" opacity={0.4} />;
+      })()}
+
       {/* 3D axes */}
-      <line x1={xNeg.px} y1={xNeg.py} x2={xPos.px} y2={xPos.py} stroke="#71717a" strokeWidth={0.5} opacity={0.4} />
-      <line x1={yNeg.px} y1={yNeg.py} x2={yPos.px} y2={yPos.py} stroke="#71717a" strokeWidth={0.5} opacity={0.4} />
-      <line x1={zNeg.px} y1={zNeg.py} x2={zPos.px} y2={zPos.py} stroke="#71717a" strokeWidth={0.5} opacity={0.4} />
+      <line x1={xNeg.px} y1={xNeg.py} x2={xPos.px} y2={xPos.py} stroke="#52525b" strokeWidth={0.6} opacity={0.5} />
+      <line x1={yNeg.px} y1={yNeg.py} x2={yPos.px} y2={yPos.py} stroke="#52525b" strokeWidth={0.6} opacity={0.5} />
+      <line x1={zNeg.px} y1={zNeg.py} x2={zPos.px} y2={zPos.py} stroke="#52525b" strokeWidth={0.6} opacity={0.5} />
 
       {/* AFB 3D diamond (behind) */}
       {afbFaces.map((face, i) => (
-        <polygon key={`afb-f${i}`} points={face.map(p => `${p.px},${p.py}`).join(" ")} fill={afbColor} fillOpacity={0.06} stroke={afbColor} strokeWidth={0.6} strokeLinejoin="round" strokeDasharray="3,2" opacity={0.5} />
+        <polygon key={`afb-f${i}`} points={face.map(p => `${p.px},${p.py}`).join(" ")} fill={afbColor} fillOpacity={0.05} stroke={afbColor} strokeWidth={0.7} strokeLinejoin="round" strokeDasharray="4,2" opacity={0.45} />
       ))}
-      {/* AFB vertices */}
-      {afbPts.map((p, i) => <circle key={`afb-v${i}`} cx={p.px} cy={p.py} r={1.5} fill={afbColor} opacity={0.5} />)}
+      {afbPts.map((p, i) => <circle key={`afb-v${i}`} cx={p.px} cy={p.py} r={1.8} fill={afbColor} opacity={0.45} />)}
 
       {/* SCM 3D diamond (front) */}
       {scmFaces.map((face, i) => (
-        <polygon key={`scm-f${i}`} points={face.map(p => `${p.px},${p.py}`).join(" ")} fill={scmColor} fillOpacity={0.1} stroke={scmColor} strokeWidth={0.8} strokeLinejoin="round" opacity={0.7} />
+        <polygon key={`scm-f${i}`} points={face.map(p => `${p.px},${p.py}`).join(" ")} fill={scmColor} fillOpacity={0.12} stroke={scmColor} strokeWidth={1} strokeLinejoin="round" opacity={0.75} />
       ))}
-      {/* SCM vertices */}
-      {scmPts.map((p, i) => <circle key={`scm-v${i}`} cx={p.px} cy={p.py} r={2} fill={scmColor} stroke="#18181b" strokeWidth={0.5} />)}
+      {scmPts.map((p, i) => <circle key={`scm-v${i}`} cx={p.px} cy={p.py} r={2.5} fill={scmColor} stroke="#18181b" strokeWidth={0.6} />)}
 
       {/* Axis labels */}
-      <text x={xPos.px + 4} y={xPos.py + 2} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Strafe</text>
-      <text x={xNeg.px - 28} y={xNeg.py + 2} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Strafe</text>
-      <text x={zPos.px - 30} y={zPos.py + 2} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Fwd</text>
-      <text x={zNeg.px + 4} y={zNeg.py + 2} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Bwd</text>
-      <text x={yPos.px + 4} y={yPos.py + 3} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Up</text>
-      <text x={yNeg.px + 4} y={yNeg.py + 3} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Down</text>
-
-      {/* G-force value labels at vertices */}
       {[
-        { pt: scmPts[0], val: strafeG, label: "", dx: 6, dy: -4 },
-        { pt: scmPts[1], val: upG, label: "", dx: 8, dy: 0 },
-        { pt: scmPts[2], val: fwdG, label: "", dx: -18, dy: -6 },
-        { pt: scmPts[4], val: downG, label: "", dx: 8, dy: 0 },
-        { pt: scmPts[5], val: bwdG, label: "", dx: 6, dy: -4 },
+        { p: xPos, text: "Strafe", dx: 6, dy: 3 },
+        { p: xNeg, text: "Strafe", dx: -32, dy: 3 },
+        { p: zPos, text: "Fwd", dx: -10, dy: 14 },
+        { p: zNeg, text: "Bwd", dx: 4, dy: -5 },
+        { p: yPos, text: "Up", dx: 5, dy: 3 },
+        { p: yNeg, text: "Down", dx: 5, dy: 4 },
       ].map((item, i) => (
-        <text key={`sv-${i}`} x={item.pt.px + item.dx} y={item.pt.py + item.dy} style={{ fontSize: "7px", fontFamily: "monospace", fill: scmColor, fontWeight: 600 }}>{item.val.toFixed(1)}G</text>
+        <text key={`axl-${i}`} x={item.p.px + item.dx} y={item.p.py + item.dy}
+          style={{ fontSize: "8px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>{item.text}</text>
       ))}
 
+      {/* G-force value labels with pill background */}
+      {[
+        { pt: scmPts[0], val: strafeG, dx: 8, dy: -6 },
+        { pt: scmPts[1], val: upG, dx: 10, dy: -2 },
+        { pt: scmPts[2], val: fwdG, dx: -28, dy: -9 },
+        { pt: scmPts[4], val: downG, dx: 10, dy: 5 },
+        { pt: scmPts[5], val: bwdG, dx: 8, dy: -5 },
+      ].map((item, i) => item.val > 0 ? (
+        <g key={`sv-${i}`}>
+          <rect x={item.pt.px + item.dx - 2} y={item.pt.py + item.dy - 8} width={32} height={11} rx={2} fill="#18181b" fillOpacity={0.85} />
+          <text x={item.pt.px + item.dx} y={item.pt.py + item.dy}
+            style={{ fontSize: "8px", fontFamily: "monospace", fill: scmColor, fontWeight: 700 }}>{item.val.toFixed(1)}G</text>
+        </g>
+      ) : null)}
+
       {/* Legend */}
-      <rect x={4} y={H - 16} width={6} height={6} rx={1} fill={scmColor} opacity={0.8} />
-      <text x={13} y={H - 10} style={{ fontSize: "6px", fontFamily: "monospace", fill: "#71717a" }}>SCM</text>
-      <rect x={40} y={H - 16} width={6} height={6} rx={1} fill={afbColor} opacity={0.6} />
-      <text x={49} y={H - 10} style={{ fontSize: "6px", fontFamily: "monospace", fill: "#71717a" }}>AFB</text>
+      <rect x={6} y={H - 18} width={7} height={7} rx={1.5} fill={scmColor} opacity={0.85} />
+      <text x={16} y={H - 11} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#71717a" }}>SCM</text>
+      <rect x={46} y={H - 18} width={7} height={7} rx={1.5} fill={afbColor} opacity={0.65} />
+      <text x={56} y={H - 11} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#71717a" }}>AFB</text>
+      {useAdaptive && (
+        <text x={90} y={H - 11} style={{ fontSize: "5.5px", fontFamily: "monospace", fill: "#3f3f46", fontStyle: "italic" }}>adaptive scale</text>
+      )}
     </svg>
   );
 }
