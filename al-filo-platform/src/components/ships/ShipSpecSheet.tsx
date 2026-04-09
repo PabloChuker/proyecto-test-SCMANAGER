@@ -224,8 +224,8 @@ export default function ShipSpecSheet({ shipId, onShipLoaded }: ShipSpecSheetPro
               </div>
             </div>
             <Link
-              href={`/ships/${ship.reference}?view=loadout`}
-              className="hidden md:flex items-center gap-2 px-4 py-2 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs hover:bg-cyan-500/20 transition-colors"
+              href={`/dps?ship=${ship.reference}`}
+              className="flex items-center gap-2 px-4 py-2 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs hover:bg-cyan-500/20 transition-colors backdrop-blur-sm"
             >
               ⚙ Abrir en DPS Calculator
             </Link>
@@ -392,15 +392,6 @@ export default function ShipSpecSheet({ shipId, onShipLoaded }: ShipSpecSheetPro
         </div>
       </div>
 
-      {/* ── DPS Calculator link (mobile) ── */}
-      <div className="md:hidden">
-        <Link
-          href={`/ships/${ship.reference}?view=loadout`}
-          className="block w-full text-center py-3 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-sm hover:bg-cyan-500/20 transition-colors"
-        >
-          ⚙ Abrir en DPS Calculator
-        </Link>
-      </div>
     </div>
   );
 }
