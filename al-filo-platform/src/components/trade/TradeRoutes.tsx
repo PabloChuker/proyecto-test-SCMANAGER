@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
-/* ── Types matching API response ── */
+/* ── Types ── */
 interface RouteItem {
-  commodity: { id: number; name: string; kind: string };
-  buyTerminal: { id: number; name: string; starSystemName: string; planetName: string };
-  sellTerminal: { id: number; name: string; starSystemName: string; planetName: string };
+  commodity: { id: number; name: string; code: string; kind: string };
+  buyTerminal: { id: number; name: string; system: string; planet: string };
+  sellTerminal: { id: number; name: string; system: string; planet: string };
   priceBuy: number;
   priceSell: number;
   profitPerScu: number;
@@ -14,115 +14,246 @@ interface RouteItem {
   roi: number;
   investment: number;
 }
-
-interface RoutesResponse {
-  routes: RouteItem[];
-  total: number;
-  page: number;
-  limit: number;
-  totalPages: number;
-  cargoScu: number;
+interface RoutesResp { routes: RouteItem[]; total: number; page: number; totalPages: number; cargoScu: number }
+interface FilterData {
+  vehicles: { name: string; cargo: number }[];
+  terminals: { id: number; label: string; planet: string; system: string }[];
+  orbits: { planet: string; system: string }[];
+  systems: { id: number; name: string }[];
+  commodities: { id: number; name: string; code: string; kind: string }[];
 }
-
-const SYSTEM_MAP: Record<string, number | null> = {
-  All: null,
-  Stanton: 68,
-  Pyro: 64,
-  Nyx: 55,
-};
 
 type SortField = "profit" | "roi" | "profit_per_scu";
 
 export default function TradeRoutes() {
+  // Filter state
+  const [vehicle, setVehicle] = useState("");
   const [cargoScu, setCargoScu] = useState(100);
-  const [systemKey, setSystemKey] = useState("All");
-  const [minProfit, setMinProfit] = useState(0);
+  const [maxInvestment, setMaxInvestment] = useState("");
+  const [systemStart, setSystemStart] = useState("");
+  const [systemEnd, setSystemEnd] = useState("");
+  const [orbitStart, setOrbitStart] = useState("");
+  const [orbitEnd, setOrbitEnd] = useState("");
+  const [terminalStart, setTerminalStart] = useState("");
+  const [terminalEnd, setTerminalEnd] = useState("");
+  const [commodity, setCommodity] = useState("");
+  const [minProfit, setMinProfit] = useState("");
+
+  // Sort & pagination
   const [sortBy, setSortBy] = useState<SortField>("profit");
   const [sortDesc, setSortDesc] = useState(true);
   const [page, setPage] = useState(1);
 
-  const [data, setData] = useState<RoutesResponse | null>(null);
+  // Data
+  const [filters, setFilters] = useState<FilterData | null>(null);
+  const [data, setData] = useState<RoutesResp | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showFilters, setShowFilters] = useState(true);
+
+  // Load filter options
+  useEffect(() => {
+    fetch("/api/trade/filters").then(r => r.json()).then(setFilters).catch(() => {});
+  }, []);
+
+  // When vehicle changes, update cargo
+  useEffect(() => {
+    if (!vehicle || !filters) return;
+    const v = filters.vehicles.find(v => v.name === vehicle);
+    if (v) setCargoScu(v.cargo);
+  }, [vehicle, filters]);
+
+  // Filtered orbits/terminals based on selected system
+  const orbitsStart = filters?.orbits.filter(o => !systemStart || o.system === filters.systems.find(s => String(s.id) === systemStart)?.name) || [];
+  const orbitsEnd = filters?.orbits.filter(o => !systemEnd || o.system === filters.systems.find(s => String(s.id) === systemEnd)?.name) || [];
+  const terminalsStart = filters?.terminals.filter(t => {
+    if (systemStart && t.system !== filters.systems.find(s => String(s.id) === systemStart)?.name) return false;
+    if (orbitStart && t.planet !== orbitStart) return false;
+    return true;
+  }) || [];
+  const terminalsEnd = filters?.terminals.filter(t => {
+    if (systemEnd && t.system !== filters.systems.find(s => String(s.id) === systemEnd)?.name) return false;
+    if (orbitEnd && t.planet !== orbitEnd) return false;
+    return true;
+  }) || [];
+
+  // Fetch routes
+  const fetchRoutes = useCallback(async () => {
+    setLoading(true); setError(null);
+    try {
+      const p = new URLSearchParams({
+        cargo_scu: String(cargoScu),
+        sortBy, sortOrder: sortDesc ? "desc" : "asc",
+        page: String(page), limit: "30",
+      });
+      if (maxInvestment) p.set("max_investment", maxInvestment);
+      if (commodity) p.set("id_commodity", commodity);
+      if (systemStart) p.set("system_start", systemStart);
+      if (systemEnd) p.set("system_end", systemEnd);
+      if (orbitStart) p.set("orbit_start", orbitStart);
+      if (orbitEnd) p.set("orbit_end", orbitEnd);
+      if (terminalStart) p.set("terminal_start", terminalStart);
+      if (terminalEnd) p.set("terminal_end", terminalEnd);
+      if (minProfit) p.set("min_profit", minProfit);
+
+      const res = await fetch(`/api/trade/routes?${p}`);
+      if (!res.ok) throw new Error("Error al cargar rutas");
+      setData(await res.json());
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [cargoScu, maxInvestment, commodity, systemStart, systemEnd, orbitStart, orbitEnd, terminalStart, terminalEnd, minProfit, sortBy, sortDesc, page]);
 
   useEffect(() => {
-    const ac = new AbortController();
-    const run = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const p = new URLSearchParams({
-          cargo_scu: String(cargoScu),
-          min_profit: String(minProfit),
-          sortBy,
-          sortOrder: sortDesc ? "desc" : "asc",
-          page: String(page),
-          limit: "30",
-        });
-        const sysId = SYSTEM_MAP[systemKey];
-        if (sysId) p.set("id_star_system", String(sysId));
+    const t = setTimeout(fetchRoutes, 350);
+    return () => clearTimeout(t);
+  }, [fetchRoutes]);
 
-        const res = await fetch(`/api/trade/routes?${p}`, { signal: ac.signal });
-        if (!res.ok) throw new Error("Error al cargar rutas");
-        const json: RoutesResponse = await res.json();
-        setData(json);
-      } catch (e: any) {
-        if (e.name !== "AbortError") setError(e.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    const t = setTimeout(run, 250);
-    return () => { clearTimeout(t); ac.abort(); };
-  }, [cargoScu, systemKey, minProfit, sortBy, sortDesc, page]);
-
-  const handleSort = (field: SortField) => {
-    if (sortBy === field) setSortDesc(!sortDesc);
-    else { setSortBy(field); setSortDesc(true); }
+  const handleSort = (f: SortField) => {
+    if (sortBy === f) setSortDesc(!sortDesc);
+    else { setSortBy(f); setSortDesc(true); }
     setPage(1);
   };
 
-  const arrow = (field: SortField) => sortBy === field ? (sortDesc ? " ↓" : " ↑") : "";
+  const resetAll = () => {
+    setVehicle(""); setCargoScu(100); setMaxInvestment("");
+    setSystemStart(""); setSystemEnd(""); setOrbitStart(""); setOrbitEnd("");
+    setTerminalStart(""); setTerminalEnd(""); setCommodity(""); setMinProfit("");
+    setSortBy("profit"); setSortDesc(true); setPage(1);
+  };
 
   const fmtN = (n: number) => Math.round(n).toLocaleString();
-  const profitColor = (p: number) => p >= 10000 ? "text-emerald-400" : p >= 3000 ? "text-amber-400" : p > 0 ? "text-zinc-300" : "text-red-400";
-  const rowBg = (p: number) => p >= 10000 ? "bg-emerald-950/10" : p >= 3000 ? "bg-amber-950/10" : "";
+  const arrow = (f: SortField) => sortBy === f ? (sortDesc ? " ↓" : " ↑") : "";
+  const pColor = (p: number) => p >= 10000 ? "text-emerald-400" : p >= 3000 ? "text-amber-400" : p > 0 ? "text-zinc-300" : "text-red-400";
+  const rBg = (p: number) => p >= 10000 ? "bg-emerald-950/10" : p >= 3000 ? "bg-amber-950/10" : "";
+
+  const selectClass = "w-full bg-zinc-800/50 border border-zinc-700/60 rounded-sm px-2.5 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-cyan-500/50 appearance-none";
+  const inputClass = "w-full bg-zinc-800/50 border border-zinc-700/60 rounded-sm px-2.5 py-1.5 text-xs font-mono text-zinc-100 focus:outline-none focus:border-cyan-500/50";
+  const labelClass = "text-[9px] uppercase tracking-widest text-zinc-500 block mb-1";
 
   return (
     <div className="space-y-4">
-      {/* ── Filters ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
-        <div>
-          <label className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1.5">Cargo (SCU)</label>
-          <input type="number" min={1} value={cargoScu}
-            onChange={e => { setCargoScu(Math.max(1, parseInt(e.target.value) || 1)); setPage(1); }}
-            className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-sm px-3 py-1.5 text-sm font-mono text-zinc-100 focus:outline-none focus:border-cyan-500/50" />
-        </div>
-        <div>
-          <label className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1.5">Sistema</label>
-          <select value={systemKey} onChange={e => { setSystemKey(e.target.value); setPage(1); }}
-            className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-sm px-3 py-1.5 text-sm text-zinc-100 focus:outline-none focus:border-cyan-500/50">
-            {Object.keys(SYSTEM_MAP).map(k => <option key={k} value={k}>{k}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1.5">Profit Mínimo</label>
-          <input type="number" min={0} value={minProfit}
-            onChange={e => { setMinProfit(Math.max(0, parseInt(e.target.value) || 0)); setPage(1); }}
-            className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-sm px-3 py-1.5 text-sm font-mono text-zinc-100 focus:outline-none focus:border-cyan-500/50" />
-        </div>
-        <div className="flex items-end">
-          <button onClick={() => { setCargoScu(100); setSystemKey("All"); setMinProfit(0); setSortBy("profit"); setSortDesc(true); setPage(1); }}
-            className="w-full px-3 py-1.5 bg-zinc-800/40 hover:bg-zinc-700/40 border border-zinc-700/60 rounded-sm text-[10px] uppercase tracking-widest text-zinc-400 transition-colors">
-            Reset
-          </button>
-        </div>
-        <div className="hidden lg:flex items-end">
-          <div className="text-[10px] font-mono text-zinc-600">
-            {data ? `${data.total} rutas encontradas` : ""}
-          </div>
+      {/* ── Toggle filters ── */}
+      <div className="flex items-center justify-between">
+        <button onClick={() => setShowFilters(!showFilters)}
+          className="text-[10px] uppercase tracking-widest text-zinc-400 hover:text-cyan-400 transition-colors flex items-center gap-1.5">
+          <span>{showFilters ? "▼" : "▶"}</span> Filtros Avanzados
+        </button>
+        <div className="text-[10px] font-mono text-zinc-600">
+          {data ? `${data.total} rutas · ${data.cargoScu} SCU` : ""}
         </div>
       </div>
+
+      {/* ── Filter Panel ── */}
+      {showFilters && (
+        <div className="bg-zinc-900/60 border border-zinc-800/50 rounded-sm p-4 space-y-3">
+          {/* Row 1: Vehicle + SCU + Investment */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="col-span-2 sm:col-span-1 lg:col-span-2">
+              <label className={labelClass}>Vehicle</label>
+              <select value={vehicle} onChange={e => { setVehicle(e.target.value); setPage(1); }} className={selectClass}>
+                <option value="">— Cualquiera —</option>
+                {filters?.vehicles.map(v => (
+                  <option key={v.name} value={v.name}>{v.name} ({v.cargo} SCU)</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>SCU</label>
+              <input type="number" min={1} value={cargoScu}
+                onChange={e => { setCargoScu(Math.max(1, parseInt(e.target.value) || 1)); setPage(1); }}
+                className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Inversión Max (UEC)</label>
+              <input type="number" min={0} placeholder="Sin límite" value={maxInvestment}
+                onChange={e => { setMaxInvestment(e.target.value); setPage(1); }}
+                className={inputClass} />
+            </div>
+            <div>
+              <label className={labelClass}>Commodity</label>
+              <select value={commodity} onChange={e => { setCommodity(e.target.value); setPage(1); }} className={selectClass}>
+                <option value="">— Todas —</option>
+                {filters?.commodities.map(c => (
+                  <option key={c.id} value={String(c.id)}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className={labelClass}>Profit Mínimo</label>
+              <input type="number" min={0} placeholder="0" value={minProfit}
+                onChange={e => { setMinProfit(e.target.value); setPage(1); }}
+                className={inputClass} />
+            </div>
+          </div>
+
+          {/* Row 2: Origin filters */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <div className="text-[9px] uppercase tracking-widest text-cyan-500/70 font-medium">Origen</div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className={labelClass}>Sistema</label>
+                  <select value={systemStart} onChange={e => { setSystemStart(e.target.value); setOrbitStart(""); setTerminalStart(""); setPage(1); }} className={selectClass}>
+                    <option value="">— All —</option>
+                    {filters?.systems.map(s => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Orbita / Planeta</label>
+                  <select value={orbitStart} onChange={e => { setOrbitStart(e.target.value); setTerminalStart(""); setPage(1); }} className={selectClass}>
+                    <option value="">— All —</option>
+                    {orbitsStart.map(o => <option key={o.planet} value={o.planet}>{o.planet}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Terminal</label>
+                  <select value={terminalStart} onChange={e => { setTerminalStart(e.target.value); setPage(1); }} className={selectClass}>
+                    <option value="">— All —</option>
+                    {terminalsStart.map(t => <option key={t.id} value={String(t.id)}>{t.label}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="text-[9px] uppercase tracking-widest text-amber-500/70 font-medium">Destino</div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className={labelClass}>Sistema</label>
+                  <select value={systemEnd} onChange={e => { setSystemEnd(e.target.value); setOrbitEnd(""); setTerminalEnd(""); setPage(1); }} className={selectClass}>
+                    <option value="">— All —</option>
+                    {filters?.systems.map(s => <option key={s.id} value={String(s.id)}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Orbita / Planeta</label>
+                  <select value={orbitEnd} onChange={e => { setOrbitEnd(e.target.value); setTerminalEnd(""); setPage(1); }} className={selectClass}>
+                    <option value="">— All —</option>
+                    {orbitsEnd.map(o => <option key={o.planet} value={o.planet}>{o.planet}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelClass}>Terminal</label>
+                  <select value={terminalEnd} onChange={e => { setTerminalEnd(e.target.value); setPage(1); }} className={selectClass}>
+                    <option value="">— All —</option>
+                    {terminalsEnd.map(t => <option key={t.id} value={String(t.id)}>{t.label}</option>)}
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Reset */}
+          <div className="flex justify-end">
+            <button onClick={resetAll}
+              className="px-3 py-1.5 bg-zinc-800/40 hover:bg-zinc-700/40 border border-zinc-700/60 rounded-sm text-[9px] uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors">
+              Reset Filtros
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Error ── */}
       {error && <div className="p-3 bg-red-950/20 border border-red-800/40 rounded-sm text-xs text-red-400">{error}</div>}
@@ -130,8 +261,8 @@ export default function TradeRoutes() {
       {/* ── Loading ── */}
       {loading ? (
         <div className="space-y-1">
-          {Array.from({ length: 12 }).map((_, i) => (
-            <div key={i} className="h-9 bg-zinc-900/40 rounded-sm animate-pulse" style={{ animationDelay: `${i * 40}ms` }} />
+          {Array.from({ length: 10 }).map((_, i) => (
+            <div key={i} className="h-10 bg-zinc-900/40 rounded-sm animate-pulse" style={{ animationDelay: `${i * 40}ms` }} />
           ))}
         </div>
       ) : data && data.routes.length > 0 ? (
@@ -144,13 +275,13 @@ export default function TradeRoutes() {
                   <th className="px-3 py-2.5 text-left font-mono font-medium">Commodity</th>
                   <th className="px-3 py-2.5 text-left font-mono font-medium">Comprar en</th>
                   <th className="px-3 py-2.5 text-left font-mono font-medium">Vender en</th>
-                  <th className="px-3 py-2.5 text-right font-mono font-medium cursor-pointer hover:text-zinc-200 transition-colors" onClick={() => handleSort("profit_per_scu")}>
+                  <th className="px-3 py-2.5 text-right font-mono font-medium cursor-pointer hover:text-zinc-200 transition-colors select-none" onClick={() => handleSort("profit_per_scu")}>
                     UEC/SCU{arrow("profit_per_scu")}
                   </th>
-                  <th className="px-3 py-2.5 text-right font-mono font-medium cursor-pointer hover:text-zinc-200 transition-colors" onClick={() => handleSort("profit")}>
-                    Profit Total{arrow("profit")}
+                  <th className="px-3 py-2.5 text-right font-mono font-medium cursor-pointer hover:text-zinc-200 transition-colors select-none" onClick={() => handleSort("profit")}>
+                    Profit{arrow("profit")}
                   </th>
-                  <th className="px-3 py-2.5 text-right font-mono font-medium cursor-pointer hover:text-zinc-200 transition-colors" onClick={() => handleSort("roi")}>
+                  <th className="px-3 py-2.5 text-right font-mono font-medium cursor-pointer hover:text-zinc-200 transition-colors select-none" onClick={() => handleSort("roi")}>
                     ROI%{arrow("roi")}
                   </th>
                   <th className="px-3 py-2.5 text-right font-mono font-medium">Inversión</th>
@@ -158,24 +289,24 @@ export default function TradeRoutes() {
               </thead>
               <tbody>
                 {data.routes.map((r, i) => (
-                  <tr key={`${r.commodity.id}-${r.buyTerminal.id}-${r.sellTerminal.id}`}
-                    className={`border-b border-zinc-800/20 transition-colors hover:bg-zinc-800/20 ${rowBg(r.totalProfit)}`}>
+                  <tr key={`${r.commodity.id}-${r.buyTerminal.id}-${r.sellTerminal.id}-${i}`}
+                    className={`border-b border-zinc-800/20 transition-colors hover:bg-zinc-800/20 ${rBg(r.totalProfit)}`}>
                     <td className="px-3 py-2">
                       <span className="text-amber-400 font-mono font-medium">{r.commodity.name}</span>
                       {r.commodity.kind && <span className="ml-1.5 text-[9px] text-zinc-600">{r.commodity.kind}</span>}
                     </td>
                     <td className="px-3 py-2">
-                      <div className="text-zinc-300">{r.buyTerminal.name}</div>
-                      <div className="text-[10px] text-zinc-600">{r.buyTerminal.starSystemName} · {r.buyTerminal.planetName}</div>
+                      <div className="text-zinc-300 font-medium">{r.buyTerminal.name}</div>
+                      <div className="text-[10px] text-zinc-600">{r.buyTerminal.system} · {r.buyTerminal.planet}</div>
                       <div className="text-cyan-400/80 font-mono text-[10px]">{fmtN(r.priceBuy)} UEC</div>
                     </td>
                     <td className="px-3 py-2">
-                      <div className="text-zinc-300">{r.sellTerminal.name}</div>
-                      <div className="text-[10px] text-zinc-600">{r.sellTerminal.starSystemName} · {r.sellTerminal.planetName}</div>
+                      <div className="text-zinc-300 font-medium">{r.sellTerminal.name}</div>
+                      <div className="text-[10px] text-zinc-600">{r.sellTerminal.system} · {r.sellTerminal.planet}</div>
                       <div className="text-cyan-400/80 font-mono text-[10px]">{fmtN(r.priceSell)} UEC</div>
                     </td>
-                    <td className={`px-3 py-2 text-right font-mono ${profitColor(r.profitPerScu)}`}>{fmtN(r.profitPerScu)}</td>
-                    <td className={`px-3 py-2 text-right font-mono font-semibold ${profitColor(r.totalProfit)}`}>{fmtN(r.totalProfit)}</td>
+                    <td className={`px-3 py-2 text-right font-mono ${pColor(r.profitPerScu)}`}>{fmtN(r.profitPerScu)}</td>
+                    <td className={`px-3 py-2 text-right font-mono font-semibold ${pColor(r.totalProfit)}`}>{fmtN(r.totalProfit)}</td>
                     <td className="px-3 py-2 text-right font-mono text-emerald-400">{r.roi.toFixed(1)}%</td>
                     <td className="px-3 py-2 text-right font-mono text-zinc-400">{fmtN(r.investment)}</td>
                   </tr>
@@ -187,14 +318,10 @@ export default function TradeRoutes() {
           {/* ── Pagination ── */}
           {data.totalPages > 1 && (
             <div className="flex items-center justify-between">
-              <div className="text-[10px] font-mono text-zinc-600">
-                Página {data.page} de {data.totalPages}
-              </div>
+              <div className="text-[10px] font-mono text-zinc-600">Página {data.page} de {data.totalPages}</div>
               <div className="flex gap-1.5">
                 <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
-                  className="px-2.5 py-1 text-[10px] bg-zinc-800/40 hover:bg-zinc-700/40 disabled:opacity-30 border border-zinc-700/60 rounded-sm transition-colors">
-                  ← Prev
-                </button>
+                  className="px-2.5 py-1 text-[10px] bg-zinc-800/40 hover:bg-zinc-700/40 disabled:opacity-30 border border-zinc-700/60 rounded-sm transition-colors">← Prev</button>
                 {Array.from({ length: Math.min(7, data.totalPages) }).map((_, i) => {
                   const pn = page <= 4 ? i + 1 : Math.max(1, page - 3) + i;
                   if (pn > data.totalPages) return null;
@@ -206,9 +333,7 @@ export default function TradeRoutes() {
                   );
                 })}
                 <button onClick={() => setPage(Math.min(data.totalPages, page + 1))} disabled={page === data.totalPages}
-                  className="px-2.5 py-1 text-[10px] bg-zinc-800/40 hover:bg-zinc-700/40 disabled:opacity-30 border border-zinc-700/60 rounded-sm transition-colors">
-                  Next →
-                </button>
+                  className="px-2.5 py-1 text-[10px] bg-zinc-800/40 hover:bg-zinc-700/40 disabled:opacity-30 border border-zinc-700/60 rounded-sm transition-colors">Next →</button>
               </div>
             </div>
           )}
@@ -216,7 +341,7 @@ export default function TradeRoutes() {
       ) : !loading && (
         <div className="py-16 text-center">
           <div className="text-zinc-600 text-sm">No se encontraron rutas comerciales con estos filtros.</div>
-          <div className="text-zinc-700 text-xs mt-1">Intentá bajar el profit mínimo o cambiar de sistema.</div>
+          <div className="text-zinc-700 text-xs mt-1">Intentá cambiar los filtros o ampliar el rango.</div>
         </div>
       )}
     </div>
