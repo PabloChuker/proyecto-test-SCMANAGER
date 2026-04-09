@@ -61,7 +61,7 @@ function getShipImageUrl(name: string, manufacturer?: string | null): string {
     .replace(/[^a-z0-9._-]/g, "-")
     .replace(/-+/g, "-")
     .replace(/-$/, "");
-  return `/ships/${slug}.jpg`;
+  return `/ships/${slug}.webp`;
 }
 
 const CAT_CONFIG: Record<string, { label: string; icon: string; accent: string }> = {

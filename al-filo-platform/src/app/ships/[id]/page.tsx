@@ -30,7 +30,7 @@ function ShipDetailContent() {
         if (n.startsWith(m + " ")) { n = n.slice(m.length + 1); break; }
       }
       const slug = n.toLowerCase().replace(/[''()]/g, "").replace(/\s+/g, "-").replace(/[^a-z0-9._-]/g, "-").replace(/-+/g, "-").replace(/-$/, "");
-      addFn({ reference, name, manufacturer, thumbUrl: `/ships/${slug}.jpg` });
+      addFn({ reference, name, manufacturer, thumbUrl: `/ships/${slug}.webp` });
     }
   }, []);
 

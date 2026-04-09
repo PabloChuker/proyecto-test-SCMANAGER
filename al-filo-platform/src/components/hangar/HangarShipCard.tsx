@@ -264,11 +264,11 @@ function getShipThumbUrl(shipName: string): string {
   const lower = cleaned.toLowerCase().trim();
 
   // Check fixed mappings first (try with and without manufacturer)
-  if (SLUG_FIXES[lower]) return `/ships/${SLUG_FIXES[lower]}.jpg`;
+  if (SLUG_FIXES[lower]) return `/ships/${SLUG_FIXES[lower]}.webp`;
 
   // Also try the original name lowercased (in case SLUG_FIXES has the full name)
   const originalLower = shipName.toLowerCase().trim();
-  if (SLUG_FIXES[originalLower]) return `/ships/${SLUG_FIXES[originalLower]}.jpg`;
+  if (SLUG_FIXES[originalLower]) return `/ships/${SLUG_FIXES[originalLower]}.webp`;
 
   const slug = lower
     .replace(/[''()]/g, "")
@@ -276,7 +276,7 @@ function getShipThumbUrl(shipName: string): string {
     .replace(/[^a-z0-9._-]/g, "-")
     .replace(/-+/g, "-")
     .replace(/-$/, "");
-  return `/ships/${slug}.jpg`;
+  return `/ships/${slug}.webp`;
 }
 
 export function HangarShipCard({ ship }: { ship: HangarShip }) {

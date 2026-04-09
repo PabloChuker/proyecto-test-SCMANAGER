@@ -31,7 +31,7 @@ function getThumbUrl(name: string, manufacturer?: string | null): string {
     if (n.startsWith(m + " ")) { n = n.slice(m.length + 1); break; }
   }
   const slug = n.toLowerCase().replace(/[''()]/g, "").replace(/\s+/g, "-").replace(/[^a-z0-9._-]/g, "-").replace(/-+/g, "-").replace(/-$/, "");
-  return `/ships/${slug}.jpg`;
+  return `/ships/${slug}.webp`;
 }
 
 function loadTabs(): QuickAccessShip[] {
