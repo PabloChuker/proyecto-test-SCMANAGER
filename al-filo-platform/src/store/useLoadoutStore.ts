@@ -573,7 +573,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
       const resolved: ResolvedHardpoint[] = rawHps.map((hp: any) => {
         const item = parseEquipped(hp.equippedItem);
 
-        const rawChildren: any[] = hp.children ?? [];
+        const rawChildren: any[] = hp.childWeapons ?? hp.children ?? [];
         const children: ResolvedChild[] = rawChildren.map((ch: any) => ({
           id: ch.id ?? "",
           hardpointName: ch.hardpointName ?? "",

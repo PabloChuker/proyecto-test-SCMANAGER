@@ -49,7 +49,7 @@ function getShipImageUrl(name: string, manufacturer?: string | null): string {
 
 function getWeaponSummary(hardpoints: FlatHardpoint[]) {
   const weapons = hardpoints.filter(h =>
-    ["WEAPON", "TURRET"].includes(h.category) && (h.equippedItem || h.childWeapons.length > 0)
+    ["WEAPON", "TURRET"].includes(h.category) && (h.equippedItem || (h.childWeapons?.length ?? 0) > 0)
   );
   let pilotDps = 0;
   let crewDps = 0;
@@ -57,7 +57,7 @@ function getWeaponSummary(hardpoints: FlatHardpoint[]) {
 
   for (const hp of hardpoints) {
     if (hp.category === "MISSILE_RACK") {
-      missileCount += hp.childWeapons.length || 1;
+      missileCount += hp.childWeapons?.length || 1;
       continue;
     }
     if (!["WEAPON", "TURRET"].includes(hp.category)) continue;
@@ -65,8 +65,8 @@ function getWeaponSummary(hardpoints: FlatHardpoint[]) {
     const isPilot = !hp.isManned || hp.hardpointName.toLowerCase().includes("pilot");
     let hpDps = 0;
 
-    if (hp.childWeapons.length > 0) {
-      for (const cw of hp.childWeapons) {
+    if ((hp.childWeapons?.length ?? 0) > 0) {
+      for (const cw of hp.childWeapons!) {
         hpDps += cw.equippedItem?.componentStats?.dps ?? 0;
       }
     } else if (hp.equippedItem?.componentStats?.dps) {
@@ -157,7 +157,17 @@ export default function ShipSpecSheet({ shipId, onShipLoaded }: ShipSpecSheetPro
     );
   }
 
-  const { data: ship, flatHardpoints, computed } = data;
+  const { data: ship, flatHardpoints: rawHardpoints, computed: rawComputed } = data as any;
+  const flatHardpoints: FlatHardpoint[] = (rawHardpoints ?? []).map((h: any) => ({
+    ...h,
+    childWeapons: h.childWeapons ?? h.children ?? [],
+  }));
+  const computed = rawComputed ?? {
+    totalDps: 0, totalAlphaDamage: 0, totalShieldHp: 0, totalShieldRegen: 0,
+    totalPowerDraw: 0, totalPowerOutput: 0, totalCooling: 0, totalThermalOutput: 0,
+    powerBalance: 0, thermalBalance: 0, totalEmSignature: 0, totalIrSignature: 0,
+    hardpointSummary: { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0 },
+  };
   const s = ship.ship;
   const imgUrl = getShipImageUrl(ship.name, ship.manufacturer);
   const weaponInfo = getWeaponSummary(flatHardpoints);
@@ -320,8 +330,8 @@ export default function ShipSpecSheet({ shipId, onShipLoaded }: ShipSpecSheetPro
           {/* Weapons */}
           {equippedWeapons.length > 0 && (
             <EquipmentSection title="Armas" icon="🔫" items={equippedWeapons.map(hp => {
-              if (hp.childWeapons.length > 0) {
-                return hp.childWeapons.map(cw => ({
+              if ((hp.childWeapons?.length ?? 0) > 0) {
+                return hp.childWeapons!.map(cw => ({
                   name: cw.equippedItem?.name ?? "Vacio",
                   size: cw.equippedItem?.size ?? cw.maxSize,
                   detail: cw.equippedItem?.componentStats?.dps != null ? `${fmt(cw.equippedItem.componentStats.dps)} DPS` : null,
@@ -340,7 +350,7 @@ export default function ShipSpecSheet({ shipId, onShipLoaded }: ShipSpecSheetPro
             <EquipmentSection title="Misiles" icon="🚀" items={equippedMissiles.map(hp => ({
               name: hp.equippedItem?.name ?? `Rack S${hp.maxSize}`,
               size: hp.maxSize,
-              detail: hp.childWeapons.length > 0 ? `${hp.childWeapons.length} misiles` : null,
+              detail: (hp.childWeapons?.length ?? 0) > 0 ? `${hp.childWeapons!.length} misiles` : null,
             }))} />
           )}
 

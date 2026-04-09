@@ -622,7 +622,7 @@ export async function GET(
             finalCategory !== "TURRET" &&
             finalCategory !== "MISSILE_RACK",
           equippedItem,
-          children,
+          childWeapons: children,
         };
       })
       .filter(Boolean);
@@ -707,8 +707,67 @@ export async function GET(
     const shipClassName = ship.reference || ship.class_name || "";
     const shipPower = spLookup[shipClassName] ?? null;
 
+    // ── Compute stats from flatHardpoints for ShipSpecSheet ──
+    let totalDps = 0, totalAlphaDamage = 0, totalShieldHp = 0, totalShieldRegen = 0;
+    let totalPowerDraw = 0, totalPowerOutput = 0, totalCooling = 0, totalThermalOutput = 0;
+    let totalEmSignature = 0, totalIrSignature = 0;
+    let weaponCount = 0, missileCount = 0, shieldCount = 0, coolerCount = 0, powerPlantCount = 0, quantumDriveCount = 0;
+
+    for (const hp of flatHardpoints as any[]) {
+      const cat = hp.category;
+      const eq = hp.equippedItem;
+      const cs = eq?.componentStats;
+
+      if (cat === "WEAPON" || cat === "TURRET") {
+        weaponCount++;
+        const cws = hp.childWeapons ?? [];
+        if (cws.length > 0) {
+          for (const cw of cws) {
+            totalDps += cw.equippedItem?.componentStats?.dps ?? 0;
+            totalAlphaDamage += cw.equippedItem?.componentStats?.alphaDamage ?? 0;
+          }
+        } else if (cs) {
+          totalDps += cs.dps ?? 0;
+          totalAlphaDamage += cs.alphaDamage ?? 0;
+        }
+      } else if (cat === "MISSILE_RACK") {
+        missileCount++;
+      } else if (cat === "SHIELD" && cs) {
+        shieldCount++;
+        totalShieldHp += cs.shieldHp ?? 0;
+        totalShieldRegen += cs.shieldRegen ?? 0;
+      } else if (cat === "POWER_PLANT" && cs) {
+        powerPlantCount++;
+        totalPowerOutput += cs.powerOutput ?? 0;
+      } else if (cat === "COOLER" && cs) {
+        coolerCount++;
+        totalCooling += cs.coolingRate ?? 0;
+      } else if (cat === "QUANTUM_DRIVE") {
+        quantumDriveCount++;
+      }
+
+      if (cs) {
+        totalPowerDraw += cs.powerDraw ?? 0;
+        totalThermalOutput += cs.thermalOutput ?? 0;
+        totalEmSignature += cs.emSignature ?? 0;
+        totalIrSignature += cs.irSignature ?? 0;
+      }
+    }
+
+    const computed = {
+      totalDps, totalAlphaDamage, totalShieldHp, totalShieldRegen,
+      totalPowerDraw, totalPowerOutput, totalCooling, totalThermalOutput,
+      powerBalance: totalPowerOutput - totalPowerDraw,
+      thermalBalance: totalCooling - totalThermalOutput,
+      totalEmSignature, totalIrSignature,
+      hardpointSummary: {
+        weapons: weaponCount, missiles: missileCount, shields: shieldCount,
+        coolers: coolerCount, powerPlants: powerPlantCount, quantumDrives: quantumDriveCount,
+      },
+    };
+
     return NextResponse.json(
-      { data, flatHardpoints, shipPower },
+      { data, flatHardpoints, computed, shipPower },
       {
         headers: {
           "Cache-Control":
