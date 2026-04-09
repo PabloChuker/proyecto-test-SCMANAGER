@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 
 /* ── Types ── */
 interface RouteItem {
@@ -50,6 +50,26 @@ export default function TradeRoutes() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showFilters, setShowFilters] = useState(true);
+
+  // Vehicle search combobox
+  const [vehicleSearch, setVehicleSearch] = useState("");
+  const [vehicleOpen, setVehicleOpen] = useState(false);
+  const vehicleRef = useRef<HTMLDivElement>(null);
+
+  // Close vehicle dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (vehicleRef.current && !vehicleRef.current.contains(e.target as Node)) {
+        setVehicleOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const filteredVehicles = filters?.vehicles.filter(v =>
+    v.name.toLowerCase().includes(vehicleSearch.toLowerCase())
+  ) || [];
 
   // Load filter options
   useEffect(() => {
@@ -151,14 +171,49 @@ export default function TradeRoutes() {
         <div className="bg-zinc-900/60 border border-zinc-800/50 rounded-sm p-4 space-y-3">
           {/* Row 1: Vehicle + SCU + Investment */}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <div className="col-span-2 sm:col-span-1 lg:col-span-2">
+            <div className="col-span-2 sm:col-span-1 lg:col-span-2 relative" ref={vehicleRef}>
               <label className={labelClass}>Vehicle</label>
-              <select value={vehicle} onChange={e => { setVehicle(e.target.value); setPage(1); }} className={selectClass}>
-                <option value="">— Cualquiera —</option>
-                {filters?.vehicles.map(v => (
-                  <option key={v.name} value={v.name}>{v.name} ({v.cargo} SCU)</option>
-                ))}
-              </select>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder={vehicle || "— Buscar nave —"}
+                  value={vehicleOpen ? vehicleSearch : (vehicle ? `${vehicle} (${filters?.vehicles.find(v => v.name === vehicle)?.cargo ?? ""} SCU)` : "")}
+                  onChange={e => { setVehicleSearch(e.target.value); setVehicleOpen(true); }}
+                  onFocus={() => { setVehicleOpen(true); setVehicleSearch(""); }}
+                  className={`${inputClass} pr-7`}
+                  autoComplete="off"
+                />
+                {vehicle && (
+                  <button
+                    onClick={() => { setVehicle(""); setVehicleSearch(""); setCargoScu(100); setPage(1); }}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 text-xs leading-none"
+                    title="Limpiar"
+                  >✕</button>
+                )}
+                {!vehicle && (
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-600 text-[8px] pointer-events-none">▼</span>
+                )}
+              </div>
+              {vehicleOpen && (
+                <div className="absolute z-50 left-0 right-0 mt-0.5 max-h-56 overflow-y-auto bg-zinc-900 border border-zinc-700/60 rounded-sm shadow-xl">
+                  <button
+                    onClick={() => { setVehicle(""); setVehicleSearch(""); setCargoScu(100); setVehicleOpen(false); setPage(1); }}
+                    className="w-full text-left px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-200 transition-colors"
+                  >— Cualquiera —</button>
+                  {filteredVehicles.length > 0 ? filteredVehicles.map(v => (
+                    <button
+                      key={v.name}
+                      onClick={() => { setVehicle(v.name); setVehicleSearch(""); setVehicleOpen(false); setPage(1); }}
+                      className={`w-full text-left px-2.5 py-1.5 text-xs transition-colors ${vehicle === v.name ? "bg-amber-500/15 text-amber-400" : "text-zinc-300 hover:bg-zinc-800/70 hover:text-zinc-100"}`}
+                    >
+                      <span className="font-medium">{v.name}</span>
+                      <span className="ml-1.5 text-zinc-500 font-mono text-[10px]">{v.cargo} SCU</span>
+                    </button>
+                  )) : (
+                    <div className="px-2.5 py-3 text-xs text-zinc-600 text-center">Sin resultados</div>
+                  )}
+                </div>
+              )}
             </div>
             <div>
               <label className={labelClass}>SCU</label>
