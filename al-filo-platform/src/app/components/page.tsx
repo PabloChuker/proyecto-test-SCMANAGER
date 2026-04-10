@@ -10,6 +10,10 @@ import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import Header from "@/app/assets/header/Header";
+import {
+  ShipContextMenu,
+  type ShipContextMenuTarget,
+} from "@/components/ships/ShipContextMenu";
 
 // ─── Category Definitions ────────────────────────────────────────────────────
 
@@ -108,6 +112,9 @@ function ComponentsPageInner() {
   const [sortCol, setSortCol] = useState("name");
   const [sortDir, setSortDir] = useState<"ASC" | "DESC">("ASC");
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Context menu state (solo para la tabla de ships) ──
+  const [contextMenu, setContextMenu] = useState<ShipContextMenuTarget | null>(null);
 
   // Sync with ?tab= param changes
   useEffect(() => {
@@ -318,6 +325,20 @@ function ComponentsPageInner() {
                 {rows.map((row, i) => (
                   <tr
                     key={row.id || row.uuid || i}
+                    onContextMenu={
+                      activeCategory.table === "ships" && row.reference
+                        ? (e) => {
+                            e.preventDefault();
+                            setContextMenu({
+                              reference: row.reference,
+                              name: row.localizedName || row.name,
+                              manufacturer: row.manufacturer ?? null,
+                              x: e.clientX,
+                              y: e.clientY,
+                            });
+                          }
+                        : undefined
+                    }
                     className="border-b border-zinc-800/20 hover:bg-zinc-800/20 transition-colors"
                   >
                     {columns.map((col) => {
@@ -364,6 +385,9 @@ function ComponentsPageInner() {
         </div>
       </div>
       </div>
+
+      {/* Context menu global para ships */}
+      <ShipContextMenu target={contextMenu} onClose={() => setContextMenu(null)} />
     </main>
   );
 }
