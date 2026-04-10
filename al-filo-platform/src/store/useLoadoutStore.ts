@@ -237,6 +237,19 @@ function computeStats(
   let weaponActiveCount = 0;
   const WEAPON_POWER_ID = "__weapons_combined__";
 
+  // ── Shields: accumulate into a single combined power column ──
+  // (game mechanic: in Star Citizen shields are always represented as 1 column)
+  let shieldPowerMin = 0;
+  let shieldPowerMax = 0;
+  let shieldEmMax = 0;
+  let shieldIrMax = 0;
+  let shieldGenPower = 0;
+  let shieldGenCoolant = 0;
+  let shieldCount = 0;
+  let shieldActiveCount = 0;
+  let shieldFirstHpName: string | null = null;
+  const SHIELD_POWER_ID = "__shields_combined__";
+
   for (const hp of hardpoints) {
     const cat = hp.resolvedCategory;
     if (!USEFUL.has(cat)) continue;
@@ -310,6 +323,22 @@ function computeStats(
           weaponIrMax += pn?.ir ?? pickNum(s, "irSignature");
           weaponCount++;
           if (isOn) weaponActiveCount++;
+        }
+      } else if (pCat === "shields") {
+        // SHIELDS → accumulate into single combined column
+        // (in Star Citizen the HUD always shows shields as a unified single column)
+        if (totalPips > 0) {
+          shieldPowerMin += powerMin;
+          shieldPowerMax += powerMax;
+          shieldEmMax += pn?.em ?? pickNum(s, "emSignature");
+          shieldIrMax += pn?.ir ?? pickNum(s, "irSignature");
+          shieldGenPower += pn?.genP ?? 0;
+          shieldGenCoolant += pn?.genC ?? 0;
+          shieldCount++;
+          if (isOn) shieldActiveCount++;
+          // Remember the first shield hardpointName so the merged column
+          // can control allocation/toggle via an existing store key.
+          if (!shieldFirstHpName) shieldFirstHpName = hp.hardpointName;
         }
       } else if (totalPips > 0) {
         // Non-weapons: individual instance per component (as before)
@@ -452,6 +481,34 @@ function computeStats(
       emMax: weaponEmMax,
       irMax: weaponIrMax,
       isOn: weaponActiveCount > 0,
+    });
+  }
+
+  // ── Push single combined shields column ──
+  // In Star Citizen the HUD always shows a single shield column, regardless
+  // of how many shield generators the ship has. We aggregate all shield
+  // generators into one visual column matching the weapons treatment.
+  if (shieldCount > 0) {
+    const shieldAllocPips = instancePower[SHIELD_POWER_ID] ?? 0;
+    const combinedShieldPips = Math.min(6, Math.max(1, Math.ceil(shieldPowerMax)));
+    // Override the per-shield allocated counts with the single combined allocation
+    cats.shields.allocated = shieldAllocPips;
+    instances.push({
+      hardpointId: SHIELD_POWER_ID,
+      hardpointName: SHIELD_POWER_ID,
+      componentName: `Shields (${shieldCount})`,
+      category: "shields",
+      type: "Shield",
+      totalPips: combinedShieldPips,
+      allocatedPips: Math.min(shieldAllocPips, combinedShieldPips),
+      ranges: [{ start: 0, modifier: 1, range: combinedShieldPips }],
+      powerMin: shieldPowerMin,
+      powerMax: shieldPowerMax,
+      genPower: shieldGenPower,
+      genCoolant: shieldGenCoolant,
+      emMax: shieldEmMax,
+      irMax: shieldIrMax,
+      isOn: shieldActiveCount > 0,
     });
   }
 
