@@ -38,6 +38,15 @@ export type ItemCategory =
   | "upgrade"
   | "other";
 
+/**
+ * Cómo se obtuvo la nave:
+ *   - "pledge"  → comprada en la tienda de RSI con USD (pledge store)
+ *   - "in_game" → comprada dentro del juego con aUEC
+ * Campo opcional para backward-compat: los items existentes sin este campo
+ * se tratan como "pledge" por default.
+ */
+export type AcquisitionType = "pledge" | "in_game";
+
 export interface HangarShip {
   id: string; // UUID generated on add
   shipReference: string; // matches ships table reference
@@ -52,6 +61,7 @@ export interface HangarShip {
   purchasedDate: string | null; // ISO date
   imageUrl: string; // RSI CDN image URL
   notes: string;
+  acquisitionType?: AcquisitionType; // pledge (default) o in_game
 }
 
 export interface HangarCCU {

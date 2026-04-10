@@ -70,14 +70,14 @@ export function ShipContextMenu({ target, onClose }: ShipContextMenuProps) {
   ).length;
 
   // Clamp menu position to viewport
-  const MENU_WIDTH = 220;
-  const MENU_HEIGHT = 200;
+  const MENU_WIDTH = 240;
+  const MENU_HEIGHT = 240;
   const viewportW = typeof window !== "undefined" ? window.innerWidth : 1920;
   const viewportH = typeof window !== "undefined" ? window.innerHeight : 1080;
   const left = Math.min(target.x, viewportW - MENU_WIDTH - 8);
   const top = Math.min(target.y, viewportH - MENU_HEIGHT - 8);
 
-  const handleAddToHangar = () => {
+  const handleAddToHangarPledge = () => {
     addShip({
       shipReference: target.reference,
       shipName: target.name,
@@ -91,8 +91,29 @@ export function ShipContextMenu({ target, onClose }: ShipContextMenuProps) {
       purchasedDate: null,
       imageUrl: "",
       notes: "",
+      acquisitionType: "pledge",
     });
-    setToast({ kind: "hangar", message: `${target.name} agregada al Hangar` });
+    setToast({ kind: "hangar", message: `${target.name} agregada al Hangar (Pledge)` });
+    onClose();
+  };
+
+  const handleAddToHangarInGame = () => {
+    addShip({
+      shipReference: target.reference,
+      shipName: target.name,
+      pledgeName: `In-Game Purchase - ${target.name}`,
+      pledgePrice: 0,
+      insuranceType: "unknown",
+      location: "hangar",
+      itemCategory: "standalone_ship",
+      isGiftable: false,
+      isMeltable: false, // compras in-game no se pueden melt
+      purchasedDate: null,
+      imageUrl: "",
+      notes: "",
+      acquisitionType: "in_game",
+    });
+    setToast({ kind: "hangar", message: `${target.name} agregada al Hangar (In-Game)` });
     onClose();
   };
 
@@ -143,12 +164,24 @@ export function ShipContextMenu({ target, onClose }: ShipContextMenuProps) {
 
         {/* Options */}
         <div className="py-1">
+          <div className="px-3 pt-1 pb-0.5">
+            <div className="text-[9px] font-mono uppercase tracking-widest text-zinc-600">
+              {hangarCount > 0 ? `Agregar al Hangar (${hangarCount})` : "Agregar al Hangar"}
+            </div>
+          </div>
           <MenuItem
-            icon="＋"
-            label={hangarCount > 0 ? `Agregar al Hangar (${hangarCount})` : "Agregar al Hangar"}
-            onClick={handleAddToHangar}
+            icon="＄"
+            label="Pledge Store"
+            onClick={handleAddToHangarPledge}
             color="amber"
           />
+          <MenuItem
+            icon="⛁"
+            label="Compra In-Game"
+            onClick={handleAddToHangarInGame}
+            color="emerald"
+          />
+          <div className="h-px bg-zinc-800/60 my-1" />
           <MenuItem
             icon="★"
             label={isInWishlist ? "Ya está en Wishlist" : "Agregar a Wishlist"}
@@ -190,7 +223,7 @@ function MenuItem({
   icon: string;
   label: string;
   onClick: () => void;
-  color: "amber" | "fuchsia" | "cyan";
+  color: "amber" | "fuchsia" | "cyan" | "emerald";
   disabled?: boolean;
 }) {
   const colorClass =
@@ -198,6 +231,8 @@ function MenuItem({
       ? "hover:bg-amber-500/10 hover:text-amber-300"
       : color === "fuchsia"
       ? "hover:bg-fuchsia-500/10 hover:text-fuchsia-300"
+      : color === "emerald"
+      ? "hover:bg-emerald-500/10 hover:text-emerald-300"
       : "hover:bg-cyan-500/10 hover:text-cyan-300";
 
   return (

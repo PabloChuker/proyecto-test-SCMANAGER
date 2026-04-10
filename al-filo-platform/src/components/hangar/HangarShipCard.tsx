@@ -345,11 +345,20 @@ export function HangarShipCard({ ship }: { ship: HangarShip }) {
           <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-zinc-900/50 to-transparent" />
 
           {/* Badges overlaid on image */}
-          <div className="absolute top-2 left-2 flex gap-1.5 z-10">
+          <div className="absolute top-2 left-2 flex gap-1.5 z-10 flex-wrap max-w-[calc(100%-3rem)]">
             {/* Category badge for non-ships */}
             {!isShip && (
               <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm ${catBadge.bg} ${catBadge.text} border ${catBadge.border}`}>
                 {catBadge.label}
+              </span>
+            )}
+            {/* IN GAME badge — only for in-game purchases */}
+            {ship.acquisitionType === "in_game" && (
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm bg-emerald-500/25 text-emerald-300 border border-emerald-500/50 tracking-wider"
+                title="Comprada dentro del juego (aUEC)"
+              >
+                IN GAME
               </span>
             )}
             <span
@@ -406,10 +415,12 @@ export function HangarShipCard({ ship }: { ship: HangarShip }) {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[10px] text-zinc-500 tracking-[0.12em] uppercase">
-                {isShip ? "Pledge" : "Value"}
+                {ship.acquisitionType === "in_game" ? "In-Game" : isShip ? "Pledge" : "Value"}
               </p>
               <p className="text-[14px] text-zinc-200 font-mono font-medium">
-                ${ship.pledgePrice.toLocaleString()}
+                {ship.acquisitionType === "in_game"
+                  ? (ship.pledgePrice > 0 ? `${ship.pledgePrice.toLocaleString()} aUEC` : "—")
+                  : `$${ship.pledgePrice.toLocaleString()}`}
               </p>
             </div>
             <div className="flex gap-1.5">
