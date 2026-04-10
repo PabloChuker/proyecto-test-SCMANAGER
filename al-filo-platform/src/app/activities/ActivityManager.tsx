@@ -1545,10 +1545,14 @@ export default function ActivityManager() {
                           )}
                         </div>
 
-                        {/* Money row — only visible when there's money at stake */}
-                        {moneyAmount > 0 && canManage && (
+                        {/* Money row: Gasto + Cobró — siempre visible para host/cohost,
+                            así podés cargar gastos antes o después de ingresar el dinero */}
+                        {canManage && (
                           <div className="flex items-center gap-2 pl-6 text-[10px]">
-                            <label className="flex items-center gap-1 text-zinc-500 cursor-pointer" title="Marca si este participante cobró/vendió el botín (tiene el dinero en su cuenta)">
+                            <label
+                              className="flex items-center gap-1 text-zinc-500 cursor-pointer"
+                              title="Marca si este participante cobró/vendió el botín (tiene el dinero en su cuenta)"
+                            >
                               <input
                                 type="checkbox"
                                 checked={!!p.collected}
@@ -1558,7 +1562,12 @@ export default function ActivityManager() {
                               <span className={p.collected ? "text-emerald-400" : ""}>💰 Cobró</span>
                             </label>
                             <div className="flex items-center gap-1 flex-1">
-                              <span className="text-zinc-500" title="Dinero que este participante invirtió/gastó (será reintegrado)">Gasto:</span>
+                              <span
+                                className="text-zinc-500"
+                                title="Dinero que este participante invirtió/gastó (será reintegrado antes de repartir el profit)"
+                              >
+                                Gasto:
+                              </span>
                               <input
                                 type="number"
                                 min={0}
@@ -1566,7 +1575,9 @@ export default function ActivityManager() {
                                 value={p.expense ?? 0}
                                 onChange={(e) => setExpense(p.id, parseInt(e.target.value) || 0)}
                                 placeholder="0"
-                                className="w-20 bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-zinc-300 focus:border-amber-500 focus:outline-none"
+                                className={`w-24 bg-zinc-800 border rounded px-1 py-0.5 text-zinc-300 focus:border-amber-500 focus:outline-none ${
+                                  (p.expense ?? 0) > 0 ? "border-amber-500/50" : "border-zinc-700"
+                                }`}
                               />
                               <span className="text-zinc-600">aUEC</span>
                             </div>
