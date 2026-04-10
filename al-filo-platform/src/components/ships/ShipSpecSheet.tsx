@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { ShipDetailResponseV2, FlatHardpoint } from "@/types/ships";
+import { useHangarStore } from "@/store/useHangarStore";
 
 // ── Helpers ──
 
@@ -121,6 +122,8 @@ export default function ShipSpecSheet({ shipId, onShipLoaded }: ShipSpecSheetPro
   const [data, setData] = useState<ShipDetailResponseV2 | null>(null);
   const [loading, setLoading] = useState(true);
   const [imgError, setImgError] = useState(false);
+  const [addedToHangar, setAddedToHangar] = useState(false);
+  const addShip = useHangarStore((s) => s.addShip);
 
   useEffect(() => {
     setLoading(true);
@@ -223,12 +226,41 @@ export default function ShipSpecSheet({ shipId, onShipLoaded }: ShipSpecSheetPro
                 </span>
               </div>
             </div>
-            <Link
-              href={`/dps?ship=${ship.reference}`}
-              className="flex items-center gap-2 px-4 py-2 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs hover:bg-cyan-500/20 transition-colors backdrop-blur-sm"
-            >
-              ⚙ Abrir en DPS Calculator
-            </Link>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  addShip({
+                    shipReference: ship.reference,
+                    shipName: ship.name,
+                    pledgeName: `Standalone Ship - ${ship.name}`,
+                    pledgePrice: 0,
+                    insuranceType: "unknown",
+                    location: "hangar",
+                    itemCategory: "standalone_ship",
+                    isGiftable: false,
+                    isMeltable: true,
+                    purchasedDate: null,
+                    imageUrl: "",
+                    notes: "",
+                  });
+                  setAddedToHangar(true);
+                  setTimeout(() => setAddedToHangar(false), 2500);
+                }}
+                className={`flex items-center gap-2 px-4 py-2 rounded border text-xs transition-colors backdrop-blur-sm ${
+                  addedToHangar
+                    ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400"
+                    : "bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
+                }`}
+              >
+                {addedToHangar ? "✓ Agregada al Hangar" : "＋ Agregar a mi Hangar"}
+              </button>
+              <Link
+                href={`/dps?ship=${ship.reference}`}
+                className="flex items-center gap-2 px-4 py-2 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs hover:bg-cyan-500/20 transition-colors backdrop-blur-sm"
+              >
+                ⚙ Abrir en DPS Calculator
+              </Link>
+            </div>
           </div>
         </div>
       </div>
