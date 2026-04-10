@@ -51,8 +51,8 @@ export default function Header({ subtitle }: HeaderProps) {
             <Image
               src="/sclabs-logo.png"
               alt="SC LABS"
-              width={24}
-              height={24}
+              width={29}
+              height={29}
               className="rounded-sm"
             />
             <span className="text-xs tracking-[0.15em] uppercase text-zinc-500 hover:text-zinc-300 transition-colors">
