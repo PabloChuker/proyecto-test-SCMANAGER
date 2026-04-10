@@ -164,6 +164,17 @@ export default function Header({ subtitle }: HeaderProps) {
                     </svg>
                     Party
                   </Link>
+                  <Link
+                    href="/streamers"
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800/60 hover:text-zinc-100 transition-colors"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="2" y="6" width="14" height="12" rx="2" />
+                      <path d="m22 8-6 4 6 4V8Z" />
+                    </svg>
+                    Streamers
+                  </Link>
                   <div className="my-1 border-t border-zinc-800/50" />
                   <Link
                     href="/my-account"
