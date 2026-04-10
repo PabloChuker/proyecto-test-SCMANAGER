@@ -332,15 +332,15 @@ export default function StreamerCardsPage() {
               <p>
                 Pegá la URL en una fuente &quot;Browser&quot; de OBS.
                 {variant === "horizontal"
-                  ? " Dimensiones sugeridas: 1200 × 560."
-                  : " Dimensiones sugeridas: 600 × 1066."}
+                  ? " Dimensiones sugeridas: 1600 × 480."
+                  : " Dimensiones sugeridas: 720 × 1280."}
               </p>
             </div>
           </aside>
 
           {/* ═══ Preview column ═══ */}
           <section className="col-span-12 lg:col-span-8 xl:col-span-9">
-            <div className="border border-zinc-800/60 bg-zinc-950/60 rounded p-6 min-h-[600px] flex items-center justify-center">
+            <div className="border border-zinc-800/60 bg-zinc-950/60 rounded p-6 min-h-[640px] flex items-center justify-center overflow-hidden">
               {!selectedReference ? (
                 <div className="text-center">
                   <div className="text-xs text-zinc-600 font-mono tracking-wider uppercase">
@@ -357,25 +357,32 @@ export default function StreamerCardsPage() {
                 <div className="text-xs text-zinc-500 font-mono">Sin datos</div>
               ) : (
                 <div
-                  className="origin-center"
                   style={{
-                    transform:
-                      variant === "horizontal" ? "scale(0.72)" : "scale(0.55)",
-                    transformOrigin: "center center",
+                    width: variant === "horizontal" ? 1600 * 0.55 : 720 * 0.48,
+                    height: variant === "horizontal" ? 480 * 0.55 : 1280 * 0.48,
+                    position: "relative",
                   }}
                 >
-                  <ShipInfoCard
-                    data={shipDetail}
-                    themeKey={themeKey}
-                    variant={variant}
-                  />
+                  <div
+                    style={{
+                      transform:
+                        variant === "horizontal" ? "scale(0.55)" : "scale(0.48)",
+                      transformOrigin: "top left",
+                    }}
+                  >
+                    <ShipInfoCard
+                      data={shipDetail}
+                      themeKey={themeKey}
+                      variant={variant}
+                    />
+                  </div>
                 </div>
               )}
             </div>
 
             <p className="mt-3 text-[10px] text-zinc-600 font-mono tracking-wider text-center">
-              La vista previa está escalada. El PNG exportado sale a resolución real
-              {variant === "horizontal" ? " 2400 × 1120" : " 1200 × 2132"}.
+              Vista previa escalada. PNG exportado a resolución real
+              {variant === "horizontal" ? " 3200 × 960" : " 1440 × 2560"} (2×).
             </p>
           </section>
         </div>

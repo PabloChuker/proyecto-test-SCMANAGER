@@ -3,11 +3,13 @@
 // SC LABS — Streamers · ShipInfoCard
 //
 // Tarjeta de información horizontal y vertical lista para exportar como PNG
-// o mostrar en un Browser Source de OBS. Diseñada para ser legible a 1080p
-// en overlays de stream y miniaturas de YouTube.
+// o mostrar en un Browser Source de OBS. El formato sigue 1:1 el layout de
+// Erkul: mismas secciones (Hull · Vital Part · Armor · Weaponry · Carrying
+// Capacity · Fuel · Refuel Cost · Flight Performances · Accelerations ·
+// Insurance), misma info, misma disposición. Los campos que nuestra DB aún
+// no expone se dejan como "—" para mantener el layout idéntico.
 //
-// El contenedor siempre lleva el logo de SC Labs y la frase "Cortesía de SC Labs"
-// independientemente del tema elegido.
+// Toda tarjeta lleva el logo de SC Labs + "Cortesía de SC Labs".
 // =============================================================================
 
 import Image from "next/image";
@@ -16,22 +18,22 @@ import { getTheme, type CardVariant } from "./ship-card-themes";
 
 // ── Helpers de formateo ──
 
-function fmt(n: number | null | undefined, decimals = 0): string {
-  if (n == null || Number.isNaN(n)) return "—";
+const MISSING = "—";
+
+function num(n: number | null | undefined, decimals = 0): string {
+  if (n == null || Number.isNaN(n)) return MISSING;
   if (decimals > 0) return n.toFixed(decimals);
-  return Math.round(n).toLocaleString("en-US");
+  return Math.round(n).toLocaleString("en-US").replace(/,/g, " ");
 }
 
-function fmtScu(n: number | null | undefined): string {
-  if (n == null) return "—";
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return `${Math.round(n)}`;
+function numOrDash(n: number | null | undefined, decimals = 0): string {
+  return num(n, decimals);
 }
 
-function fmtHp(n: number | null | undefined): string {
-  if (n == null) return "—";
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return `${Math.round(n)}`;
+/** Convierte m/s² a G (1 G ≈ 9.80665 m/s²) */
+function toG(accelMs2: number | null | undefined): string {
+  if (accelMs2 == null) return MISSING;
+  return (accelMs2 / 9.80665).toFixed(1);
 }
 
 const MFR_PREFIXES = [
@@ -68,29 +70,120 @@ export function getShipImageUrl(
 
 // ── Shared subcomponents ──
 
-function StatCell({
-  label,
-  value,
-  unit,
+type Theme = ReturnType<typeof getTheme>;
+
+function SectionHeader({
+  title,
   theme,
+  suffix,
+  dense = false,
 }: {
-  label: string;
-  value: string;
-  unit?: string;
-  theme: ReturnType<typeof getTheme>;
+  title: string;
+  theme: Theme;
+  suffix?: string;
+  dense?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-0.5 leading-tight">
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        borderBottom: `1px solid ${theme.border}`,
+        paddingBottom: dense ? 2 : 3,
+        marginBottom: dense ? 4 : 6,
+        marginTop: dense ? 6 : 8,
+      }}
+    >
       <span
-        className="text-[9px] tracking-[0.15em] uppercase font-mono"
-        style={{ color: theme.textMuted }}
+        style={{
+          fontSize: dense ? 10 : 11,
+          fontWeight: 600,
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          color: theme.accent,
+          fontFamily: "inherit",
+        }}
       >
-        {label}
+        {title}
       </span>
-      <span className="text-sm font-mono font-medium" style={{ color: theme.text }}>
+      {suffix && (
+        <span
+          style={{
+            fontSize: 8,
+            color: theme.textMuted,
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+          }}
+        >
+          {suffix}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function SubHeader({ title, theme }: { title: string; theme: Theme }) {
+  return (
+    <div
+      style={{
+        fontSize: 8.5,
+        fontWeight: 600,
+        letterSpacing: "0.1em",
+        textTransform: "uppercase",
+        color: theme.textMuted,
+        marginTop: 4,
+        marginBottom: 2,
+      }}
+    >
+      {title}
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  theme,
+  unit,
+  dense = false,
+}: {
+  label: string;
+  value: string | React.ReactNode;
+  theme: Theme;
+  unit?: string;
+  dense?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "baseline",
+        justifyContent: "space-between",
+        gap: 8,
+        padding: dense ? "1px 0" : "2px 0",
+        fontSize: dense ? 9.5 : 10.5,
+        lineHeight: 1.25,
+      }}
+    >
+      <span style={{ color: theme.textMuted, flexShrink: 0 }}>{label}</span>
+      <span
+        style={{
+          color: theme.text,
+          fontWeight: 500,
+          textAlign: "right",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
         {value}
         {unit && (
-          <span className="text-[9px] ml-0.5" style={{ color: theme.textMuted }}>
+          <span
+            style={{
+              color: theme.textMuted,
+              fontSize: "0.82em",
+              marginLeft: 3,
+            }}
+          >
             {unit}
           </span>
         )}
@@ -99,57 +192,79 @@ function StatCell({
   );
 }
 
-function SectionTitle({
-  title,
+function ModifierTriplet({
+  a,
+  b,
   theme,
 }: {
-  title: string;
-  theme: ReturnType<typeof getTheme>;
+  a: [string, string];
+  b: [string, string];
+  theme: Theme;
 }) {
   return (
-    <div className="flex items-center gap-2 mb-2">
-      <div
-        className="w-1 h-3 rounded-full"
-        style={{ backgroundColor: theme.accent }}
-      />
-      <h4
-        className="text-[10px] tracking-[0.18em] uppercase font-mono font-medium"
-        style={{ color: theme.accent }}
-      >
-        {title}
-      </h4>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        columnGap: 10,
+        fontSize: 9,
+        lineHeight: 1.3,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <span style={{ color: theme.textMuted }}>{a[0]}</span>
+        <span style={{ color: theme.text, fontVariantNumeric: "tabular-nums" }}>
+          {a[1]}
+        </span>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between" }}>
+        <span style={{ color: theme.textMuted }}>{b[0]}</span>
+        <span style={{ color: theme.text, fontVariantNumeric: "tabular-nums" }}>
+          {b[1]}
+        </span>
+      </div>
     </div>
   );
 }
 
 function LogoWordmark({
   theme,
-  size = 22,
+  size = 28,
 }: {
-  theme: ReturnType<typeof getTheme>;
+  theme: Theme;
   size?: number;
 }) {
   return (
-    <div className="flex items-center gap-2">
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
       <Image
         src="/sclabs-logo.png"
         alt="SC LABS"
         width={size}
         height={size}
-        className="rounded-sm"
+        style={{ borderRadius: 4 }}
         crossOrigin="anonymous"
         unoptimized
       />
-      <div className="flex flex-col leading-none">
+      <div style={{ display: "flex", flexDirection: "column", lineHeight: 1 }}>
         <span
-          className="text-[11px] tracking-[0.22em] uppercase font-semibold"
-          style={{ color: theme.text }}
+          style={{
+            fontSize: 12,
+            fontWeight: 700,
+            letterSpacing: "0.22em",
+            textTransform: "uppercase",
+            color: theme.text,
+          }}
         >
           SC Labs
         </span>
         <span
-          className="text-[7px] tracking-[0.2em] uppercase font-mono mt-0.5"
-          style={{ color: theme.textMuted }}
+          style={{
+            fontSize: 7,
+            letterSpacing: "0.2em",
+            textTransform: "uppercase",
+            color: theme.textMuted,
+            marginTop: 2,
+          }}
         >
           Star Citizen Intelligence
         </span>
@@ -179,279 +294,452 @@ export default function ShipInfoCard({
   const theme = getTheme(themeKey);
   const ship = data.data;
   const computed = data.computed;
-  const specs = ship.ship;
+  // El API devuelve varios campos que no están en el type oficial (mass,
+  // hullHp, scmSpeed, accelForward, etc.) — los leemos con cast puntual.
+  const specs = (ship.ship ?? {}) as any;
 
   const displayName = ship.localizedName || ship.name;
   const imageUrl = getShipImageUrl(displayName, ship.manufacturer);
 
-  // Totales desde computed (los que muestra el DPS calculator)
+  // ── Datos para cada sección ──
+  const lengthM = specs.lengthMeters ?? null;
+  const beamM = specs.beamMeters ?? null;
+  const heightM = specs.heightMeters ?? null;
+  const size = specs.size ?? null;
+  const mass = specs.mass ?? null;
+  const hullHp = specs.hullHp ?? null;
+
+  const deflPhys = specs.deflectionPhysical ?? null;
+  const deflEne = specs.deflectionEnergy ?? null;
+  const deflDis = specs.deflectionDistortion ?? null;
+
+  const scmSpeed = specs.scmSpeed ?? specs.maxSpeed ?? null;
+  const boostFwd = specs.boostSpeedForward ?? specs.afterburnerSpeed ?? null;
+  const pitch = specs.pitchRate ?? null;
+  const yaw = specs.yawRate ?? null;
+  const roll = specs.rollRate ?? null;
+  const bPitch = specs.boostedPitch ?? null;
+  const bYaw = specs.boostedYaw ?? null;
+  const bRoll = specs.boostedRoll ?? null;
+
+  const accelFwd = specs.accelForward ?? null;
+  const accelBwd = specs.accelBackward ?? null;
+  const accelUp = specs.accelUp ?? null;
+  const accelDown = specs.accelDown ?? null;
+  const accelStr = specs.accelStrafe ?? null;
+
+  const cargo = specs.cargo ?? null;
+  const h2 = specs.hydrogenCapacity ?? specs.hydrogenFuelCap ?? null;
+  const qt = specs.quantumFuelCapacity ?? specs.quantumFuelCap ?? null;
+  const qtRangeGm = specs.quantumRange ?? null;
+
+  const shieldHp = specs.shieldHpTotal ?? computed?.totalShieldHp ?? null;
   const pilotDps = computed?.totalDps ?? null;
-  const shieldHp = computed?.totalShieldHp ?? null;
 
-  // Totales desde specs del barco
-  const cargo = specs?.cargo ?? null;
-  const maxSpeed = specs?.maxSpeed ?? null;
-  const afterburner = specs?.afterburnerSpeed ?? null;
-  const pitch = specs?.pitchRate ?? null;
-  const yaw = specs?.yawRate ?? null;
-  const roll = specs?.rollRate ?? null;
-  const hydrogenFuel = specs?.hydrogenFuelCap ?? null;
-  const quantumFuel = specs?.quantumFuelCap ?? null;
-  const length = specs?.lengthMeters ?? null;
-  const beam = specs?.beamMeters ?? null;
-  const height = specs?.heightMeters ?? null;
-  const maxCrew = specs?.maxCrew ?? null;
+  // Dimensiones string
+  const dimsFlight =
+    lengthM != null && beamM != null && heightM != null
+      ? `${size ? `(S${size}) ` : ""}${num(lengthM)} L × ${num(
+          beamM
+        )} W × ${num(heightM)} H m`
+      : MISSING;
 
+  // Helpers para strings con unidad
+  const pitchYawRoll =
+    pitch != null || yaw != null || roll != null
+      ? `${num(pitch)} / ${num(yaw)} / ${num(roll)}`
+      : MISSING;
+  const boostedPYR =
+    bPitch != null || bYaw != null || bRoll != null
+      ? `${num(bPitch, 1)} / ${num(bYaw, 1)} / ${num(bRoll, 1)}`
+      : MISSING;
+
+  const scmBoostStr =
+    scmSpeed != null || boostFwd != null
+      ? `${num(scmSpeed)} / ${num(boostFwd)}`
+      : MISSING;
+
+  const h2Str = h2 != null ? `${num(h2)}` : MISSING;
+  const qtStr = qt != null ? `${num(qt, 2)}` : MISSING;
+
+  // ═════════════════════════════════════════════════════════════════════
+  // HORIZONTAL — formato Erkul-like ancho y bajo
+  // ═════════════════════════════════════════════════════════════════════
   if (variant === "horizontal") {
+    const W = 1600;
+    const H = 480;
+
     return (
       <div
         id={captureId}
-        className="relative overflow-hidden"
         style={{
-          width: 1200,
-          height: 560,
+          position: "relative",
+          width: W,
+          height: H,
           backgroundColor: theme.bg,
+          color: theme.text,
           border: `1px solid ${theme.border}`,
           fontFamily:
             '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+          overflow: "hidden",
         }}
       >
-        {/* Border accent top */}
+        {/* Top accent bar */}
         <div
-          className="absolute top-0 left-0 right-0 h-1"
-          style={{ backgroundColor: theme.accent }}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 3,
+            backgroundColor: theme.accent,
+          }}
         />
 
-        {/* Main grid: image left, stats right */}
-        <div className="absolute inset-0 p-8 flex gap-6">
-          {/* Left column: image + name + manufacturer */}
-          <div
-            className="flex-shrink-0 flex flex-col justify-between"
-            style={{ width: 480 }}
-          >
-            <div className="flex-1 flex items-center justify-center relative">
-              <div
-                className="relative w-full"
-                style={{ height: 280, backgroundColor: theme.bgPanel }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={imageUrl}
-                  alt={displayName}
-                  crossOrigin="anonymous"
-                  className="absolute inset-0 w-full h-full object-contain p-2"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.opacity = "0.3";
-                  }}
-                />
-              </div>
+        {/* Brand header */}
+        <div
+          style={{
+            position: "absolute",
+            top: 14,
+            left: 20,
+            right: 20,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <LogoWordmark theme={theme} size={28} />
+          <div style={{ textAlign: "right" }}>
+            <div
+              style={{
+                fontSize: 8,
+                letterSpacing: "0.22em",
+                textTransform: "uppercase",
+                color: theme.textMuted,
+              }}
+            >
+              Ship Spec Sheet
             </div>
+            <div
+              style={{
+                fontSize: 10,
+                color: theme.accent,
+                marginTop: 2,
+                fontFamily: "monospace",
+              }}
+            >
+              {ship.gameVersion || "4.x"}
+            </div>
+          </div>
+        </div>
 
-            {/* Name + manufacturer */}
-            <div className="mt-4">
+        {/* Main content grid: image col + 4 data cols */}
+        <div
+          style={{
+            position: "absolute",
+            top: 60,
+            left: 20,
+            right: 20,
+            bottom: 32,
+            display: "grid",
+            gridTemplateColumns: "340px 1fr 1fr 1fr 1fr",
+            gap: 14,
+          }}
+        >
+          {/* ── Col 0: Image + Name ── */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+            }}
+          >
+            <div
+              style={{
+                position: "relative",
+                width: "100%",
+                height: 210,
+                backgroundColor: theme.bgPanel,
+                border: `1px solid ${theme.border}`,
+              }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={imageUrl}
+                alt={displayName}
+                crossOrigin="anonymous"
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  padding: 10,
+                }}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.opacity = "0.3";
+                }}
+              />
+            </div>
+            <div style={{ marginTop: 10 }}>
               <div
-                className="text-[10px] tracking-[0.22em] uppercase font-mono mb-1"
-                style={{ color: theme.textMuted }}
+                style={{
+                  fontSize: 9,
+                  letterSpacing: "0.22em",
+                  textTransform: "uppercase",
+                  color: theme.textMuted,
+                  marginBottom: 2,
+                }}
               >
                 {ship.manufacturer ?? "Manufacturer"}
               </div>
-              <h2
-                className="text-3xl font-light tracking-tight leading-none"
-                style={{ color: theme.text }}
+              <div
+                style={{
+                  fontSize: 28,
+                  fontWeight: 300,
+                  lineHeight: 1,
+                  color: theme.text,
+                  letterSpacing: "-0.01em",
+                }}
               >
                 {displayName}
-              </h2>
-              {(ship.type || specs?.role) && (
+              </div>
+              {(ship.type || specs.role) && (
                 <div
-                  className="text-xs font-mono mt-2"
-                  style={{ color: theme.accent }}
+                  style={{
+                    fontSize: 10,
+                    marginTop: 4,
+                    color: theme.accent,
+                    letterSpacing: "0.05em",
+                  }}
                 >
-                  {[ship.type, specs?.role].filter(Boolean).join(" · ")}
+                  {[ship.type, specs.role].filter(Boolean).join(" · ")}
+                </div>
+              )}
+              {(specs.maxCrew != null || mass != null) && (
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 14,
+                    marginTop: 6,
+                    fontSize: 10,
+                    color: theme.textMuted,
+                  }}
+                >
+                  {specs.maxCrew != null && (
+                    <span>
+                      <span style={{ color: theme.text, fontWeight: 600 }}>
+                        {specs.maxCrew}
+                      </span>{" "}
+                      crew
+                    </span>
+                  )}
+                  {mass != null && (
+                    <span>
+                      <span style={{ color: theme.text, fontWeight: 600 }}>
+                        {num(mass)}
+                      </span>{" "}
+                      kg
+                    </span>
+                  )}
                 </div>
               )}
             </div>
           </div>
 
-          {/* Right column: stat panels */}
-          <div className="flex-1 flex flex-col gap-5 min-w-0">
-            {/* Header with SC Labs logo */}
-            <div className="flex items-center justify-between">
-              <LogoWordmark theme={theme} size={26} />
-              <div className="flex flex-col items-end">
-                <span
-                  className="text-[8px] tracking-[0.22em] uppercase font-mono"
-                  style={{ color: theme.textMuted }}
-                >
-                  Ship Spec Sheet
-                </span>
-                <span
-                  className="text-[10px] font-mono mt-0.5"
-                  style={{ color: theme.accent }}
-                >
-                  {ship.gameVersion ?? "4.x"}
-                </span>
-              </div>
-            </div>
+          {/* ── Col 1: Hull + Vital Part + Armor ── */}
+          <div style={{ minWidth: 0 }}>
+            <SectionHeader title="Hull" theme={theme} />
+            <Row label="Dimensions (Flight)" value={dimsFlight} theme={theme} dense />
+            <Row label="Dimensions (Landed)" value={MISSING} theme={theme} dense />
+            <Row label="Mass" value={num(mass)} unit="Kg" theme={theme} dense />
+            <Row
+              label="Total health points"
+              value={num(hullHp)}
+              unit="HP"
+              theme={theme}
+              dense
+            />
 
-            {/* Offense + Defense */}
-            <div className="grid grid-cols-2 gap-5">
-              <div
-                className="p-3 rounded"
-                style={{
-                  backgroundColor: theme.bgPanel,
-                  borderLeft: `2px solid ${theme.accent}`,
-                }}
-              >
-                <SectionTitle title="⬡ Weaponry" theme={theme} />
-                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                  <StatCell
-                    label="Pilot DPS"
-                    value={fmt(pilotDps)}
-                    theme={theme}
-                  />
-                  <StatCell
-                    label="Weapons"
-                    value={fmt(computed?.hardpointSummary?.weapons)}
-                    theme={theme}
-                  />
-                  <StatCell
-                    label="Missiles"
-                    value={fmt(computed?.hardpointSummary?.missiles)}
-                    theme={theme}
-                  />
-                  <StatCell
-                    label="Alpha"
-                    value={fmt(computed?.totalAlphaDamage)}
-                    theme={theme}
-                  />
-                </div>
-              </div>
+            <SubHeader title="Vital Part" theme={theme} />
+            <Row label="Body" value={MISSING} unit="HP" theme={theme} dense />
+            <SubHeader title="Damage Modifiers" theme={theme} />
+            <ModifierTriplet
+              a={["Physical", deflPhys != null ? `${num(deflPhys)} %` : MISSING]}
+              b={["Electromagnetic", MISSING]}
+              theme={theme}
+            />
+            <ModifierTriplet
+              a={["Energy", deflEne != null ? `${num(deflEne)} %` : MISSING]}
+              b={["CrossSection", MISSING]}
+              theme={theme}
+            />
+            <ModifierTriplet
+              a={["Distortion", deflDis != null ? `${num(deflDis)} %` : MISSING]}
+              b={["Infrared", MISSING]}
+              theme={theme}
+            />
 
-              <div
-                className="p-3 rounded"
-                style={{
-                  backgroundColor: theme.bgPanel,
-                  borderLeft: `2px solid ${theme.accent}`,
-                }}
-              >
-                <SectionTitle title="◈ Defense" theme={theme} />
-                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                  <StatCell
-                    label="Shield HP"
-                    value={fmtHp(shieldHp)}
-                    theme={theme}
-                  />
-                  <StatCell
-                    label="Shields"
-                    value={fmt(computed?.hardpointSummary?.shields)}
-                    theme={theme}
-                  />
-                  <StatCell
-                    label="Power"
-                    value={fmt(computed?.totalPowerOutput)}
-                    unit="W"
-                    theme={theme}
-                  />
-                  <StatCell
-                    label="Cooling"
-                    value={fmt(computed?.totalCooling)}
-                    theme={theme}
-                  />
-                </div>
-              </div>
-            </div>
+            <SubHeader title="Armor" theme={theme} />
+            <Row label="Health points" value={MISSING} unit="HP" theme={theme} dense />
+            <Row
+              label="Deflection Threshold"
+              value={MISSING}
+              theme={theme}
+              dense
+            />
+          </div>
 
-            {/* Mobility + Cargo */}
-            <div className="grid grid-cols-2 gap-5">
-              <div
-                className="p-3 rounded"
-                style={{
-                  backgroundColor: theme.bgPanel,
-                  borderLeft: `2px solid ${theme.accent}`,
-                }}
-              >
-                <SectionTitle title="△ Mobility" theme={theme} />
-                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                  <StatCell
-                    label="SCM"
-                    value={fmt(maxSpeed)}
-                    unit="m/s"
-                    theme={theme}
-                  />
-                  <StatCell
-                    label="Boost"
-                    value={fmt(afterburner)}
-                    unit="m/s"
-                    theme={theme}
-                  />
-                  <StatCell
-                    label="Pitch"
-                    value={fmt(pitch, 1)}
-                    unit="°/s"
-                    theme={theme}
-                  />
-                  <StatCell
-                    label="Yaw"
-                    value={fmt(yaw, 1)}
-                    unit="°/s"
-                    theme={theme}
-                  />
-                </div>
-              </div>
+          {/* ── Col 2: Weaponry ── */}
+          <div style={{ minWidth: 0 }}>
+            <SectionHeader title="Weaponry" theme={theme} />
+            <Row
+              label="Pilot DPS"
+              value={pilotDps != null ? num(pilotDps) : MISSING}
+              theme={theme}
+              dense
+            />
+            <Row label="Crew DPS" value={MISSING} theme={theme} dense />
+            <Row label="Missiles & Bombs" value={MISSING} unit="Dmg" theme={theme} dense />
+            <Row
+              label="Max Armed / Rearm CD"
+              value={MISSING}
+              theme={theme}
+              dense
+            />
+            <Row
+              label="Shield (Quadrant)"
+              value={shieldHp != null ? num(shieldHp) : MISSING}
+              unit="HP"
+              theme={theme}
+              dense
+            />
+            <Row
+              label="Weapons (count)"
+              value={num(computed?.hardpointSummary?.weapons)}
+              theme={theme}
+              dense
+            />
+            <Row
+              label="Missiles (count)"
+              value={num(computed?.hardpointSummary?.missiles)}
+              theme={theme}
+              dense
+            />
+            <Row
+              label="Shields (count)"
+              value={num(computed?.hardpointSummary?.shields)}
+              theme={theme}
+              dense
+            />
 
-              <div
-                className="p-3 rounded"
-                style={{
-                  backgroundColor: theme.bgPanel,
-                  borderLeft: `2px solid ${theme.accent}`,
-                }}
-              >
-                <SectionTitle title="⊞ Cargo & Crew" theme={theme} />
-                <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                  <StatCell
-                    label="Cargo"
-                    value={fmtScu(cargo)}
-                    unit="SCU"
-                    theme={theme}
-                  />
-                  <StatCell
-                    label="Crew"
-                    value={fmt(maxCrew)}
-                    theme={theme}
-                  />
-                  <StatCell
-                    label="H₂ Fuel"
-                    value={fmt(hydrogenFuel)}
-                    theme={theme}
-                  />
-                  <StatCell
-                    label="QT Fuel"
-                    value={fmt(quantumFuel)}
-                    theme={theme}
-                  />
-                </div>
-              </div>
-            </div>
+            <SectionHeader title="Carrying Capacity" theme={theme} />
+            <Row
+              label="Cargo Grid"
+              value={num(cargo)}
+              unit="SCU"
+              theme={theme}
+              dense
+            />
+          </div>
+
+          {/* ── Col 3: Fuel + Refuel Cost ── */}
+          <div style={{ minWidth: 0 }}>
+            <SectionHeader title="Fuel" theme={theme} />
+            <Row label="Hydrogen" value={h2Str} unit="SCU" theme={theme} dense />
+            <Row label="Quantum" value={qtStr} unit="SCU" theme={theme} dense />
+            <Row
+              label="Range"
+              value={qtRangeGm != null ? num(qtRangeGm, 2) : MISSING}
+              unit="GM"
+              theme={theme}
+              dense
+            />
+
+            <SectionHeader title="Refuel Cost" theme={theme} />
+            <Row label="Hydrogen" value={MISSING} unit="aUEC" theme={theme} dense />
+            <Row label="Quantum" value={MISSING} unit="aUEC" theme={theme} dense />
+
+            <SectionHeader title="Insurance" theme={theme} />
+            <Row label="Claim / Expedite" value={MISSING} theme={theme} dense />
+            <Row label="Expedite cost" value={MISSING} unit="aUEC" theme={theme} dense />
+          </div>
+
+          {/* ── Col 4: Flight Perf + Accelerations ── */}
+          <div style={{ minWidth: 0 }}>
+            <SectionHeader title="Flight Performances" theme={theme} />
+            <Row
+              label="SCM / Forward Boost"
+              value={scmBoostStr}
+              unit="m/s"
+              theme={theme}
+              dense
+            />
+            <Row label="NAV" value={MISSING} unit="m/s" theme={theme} dense />
+            <Row
+              label="Boost Ramp Up / Down"
+              value={MISSING}
+              unit="s"
+              theme={theme}
+              dense
+            />
+            <Row
+              label="Pitch / Yaw / Roll"
+              value={pitchYawRoll}
+              unit="°/s"
+              theme={theme}
+              dense
+            />
+            <Row
+              label="Boosted"
+              value={boostedPYR}
+              unit="°/s"
+              theme={theme}
+              dense
+            />
+
+            <SectionHeader title="Accelerations" theme={theme} />
+            <Row label="Main" value={toG(accelFwd)} unit="G" theme={theme} dense />
+            <Row label="Retro" value={toG(accelBwd)} unit="G" theme={theme} dense />
+            <Row label="Up" value={toG(accelUp)} unit="G" theme={theme} dense />
+            <Row label="Down" value={toG(accelDown)} unit="G" theme={theme} dense />
+            <Row label="Strafe" value={toG(accelStr)} unit="G" theme={theme} dense />
           </div>
         </div>
 
         {/* Footer: cortesía */}
         <div
-          className="absolute bottom-0 left-0 right-0 flex items-center justify-between px-8 py-2.5 border-t"
           style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: 26,
             backgroundColor: theme.bgPanel,
-            borderColor: theme.border,
+            borderTop: `1px solid ${theme.border}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0 20px",
           }}
         >
           <span
-            className="text-[9px] tracking-[0.22em] uppercase font-mono"
-            style={{ color: theme.textMuted }}
+            style={{
+              fontSize: 9,
+              letterSpacing: "0.22em",
+              textTransform: "uppercase",
+              color: theme.textMuted,
+            }}
           >
             Cortesía de SC Labs
           </span>
           <span
-            className="text-[9px] tracking-[0.22em] uppercase font-mono"
-            style={{ color: theme.accent }}
+            style={{
+              fontSize: 9,
+              letterSpacing: "0.22em",
+              textTransform: "uppercase",
+              color: theme.accent,
+            }}
           >
             sclabs · star citizen intelligence
           </span>
@@ -460,46 +748,82 @@ export default function ShipInfoCard({
     );
   }
 
-  // ── Vertical variant ──
+  // ═════════════════════════════════════════════════════════════════════
+  // VERTICAL — mismo contenido, layout stacked para portrait
+  // ═════════════════════════════════════════════════════════════════════
+  const W = 720;
+  const H = 1280;
+
   return (
     <div
       id={captureId}
-      className="relative overflow-hidden"
       style={{
-        width: 600,
-        height: 1066, // ≈ 9:16 para Reels / Shorts / portrait overlays
+        position: "relative",
+        width: W,
+        height: H,
         backgroundColor: theme.bg,
+        color: theme.text,
         border: `1px solid ${theme.border}`,
         fontFamily:
           '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        overflow: "hidden",
       }}
     >
-      {/* Border accent top */}
+      {/* Accent top */}
       <div
-        className="absolute top-0 left-0 right-0 h-1.5"
-        style={{ backgroundColor: theme.accent }}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 4,
+          backgroundColor: theme.accent,
+        }}
       />
 
-      <div className="absolute inset-0 p-8 pt-10 flex flex-col">
-        {/* Top: SC Labs brand */}
-        <div className="flex items-center justify-between mb-6">
-          <LogoWordmark theme={theme} size={30} />
-          <span
-            className="text-[9px] tracking-[0.22em] uppercase font-mono"
-            style={{ color: theme.textMuted }}
+      <div
+        style={{
+          position: "absolute",
+          top: 18,
+          left: 24,
+          right: 24,
+          bottom: 34,
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* Brand header */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 14,
+          }}
+        >
+          <LogoWordmark theme={theme} size={32} />
+          <div
+            style={{
+              fontSize: 10,
+              letterSpacing: "0.22em",
+              textTransform: "uppercase",
+              color: theme.textMuted,
+            }}
           >
-            {ship.gameVersion ?? "4.x"}
-          </span>
+            {ship.gameVersion || "4.x"}
+          </div>
         </div>
 
         {/* Ship image */}
         <div
-          className="w-full flex items-center justify-center relative mb-5"
           style={{
-            height: 320,
+            position: "relative",
+            width: "100%",
+            height: 260,
             backgroundColor: theme.bgPanel,
             borderTop: `2px solid ${theme.accent}`,
             borderBottom: `2px solid ${theme.accent}`,
+            marginBottom: 10,
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -507,7 +831,14 @@ export default function ShipInfoCard({
             src={imageUrl}
             alt={displayName}
             crossOrigin="anonymous"
-            className="absolute inset-0 w-full h-full object-contain p-3"
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              padding: 14,
+            }}
             onError={(e) => {
               (e.target as HTMLImageElement).style.opacity = "0.3";
             }}
@@ -515,143 +846,191 @@ export default function ShipInfoCard({
         </div>
 
         {/* Name + manufacturer */}
-        <div className="mb-5">
+        <div style={{ marginBottom: 10 }}>
           <div
-            className="text-[10px] tracking-[0.24em] uppercase font-mono mb-1.5"
-            style={{ color: theme.textMuted }}
+            style={{
+              fontSize: 10,
+              letterSpacing: "0.24em",
+              textTransform: "uppercase",
+              color: theme.textMuted,
+              marginBottom: 3,
+            }}
           >
             {ship.manufacturer ?? "Manufacturer"}
           </div>
-          <h2
-            className="text-4xl font-light tracking-tight leading-none"
-            style={{ color: theme.text }}
+          <div
+            style={{
+              fontSize: 36,
+              fontWeight: 300,
+              lineHeight: 1,
+              color: theme.text,
+              letterSpacing: "-0.01em",
+            }}
           >
             {displayName}
-          </h2>
-          {(ship.type || specs?.role) && (
+          </div>
+          {(ship.type || specs.role) && (
             <div
-              className="text-sm font-mono mt-2"
-              style={{ color: theme.accent }}
+              style={{
+                fontSize: 12,
+                marginTop: 5,
+                color: theme.accent,
+              }}
             >
-              {[ship.type, specs?.role].filter(Boolean).join(" · ")}
+              {[ship.type, specs.role].filter(Boolean).join(" · ")}
             </div>
           )}
         </div>
 
-        {/* Stats grid 2x4 */}
+        {/* 2-col data grid */}
         <div
-          className="grid grid-cols-2 gap-3 flex-1"
-          style={{ alignContent: "start" }}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            columnGap: 18,
+            flex: 1,
+            alignContent: "start",
+          }}
         >
-          <div
-            className="p-3 rounded"
-            style={{
-              backgroundColor: theme.bgPanel,
-              borderLeft: `2px solid ${theme.accent}`,
-            }}
-          >
-            <SectionTitle title="⬡ DPS Pilot" theme={theme} />
-            <div className="text-2xl font-mono font-medium" style={{ color: theme.text }}>
-              {fmt(pilotDps)}
-            </div>
+          {/* LEFT COLUMN */}
+          <div>
+            <SectionHeader title="Hull" theme={theme} dense />
+            <Row label="Dimensions (F)" value={dimsFlight} theme={theme} dense />
+            <Row label="Dimensions (L)" value={MISSING} theme={theme} dense />
+            <Row label="Mass" value={num(mass)} unit="Kg" theme={theme} dense />
+            <Row label="Total HP" value={num(hullHp)} unit="HP" theme={theme} dense />
+
+            <SubHeader title="Vital Part" theme={theme} />
+            <Row label="Body" value={MISSING} unit="HP" theme={theme} dense />
+            <SubHeader title="Damage Modifiers" theme={theme} />
+            <ModifierTriplet
+              a={["Physical", deflPhys != null ? `${num(deflPhys)} %` : MISSING]}
+              b={["Electromag.", MISSING]}
+              theme={theme}
+            />
+            <ModifierTriplet
+              a={["Energy", deflEne != null ? `${num(deflEne)} %` : MISSING]}
+              b={["CrossSection", MISSING]}
+              theme={theme}
+            />
+            <ModifierTriplet
+              a={["Distortion", deflDis != null ? `${num(deflDis)} %` : MISSING]}
+              b={["Infrared", MISSING]}
+              theme={theme}
+            />
+
+            <SubHeader title="Armor" theme={theme} />
+            <Row label="Health points" value={MISSING} unit="HP" theme={theme} dense />
+            <Row label="Deflect. Threshold" value={MISSING} theme={theme} dense />
+
+            <SectionHeader title="Weaponry" theme={theme} dense />
+            <Row
+              label="Pilot DPS"
+              value={pilotDps != null ? num(pilotDps) : MISSING}
+              theme={theme}
+              dense
+            />
+            <Row label="Crew DPS" value={MISSING} theme={theme} dense />
+            <Row label="Missiles & Bombs" value={MISSING} unit="Dmg" theme={theme} dense />
+            <Row label="Max Armed / Rearm" value={MISSING} theme={theme} dense />
+            <Row
+              label="Shield (Quadrant)"
+              value={shieldHp != null ? num(shieldHp) : MISSING}
+              unit="HP"
+              theme={theme}
+              dense
+            />
           </div>
 
-          <div
-            className="p-3 rounded"
-            style={{
-              backgroundColor: theme.bgPanel,
-              borderLeft: `2px solid ${theme.accent}`,
-            }}
-          >
-            <SectionTitle title="◈ Shields" theme={theme} />
-            <div className="text-2xl font-mono font-medium" style={{ color: theme.text }}>
-              {fmtHp(shieldHp)}
-            </div>
-          </div>
+          {/* RIGHT COLUMN */}
+          <div>
+            <SectionHeader title="Carrying Capacity" theme={theme} dense />
+            <Row label="Cargo Grid" value={num(cargo)} unit="SCU" theme={theme} dense />
 
-          <div
-            className="p-3 rounded"
-            style={{
-              backgroundColor: theme.bgPanel,
-              borderLeft: `2px solid ${theme.accent}`,
-            }}
-          >
-            <SectionTitle title="⊞ Cargo" theme={theme} />
-            <div className="text-2xl font-mono font-medium" style={{ color: theme.text }}>
-              {fmtScu(cargo)}
-              <span className="text-xs ml-1" style={{ color: theme.textMuted }}>
-                SCU
-              </span>
-            </div>
-          </div>
+            <SectionHeader title="Fuel" theme={theme} dense />
+            <Row label="Hydrogen" value={h2Str} unit="SCU" theme={theme} dense />
+            <Row label="Quantum" value={qtStr} unit="SCU" theme={theme} dense />
+            <Row
+              label="Range"
+              value={qtRangeGm != null ? num(qtRangeGm, 2) : MISSING}
+              unit="GM"
+              theme={theme}
+              dense
+            />
 
-          <div
-            className="p-3 rounded"
-            style={{
-              backgroundColor: theme.bgPanel,
-              borderLeft: `2px solid ${theme.accent}`,
-            }}
-          >
-            <SectionTitle title="△ SCM" theme={theme} />
-            <div className="text-2xl font-mono font-medium" style={{ color: theme.text }}>
-              {fmt(maxSpeed)}
-              <span className="text-xs ml-1" style={{ color: theme.textMuted }}>
-                m/s
-              </span>
-            </div>
-          </div>
+            <SectionHeader title="Refuel Cost" theme={theme} dense />
+            <Row label="Hydrogen" value={MISSING} unit="aUEC" theme={theme} dense />
+            <Row label="Quantum" value={MISSING} unit="aUEC" theme={theme} dense />
 
-          <div
-            className="p-3 rounded col-span-2"
-            style={{
-              backgroundColor: theme.bgPanel,
-              borderLeft: `2px solid ${theme.accent}`,
-            }}
-          >
-            <SectionTitle title="◎ Dimensions" theme={theme} />
-            <div
-              className="text-sm font-mono font-medium tracking-wide"
-              style={{ color: theme.text }}
-            >
-              {fmt(length, 1)}
-              <span className="text-[10px] mx-1" style={{ color: theme.textMuted }}>
-                L
-              </span>
-              {" × "}
-              {fmt(beam, 1)}
-              <span className="text-[10px] mx-1" style={{ color: theme.textMuted }}>
-                W
-              </span>
-              {" × "}
-              {fmt(height, 1)}
-              <span className="text-[10px] mx-1" style={{ color: theme.textMuted }}>
-                H
-              </span>
-              <span className="text-[10px] ml-1" style={{ color: theme.textMuted }}>
-                m
-              </span>
-            </div>
+            <SectionHeader title="Flight Performances" theme={theme} dense />
+            <Row
+              label="SCM / Fwd Boost"
+              value={scmBoostStr}
+              unit="m/s"
+              theme={theme}
+              dense
+            />
+            <Row label="NAV" value={MISSING} unit="m/s" theme={theme} dense />
+            <Row label="Boost Ramp U/D" value={MISSING} unit="s" theme={theme} dense />
+            <Row
+              label="Pitch / Yaw / Roll"
+              value={pitchYawRoll}
+              unit="°/s"
+              theme={theme}
+              dense
+            />
+            <Row label="Boosted" value={boostedPYR} unit="°/s" theme={theme} dense />
+
+            <SectionHeader title="Accelerations" theme={theme} dense />
+            <Row label="Main" value={toG(accelFwd)} unit="G" theme={theme} dense />
+            <Row label="Retro" value={toG(accelBwd)} unit="G" theme={theme} dense />
+            <Row label="Up" value={toG(accelUp)} unit="G" theme={theme} dense />
+            <Row label="Down" value={toG(accelDown)} unit="G" theme={theme} dense />
+            <Row label="Strafe" value={toG(accelStr)} unit="G" theme={theme} dense />
+
+            <SectionHeader title="Insurance" theme={theme} dense />
+            <Row label="Claim / Expedite" value={MISSING} theme={theme} dense />
+            <Row label="Expedite cost" value={MISSING} unit="aUEC" theme={theme} dense />
           </div>
         </div>
+      </div>
 
-        {/* Footer: cortesía */}
-        <div
-          className="mt-5 pt-4 flex items-center justify-between border-t"
-          style={{ borderColor: theme.border }}
+      {/* Footer: cortesía */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: 28,
+          backgroundColor: theme.bgPanel,
+          borderTop: `1px solid ${theme.border}`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 24px",
+        }}
+      >
+        <span
+          style={{
+            fontSize: 10,
+            letterSpacing: "0.22em",
+            textTransform: "uppercase",
+            color: theme.textMuted,
+          }}
         >
-          <span
-            className="text-[10px] tracking-[0.22em] uppercase font-mono"
-            style={{ color: theme.textMuted }}
-          >
-            Cortesía de SC Labs
-          </span>
-          <span
-            className="text-[10px] tracking-[0.22em] uppercase font-mono"
-            style={{ color: theme.accent }}
-          >
-            sclabs.app
-          </span>
-        </div>
+          Cortesía de SC Labs
+        </span>
+        <span
+          style={{
+            fontSize: 10,
+            letterSpacing: "0.22em",
+            textTransform: "uppercase",
+            color: theme.accent,
+          }}
+        >
+          sclabs.app
+        </span>
       </div>
     </div>
   );
