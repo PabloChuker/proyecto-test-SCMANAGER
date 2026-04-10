@@ -62,6 +62,14 @@ export interface HangarShip {
   imageUrl: string; // RSI CDN image URL
   notes: string;
   acquisitionType?: AcquisitionType; // pledge (default) o in_game
+
+  // ── Loaner tracking (RSI Loaner Ship Matrix) ──
+  // A "loaner" is a temporary ship granted by RSI while the pledged ship
+  // is not yet Flight Ready. Loaners are auto-added when a pledge ship is
+  // added to the hangar and are auto-removed when the parent pledge is
+  // removed. Loaners cannot be sold/melted.
+  isLoaner?: boolean;        // true → this entry is a loaner, not a real pledge
+  loanerOf?: string;         // id of the parent HangarShip that granted this loaner
 }
 
 export interface HangarCCU {
@@ -122,7 +130,7 @@ export interface HangarStoreState {
   wishlist: HangarWishlistItem[];
 
   // Ship actions
-  addShip: (ship: Omit<HangarShip, "id">) => void;
+  addShip: (ship: Omit<HangarShip, "id">) => string; // returns new ship id
   removeShip: (id: string) => void;
   updateShip: (id: string, updates: Partial<HangarShip>) => void;
 
@@ -686,20 +694,25 @@ export const useHangarStore = create<HangarStoreState>()(
       // =========================================================================
 
       addShip: (ship) => {
+        const newId = generateUUID();
         set((state) => ({
           ships: [
             ...state.ships,
             {
               ...ship,
-              id: generateUUID(),
+              id: newId,
             },
           ],
         }));
+        return newId;
       },
 
       removeShip: (id) => {
         set((state) => ({
-          ships: state.ships.filter((ship) => ship.id !== id),
+          // Cascade-remove any loaners attached to this pledged ship.
+          ships: state.ships.filter(
+            (ship) => ship.id !== id && ship.loanerOf !== id,
+          ),
         }));
       },
 

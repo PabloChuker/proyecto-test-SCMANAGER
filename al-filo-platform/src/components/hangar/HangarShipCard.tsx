@@ -361,6 +361,15 @@ export function HangarShipCard({ ship }: { ship: HangarShip }) {
                 IN GAME
               </span>
             )}
+            {/* LOANER badge — auto-added from the RSI Loaner Ship Matrix */}
+            {ship.isLoaner && (
+              <span
+                className="text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm bg-sky-500/25 text-sky-300 border border-sky-500/50 tracking-wider"
+                title="Loaner temporal (RSI Loaner Ship Matrix)"
+              >
+                LOANER
+              </span>
+            )}
             <span
               className={`text-[10px] font-medium px-2 py-0.5 rounded-full backdrop-blur-sm ${insuranceColor.bg} ${insuranceColor.text} border ${insuranceColor.border}`}
             >

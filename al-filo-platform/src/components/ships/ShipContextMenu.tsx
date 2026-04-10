@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useHangarStore } from "@/store/useHangarStore";
+import { getLoanersFor } from "@/lib/loaners";
 
 export interface ShipContextMenuTarget {
   reference: string;
@@ -77,8 +78,8 @@ export function ShipContextMenu({ target, onClose }: ShipContextMenuProps) {
   const left = Math.min(target.x, viewportW - MENU_WIDTH - 8);
   const top = Math.min(target.y, viewportH - MENU_HEIGHT - 8);
 
-  const handleAddToHangarPledge = () => {
-    addShip({
+  const handleAddToHangarPledge = async () => {
+    const parentId = addShip({
       shipReference: target.reference,
       shipName: target.name,
       pledgeName: `Standalone Ship - ${target.name}`,
@@ -95,6 +96,35 @@ export function ShipContextMenu({ target, onClose }: ShipContextMenuProps) {
     });
     setToast({ kind: "hangar", message: `${target.name} agregada al Hangar (Pledge)` });
     onClose();
+
+    // Fetch loaners for this pledged ship and auto-add them to the hangar.
+    // This runs after the context menu closes so the user gets immediate
+    // feedback; loaner ships appear shortly after with the LOANER badge.
+    try {
+      const loaners = await getLoanersFor(target.name);
+      if (loaners.length > 0) {
+        for (const loaner of loaners) {
+          addShip({
+            shipReference: "", // loaners don't map to a specific ships-table row
+            shipName: loaner.name,
+            pledgeName: `Loaner - ${loaner.name}`,
+            pledgePrice: 0,
+            insuranceType: "unknown",
+            location: "hangar",
+            itemCategory: "standalone_ship",
+            isGiftable: false,
+            isMeltable: false, // loaners cannot be melted
+            purchasedDate: null,
+            imageUrl: "",
+            notes: loaner.note ?? "",
+            isLoaner: true,
+            loanerOf: parentId,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("[ShipContextMenu] Failed to fetch loaners:", err);
+    }
   };
 
   const handleAddToHangarInGame = () => {
