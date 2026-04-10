@@ -37,6 +37,10 @@ interface Participant {
   contributed: boolean;
   weight: number;
   isFromParty: boolean;
+  /** Gastos/inversión del participante (money spent out-of-pocket to be reimbursed) */
+  expense?: number;
+  /** Marca si este participante fue quien cobró/vendió el botín (tiene el dinero) */
+  collected?: boolean;
 }
 
 interface LootEntry {
@@ -58,6 +62,43 @@ interface DraftResult {
   order: { participantId: string; participantName: string; position: number }[];
 }
 
+/** Sentinel entry used inside lootEntries to persist money without DB schema changes */
+const MONEY_SENTINEL_ID = "__money__";
+/** In-game transfer tax coefficient: sender sends X, receiver gets X * 0.995 */
+const TAX_COEF = 0.995;
+
+type RaffleMode = "lottery" | "draft" | "split";
+
+interface SettlementEntry {
+  participantId: string;
+  participantName: string;
+  /** Net amount participant should end up with (positive = gets money, negative = owes) */
+  netShare: number;
+  /** Gross amount after money they are currently holding (positive = owed money, negative = owes money) */
+  balance: number;
+}
+
+interface SettlementTransaction {
+  fromId: string;
+  fromName: string;
+  toId: string;
+  toName: string;
+  /** Amount the sender actually sends (gross, pre-tax) */
+  grossAmount: number;
+  /** Amount the receiver actually gets (net, grossAmount * TAX_COEF) */
+  netAmount: number;
+}
+
+interface Settlement {
+  moneyAmount: number;
+  totalExpenses: number;
+  profit: number;
+  shareEach: number;
+  entries: SettlementEntry[];
+  transactions: SettlementTransaction[];
+  warning: string | null;
+}
+
 interface ActivitySession {
   id: string;
   date: string;
@@ -65,8 +106,9 @@ interface ActivitySession {
   activityId: string;
   participants: Participant[];
   loot: LootEntry[];
-  mode: "lottery" | "draft";
+  mode: RaffleMode;
   results: RaffleResult[] | DraftResult | null;
+  settlement?: Settlement | null;
 }
 
 type SessionRole = "host" | "cohost" | "viewer";
@@ -81,9 +123,10 @@ interface SyncPayload {
   selectedActivity: string;
   lootEntries: LootEntry[];
   participants: Participant[];
-  raffleMode: "lottery" | "draft";
+  raffleMode: RaffleMode;
   results: RaffleResult[] | null;
   draftResults: DraftResult | null;
+  settlement: Settlement | null;
   isRolling: boolean;
   rollingName: string;
 }
@@ -102,6 +145,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   card: "🃏 Tarjetas",
   material: "💎 Materiales",
   misc: "📦 Otros",
+  money: "💰 Dinero",
 };
 
 const CATEGORY_ORDER = [
@@ -169,6 +213,105 @@ function weightedShuffle(participants: Participant[]): Participant[] {
   return result;
 }
 
+/**
+ * Compute money settlement: reimburse expenses first, split remaining profit equally,
+ * then compute a minimal set of transfers from collectors (holders of the money) to
+ * people who are owed money. Applies the in-game transfer tax (TAX_COEF = 0.995)
+ * so the sender sends a gross amount and the receiver gets `gross * TAX_COEF` net.
+ *
+ * Algorithm:
+ *  - netShare[i] = expense[i] + (moneyAmount - totalExpenses) / N   // what they should end up with
+ *  - held[i]     = collected[i] ? (moneyAmount / numCollectors) : 0 // what they currently hold
+ *  - balance[i]  = netShare[i] - held[i]                            // +ve = owed, -ve = owes
+ *  - Greedy match largest debtor with largest creditor; the debtor (sender) sends
+ *    `gross` such that `gross * TAX_COEF = min(|debtor|, creditor)` (i.e. the
+ *    receiver's owed amount), and we reduce both balances accordingly. The tax cost
+ *    comes out of the debtor's pocket — that's how in-game money transfer works.
+ */
+function computeSettlement(
+  participants: Participant[],
+  moneyAmount: number,
+): Settlement {
+  const N = participants.length;
+  const totalExpenses = participants.reduce((s, p) => s + (p.expense ?? 0), 0);
+  const profit = Math.max(0, moneyAmount - totalExpenses);
+  const shareEach = N > 0 ? profit / N : 0;
+
+  const collectors = participants.filter((p) => p.collected);
+  const numCollectors = collectors.length;
+  const heldEach = numCollectors > 0 ? moneyAmount / numCollectors : 0;
+
+  const entries: SettlementEntry[] = participants.map((p) => {
+    const netShare = (p.expense ?? 0) + shareEach;
+    const held = p.collected ? heldEach : 0;
+    return {
+      participantId: p.id,
+      participantName: p.name,
+      netShare,
+      balance: +(netShare - held).toFixed(2), // +ve = owed money, -ve = owes money
+    };
+  });
+
+  let warning: string | null = null;
+  if (N === 0 || moneyAmount <= 0) {
+    return { moneyAmount, totalExpenses, profit, shareEach, entries, transactions: [], warning };
+  }
+  if (numCollectors === 0) {
+    warning = "Nadie marcó que cobró el dinero — no se pueden calcular transferencias.";
+    return { moneyAmount, totalExpenses, profit, shareEach, entries, transactions: [], warning };
+  }
+  if (totalExpenses > moneyAmount) {
+    warning = "Los gastos superan el dinero obtenido — no hay profit para repartir (solo reintegros).";
+  }
+
+  // Greedy match of debtors -> creditors (copy of balances so we can mutate)
+  const work = entries.map((e) => ({ ...e }));
+  const transactions: SettlementTransaction[] = [];
+  const EPS = 0.005; // below ~0.5 centavo we consider settled
+
+  while (true) {
+    // Find biggest creditor (most positive balance) and biggest debtor (most negative)
+    let creditorIdx = -1;
+    let debtorIdx = -1;
+    let maxCred = 0;
+    let minDebt = 0;
+    for (let i = 0; i < work.length; i++) {
+      if (work[i].balance > maxCred) { maxCred = work[i].balance; creditorIdx = i; }
+      if (work[i].balance < minDebt) { minDebt = work[i].balance; debtorIdx = i; }
+    }
+    if (creditorIdx === -1 || debtorIdx === -1) break;
+    if (maxCred < EPS || -minDebt < EPS) break;
+
+    const creditor = work[creditorIdx];
+    const debtor = work[debtorIdx];
+    // The receiver is owed `creditor.balance` net. Sender has `-debtor.balance` to give.
+    // The debtor pays gross; receiver gets gross * TAX_COEF.
+    // Limit to what the debtor can actually pay in gross terms.
+    const maxNetReceiverWants = creditor.balance;
+    const maxGrossDebtorCanPay = -debtor.balance; // debtor's budget is in "net share" terms
+    // If debtor pays G gross, their own cost is G (they spend G from their wallet).
+    // So the smaller of the two caps in gross terms is:
+    //   grossCap = min(maxGrossDebtorCanPay, maxNetReceiverWants / TAX_COEF)
+    const grossFromReceiverCap = maxNetReceiverWants / TAX_COEF;
+    const gross = Math.min(maxGrossDebtorCanPay, grossFromReceiverCap);
+    const net = gross * TAX_COEF;
+
+    transactions.push({
+      fromId: debtor.participantId,
+      fromName: debtor.participantName,
+      toId: creditor.participantId,
+      toName: creditor.participantName,
+      grossAmount: Math.round(gross * 100) / 100,
+      netAmount: Math.round(net * 100) / 100,
+    });
+
+    debtor.balance = +(debtor.balance + gross).toFixed(2); // less negative
+    creditor.balance = +(creditor.balance - net).toFixed(2); // less positive
+  }
+
+  return { moneyAmount, totalExpenses, profit, shareEach, entries, transactions, warning };
+}
+
 function loadHistory(): ActivitySession[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -200,9 +343,11 @@ export default function ActivityManager() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [newName, setNewName] = useState("");
   const [lootEntries, setLootEntries] = useState<LootEntry[]>([]);
-  const [raffleMode, setRaffleMode] = useState<"lottery" | "draft">("lottery");
+  const [raffleMode, setRaffleMode] = useState<RaffleMode>("lottery");
   const [results, setResults] = useState<RaffleResult[] | null>(null);
   const [draftResults, setDraftResults] = useState<DraftResult | null>(null);
+  const [settlement, setSettlement] = useState<Settlement | null>(null);
+  const [moneyInput, setMoneyInput] = useState<string>("");
   const [history, setHistory] = useState<ActivitySession[]>([]);
   const [viewingSession, setViewingSession] = useState<ActivitySession | null>(null);
   const [saved, setSaved] = useState(false);
@@ -338,7 +483,7 @@ export default function ActivityManager() {
         setSelectedActivity(data.selected_activity ?? "");
         setParticipants(data.participants as Participant[] ?? []);
         setLootEntries(data.loot_entries as LootEntry[] ?? []);
-        setRaffleMode((data.raffle_mode as "lottery" | "draft") ?? "lottery");
+        setRaffleMode((data.raffle_mode as RaffleMode) ?? "lottery");
         setResults(data.results as RaffleResult[] | null ?? null);
         setDraftResults(data.draft_results as DraftResult | null ?? null);
         setCoHostIds(new Set(data.co_host_ids ?? []));
@@ -467,6 +612,7 @@ export default function ActivityManager() {
       setRaffleMode(payload.raffleMode);
       setResults(payload.results);
       setDraftResults(payload.draftResults);
+      setSettlement(payload.settlement ?? null);
       setIsRolling(payload.isRolling);
       setRollingName(payload.rollingName);
       setSaved(false);
@@ -491,6 +637,8 @@ export default function ActivityManager() {
       setLootEntries([]);
       setResults(null);
       setDraftResults(null);
+      setSettlement(null);
+      setMoneyInput("");
       setRollingName("");
       setDbSessionId(null);
       setSaved(false);
@@ -553,12 +701,13 @@ export default function ActivityManager() {
         raffleMode,
         results,
         draftResults,
+        settlement,
         isRolling,
         rollingName,
       } as SyncPayload,
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedActivity, lootEntries, participants, raffleMode, results, draftResults, isRolling, rollingName]);
+  }, [selectedActivity, lootEntries, participants, raffleMode, results, draftResults, settlement, isRolling, rollingName]);
 
   // ── Promote / demote co-host ──
   const toggleCoHost = useCallback((userId: string) => {
@@ -614,6 +763,8 @@ export default function ActivityManager() {
     setLootEntries([]);
     setResults(null);
     setDraftResults(null);
+    setSettlement(null);
+    setMoneyInput("");
     setRollingName("");
     setSaved(false);
     setShowCancelConfirm(false);
@@ -657,9 +808,46 @@ export default function ActivityManager() {
     return items;
   }, [lootCatalog, selectedCategory, lootSearch]);
 
+  // Money is stored inside lootEntries as a sentinel entry (category === "money"),
+  // so we don't need DB schema changes. The `quantity` field holds the money amount.
+  const moneyAmount = useMemo(() => {
+    const e = lootEntries.find((x) => x.itemId === MONEY_SENTINEL_ID);
+    return e ? e.quantity : 0;
+  }, [lootEntries]);
+
+  // Keep the text input in sync when data loads from DB/realtime
+  useEffect(() => {
+    if (moneyAmount > 0 && moneyInput === "") setMoneyInput(String(moneyAmount));
+    if (moneyAmount === 0 && moneyInput !== "") {
+      // only clear if user hasn't started typing a new value
+      const parsed = parseInt(moneyInput, 10);
+      if (!isNaN(parsed) && parsed > 0) return;
+      setMoneyInput("");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [moneyAmount]);
+
+  const setMoneyAmount = useCallback((amount: number) => {
+    setLootEntries((prev) => {
+      const filtered = prev.filter((e) => e.itemId !== MONEY_SENTINEL_ID);
+      if (amount > 0) {
+        filtered.unshift({
+          id: MONEY_SENTINEL_ID,
+          itemId: MONEY_SENTINEL_ID,
+          itemName: "Dinero (aUEC)",
+          category: "money",
+          rarity: "legendary",
+          quantity: Math.floor(amount),
+        });
+      }
+      return filtered;
+    });
+  }, []);
+
   const flatLoot = useMemo(() => {
     const items: { itemName: string; category: string; rarity: string }[] = [];
     for (const entry of lootEntries) {
+      if (entry.itemId === MONEY_SENTINEL_ID) continue; // skip money sentinel
       for (let i = 0; i < entry.quantity; i++) {
         items.push({ itemName: entry.itemName, category: entry.category, rarity: entry.rarity });
       }
@@ -667,7 +855,13 @@ export default function ActivityManager() {
     return items;
   }, [lootEntries]);
 
-  const hasResults = results !== null || draftResults !== null;
+  // Physical loot entries (excluding the money sentinel) — used by the list UI
+  const physicalLootEntries = useMemo(
+    () => lootEntries.filter((e) => e.itemId !== MONEY_SENTINEL_ID),
+    [lootEntries],
+  );
+
+  const hasResults = results !== null || draftResults !== null || settlement !== null;
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ACTIONS
@@ -692,6 +886,14 @@ export default function ActivityManager() {
 
   const setWeight = useCallback((id: string, w: number) => {
     setParticipants((prev) => prev.map((p) => (p.id === id ? { ...p, weight: Math.max(1, w) } : p)));
+  }, []);
+
+  const toggleCollected = useCallback((id: string) => {
+    setParticipants((prev) => prev.map((p) => (p.id === id ? { ...p, collected: !p.collected } : p)));
+  }, []);
+
+  const setExpense = useCallback((id: string, v: number) => {
+    setParticipants((prev) => prev.map((p) => (p.id === id ? { ...p, expense: Math.max(0, v) } : p)));
   }, []);
 
   // ── Loot ──
@@ -794,6 +996,56 @@ export default function ActivityManager() {
     }, 100);
   }, [participants, flatLoot, supabase]);
 
+  // ── Split (deterministic equal distribution, round-robin by rarity) ──
+  const runSplit = useCallback(() => {
+    if (participants.length === 0 || flatLoot.length === 0) return;
+    setIsRolling(true);
+    setSaved(false);
+    let rollCount = 0;
+    rollRef.current = setInterval(() => {
+      rollCount++;
+      setRollingName(participants[Math.floor(Math.random() * participants.length)].name);
+      if (rollCount >= 20) {
+        if (rollRef.current) clearInterval(rollRef.current);
+        setIsRolling(false);
+        setRollingName("");
+
+        // Sort by rarity descending so that rarest items get distributed first (fairness)
+        const rarityRank: Record<string, number> = { legendary: 5, epic: 4, rare: 3, uncommon: 2, common: 1 };
+        const sortedLoot = [...flatLoot].sort(
+          (a, b) => (rarityRank[b.rarity] ?? 0) - (rarityRank[a.rarity] ?? 0),
+        );
+
+        const resultMap: Record<string, { participantName: string; items: typeof flatLoot }> = {};
+        for (const p of participants) resultMap[p.id] = { participantName: p.name, items: [] };
+
+        // Weighted round-robin: participants with higher weight receive more passes
+        const expanded: Participant[] = [];
+        for (const p of participants) {
+          for (let i = 0; i < p.weight; i++) expanded.push(p);
+        }
+        // Shuffle the expanded order once so ties in rarity are distributed fairly
+        const order = shuffleArray(expanded);
+
+        let idx = 0;
+        for (const item of sortedLoot) {
+          const p = order[idx % order.length];
+          resultMap[p.id].items.push(item);
+          idx++;
+        }
+
+        setResults(
+          participants.map((p) => ({
+            participantId: p.id,
+            participantName: p.name,
+            items: resultMap[p.id].items,
+          })),
+        );
+        setDraftResults(null);
+      }
+    }, 100);
+  }, [participants, flatLoot]);
+
   // ── Draft ──
   const runDraft = useCallback(() => {
     if (participants.length === 0) return;
@@ -814,19 +1066,46 @@ export default function ActivityManager() {
     }, 100);
   }, [participants]);
 
+  // ── Unified SORTEAR: compute money settlement + run the chosen loot distribution ──
+  const runSorteo = useCallback(() => {
+    if (participants.length < 2) return;
+
+    // Compute settlement upfront if there's money at stake
+    if (moneyAmount > 0) {
+      const s = computeSettlement(participants, moneyAmount);
+      setSettlement(s);
+    } else {
+      setSettlement(null);
+    }
+
+    // Run the appropriate loot distribution (only if there's physical loot)
+    if (flatLoot.length === 0) {
+      // Money-only activity: no loot to distribute, just show settlement
+      setResults(null);
+      setDraftResults(null);
+      setSaved(false);
+      return;
+    }
+
+    if (raffleMode === "lottery") runLottery();
+    else if (raffleMode === "split") runSplit();
+    else runDraft();
+  }, [participants, moneyAmount, flatLoot.length, raffleMode, runLottery, runSplit, runDraft]);
+
   // ── Save to local history ──
   const saveSession = useCallback(() => {
     const session: ActivitySession = {
       id: uid(), date: new Date().toISOString(),
       activityName: activity?.name ?? "Custom", activityId: selectedActivity,
       participants, loot: lootEntries, mode: raffleMode,
-      results: raffleMode === "lottery" ? results : draftResults,
+      results: raffleMode === "draft" ? draftResults : results,
+      settlement,
     };
     const updated = [session, ...history].slice(0, 100);
     setHistory(updated);
     saveHistory(updated);
     setSaved(true);
-  }, [activity, selectedActivity, participants, lootEntries, raffleMode, results, draftResults, history]);
+  }, [activity, selectedActivity, participants, lootEntries, raffleMode, results, draftResults, settlement, history]);
 
   // ── Finish + close: save to history then cancel DB session ──
   const finishSession = useCallback(async () => {
@@ -853,6 +1132,8 @@ export default function ActivityManager() {
     setLootEntries([]);
     setResults(null);
     setDraftResults(null);
+    setSettlement(null);
+    setMoneyInput("");
     setRollingName("");
     setSaved(false);
     if (partyMembers.length > 0) {
@@ -880,6 +1161,8 @@ export default function ActivityManager() {
     skipAutoSaveRef.current = true;
     setResults(null);
     setDraftResults(null);
+    setSettlement(null);
+    setMoneyInput("");
     setRollingName("");
     setLootEntries([]);
     setSelectedActivity("");
@@ -1021,7 +1304,7 @@ export default function ActivityManager() {
                 <div className="flex-1 cursor-pointer" onClick={() => setViewingSession(s)}>
                   <div className="text-sm text-zinc-200">{s.activityName}</div>
                   <div className="text-xs text-zinc-500">
-                    {new Date(s.date).toLocaleString("es-AR")} • {s.participants.length} participantes • {s.mode === "lottery" ? "Loteria" : "Draft"} • {s.loot.reduce((a, l) => a + l.quantity, 0)} items
+                    {new Date(s.date).toLocaleString("es-AR")} • {s.participants.length} participantes • {s.mode === "lottery" ? "Loteria" : s.mode === "split" ? "Repartir" : "Draft"} • {s.loot.filter((l) => l.itemId !== MONEY_SENTINEL_ID).reduce((a, l) => a + l.quantity, 0)} items{s.settlement && s.settlement.moneyAmount > 0 ? ` • 💰 ${s.settlement.moneyAmount.toLocaleString("es-AR")} aUEC` : ""}
                   </div>
                 </div>
                 <button onClick={() => deleteHistoryItem(s.id)} className="text-zinc-600 hover:text-red-400 text-xs ml-2">✕</button>
@@ -1059,7 +1342,8 @@ export default function ActivityManager() {
               ))}
             </div>
           </div>
-          {viewingSession.mode === "lottery" && Array.isArray(viewingSession.results) && (
+          {viewingSession.settlement && renderSettlement(viewingSession.settlement)}
+          {(viewingSession.mode === "lottery" || viewingSession.mode === "split") && Array.isArray(viewingSession.results) && (
             <div className="space-y-3">
               <h3 className="text-sm text-zinc-400 uppercase tracking-wider">Resultado del Sorteo</h3>
               {renderLotteryResults(viewingSession.results as RaffleResult[])}
@@ -1091,14 +1375,18 @@ export default function ActivityManager() {
             <div className="space-y-4 p-4 rounded-lg border border-amber-500/20 bg-zinc-900/40">
               <h2 className="text-lg text-amber-400 tracking-wider uppercase text-center">🏆 Resultados</h2>
 
-              {raffleMode === "lottery" && results && renderLotteryResults(results)}
+              {/* Settlement (money distribution) always shown first if present */}
+              {settlement && renderSettlement(settlement)}
+
+              {/* Loot distribution */}
+              {(raffleMode === "lottery" || raffleMode === "split") && results && renderLotteryResults(results)}
               {raffleMode === "draft" && draftResults && (
                 <>
                   {renderDraftResults(draftResults)}
-                  {lootEntries.length > 0 && (
+                  {physicalLootEntries.length > 0 && (
                     <div className="mt-3 p-3 rounded border border-zinc-800/50 bg-zinc-900/30">
                       <h3 className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Botin disponible para elegir</h3>
-                      {lootEntries.map((entry) => (
+                      {physicalLootEntries.map((entry) => (
                         <div key={entry.id} className="text-sm text-zinc-300">
                           <span className={RARITY_COLORS[entry.rarity] ?? "text-zinc-400"}>{entry.itemName}</span>
                           {entry.quantity > 1 && <span className="text-zinc-500"> x{entry.quantity}</span>}
@@ -1211,48 +1499,78 @@ export default function ActivityManager() {
                 )}
 
                 {participants.length > 0 && (
-                  <div className="space-y-1 max-h-64 overflow-y-auto">
+                  <div className="space-y-1 max-h-80 overflow-y-auto">
                     {participants.map((p, i) => (
-                      <div key={p.id} className="flex items-center gap-2 p-1.5 rounded border border-zinc-800/40 bg-zinc-900/30">
-                        <span className="text-[10px] text-zinc-600 w-4">{i + 1}</span>
-                        {p.avatarUrl ? (
-                          <img src={p.avatarUrl} alt="" className="w-6 h-6 rounded-full" />
-                        ) : (
-                          <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-[10px]">👤</div>
-                        )}
-                        <span className="flex-1 text-sm text-zinc-200">{p.name}</span>
-                        {p.isFromParty && <span className="text-[9px] text-amber-500/50 bg-amber-500/10 px-1 rounded">PARTY</span>}
+                      <div key={p.id} className="p-1.5 rounded border border-zinc-800/40 bg-zinc-900/30 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] text-zinc-600 w-4">{i + 1}</span>
+                          {p.avatarUrl ? (
+                            <img src={p.avatarUrl} alt="" className="w-6 h-6 rounded-full" />
+                          ) : (
+                            <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center text-[10px]">👤</div>
+                          )}
+                          <span className="flex-1 text-sm text-zinc-200">{p.name}</span>
+                          {p.isFromParty && <span className="text-[9px] text-amber-500/50 bg-amber-500/10 px-1 rounded">PARTY</span>}
 
-                        {sessionRole === "host" && p.isFromParty && p.id !== user?.id && (
-                          <button
-                            onClick={() => toggleCoHost(p.id)}
-                            className={`text-[9px] px-1.5 py-0.5 rounded border transition-colors ${
-                              coHostIds.has(p.id)
-                                ? "bg-sky-500/20 text-sky-400 border-sky-500/30 hover:bg-sky-500/10"
-                                : "bg-zinc-800/60 text-zinc-500 border-zinc-700/40 hover:text-sky-400 hover:border-sky-500/30"
-                            }`}
-                            title={coHostIds.has(p.id) ? "Quitar co-host" : "Hacer co-host"}
-                          >
-                            {coHostIds.has(p.id) ? "CO-HOST ✓" : "→ Co-host"}
-                          </button>
-                        )}
+                          {sessionRole === "host" && p.isFromParty && p.id !== user?.id && (
+                            <button
+                              onClick={() => toggleCoHost(p.id)}
+                              className={`text-[9px] px-1.5 py-0.5 rounded border transition-colors ${
+                                coHostIds.has(p.id)
+                                  ? "bg-sky-500/20 text-sky-400 border-sky-500/30 hover:bg-sky-500/10"
+                                  : "bg-zinc-800/60 text-zinc-500 border-zinc-700/40 hover:text-sky-400 hover:border-sky-500/30"
+                              }`}
+                              title={coHostIds.has(p.id) ? "Quitar co-host" : "Hacer co-host"}
+                            >
+                              {coHostIds.has(p.id) ? "CO-HOST ✓" : "→ Co-host"}
+                            </button>
+                          )}
 
-                        {canManage && (
-                          <>
-                            <label className="flex items-center gap-1 text-[10px] text-zinc-500 cursor-pointer">
-                              <input type="checkbox" checked={p.contributed} onChange={() => toggleContributed(p.id)} className="accent-amber-500 w-3 h-3" />
-                              Aporto
-                            </label>
-                            <div className="flex items-center gap-0.5">
-                              <span className="text-[10px] text-zinc-600">x</span>
+                          {canManage && (
+                            <>
+                              <label className="flex items-center gap-1 text-[10px] text-zinc-500 cursor-pointer">
+                                <input type="checkbox" checked={p.contributed} onChange={() => toggleContributed(p.id)} className="accent-amber-500 w-3 h-3" />
+                                Aporto
+                              </label>
+                              <div className="flex items-center gap-0.5">
+                                <span className="text-[10px] text-zinc-600">x</span>
+                                <input
+                                  type="number" min={1} max={5} value={p.weight}
+                                  onChange={(e) => setWeight(p.id, parseInt(e.target.value) || 1)}
+                                  className="w-8 bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-[10px] text-center text-zinc-300 focus:border-amber-500 focus:outline-none"
+                                />
+                              </div>
+                              <button onClick={() => removeParticipant(p.id)} className="text-zinc-600 hover:text-red-400 text-xs">✕</button>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Money row — only visible when there's money at stake */}
+                        {moneyAmount > 0 && canManage && (
+                          <div className="flex items-center gap-2 pl-6 text-[10px]">
+                            <label className="flex items-center gap-1 text-zinc-500 cursor-pointer" title="Marca si este participante cobró/vendió el botín (tiene el dinero en su cuenta)">
                               <input
-                                type="number" min={1} max={5} value={p.weight}
-                                onChange={(e) => setWeight(p.id, parseInt(e.target.value) || 1)}
-                                className="w-8 bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-[10px] text-center text-zinc-300 focus:border-amber-500 focus:outline-none"
+                                type="checkbox"
+                                checked={!!p.collected}
+                                onChange={() => toggleCollected(p.id)}
+                                className="accent-emerald-500 w-3 h-3"
                               />
+                              <span className={p.collected ? "text-emerald-400" : ""}>💰 Cobró</span>
+                            </label>
+                            <div className="flex items-center gap-1 flex-1">
+                              <span className="text-zinc-500" title="Dinero que este participante invirtió/gastó (será reintegrado)">Gasto:</span>
+                              <input
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={p.expense ?? 0}
+                                onChange={(e) => setExpense(p.id, parseInt(e.target.value) || 0)}
+                                placeholder="0"
+                                className="w-20 bg-zinc-800 border border-zinc-700 rounded px-1 py-0.5 text-zinc-300 focus:border-amber-500 focus:outline-none"
+                              />
+                              <span className="text-zinc-600">aUEC</span>
                             </div>
-                            <button onClick={() => removeParticipant(p.id)} className="text-zinc-600 hover:text-red-400 text-xs">✕</button>
-                          </>
+                          </div>
                         )}
                       </div>
                     ))}
@@ -1268,21 +1586,28 @@ export default function ActivityManager() {
 
               {/* Raffle Mode */}
               <div className="space-y-2">
-                <h2 className="text-xs text-zinc-500 uppercase tracking-wider">Modo de Reparto</h2>
-                <div className="grid grid-cols-2 gap-2">
+                <h2 className="text-xs text-zinc-500 uppercase tracking-wider">Modo de Reparto del Botín</h2>
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={() => canManage && setRaffleMode("lottery")}
                     className={`p-2.5 rounded border text-left transition-all ${!canManage ? "opacity-50 cursor-not-allowed" : ""} ${raffleMode === "lottery" ? "border-amber-500 bg-amber-500/10 text-amber-300" : "border-zinc-700 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600"}`}
                   >
                     <div className="text-sm font-medium">🎰 Loteria</div>
-                    <div className="text-[10px] mt-0.5 opacity-70">Reparto automatico ponderado</div>
+                    <div className="text-[10px] mt-0.5 opacity-70">Sortear con wishlist</div>
+                  </button>
+                  <button
+                    onClick={() => canManage && setRaffleMode("split")}
+                    className={`p-2.5 rounded border text-left transition-all ${!canManage ? "opacity-50 cursor-not-allowed" : ""} ${raffleMode === "split" ? "border-amber-500 bg-amber-500/10 text-amber-300" : "border-zinc-700 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600"}`}
+                  >
+                    <div className="text-sm font-medium">⚖ Repartir</div>
+                    <div className="text-[10px] mt-0.5 opacity-70">Dividir en partes iguales</div>
                   </button>
                   <button
                     onClick={() => canManage && setRaffleMode("draft")}
                     className={`p-2.5 rounded border text-left transition-all ${!canManage ? "opacity-50 cursor-not-allowed" : ""} ${raffleMode === "draft" ? "border-amber-500 bg-amber-500/10 text-amber-300" : "border-zinc-700 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600"}`}
                   >
                     <div className="text-sm font-medium">📋 Draft</div>
-                    <div className="text-[10px] mt-0.5 opacity-70">Sortear orden, elegir por turno</div>
+                    <div className="text-[10px] mt-0.5 opacity-70">Orden y elegir turno</div>
                   </button>
                 </div>
               </div>
@@ -1290,6 +1615,51 @@ export default function ActivityManager() {
 
             {/* ═══ RIGHT COLUMN: Loot ═══ */}
             <div className="space-y-5">
+
+              {/* Money input (Dinero) */}
+              <div className="space-y-2">
+                <h2 className="text-xs text-zinc-500 uppercase tracking-wider">💰 Dinero (aUEC)</h2>
+                {canManage ? (
+                  <div className="p-3 rounded border border-amber-500/20 bg-amber-500/5 space-y-2">
+                    <div className="flex gap-2 items-center">
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={moneyInput}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setMoneyInput(v);
+                          const parsed = parseInt(v, 10);
+                          setMoneyAmount(isNaN(parsed) ? 0 : parsed);
+                        }}
+                        placeholder="0"
+                        className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-amber-300 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
+                      />
+                      <span className="text-xs text-zinc-500">aUEC</span>
+                      {moneyAmount > 0 && (
+                        <button
+                          onClick={() => { setMoneyAmount(0); setMoneyInput(""); }}
+                          className="text-zinc-600 hover:text-red-400 text-xs px-2"
+                          title="Limpiar dinero"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                    {moneyAmount > 0 && (
+                      <div className="text-[10px] text-zinc-500 leading-tight">
+                        Se reparte en partes iguales tras reintegrar gastos. Marca quién <span className="text-amber-400">cobró</span> y quién <span className="text-amber-400">invirtió</span> en la sección de participantes. Impuesto de transferencia: <span className="text-amber-400">0.5%</span> (coef {TAX_COEF}).
+                      </div>
+                    )}
+                  </div>
+                ) : moneyAmount > 0 ? (
+                  <div className="p-3 rounded border border-amber-500/20 bg-amber-500/5 text-amber-300 text-sm">
+                    💰 {moneyAmount.toLocaleString("es-AR")} aUEC
+                  </div>
+                ) : null}
+              </div>
+
               <div className="space-y-2">
                 <h2 className="text-xs text-zinc-500 uppercase tracking-wider">Cargar Botin</h2>
                 {canManage ? (
@@ -1373,13 +1743,13 @@ export default function ActivityManager() {
               </div>
 
               {/* Loot list — visible to everyone */}
-              {lootEntries.length > 0 && (
+              {physicalLootEntries.length > 0 && (
                 <div className="space-y-1.5">
                   <h3 className="text-[10px] text-zinc-500 uppercase tracking-wider">
                     Botin Cargado ({flatLoot.length} items)
                   </h3>
                   <div className="max-h-52 overflow-y-auto space-y-1">
-                    {lootEntries.map((entry) => (
+                    {physicalLootEntries.map((entry) => (
                       <div key={entry.id} className={`flex items-center justify-between p-1.5 rounded border ${RARITY_BG[entry.rarity] ?? "border-zinc-700 bg-zinc-900/30"}`}>
                         <div>
                           <span className={`text-xs ${RARITY_COLORS[entry.rarity] ?? "text-zinc-300"}`}>{entry.itemName}</span>
@@ -1403,12 +1773,18 @@ export default function ActivityManager() {
           {!hasResults && !isRolling && (
             <div className="space-y-3 pt-2">
               <div className="p-2.5 rounded border border-zinc-800/50 bg-zinc-900/30 text-sm text-zinc-400 text-center">
-                <span className="text-zinc-300">{participants.length}</span> participantes • <span className="text-zinc-300">{flatLoot.length}</span> items • <span className="text-amber-400">{raffleMode === "lottery" ? "Loteria" : "Draft"}</span>
+                <span className="text-zinc-300">{participants.length}</span> participantes • <span className="text-zinc-300">{flatLoot.length}</span> items
+                {moneyAmount > 0 && (<> • <span className="text-amber-400">💰 {moneyAmount.toLocaleString("es-AR")} aUEC</span></>)}
+                {flatLoot.length > 0 && (<> • <span className="text-amber-400">{raffleMode === "lottery" ? "Loteria" : raffleMode === "split" ? "Repartir" : "Draft"}</span></>)}
               </div>
               {canManage ? (
                 <button
-                  onClick={() => raffleMode === "lottery" ? runLottery() : runDraft()}
-                  disabled={(raffleMode === "lottery" && flatLoot.length === 0) || participants.length < 2 || isRolling}
+                  onClick={runSorteo}
+                  disabled={
+                    participants.length < 2 ||
+                    isRolling ||
+                    (flatLoot.length === 0 && moneyAmount === 0)
+                  }
                   className="w-full py-3 bg-amber-600/80 hover:bg-amber-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-950 text-lg font-bold rounded transition-all active:scale-[0.98] disabled:cursor-not-allowed"
                 >
                   🎲 SORTEAR
@@ -1443,6 +1819,87 @@ export default function ActivityManager() {
             )}
           </div>
         ))}
+      </div>
+    );
+  }
+
+  function renderSettlement(s: Settlement) {
+    const fmt = (n: number) =>
+      n.toLocaleString("es-AR", { maximumFractionDigits: 2, minimumFractionDigits: 0 });
+    return (
+      <div className="space-y-3 p-3 rounded-lg border border-amber-500/30 bg-amber-500/5">
+        <h3 className="text-sm text-amber-400 uppercase tracking-wider flex items-center gap-2">
+          💰 Reparto de Dinero
+          <span className="text-[10px] text-zinc-500 normal-case">(coef. impuesto {TAX_COEF})</span>
+        </h3>
+
+        {/* Summary row */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+          <div className="p-2 rounded bg-zinc-900/60 border border-zinc-800/40">
+            <div className="text-[10px] text-zinc-500 uppercase">Total</div>
+            <div className="text-sm text-amber-300">{fmt(s.moneyAmount)} aUEC</div>
+          </div>
+          <div className="p-2 rounded bg-zinc-900/60 border border-zinc-800/40">
+            <div className="text-[10px] text-zinc-500 uppercase">Gastos</div>
+            <div className="text-sm text-red-300">{fmt(s.totalExpenses)} aUEC</div>
+          </div>
+          <div className="p-2 rounded bg-zinc-900/60 border border-zinc-800/40">
+            <div className="text-[10px] text-zinc-500 uppercase">Profit</div>
+            <div className="text-sm text-emerald-300">{fmt(s.profit)} aUEC</div>
+          </div>
+          <div className="p-2 rounded bg-zinc-900/60 border border-zinc-800/40">
+            <div className="text-[10px] text-zinc-500 uppercase">Por persona</div>
+            <div className="text-sm text-zinc-200">{fmt(s.shareEach)} aUEC</div>
+          </div>
+        </div>
+
+        {/* Warning if any */}
+        {s.warning && (
+          <div className="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded px-2 py-1.5">
+            ⚠ {s.warning}
+          </div>
+        )}
+
+        {/* Per-participant net shares */}
+        <div className="space-y-1">
+          <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Le corresponde a cada uno</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+            {s.entries.map((e) => (
+              <div key={e.participantId} className="flex items-center justify-between px-2 py-1 rounded bg-zinc-900/40 border border-zinc-800/40 text-xs">
+                <span className="text-zinc-300">{e.participantName}</span>
+                <span className="text-zinc-200 tabular-nums">{fmt(e.netShare)} aUEC</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Transactions */}
+        {s.transactions.length > 0 && (
+          <div className="space-y-1">
+            <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Transferencias a realizar</div>
+            <div className="space-y-1">
+              {s.transactions.map((t, i) => (
+                <div key={i} className="flex items-center gap-2 p-2 rounded bg-zinc-900/60 border border-zinc-800/40 text-xs">
+                  <span className="text-red-300 font-medium flex-1 truncate">{t.fromName}</span>
+                  <span className="text-zinc-600">→</span>
+                  <span className="text-emerald-300 font-medium flex-1 truncate">{t.toName}</span>
+                  <span className="text-amber-300 tabular-nums whitespace-nowrap">
+                    envía {fmt(t.grossAmount)}
+                  </span>
+                  <span className="text-zinc-500 text-[10px] whitespace-nowrap">
+                    (recibe {fmt(t.netAmount)})
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {s.transactions.length === 0 && !s.warning && s.moneyAmount > 0 && (
+          <div className="text-[11px] text-zinc-500 italic text-center py-1">
+            No hacen falta transferencias — el dinero ya está bien distribuido.
+          </div>
+        )}
       </div>
     );
   }
