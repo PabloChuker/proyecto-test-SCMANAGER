@@ -153,7 +153,8 @@ function ComponentsPageInner() {
   const fetchData = useCallback(async (cat: CategoryDef, s: string, size: string, sort: string, dir: string) => {
     setLoading(true);
     try {
-      const body: Record<string, any> = { table: cat.table, sort, dir, limit: 200 };
+      // 500 es el máximo que acepta /api/components/browse (ver validateInt en el route)
+      const body: Record<string, any> = { table: cat.table, sort, dir, limit: 500 };
       if (s) body.search = s;
       if (size) body.size = size;
       const res = await fetch(`/api/components/browse`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -161,7 +162,7 @@ function ComponentsPageInner() {
       if (json.rows) {
         setRows(json.rows);
         setColumns(json.columns || []);
-        setMeta(json.meta || { total: 0, limit: 200, offset: 0 });
+        setMeta(json.meta || { total: 0, limit: 500, offset: 0 });
       }
     } catch (e) {
       console.error("Failed to fetch components:", e);
@@ -291,9 +292,24 @@ function ComponentsPageInner() {
           )}
 
           {/* Count badge */}
-          <span className="text-[10px] font-mono text-zinc-600">
-            {rows.length} / {meta.total} rows
-          </span>
+          {(() => {
+            const truncated = meta.total > rows.length;
+            return (
+              <span
+                className={`text-[10px] font-mono ${
+                  truncated ? "text-amber-500" : "text-zinc-600"
+                }`}
+                title={
+                  truncated
+                    ? `Mostrando las primeras ${rows.length} filas de ${meta.total}. Usá la búsqueda o los filtros para acotar.`
+                    : undefined
+                }
+              >
+                {rows.length} / {meta.total} rows
+                {truncated && <span className="ml-1">⚠</span>}
+              </span>
+            );
+          })()}
         </div>
 
         {/* ── Data Table ── */}
