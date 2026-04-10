@@ -51,13 +51,13 @@ export const CARD_THEMES: CardTheme[] = [
   {
     key: "pink",
     label: "Barbie",
-    bg: "#ff2e93",
-    bgPanel: "#e0218a",
+    bg: "#ed68b2",
+    bgPanel: "#d9559f",
     text: "#ffffff",
-    textMuted: "#ffd9eb",
+    textMuted: "#ffe4f3",
     accent: "#ffffff",
     logoTint: "#ffffff",
-    border: "#ff8cc6",
+    border: "#f4a9cd",
   },
   {
     key: "orange",
