@@ -718,6 +718,10 @@ export async function GET(
     const shipClassName = ship.reference || ship.class_name || "";
     const shipPower = spLookup[shipClassName] ?? null;
 
+    // Flight controller (thrusters) power data — looked up by Controller_Flight_{className}
+    const flightController =
+      pnLookup[`Controller_Flight_${shipClassName}`] ?? null;
+
     // ── Compute stats from flatHardpoints for ShipSpecSheet ──
     let totalDps = 0, totalAlphaDamage = 0, totalShieldHp = 0, totalShieldRegen = 0;
     let totalPowerDraw = 0, totalPowerOutput = 0, totalCooling = 0, totalThermalOutput = 0;
@@ -778,7 +782,7 @@ export async function GET(
     };
 
     return NextResponse.json(
-      { data, flatHardpoints, computed, shipPower },
+      { data, flatHardpoints, computed, shipPower, flightController },
       {
         headers: {
           "Cache-Control":

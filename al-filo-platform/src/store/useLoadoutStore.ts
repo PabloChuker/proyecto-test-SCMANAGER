@@ -201,6 +201,7 @@ function computeStats(
   instancePower: Record<string, number>,  // hardpointName -> allocated pips
   shipInfo: ShipInfo | null,
   shipPowerGen: number,  // from ship-power-data.json
+  flightControllerPower: any | null,  // from power-network-lookup (Controller_Flight_*)
 ): ComputedStats {
   let totalDps = 0, totalAlpha = 0, shieldHp = 0, shieldRegen = 0;
   let powerOutput = 0, coolingRate = 0, thermalOutput = 0, emSig = 0, irSig = 0;
@@ -395,6 +396,40 @@ function computeStats(
     }
   }
 
+  // ── Push synthetic thrusters column (from FlightController power data) ──
+  // Thrusters are not regular hardpoints, so we inject a single column based on
+  // the ship's Controller_Flight_* entry in power-network-lookup.json.
+  const THRUSTERS_POWER_ID = "__thrusters_combined__";
+  if (flightControllerPower && (flightControllerPower.pMax ?? 0) > 0) {
+    const thrPMin = Number(flightControllerPower.pMin ?? 0);
+    const thrPMax = Number(flightControllerPower.pMax ?? 0);
+    const thrustPips = Math.min(6, Math.max(1, Math.ceil(thrPMax)));
+    const thrustAllocPips = instancePower[THRUSTERS_POWER_ID] ?? 0;
+
+    cats.thrusters.componentCount += 1;
+    cats.thrusters.activeCount += 1;
+    cats.thrusters.minDraw += thrPMin;
+    cats.thrusters.allocated += thrustAllocPips;
+
+    instances.push({
+      hardpointId: THRUSTERS_POWER_ID,
+      hardpointName: THRUSTERS_POWER_ID,
+      componentName: "Thrusters",
+      category: "thrusters",
+      type: "FlightController",
+      totalPips: thrustPips,
+      allocatedPips: Math.min(thrustAllocPips, thrustPips),
+      ranges: [{ start: 0, modifier: 1, range: thrustPips }],
+      powerMin: thrPMin,
+      powerMax: thrPMax,
+      genPower: 0,
+      genCoolant: 0,
+      emMax: Number(flightControllerPower.em ?? 0),
+      irMax: Number(flightControllerPower.ir ?? 0),
+      isOn: true,
+    });
+  }
+
   // ── Push single combined weapons column ──
   if (weaponCount > 0) {
     const weaponAllocPips = instancePower[WEAPON_POWER_ID] ?? 0;
@@ -488,6 +523,8 @@ interface LoadoutState {
   instancePower: Record<string, number>;
   /** Ship-level power generation from sc-unpacked */
   shipPowerGen: number;
+  /** Flight controller power data (for thrusters column) */
+  flightControllerPower: any | null;
   // Legacy: keep for backward compat but internally maps to instancePower
   allocatedPower: Record<PowerCategory, number>;
   isLoading: boolean; error: string | null;
@@ -515,14 +552,14 @@ interface LoadoutState {
 export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   shipId: null, shipInfo: null, hardpoints: [], overrides: new Map(),
   componentStates: {}, flightMode: "SCM" as FlightMode,
-  instancePower: {}, shipPowerGen: 0,
+  instancePower: {}, shipPowerGen: 0, flightControllerPower: null,
   allocatedPower: { ...ZERO_ALLOC }, isLoading: false, error: null,
 
   getStats: () => {
     const s = get();
     return s.hardpoints.length === 0
       ? EMPTY_STATS
-      : computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, s.instancePower, s.shipInfo, s.shipPowerGen);
+      : computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, s.instancePower, s.shipInfo, s.shipPowerGen, s.flightControllerPower);
   },
   getEffectiveItem: (hpId) => { const { hardpoints, overrides } = get(); if (overrides.has(hpId)) return overrides.get(hpId) ?? null; return hardpoints.find(h => h.id === hpId)?.defaultItem ?? null; },
   isComponentOn: (hpName) => get().componentStates[hpName] !== false,
@@ -541,6 +578,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
       // Ship-level power from sc-unpacked
       const shipPower = json.shipPower;
       const shipPowerGen = shipPower?.gen ?? 0;
+      const flightControllerPower = json.flightController ?? null;
 
       const shipInfo: ShipInfo = {
         id: data.id ?? "", reference: data.reference ?? "", name: data.name ?? "",
@@ -629,7 +667,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
       set({
         shipId: id, shipInfo, hardpoints: resolved, overrides: restored,
         componentStates: states, flightMode: "SCM",
-        instancePower: {}, shipPowerGen,
+        instancePower: {}, shipPowerGen, flightControllerPower,
         allocatedPower: { ...ZERO_ALLOC },
         isLoading: false, error: null,
       });
@@ -668,7 +706,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   autoAllocatePower: () => {
     const s = get();
     // Compute stats with zero allocation to get instance list
-    const probe = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, {}, s.shipInfo, s.shipPowerGen);
+    const probe = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, {}, s.shipInfo, s.shipPowerGen, s.flightControllerPower);
     const total = probe.powerNetwork.totalOutput;
     const newAlloc: Record<string, number> = {};
     let rem = total;
