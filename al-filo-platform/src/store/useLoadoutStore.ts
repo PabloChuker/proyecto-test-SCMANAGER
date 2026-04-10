@@ -201,29 +201,41 @@ function emptyCat(): CategoryPowerInfo { return { minDraw: 0, allocated: 0, comp
  *
  * Empirical formula (2026-04 observations from live game testing):
  *
- *   Total = floor(bestRating * 0.95) + round( sum(rest) / 3 )
+ *   - Si todas las plantas son IDÉNTICAS (mismo rating):
+ *       Total = count * floor(rating * 0.6)
+ *     El juego parece penalizar más fuerte cuando no hay una planta
+ *     dominante que actúe como backbone (cada una aporta ~60%).
  *
- * Rationale:
- *   - The best plant pays a ~5% efficiency tax for connection overhead.
- *     This matches Star Citizen's behavior where rating 21 → 19 effective,
- *     rating 20 → 19, rating 19 → 18.
- *   - Each additional plant only contributes ~⅓ of its rated output because
- *     the ship's power network caps how many plants can feed in parallel.
- *   - This prevents stacking identical plants from linearly scaling output.
+ *   - Si hay al menos una diferencia de rating:
+ *       Total = floor(bestRating * 0.95) + round( sum(rest) / 3 )
+ *     La mejor paga un ~5% de overhead; cada extra contribuye ~⅓.
  *
  * Validation (rating → effective total):
- *   [21]          → 19   (floor(21*0.95) = 19)
- *   [20]          → 19   (floor(20*0.95) = 19)
- *   [19]          → 18   (floor(19*0.95) = 18)
- *   [21, 20]      → 26   (19 + round(20/3) = 19 + 7)
- *   [21, 19]      → 25   (19 + round(19/3) = 19 + 6)
- *   [21, 20, 19]  → 32   (19 + round(39/3) = 19 + 13)
+ *   [21]          → 19   (1 plant, floor(21*0.95) = 19)
+ *   [20]          → 19   (1 plant, floor(20*0.95) = 19)
+ *   [19]          → 18   (1 plant, floor(19*0.95) = 18)
+ *   [21, 20]      → 26   (mix: 19 + round(20/3) = 19 + 7)
+ *   [21, 19]      → 25   (mix: 19 + round(19/3) = 19 + 6)
+ *   [20, 20]      → 24   (idénticas: 2 * floor(20*0.6) = 2*12)   ← Asgard
+ *   [21, 20, 19]  → 32   (mix: 19 + round(39/3) = 19 + 13)
+ *
+ * NOTA: La rama de "idénticas" se basa en un único dato (Asgard 2× Maelstrom).
+ * Si aparecen más naves con plantas idénticas que contradigan esta hipótesis,
+ * hay que revisar la fórmula con esos valores.
  */
 function combinePowerPlantOutputs(outputs: number[]): number {
   if (outputs.length === 0) return 0;
   // Sort descending so index 0 is the best plant.
   const sorted = [...outputs].sort((a, b) => b - a);
   const best = sorted[0];
+
+  // Special case: all plants identical → each contributes ~60%.
+  // Derived from Asgard observation ([20, 20] → 24 in game).
+  if (outputs.length > 1 && sorted.every((r) => r === best)) {
+    return Math.max(0, outputs.length * Math.floor(best * 0.6));
+  }
+
+  // Default: best pays 5% overhead, rest contribute ~⅓ each.
   const rest = sorted.slice(1);
   const restSum = rest.reduce((acc, v) => acc + v, 0);
   const effectiveBest = Math.floor(best * 0.95);
