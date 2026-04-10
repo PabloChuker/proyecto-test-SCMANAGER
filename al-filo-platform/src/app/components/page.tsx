@@ -14,6 +14,24 @@ import {
   ShipContextMenu,
   type ShipContextMenuTarget,
 } from "@/components/ships/ShipContextMenu";
+import {
+  ComponentContextMenu,
+  type ComponentContextMenuTarget,
+} from "@/components/components/ComponentContextMenu";
+
+// Mapeo de nombres de tabla a item_type usado en user_inventory / user_wishlist
+const TABLE_TO_ITEM_TYPE: Record<string, string> = {
+  weapon_guns: "WEAPON",
+  missiles: "MISSILE",
+  emps: "EMP",
+  shields: "SHIELD",
+  power_plants: "POWER_PLANT",
+  coolers: "COOLER",
+  quantum_drives: "QUANTUM_DRIVE",
+  mining_lasers: "MINING",
+  turrets: "TURRET",
+  quantum_interdiction_generators: "QED",
+};
 
 // ─── Category Definitions ────────────────────────────────────────────────────
 
@@ -113,8 +131,10 @@ function ComponentsPageInner() {
   const [sortDir, setSortDir] = useState<"ASC" | "DESC">("ASC");
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Context menu state (solo para la tabla de ships) ──
+  // ── Context menu state (ships vs componentes) ──
   const [contextMenu, setContextMenu] = useState<ShipContextMenuTarget | null>(null);
+  const [componentContextMenu, setComponentContextMenu] =
+    useState<ComponentContextMenuTarget | null>(null);
 
   // Sync with ?tab= param changes
   useEffect(() => {
@@ -325,20 +345,40 @@ function ComponentsPageInner() {
                 {rows.map((row, i) => (
                   <tr
                     key={row.id || row.uuid || i}
-                    onContextMenu={
-                      activeCategory.table === "ships" && row.reference
-                        ? (e) => {
-                            e.preventDefault();
-                            setContextMenu({
-                              reference: row.reference,
-                              name: row.localizedName || row.name,
-                              manufacturer: row.manufacturer ?? null,
-                              x: e.clientX,
-                              y: e.clientY,
-                            });
-                          }
-                        : undefined
-                    }
+                    onContextMenu={(e) => {
+                      // Ships → menú de hangar/wishlist de naves
+                      if (activeCategory.table === "ships" && row.reference) {
+                        e.preventDefault();
+                        setContextMenu({
+                          reference: row.reference,
+                          name: row.localizedName || row.name,
+                          manufacturer: row.manufacturer ?? null,
+                          x: e.clientX,
+                          y: e.clientY,
+                        });
+                        return;
+                      }
+                      // Componentes → menú de inventario/wishlist de componentes
+                      const itemType = TABLE_TO_ITEM_TYPE[activeCategory.table];
+                      const componentRef =
+                        row.reference ||
+                        row.class_name ||
+                        row.className ||
+                        row.uuid ||
+                        row.id;
+                      if (itemType && componentRef && row.name) {
+                        e.preventDefault();
+                        setComponentContextMenu({
+                          reference: String(componentRef),
+                          name: String(row.localizedName || row.name),
+                          itemType,
+                          size: row.size != null ? Number(row.size) : null,
+                          grade: row.grade != null ? String(row.grade) : null,
+                          x: e.clientX,
+                          y: e.clientY,
+                        });
+                      }
+                    }}
                     className="border-b border-zinc-800/20 hover:bg-zinc-800/20 transition-colors"
                   >
                     {columns.map((col) => {
@@ -388,6 +428,12 @@ function ComponentsPageInner() {
 
       {/* Context menu global para ships */}
       <ShipContextMenu target={contextMenu} onClose={() => setContextMenu(null)} />
+
+      {/* Context menu global para componentes */}
+      <ComponentContextMenu
+        target={componentContextMenu}
+        onClose={() => setComponentContextMenu(null)}
+      />
     </main>
   );
 }
