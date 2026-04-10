@@ -814,7 +814,7 @@ export default function ShipInfoCard({
               color: theme.accent,
             }}
           >
-            sclabs · star citizen intelligence
+            sclabs.space
           </span>
         </div>
       </div>
@@ -1129,7 +1129,7 @@ export default function ShipInfoCard({
             color: theme.accent,
           }}
         >
-          sclabs.app
+          sclabs.space
         </span>
       </div>
     </div>
