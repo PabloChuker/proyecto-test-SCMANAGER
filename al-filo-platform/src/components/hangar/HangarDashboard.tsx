@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useHangarStore, type InsuranceType, type ItemCategory, type CCUChain, type WishlistPriority, type HangarShip } from "@/store/useHangarStore";
+import { getLoanersFor } from "@/lib/loaners";
 import { FleetGrid } from "./FleetGrid";
 import { ImportModal } from "./ImportModal";
 import { AddShipModal } from "./AddShipModal";
@@ -62,6 +63,74 @@ export function HangarDashboard() {
   const exportToJSON = useHangarStore((state) => state.exportToJSON);
   const clearAll = useHangarStore((state) => state.clearAll);
   const updateShip = useHangarStore((state) => state.updateShip);
+  const addShip = useHangarStore((state) => state.addShip);
+
+  // ── Auto-backfill de loaners ──
+  // Al montar el hangar, recorre las naves de pledge puras sin loaners asociados
+  // y fetchea la matriz RSI (/api/loaners) para agregar los que falten.
+  // Solo corre una vez por sesi\u00f3n (guard con useRef) para no spamear la API
+  // ni re-triggerearse cuando el store cambia al agregar los propios loaners.
+  const loanersBackfilledRef = useRef(false);
+  useEffect(() => {
+    if (loanersBackfilledRef.current) return;
+    loanersBackfilledRef.current = true;
+
+    let cancelled = false;
+    (async () => {
+      const initialShips = useHangarStore.getState().ships;
+      const pledgeShips = initialShips.filter(
+        (s) =>
+          s.location === "hangar" &&
+          s.itemCategory === "standalone_ship" &&
+          (s.acquisitionType ?? "pledge") === "pledge" &&
+          !s.isLoaner,
+      );
+
+      for (const parent of pledgeShips) {
+        if (cancelled) return;
+        try {
+          const loaners = await getLoanersFor(parent.shipName);
+          if (cancelled || loaners.length === 0) continue;
+
+          // Dedupe: no agregar si ya existe un loaner con el mismo nombre
+          // asociado a este mismo parent (por loanerOf + shipName).
+          const currentShips = useHangarStore.getState().ships;
+          const existingForParent = new Set(
+            currentShips
+              .filter((s) => s.isLoaner && s.loanerOf === parent.id)
+              .map((s) => s.shipName.toLowerCase()),
+          );
+
+          for (const loaner of loaners) {
+            if (existingForParent.has(loaner.name.toLowerCase())) continue;
+            addShip({
+              shipReference: "",
+              shipName: loaner.name,
+              pledgeName: `Loaner - ${loaner.name}`,
+              pledgePrice: 0,
+              insuranceType: "unknown",
+              location: "hangar",
+              itemCategory: "standalone_ship",
+              isGiftable: false,
+              isMeltable: false,
+              purchasedDate: null,
+              imageUrl: "",
+              notes: loaner.note ?? "",
+              isLoaner: true,
+              loanerOf: parent.id,
+            });
+          }
+        } catch (err) {
+          console.error("[HangarDashboard] Loaner backfill failed for", parent.shipName, err);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Wishlist filter state
   const [wishlistPriorityFilter, setWishlistPriorityFilter] = useState<WishlistPriority | "all">("all");
