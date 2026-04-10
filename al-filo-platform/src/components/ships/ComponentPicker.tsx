@@ -9,6 +9,10 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type { EquippedItem, ResolvedHardpoint } from "@/store/useLoadoutStore";
 import { CAT_COLORS, fmtPrice, getKeyStat } from "./loadout-utils";
 import powerNetworkLookup from "@/data/power-network-lookup.json";
+import {
+  ComponentContextMenu,
+  type ComponentContextMenuTarget,
+} from "@/components/components/ComponentContextMenu";
 
 const pnLookup = powerNetworkLookup as Record<string, any>;
 
@@ -16,6 +20,20 @@ const CAT_TO_API_TYPE: Record<string, string> = {
   WEAPON: "WEAPON", TURRET: "WEAPON,TURRET", MISSILE_RACK: "MISSILE",
   SHIELD: "SHIELD", POWER_PLANT: "POWER_PLANT", COOLER: "COOLER",
   QUANTUM_DRIVE: "QUANTUM_DRIVE", MINING: "MINING_LASER", UTILITY: "TRACTOR_BEAM,EMP,QED",
+};
+
+// Mapeo categoría del hardpoint → item_type usado en user_inventory / user_wishlist.
+// Debe coincidir con TABLE_TO_ITEM_TYPE en src/app/components/page.tsx.
+const CAT_TO_ITEM_TYPE: Record<string, string> = {
+  WEAPON: "WEAPON",
+  TURRET: "TURRET",
+  MISSILE_RACK: "MISSILE",
+  SHIELD: "SHIELD",
+  POWER_PLANT: "POWER_PLANT",
+  COOLER: "COOLER",
+  QUANTUM_DRIVE: "QUANTUM_DRIVE",
+  MINING: "MINING",
+  UTILITY: "UTILITY",
 };
 
 interface CatalogItem {
@@ -45,6 +63,7 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
   const [total, setTotal] = useState(0);
   const [sortKey, setSortKey] = useState<SortKey>("stat");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [contextMenu, setContextMenu] = useState<ComponentContextMenuTarget | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const catColor = CAT_COLORS[hardpoint.resolvedCategory] || "#71717a";
@@ -165,7 +184,27 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
             const shop = getBestShop(item);
             const rowCls = isCurrent ? "w-full flex items-center gap-1 px-4 py-2 text-left bg-cyan-500/5 cursor-default border-b border-zinc-800/20" : "w-full flex items-center gap-1 px-4 py-2 text-left hover:bg-zinc-800/30 cursor-pointer border-b border-zinc-800/20 transition-colors";
             return (
-              <button key={item.id} onClick={() => handleItemSelect(item)} disabled={isCurrent} className={rowCls}>
+              <button
+                key={item.id}
+                onClick={() => handleItemSelect(item)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  const itemType = CAT_TO_ITEM_TYPE[hardpoint.resolvedCategory] || hardpoint.resolvedCategory;
+                  const ref = item.reference || item.className || item.id;
+                  if (!ref || !item.name) return;
+                  setContextMenu({
+                    reference: String(ref),
+                    name: String(item.localizedName || item.name),
+                    itemType,
+                    size: item.size ?? null,
+                    grade: item.grade ?? null,
+                    x: e.clientX,
+                    y: e.clientY,
+                  });
+                }}
+                disabled={isCurrent}
+                className={rowCls}
+              >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5"><span className="text-[13px] text-zinc-200 truncate">{item.localizedName || item.name}</span>{isCurrent && <span className="text-[8px] text-cyan-500 tracking-wider">EQUIPPED</span>}</div>
                   {shop && <div className="text-[9px] text-zinc-600 truncate">{shop}</div>}
@@ -180,6 +219,9 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
           })}
         </div>
       </div>
+
+      {/* Context menu para agregar a inventario / wishlist con click derecho */}
+      <ComponentContextMenu target={contextMenu} onClose={() => setContextMenu(null)} />
     </>
   );
 }
