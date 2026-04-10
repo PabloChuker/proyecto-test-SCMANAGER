@@ -195,6 +195,42 @@ const SYSTEM_CATS = new Set(["SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE",
 
 function emptyCat(): CategoryPowerInfo { return { minDraw: 0, allocated: 0, componentCount: 0, activeCount: 0 }; }
 
+/**
+ * Combine multiple power plant outputs into a single effective total,
+ * applying in-game diminishing returns.
+ *
+ * Empirical formula (2026-04 observations from live game testing):
+ *
+ *   Total = floor(bestRating * 0.95) + round( sum(rest) / 3 )
+ *
+ * Rationale:
+ *   - The best plant pays a ~5% efficiency tax for connection overhead.
+ *     This matches Star Citizen's behavior where rating 21 → 19 effective,
+ *     rating 20 → 19, rating 19 → 18.
+ *   - Each additional plant only contributes ~⅓ of its rated output because
+ *     the ship's power network caps how many plants can feed in parallel.
+ *   - This prevents stacking identical plants from linearly scaling output.
+ *
+ * Validation (rating → effective total):
+ *   [21]          → 19   (floor(21*0.95) = 19)
+ *   [20]          → 19   (floor(20*0.95) = 19)
+ *   [19]          → 18   (floor(19*0.95) = 18)
+ *   [21, 20]      → 26   (19 + round(20/3) = 19 + 7)
+ *   [21, 19]      → 25   (19 + round(19/3) = 19 + 6)
+ *   [21, 20, 19]  → 32   (19 + round(39/3) = 19 + 13)
+ */
+function combinePowerPlantOutputs(outputs: number[]): number {
+  if (outputs.length === 0) return 0;
+  // Sort descending so index 0 is the best plant.
+  const sorted = [...outputs].sort((a, b) => b - a);
+  const best = sorted[0];
+  const rest = sorted.slice(1);
+  const restSum = rest.reduce((acc, v) => acc + v, 0);
+  const effectiveBest = Math.floor(best * 0.95);
+  const effectiveRest = Math.round(restSum / 3);
+  return Math.max(0, effectiveBest + effectiveRest);
+}
+
 function computeStats(
   hardpoints: ResolvedHardpoint[], overrides: Map<string, EquippedItem | null>,
   componentStates: Record<string, boolean>, flightMode: FlightMode,
@@ -205,6 +241,11 @@ function computeStats(
 ): ComputedStats {
   let totalDps = 0, totalAlpha = 0, shieldHp = 0, shieldRegen = 0;
   let powerOutput = 0, coolingRate = 0, thermalOutput = 0, emSig = 0, irSig = 0;
+  // Individual power plant outputs — accumulated separately so we can apply
+  // diminishing returns at the end (Star Citizen in-game behavior: the best
+  // plant contributes near-full output minus fixed overhead, and each extra
+  // plant only contributes ~⅓ of its rating). See combinePowerPlantOutputs().
+  const powerPlantOutputs: number[] = [];
   let activeComponents = 0, totalComponents = 0;
   const summary = { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0, activeComponents: 0, totalComponents: 0 };
   const cats: Record<PowerCategory, CategoryPowerInfo> = {} as any;
@@ -366,11 +407,13 @@ function computeStats(
       }
     }
 
-    // Power plants: always output — prefer DB value over static JSON
+    // Power plants: always output — prefer DB value over static JSON.
+    // Collect each plant's rated output; the combined total is computed
+    // AFTER the loop using diminishing returns (see combinePowerPlantOutputs).
     if (cat === "POWER_PLANT") {
       const dbPower = pickNum(s, "powerOutput");
       const ppOutput = dbPower > 0 ? dbPower : (pn?.genP ?? 0);
-      powerOutput += ppOutput;
+      if (ppOutput > 0) powerPlantOutputs.push(ppOutput);
       if (isOn) { activeComponents++; }
       // EM from power network data
       if (pn?.em) emSig += pn.em;
@@ -512,9 +555,20 @@ function computeStats(
     });
   }
 
+  // Apply diminishing returns to combine multiple power plants.
+  // Empirical formula derived from in-game observations (2026-04):
+  //
+  //   Total = round( (bestRating - 2) + sum(rest) / 3 )
+  //
+  // The first plant loses a fixed "connection tax" of 2 points, and every
+  // additional plant only contributes ~1/3 of its rated output. This matches
+  // Star Citizen's actual behavior: stacking identical plants gives sharply
+  // diminishing gains (e.g. 21+20+19 rated → ~32 effective, not 60).
+  powerOutput = combinePowerPlantOutputs(powerPlantOutputs);
+
   // Prefer component-level power output (from equipped power plants) over ship-level static data.
   // Ship-level is only a fallback when no power plant components are found.
-  const totalPO = powerOutput > 0 ? Math.round(powerOutput) : (shipPowerGen > 0 ? shipPowerGen : 0);
+  const totalPO = powerOutput > 0 ? powerOutput : (shipPowerGen > 0 ? shipPowerGen : 0);
 
   let totalAllocated = 0, totalMinDraw = 0;
   for (const c of POWER_CATEGORIES) {
