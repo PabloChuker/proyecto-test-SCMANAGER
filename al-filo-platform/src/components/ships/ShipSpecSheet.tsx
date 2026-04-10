@@ -123,7 +123,10 @@ export default function ShipSpecSheet({ shipId, onShipLoaded }: ShipSpecSheetPro
   const [loading, setLoading] = useState(true);
   const [imgError, setImgError] = useState(false);
   const [addedToHangar, setAddedToHangar] = useState(false);
+  const [addedToWishlist, setAddedToWishlist] = useState(false);
   const addShip = useHangarStore((s) => s.addShip);
+  const addToWishlist = useHangarStore((s) => s.addToWishlist);
+  const wishlist = useHangarStore((s) => s.wishlist);
 
   useEffect(() => {
     setLoading(true);
@@ -226,7 +229,7 @@ export default function ShipSpecSheet({ shipId, onShipLoaded }: ShipSpecSheetPro
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
               <button
                 onClick={() => {
                   addShip({
@@ -254,6 +257,37 @@ export default function ShipSpecSheet({ shipId, onShipLoaded }: ShipSpecSheetPro
               >
                 {addedToHangar ? "✓ Agregada al Hangar" : "＋ Agregar a mi Hangar"}
               </button>
+              {(() => {
+                const isInWishlist = wishlist.some((w) => w.shipReference === ship.reference);
+                return (
+                  <button
+                    disabled={isInWishlist}
+                    onClick={() => {
+                      addToWishlist({
+                        shipReference: ship.reference,
+                        shipName: ship.name,
+                        manufacturer: ship.manufacturer,
+                        priority: "medium",
+                        targetPrice: null,
+                        notes: "",
+                      });
+                      setAddedToWishlist(true);
+                      setTimeout(() => setAddedToWishlist(false), 2500);
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded border text-xs transition-colors backdrop-blur-sm ${
+                      addedToWishlist || isInWishlist
+                        ? "bg-fuchsia-500/25 border-fuchsia-500/50 text-fuchsia-300"
+                        : "bg-fuchsia-500/10 border-fuchsia-500/30 text-fuchsia-400 hover:bg-fuchsia-500/20"
+                    } ${isInWishlist && !addedToWishlist ? "cursor-not-allowed opacity-80" : ""}`}
+                  >
+                    {addedToWishlist
+                      ? "✓ En tu Wishlist"
+                      : isInWishlist
+                      ? "★ En Wishlist"
+                      : "★ Agregar a Wishlist"}
+                  </button>
+                );
+              })()}
               <Link
                 href={`/dps?ship=${ship.reference}`}
                 className="flex items-center gap-2 px-4 py-2 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs hover:bg-cyan-500/20 transition-colors backdrop-blur-sm"

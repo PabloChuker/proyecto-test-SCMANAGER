@@ -73,13 +73,23 @@ function getShipThumbUrl(name: string, manufacturer?: string | null): string {
   return `/ships/${slug}.webp`;
 }
 
-export function ShipCard({ ship }: { ship: ShipCardData }) {
+export function ShipCard({
+  ship,
+  onContextMenu,
+}: {
+  ship: ShipCardData;
+  onContextMenu?: (e: React.MouseEvent) => void;
+}) {
   const roleIndicator = getRoleIndicator(ship.ship?.role || ship.ship?.career);
   const roleColor = roleIndicator.color;
   const thumbUrl = getShipThumbUrl(ship.name, ship.manufacturer);
 
   return (
-    <Link href={"/ships/" + ship.reference} className="group block">
+    <Link
+      href={"/ships/" + ship.reference}
+      className="group block"
+      onContextMenu={onContextMenu}
+    >
       <article className="relative overflow-hidden rounded-sm border border-zinc-800/70 transition-all duration-300 ease-out hover:border-cyan-500/40 hover:shadow-[0_0_30px_-8px_rgba(6,182,212,0.15)]">
         {/* Ship image — top half, more visible */}
         <div className="relative h-[110px] overflow-hidden">

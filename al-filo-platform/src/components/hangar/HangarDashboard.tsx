@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useHangarStore, type InsuranceType, type ItemCategory, type CCUChain } from "@/store/useHangarStore";
+import { useHangarStore, type InsuranceType, type ItemCategory, type CCUChain, type WishlistPriority } from "@/store/useHangarStore";
 import { FleetGrid } from "./FleetGrid";
 import { ImportModal } from "./ImportModal";
 import { AddShipModal } from "./AddShipModal";
@@ -11,8 +11,9 @@ import { ChainList } from "./ChainList";
 import { ChainBuilder } from "./ChainBuilder";
 import { CCUChainCalculator } from "./CCUChainCalculator";
 import { QuickAddShip } from "./QuickAddShip";
+import { WishlistGrid } from "./WishlistGrid";
 
-type TabType = "My Fleet" | "Buyback" | "CCU Chains";
+type TabType = "My Fleet" | "Buyback" | "Wishlist" | "CCU Chains";
 
 const CATEGORY_OPTIONS: { value: ItemCategory | "all" | "ccu"; label: string }[] = [
   { value: "all", label: "All Items" },
@@ -45,9 +46,14 @@ export function HangarDashboard() {
   const ships = useHangarStore((state) => state.ships);
   const ccus = useHangarStore((state) => state.ccus);
   const chains = useHangarStore((state) => state.chains);
+  const wishlist = useHangarStore((state) => state.wishlist);
   const exportToJSON = useHangarStore((state) => state.exportToJSON);
   const clearAll = useHangarStore((state) => state.clearAll);
   const updateShip = useHangarStore((state) => state.updateShip);
+
+  // Wishlist filter state
+  const [wishlistPriorityFilter, setWishlistPriorityFilter] = useState<WishlistPriority | "all">("all");
+  const [wishlistSearch, setWishlistSearch] = useState("");
 
   // ── Split by location ──
   const fleetShips = ships.filter((s) => s.location === "hangar");
@@ -134,8 +140,21 @@ export function HangarDashboard() {
   const TABS: { id: TabType; label: string; count: number }[] = [
     { id: "My Fleet", label: "My Fleet", count: fleetShips.length + fleetCCUs.length },
     { id: "Buyback", label: "Buyback", count: buybackShips.length + buybackCCUs.length },
+    { id: "Wishlist", label: "Wishlist", count: wishlist.length },
     { id: "CCU Chains", label: "CCU Chains", count: chains.length },
   ];
+
+  // ── Wishlist filtering ──
+  const filteredWishlist = wishlist.filter((w) => {
+    if (wishlistPriorityFilter !== "all" && w.priority !== wishlistPriorityFilter) return false;
+    if (wishlistSearch) {
+      const q = wishlistSearch.toLowerCase();
+      return w.shipName.toLowerCase().includes(q) || (w.manufacturer || "").toLowerCase().includes(q);
+    }
+    return true;
+  });
+  const wishlistTotalValue = wishlist.reduce((sum, w) => sum + (w.targetPrice || 0), 0);
+  const wishlistHighPriority = wishlist.filter((w) => w.priority === "high").length;
 
   return (
     <div className="space-y-6">
@@ -315,6 +334,75 @@ export function HangarDashboard() {
               description={activeTab === "My Fleet" ? "Import your hangar using the SC Labs extension or add items manually." : "Import your hangar using the SC Labs extension to see buyback items here."}
               onImport={() => setShowImportModal(true)}
             />
+          )}
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════════════════════════════════
+         WISHLIST TAB — Naves que el usuario quiere conseguir
+         ════════════════════════════════════════════════════════════════════════ */}
+      {activeTab === "Wishlist" && (
+        <div className="space-y-5">
+          {/* Stats */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <StatCard label="Total Wishlist" value={wishlist.length.toString()} accent="purple" />
+            <StatCard label="Alta Prioridad" value={wishlistHighPriority.toString()} accent="orange" />
+            <StatCard label="Presupuesto Estimado" value={`$${wishlistTotalValue.toLocaleString()}`} accent="amber" />
+            <StatCard label="Restantes" value={(wishlist.length - wishlistHighPriority).toString()} />
+          </div>
+
+          {/* Banner informativo */}
+          <div className="p-3 bg-fuchsia-500/5 border border-fuchsia-500/20 rounded-sm">
+            <p className="text-[12px] text-fuchsia-300/80">
+              💡 Tu wishlist guarda naves que te interesa comprar. Agregalas desde la página de detalle con el botón <span className="text-fuchsia-300">&quot;＋ Wishlist&quot;</span> o haciendo click derecho en cualquier nave de la lista.
+            </p>
+          </div>
+
+          {wishlist.length > 0 && (
+            <>
+              {/* Filtros */}
+              <div className="flex flex-wrap gap-1.5">
+                {(["all", "high", "medium", "low"] as const).map((p) => {
+                  const label = p === "all" ? "Todas" : p === "high" ? "Alta" : p === "medium" ? "Media" : "Baja";
+                  const count = p === "all" ? wishlist.length : wishlist.filter((w) => w.priority === p).length;
+                  if (count === 0 && p !== "all") return null;
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => setWishlistPriorityFilter(p)}
+                      className={`px-3 py-1 rounded-full text-[11px] font-medium transition-all duration-200 ${
+                        wishlistPriorityFilter === p
+                          ? "bg-fuchsia-500/30 text-fuchsia-400 border border-fuchsia-500/50"
+                          : "bg-zinc-800/50 text-zinc-400 border border-zinc-700/30 hover:border-zinc-600/50"
+                      }`}
+                    >
+                      {label}
+                      {count > 0 && <span className="ml-1.5 text-[9px] opacity-60">{count}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Search */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  placeholder="Buscar en wishlist..."
+                  value={wishlistSearch}
+                  onChange={(e) => setWishlistSearch(e.target.value)}
+                  className="flex-1 px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-fuchsia-500/50 transition-all duration-300"
+                />
+              </div>
+            </>
+          )}
+
+          {/* Grid */}
+          <WishlistGrid items={filteredWishlist} />
+
+          {wishlist.length > 0 && filteredWishlist.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-sm text-zinc-500">Ningún item coincide con los filtros.</p>
+            </div>
           )}
         </div>
       )}

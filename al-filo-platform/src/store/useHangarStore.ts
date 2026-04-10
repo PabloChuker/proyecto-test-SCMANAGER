@@ -88,6 +88,19 @@ export interface CCUChain {
   status: "planning" | "in_progress" | "completed";
 }
 
+export type WishlistPriority = "low" | "medium" | "high";
+
+export interface HangarWishlistItem {
+  id: string;
+  shipReference: string;
+  shipName: string;
+  manufacturer: string | null;
+  priority: WishlistPriority;
+  targetPrice: number | null; // USD - precio esperado de compra
+  notes: string;
+  addedDate: string; // ISO
+}
+
 // =============================================================================
 // Store State & Actions
 // =============================================================================
@@ -96,6 +109,7 @@ export interface HangarStoreState {
   ships: HangarShip[];
   ccus: HangarCCU[];
   chains: CCUChain[];
+  wishlist: HangarWishlistItem[];
 
   // Ship actions
   addShip: (ship: Omit<HangarShip, "id">) => void;
@@ -111,6 +125,13 @@ export interface HangarStoreState {
   addChain: (chain: Omit<CCUChain, "id">) => void;
   removeChain: (id: string) => void;
   updateChain: (id: string, updates: Partial<CCUChain>) => void;
+
+  // Wishlist actions
+  addToWishlist: (item: Omit<HangarWishlistItem, "id" | "addedDate">) => void;
+  removeFromWishlist: (id: string) => void;
+  updateWishlistItem: (id: string, updates: Partial<HangarWishlistItem>) => void;
+  moveWishlistToFleet: (id: string) => void;
+  isInWishlist: (shipReference: string) => boolean;
 
   // Import/Export
   importFromJSON: (
@@ -648,6 +669,7 @@ export const useHangarStore = create<HangarStoreState>()(
       ships: [],
       ccus: [],
       chains: [],
+      wishlist: [],
 
       // =========================================================================
       // Ship Actions
@@ -740,6 +762,74 @@ export const useHangarStore = create<HangarStoreState>()(
       },
 
       // =========================================================================
+      // Wishlist Actions
+      // =========================================================================
+
+      addToWishlist: (item) => {
+        set((state) => {
+          // Evitar duplicados: si ya existe esa nave en wishlist, no agregar
+          if (state.wishlist.some((w) => w.shipReference === item.shipReference)) {
+            return state;
+          }
+          return {
+            wishlist: [
+              ...state.wishlist,
+              {
+                ...item,
+                id: generateUUID(),
+                addedDate: new Date().toISOString(),
+              },
+            ],
+          };
+        });
+      },
+
+      removeFromWishlist: (id) => {
+        set((state) => ({
+          wishlist: state.wishlist.filter((w) => w.id !== id),
+        }));
+      },
+
+      updateWishlistItem: (id, updates) => {
+        set((state) => ({
+          wishlist: state.wishlist.map((w) =>
+            w.id === id ? { ...w, ...updates } : w
+          ),
+        }));
+      },
+
+      moveWishlistToFleet: (id) => {
+        const state = get();
+        const item = state.wishlist.find((w) => w.id === id);
+        if (!item) return;
+        set({
+          wishlist: state.wishlist.filter((w) => w.id !== id),
+          ships: [
+            ...state.ships,
+            {
+              id: generateUUID(),
+              shipReference: item.shipReference,
+              shipName: item.shipName,
+              pledgeName: `Standalone Ship - ${item.shipName}`,
+              pledgePrice: item.targetPrice ?? 0,
+              insuranceType: "unknown",
+              location: "hangar",
+              itemCategory: "standalone_ship",
+              isGiftable: false,
+              isMeltable: true,
+              purchasedDate: new Date().toISOString(),
+              imageUrl: "",
+              notes: item.notes || "",
+            },
+          ],
+        });
+      },
+
+      isInWishlist: (shipReference) => {
+        return get().wishlist.some((w) => w.shipReference === shipReference);
+      },
+
+      // =========================================================================
       // Import/Export
       // =========================================================================
 
@@ -775,11 +865,12 @@ export const useHangarStore = create<HangarStoreState>()(
       exportToJSON: () => {
         const state = get();
         const exportData = {
-          version: "1.0",
+          version: "1.1",
           exportDate: new Date().toISOString(),
           ships: state.ships,
           ccus: state.ccus,
           chains: state.chains,
+          wishlist: state.wishlist,
         };
         return JSON.stringify(exportData, null, 2);
       },
@@ -789,12 +880,17 @@ export const useHangarStore = create<HangarStoreState>()(
           ships: [],
           ccus: [],
           chains: [],
+          wishlist: [],
         });
       },
     }),
     {
       name: "sc-labs-hangar", // localStorage key
       onRehydrateStorage: () => (state) => {
+        // Backward compatibility: ensure wishlist exists
+        if (state && !state.wishlist) {
+          state.wishlist = [];
+        }
         // Backward compatibility: assign itemCategory to old items that lack it
         if (state && state.ships) {
           let needsUpdate = false;

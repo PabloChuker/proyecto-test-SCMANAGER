@@ -10,6 +10,10 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useLoadoutStore } from "@/store/useLoadoutStore";
+import {
+  ShipContextMenu,
+  type ShipContextMenuTarget,
+} from "@/components/ships/ShipContextMenu";
 
 interface ShipEntry {
   id: string;
@@ -32,6 +36,9 @@ export function ShipSelector() {
   const [selectedMfr, setSelectedMfr] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+
+  // ── Context menu state ──
+  const [contextMenu, setContextMenu] = useState<ShipContextMenuTarget | null>(null);
 
   // Fetch ship list once
   useEffect(() => {
@@ -170,7 +177,21 @@ export function ShipSelector() {
               {!loading && filtered.map(ship => {
                 const isCurrent = ship.reference === currentRef;
                 return (
-                  <button key={ship.id} onClick={() => handleSelect(ship)} className={"w-full text-left px-3 py-2 flex items-center gap-2.5 transition-colors border-b border-zinc-800/30 " + (isCurrent ? "bg-yellow-500/8" : "hover:bg-zinc-800/30")}>
+                  <button
+                    key={ship.id}
+                    onClick={() => handleSelect(ship)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setContextMenu({
+                        reference: ship.reference,
+                        name: ship.localizedName || ship.name,
+                        manufacturer: ship.manufacturer,
+                        x: e.clientX,
+                        y: e.clientY,
+                      });
+                    }}
+                    className={"w-full text-left px-3 py-2 flex items-center gap-2.5 transition-colors border-b border-zinc-800/30 " + (isCurrent ? "bg-yellow-500/8" : "hover:bg-zinc-800/30")}>
                     <div className={"w-1.5 h-1.5 rounded-full flex-shrink-0 " + (isCurrent ? "bg-yellow-500" : "bg-zinc-700")} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
@@ -197,6 +218,9 @@ export function ShipSelector() {
           </div>
         </div>
       )}
+
+      {/* Context menu global (dentro del panelRef para no disparar el outside-click del dropdown) */}
+      <ShipContextMenu target={contextMenu} onClose={() => setContextMenu(null)} />
     </div>
   );
 }
