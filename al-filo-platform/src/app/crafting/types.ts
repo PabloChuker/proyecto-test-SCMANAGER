@@ -3,6 +3,14 @@
 export interface MaterialEntry {
   resourceUuid: string;
   resourceName: string;
+  /** Internal key from the `resources` table, e.g. "Ore_Agricium". */
+  resourceKey: string;
+  /** Lore/gameplay description from the `resources` table. */
+  description: string;
+  /** If this resource is an ore, the name of its refined counterpart. */
+  refinedName: string | null;
+  /** SCU container sizes this resource is packaged in (from `resources_box_sizes`). */
+  boxSizes: number[];
   quantityScu: number;
   minQuality: number;
 }
@@ -60,7 +68,16 @@ export interface Category {
 
 export interface ResourceInfo {
   resourceUuid: string;
+  /** Internal key from the `resources` table, e.g. "Ore_Agricium". */
+  resourceKey: string;
   resourceName: string;
+  /** Lore/gameplay description from the `resources` table. */
+  description: string;
+  /** Link to the refined counterpart if this entry is an ore. */
+  refinedUuid: string | null;
+  refinedName: string | null;
+  /** Distinct SCU container sizes this resource is packaged in. */
+  boxSizes: number[];
   blueprintCount: number;
   totalScuUsed: number;
 }

@@ -78,16 +78,36 @@ export default function MaterialBrowser() {
             )
           );
 
+          const formatBox = (n: number) =>
+            Number.isInteger(n) ? String(n) : n.toFixed(3).replace(/\.?0+$/, "");
+
           return (
             <div
               key={mat.resourceUuid}
               className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-6 hover:border-amber-500/40 transition-colors"
             >
-              <div className="flex items-start justify-between mb-3">
-                <h3 className="text-lg font-semibold text-amber-400 mb-1">
+              <div className="flex items-start justify-between mb-1">
+                <h3 className="text-lg font-semibold text-amber-400">
                   {mat.resourceName}
                 </h3>
+                {mat.refinedName && (
+                  <span className="text-[10px] px-2 py-0.5 bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/20 whitespace-nowrap">
+                    Refines → {mat.refinedName}
+                  </span>
+                )}
               </div>
+              {mat.resourceKey && (
+                <p className="text-[10px] text-zinc-600 font-mono mb-2">
+                  {mat.resourceKey}
+                </p>
+              )}
+
+              {/* Description from resources table */}
+              {mat.description && (
+                <p className="text-xs text-zinc-400 leading-relaxed mb-3 line-clamp-3">
+                  {mat.description}
+                </p>
+              )}
 
               <div className="space-y-3 border-t border-zinc-800 pt-4">
                 <div>
@@ -102,6 +122,23 @@ export default function MaterialBrowser() {
                     {mat.totalScuUsed.toFixed(1)} SCU
                   </div>
                 </div>
+                {mat.boxSizes.length > 0 && (
+                  <div>
+                    <span className="text-xs text-zinc-500 uppercase block mb-1">
+                      Container Sizes (SCU)
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {mat.boxSizes.map((size) => (
+                        <span
+                          key={size}
+                          className="text-[10px] px-2 py-0.5 bg-zinc-800/60 text-zinc-300 rounded border border-zinc-700/40 font-mono"
+                        >
+                          {formatBox(size)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Used in */}

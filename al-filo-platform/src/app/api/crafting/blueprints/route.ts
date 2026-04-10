@@ -18,6 +18,10 @@ export const dynamic = "force-dynamic";
 interface MaterialEntry {
   resourceUuid: string;
   resourceName: string;
+  resourceKey: string;
+  description: string;
+  refinedName: string | null;
+  boxSizes: number[];
   quantityScu: number;
   minQuality: number;
 }
@@ -84,15 +88,28 @@ export async function GET() {
       ORDER BY output_type, output_subtype, output_name
     `, []);
 
-    // ── 2. Load all materials (grouped) ──
+    // ── 2. Load all materials (grouped), enriched with resource metadata
+    //       (description, key, refining chain) and container box sizes. ──
     const matRows: any[] = await sql.unsafe(`
-      SELECT id, blueprint_uuid, group_key, group_name, required_count,
-             resource_uuid, resource_name, quantity_scu, min_quality,
-             modifier_property_uuid, modifier_property_key,
-             modifier_quality_min, modifier_quality_max,
-             modifier_at_min_quality, modifier_at_max_quality
-      FROM blueprint_materials
-      ORDER BY blueprint_uuid, group_key, resource_name
+      SELECT
+        bm.id, bm.blueprint_uuid, bm.group_key, bm.group_name, bm.required_count,
+        bm.resource_uuid, bm.resource_name, bm.quantity_scu, bm.min_quality,
+        bm.modifier_property_uuid, bm.modifier_property_key,
+        bm.modifier_quality_min, bm.modifier_quality_max,
+        bm.modifier_at_min_quality, bm.modifier_at_max_quality,
+        r.key         AS resource_key,
+        r.description AS resource_description,
+        r.refined_uuid,
+        r.refined_name,
+        COALESCE(bs.sizes, '{}'::numeric[]) AS box_sizes
+      FROM blueprint_materials bm
+      LEFT JOIN resources r ON r.uuid = bm.resource_uuid
+      LEFT JOIN LATERAL (
+        SELECT array_agg(box_size ORDER BY box_size)::numeric[] AS sizes
+        FROM resources_box_sizes
+        WHERE resource_uuid = bm.resource_uuid
+      ) bs ON TRUE
+      ORDER BY bm.blueprint_uuid, bm.group_key, bm.resource_name
     `, []);
 
     // ── 3. Load reward pools ──
@@ -151,9 +168,17 @@ export async function GET() {
           (mat) => mat.resourceUuid === String(m.resource_uuid)
         );
         if (!alreadyHasMat) {
+          const rawSizes = Array.isArray(m.box_sizes) ? m.box_sizes : [];
+          const boxSizes = rawSizes
+            .map((s: any) => Number(s))
+            .filter((n: number) => !Number.isNaN(n));
           part.materials.push({
             resourceUuid: String(m.resource_uuid),
             resourceName: m.resource_name || "",
+            resourceKey: m.resource_key || "",
+            description: m.resource_description || "",
+            refinedName: m.refined_name || null,
+            boxSizes,
             quantityScu: Number(m.quantity_scu) || 0,
             minQuality: Number(m.min_quality) || 0,
           });
