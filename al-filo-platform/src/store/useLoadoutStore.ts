@@ -199,43 +199,58 @@ function emptyCat(): CategoryPowerInfo { return { minDraw: 0, allocated: 0, comp
  * Combine multiple power plant outputs into a single effective total,
  * applying in-game diminishing returns.
  *
- * Empirical formula (2026-04 observations from live game testing):
+ * Empirical formula (2026-04 — validada con Erkul):
  *
- *   - Si todas las plantas son IDÉNTICAS (mismo rating):
- *       Total = count * floor(rating * 0.6)
- *     El juego parece penalizar más fuerte cuando no hay una planta
- *     dominante que actúe como backbone (cada una aporta ~60%).
+ * Rama A — Plantas MIXTAS (ratings distintos):
+ *     Total = floor(bestRating * 0.95) + round( sum(rest) / 3 )
+ *   La mejor paga un ~5% de overhead y cada planta extra aporta ~⅓ de
+ *   su rating al bus compartido.
  *
- *   - Si hay al menos una diferencia de rating:
- *       Total = floor(bestRating * 0.95) + round( sum(rest) / 3 )
- *     La mejor paga un ~5% de overhead; cada extra contribuye ~⅓.
+ * Rama B — Plantas IDÉNTICAS (todas mismo rating r):
+ *     Total = floor(r * factor(n))     con factor dependiente de n:
+ *       n=1 → 0.95
+ *       n=2 → 1.20
+ *       n=3 → 1.65
+ *       n≥4 → 0.95 + 0.25*(n-1) + 0.10*(n-1)*(n-2)  (extrapolación cuadrática)
  *
- * Validation (rating → effective total):
- *   [21]          → 19   (1 plant, floor(21*0.95) = 19)
- *   [20]          → 19   (1 plant, floor(20*0.95) = 19)
- *   [19]          → 18   (1 plant, floor(19*0.95) = 18)
- *   [21, 20]      → 26   (mix: 19 + round(20/3) = 19 + 7)
- *   [21, 19]      → 25   (mix: 19 + round(19/3) = 19 + 6)
- *   [20, 20]      → 24   (idénticas: 2 * floor(20*0.6) = 2*12)   ← Asgard
- *   [21, 20, 19]  → 32   (mix: 19 + round(39/3) = 19 + 13)
+ *   Las plantas idénticas NO crecen linealmente con la cantidad: el primer
+ *   duplicado suma poco (n=2: +0.25), pero el tercero aporta más por tener
+ *   una carga más distribuida (n=3: +0.45). Comportamiento observado en
+ *   Erkul y reproducido en el juego.
  *
- * NOTA: La rama de "idénticas" se basa en un único dato (Asgard 2× Maelstrom).
- * Si aparecen más naves con plantas idénticas que contradigan esta hipótesis,
- * hay que revisar la fórmula con esos valores.
+ * Validation (rating → effective total, todos verificados en Erkul):
+ *   [21]            → 19   (rama A, 1 plant)
+ *   [20]            → 19   (rama A, 1 plant)
+ *   [19]            → 18   (rama A, 1 plant)
+ *   [21, 20]        → 26   (rama A, mixta: 19 + round(20/3) = 19 + 7)
+ *   [21, 19]        → 25   (rama A, mixta: 19 + round(19/3) = 19 + 6)
+ *   [21, 20, 19]    → 32   (rama A, mixta: 19 + round(39/3) = 19 + 13)
+ *   [20, 20]        → 24   (rama B, idénticas n=2: floor(20*1.20))   ← Asgard
+ *   [20, 20, 20]    → 33   (rama B, idénticas n=3: floor(20*1.65))   ← Paladin
+ *
+ * NOTA: La rama B está calibrada sobre datos de rating 20 únicamente.
+ * Si aparecen naves con plantas idénticas de otro rating (e.g. [18,18] o
+ * [21,21,21]) y los totales no cierran, hay que re-calibrar factor(n).
  */
 function combinePowerPlantOutputs(outputs: number[]): number {
   if (outputs.length === 0) return 0;
   // Sort descending so index 0 is the best plant.
   const sorted = [...outputs].sort((a, b) => b - a);
+  const n = sorted.length;
   const best = sorted[0];
 
-  // Special case: all plants identical → each contributes ~60%.
-  // Derived from Asgard observation ([20, 20] → 24 in game).
-  if (outputs.length > 1 && sorted.every((r) => r === best)) {
-    return Math.max(0, outputs.length * Math.floor(best * 0.6));
+  // Rama B — todas las plantas idénticas: factor empírico por cantidad.
+  const allIdentical = sorted.every((r) => r === best);
+  if (allIdentical) {
+    let factor: number;
+    if (n === 1) factor = 0.95;
+    else if (n === 2) factor = 1.20;
+    else if (n === 3) factor = 1.65;
+    else factor = 0.95 + 0.25 * (n - 1) + 0.10 * (n - 1) * (n - 2);
+    return Math.max(0, Math.floor(best * factor));
   }
 
-  // Default: best pays 5% overhead, rest contribute ~⅓ each.
+  // Rama A — plantas mixtas: best paga 5% y cada extra aporta ~⅓.
   const rest = sorted.slice(1);
   const restSum = rest.reduce((acc, v) => acc + v, 0);
   const effectiveBest = Math.floor(best * 0.95);
