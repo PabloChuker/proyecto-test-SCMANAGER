@@ -177,7 +177,9 @@ async function browseComponents(
   const columns = TABLE_COLUMNS[validTable] || [{ key: "name", label: "Name", type: "text" as const }];
 
   const safeSearch = sanitizeString(search, 200);
-  const safeLimit = validateInt(limit, 200, 1, 500);
+  // Tope alto para poder traer todas las filas de un browse sin paginar.
+  // Las tablas de componentes del juego rondan las ~300-2000 entradas como máximo.
+  const safeLimit = validateInt(limit, 500, 1, 5000);
   const safeOffset = validateInt(offset, 0, 0, 1000000);
 
   // Build whitelist of column keys for sort validation

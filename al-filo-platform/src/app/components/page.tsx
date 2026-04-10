@@ -153,8 +153,9 @@ function ComponentsPageInner() {
   const fetchData = useCallback(async (cat: CategoryDef, s: string, size: string, sort: string, dir: string) => {
     setLoading(true);
     try {
-      // 500 es el máximo que acepta /api/components/browse (ver validateInt en el route)
-      const body: Record<string, any> = { table: cat.table, sort, dir, limit: 500 };
+      // 5000 es el tope configurado en /api/components/browse (ver validateInt en el route).
+      // Con esto entran de un saque todas las ships (~300) y weapons (~1000-2000), etc.
+      const body: Record<string, any> = { table: cat.table, sort, dir, limit: 5000 };
       if (s) body.search = s;
       if (size) body.size = size;
       const res = await fetch(`/api/components/browse`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -162,7 +163,7 @@ function ComponentsPageInner() {
       if (json.rows) {
         setRows(json.rows);
         setColumns(json.columns || []);
-        setMeta(json.meta || { total: 0, limit: 500, offset: 0 });
+        setMeta(json.meta || { total: 0, limit: 5000, offset: 0 });
       }
     } catch (e) {
       console.error("Failed to fetch components:", e);
