@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useHangarStore, type InsuranceType, type ItemCategory, type CCUChain, type WishlistPriority } from "@/store/useHangarStore";
+import { useHangarStore, type InsuranceType, type ItemCategory, type CCUChain, type WishlistPriority, type HangarShip } from "@/store/useHangarStore";
 import { FleetGrid } from "./FleetGrid";
 import { ImportModal } from "./ImportModal";
 import { AddShipModal } from "./AddShipModal";
@@ -15,8 +15,9 @@ import { WishlistGrid } from "./WishlistGrid";
 
 type TabType = "My Fleet" | "Buyback" | "Wishlist" | "CCU Chains";
 
-const CATEGORY_OPTIONS: { value: ItemCategory | "all" | "ccu"; label: string }[] = [
+const CATEGORY_OPTIONS: { value: ItemCategory | "all" | "ccu" | "fleet"; label: string }[] = [
   { value: "all", label: "All Items" },
+  { value: "fleet", label: "Fleet" },
   { value: "standalone_ship", label: "Ships" },
   { value: "game_package", label: "Packages" },
   { value: "ccu", label: "CCU / Upgrades" },
@@ -26,6 +27,17 @@ const CATEGORY_OPTIONS: { value: ItemCategory | "all" | "ccu"; label: string }[]
   { value: "subscriber", label: "Subscriber" },
   { value: "other", label: "Other" },
 ];
+
+// Fleet = todas las naves "reales" (standalone + game packages), incluyendo loaners
+// y naves adquiridas in-game.
+const isFleetItem = (s: HangarShip) =>
+  s.itemCategory === "standalone_ship" || s.itemCategory === "game_package";
+
+// Ships = solo naves de pledge store puras (sin loaners, sin in-game).
+const isPledgeShip = (s: HangarShip) =>
+  s.itemCategory === "standalone_ship" &&
+  (s.acquisitionType ?? "pledge") === "pledge" &&
+  !s.isLoaner;
 
 export function HangarDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>("My Fleet");
@@ -40,7 +52,7 @@ export function HangarDashboard() {
   // Shared filters
   const [searchQuery, setSearchQuery] = useState("");
   const [filterInsurance, setFilterInsurance] = useState<InsuranceType | "all">("all");
-  const [filterCategory, setFilterCategory] = useState<ItemCategory | "all" | "ccu">("all");
+  const [filterCategory, setFilterCategory] = useState<ItemCategory | "all" | "ccu" | "fleet">("all");
   const [sortBy, setSortBy] = useState<"name" | "price" | "date">("name");
 
   const ships = useHangarStore((state) => state.ships);
@@ -65,6 +77,10 @@ export function HangarDashboard() {
   const getCountsByCategory = (items: typeof ships, ccuItems: typeof ccus) => {
     const counts: Record<string, number> = { all: items.length + ccuItems.length, ccu: ccuItems.length };
     items.forEach((s) => { counts[s.itemCategory] = (counts[s.itemCategory] || 0) + 1; });
+    // Fleet: standalone_ship + game_package (incluye loaners e in-game)
+    counts["fleet"] = items.filter(isFleetItem).length;
+    // Ships: solo pledge puras (override del conteo "standalone_ship")
+    counts["standalone_ship"] = items.filter(isPledgeShip).length;
     return counts;
   };
 
@@ -88,7 +104,11 @@ export function HangarDashboard() {
     const name = (ship.shipName || ship.pledgeName || "").toLowerCase();
     const matchesSearch = searchQuery === "" || name.includes(searchQuery.toLowerCase()) || ship.pledgeName.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesInsurance = filterInsurance === "all" || ship.insuranceType === filterInsurance;
-    const matchesCategory = filterCategory === "all" || ship.itemCategory === filterCategory;
+    let matchesCategory: boolean;
+    if (filterCategory === "all") matchesCategory = true;
+    else if (filterCategory === "fleet") matchesCategory = isFleetItem(ship);
+    else if (filterCategory === "standalone_ship") matchesCategory = isPledgeShip(ship);
+    else matchesCategory = ship.itemCategory === filterCategory;
     return matchesSearch && matchesInsurance && matchesCategory;
   }) : [];
 
