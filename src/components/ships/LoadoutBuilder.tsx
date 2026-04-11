@@ -110,19 +110,21 @@ const GRID_ROWS           = 100;
 const ROW_HEIGHT_RATIO    = 0.25;
 const ANCHOR_OFFSET_RATIO = 0.05;
 const MARGIN_RATIO        = 0.1;        // gap total entre cards = 0.1 * UNIT
-const MIN_UNIT_PX         = 180;        // clamp inferior del UNIT
-const MAX_UNIT_PX         = 340;        // clamp superior del UNIT
+const MIN_UNIT_PX         = 160;        // clamp inferior del UNIT
+const MAX_UNIT_PX         = 260;        // clamp superior del UNIT (compacto: todo entra en 1 pantalla)
 
 // Ancho de card en columnas: 1 o 2. (Max permitido por la spec = 2.)
-// flight-dynamics-3d baja de 4 → 2 cols por la regla estricta.
+// v8: TODAS las cards son 1-col para que el layout categorizado 5-col quede
+// uniforme y no se pierda espacio. flight-dynamics-3d, ship-card, dps-detail
+// y ship-selector bajan a 1-col (se re-dimensionan internamente).
 type CardWidth = 1 | 2;
 const WIDGET_WIDTH: Record<WidgetId, CardWidth> = {
   weapons: 1, missiles: 1, "strafe-profile": 1, "turning-profile": 1,
   shields: 1, powerplants: 1, coolers: 1, "maneuver-radar": 1,
   quantum: 1, radar: 1, utility: 1, "combat-summary": 1,
   "power-grid": 1, signatures: 1, balance: 1,
-  "ship-selector": 2, "ship-card": 2, "dps-detail": 2,
-  "flight-dynamics-3d": 2,
+  "ship-selector": 1, "ship-card": 1, "dps-detail": 1,
+  "flight-dynamics-3d": 1,
 };
 
 const WIDGET_LABELS: Record<WidgetId, string> = {
@@ -197,9 +199,9 @@ function getWidgetBlocks(
     quantum: number; radar: number; utility: number;
   },
 ): number {
-  // Grupo HP: 2 bloques base (header + group-header + pad) + 1 bloque por slot.
-  // Mínimo 3 bloques para que siempre sea legible.
-  const hpBlocks = (n: number) => Math.max(3, 2 + Math.max(1, n));
+  // Grupo HP: 1 bloque base (header compacto) + 1 bloque por slot.
+  // Mínimo 2 bloques para legibilidad. Compacto — v8.
+  const hpBlocks = (n: number) => Math.max(2, 1 + Math.max(1, n));
 
   switch (wId) {
     case "weapons":            return hpBlocks(counts.weapons);
@@ -210,106 +212,64 @@ function getWidgetBlocks(
     case "quantum":            return hpBlocks(counts.quantum);
     case "radar":              return hpBlocks(counts.radar);
     case "utility":            return hpBlocks(counts.utility);
-    case "combat-summary":     return 4;
-    case "power-grid":         return 7;
-    case "signatures":         return 3;
-    case "balance":            return 3;
-    case "strafe-profile":     return 5;
-    case "turning-profile":    return 6;
-    case "maneuver-radar":     return 6;
+    case "combat-summary":     return 3;
+    case "power-grid":         return 4;
+    case "signatures":         return 2;
+    case "balance":            return 2;
+    case "strafe-profile":     return 4;
+    case "turning-profile":    return 4;
+    case "maneuver-radar":     return 4;
     case "ship-selector":      return 2;
-    case "ship-card":          return 9;
-    case "dps-detail":         return 6;
-    case "flight-dynamics-3d": return 9;
+    case "ship-card":          return 5;
+    case "dps-detail":         return 4;
+    case "flight-dynamics-3d": return 5;
   }
 }
 
-// Columnas reservadas al sidebar derecho (ship info). El sidebar ocupa las
-// últimas 2 columnas de la grilla (cols 3-4 en una grilla de 5). Widgets de
-// ancho 2: ship-selector → ship-card → dps-detail, apilados verticalmente.
-const SIDEBAR_COL_START = GRID_COLUMNS - 2; // 3
-const SIDEBAR_WIDGETS: WidgetId[] = ["ship-selector", "ship-card", "dps-detail"];
-
-// Orden del bin-pack para la zona izquierda (cols 0..2, widgets de ancho 1).
-const LEFT_BINPACK_ORDER: WidgetId[] = [
-  "weapons",
-  "missiles",
-  "shields",
-  "powerplants",
-  "coolers",
-  "quantum",
-  "radar",
-  "utility",
-  "combat-summary",
-  "power-grid",
-  "signatures",
-  "balance",
-  "strafe-profile",
-  "turning-profile",
-  "maneuver-radar",
+// ─── Category-based 5-column layout (v8) ────────────────────────────────────
+// Distribución determinística por categoría — armas con armas, componentes con
+// componentes, charts con charts, ship-info con ship-info. Cada columna apila
+// sus widgets en orden, sin bin-packing. La idea: mirar una columna = ver una
+// familia de info. Los widgets ocultos (sin hardpoints del tipo) se saltan,
+// pero NO se re-balancea entre columnas para conservar la identidad visual.
+const COLUMN_PLAN: WidgetId[][] = [
+  // Col 0 — OFFENSE: armas + missiles + resumen de combate
+  ["weapons", "missiles", "combat-summary"],
+  // Col 1 — DEFENSE & POWER: shields + plantas + coolers + signatures
+  ["shields", "powerplants", "coolers", "signatures"],
+  // Col 2 — NAV & SENSORS: QT, radar, utility, power grid
+  ["quantum", "radar", "utility", "power-grid"],
+  // Col 3 — FLIGHT CHARTS: strafe, turning, g-forces, balance
+  ["strafe-profile", "turning-profile", "maneuver-radar", "balance"],
+  // Col 4 — SHIP INFO: selector, card, dps detail, 3D viewer (vertical)
+  ["ship-selector", "ship-card", "dps-detail", "flight-dynamics-3d"],
 ];
 
-// Posiciones default en coordenadas (col, row) — todas las cards quedan
-// alineadas a la grilla. Pass 1: sidebar; Pass 2: bin-pack 1-col en cols
-// izquierdas; Pass 3: flight-dynamics-3d (2-col) en el mejor hueco.
+// Posiciones default en coordenadas (col, row). Cada widget va a su columna
+// fija según COLUMN_PLAN, apilado verticalmente en el orden del plan. Los
+// widgets ocultos NO ocupan espacio. Sin bin-packing, sin optimización: el
+// layout es determinístico y categorizado.
 function buildDefaultPositions(
   visible: Set<WidgetId>,
   blocks: Record<WidgetId, number>,
 ): Map<WidgetId, { col: number; row: number }> {
   const result = new Map<WidgetId, { col: number; row: number }>();
-  // colBottoms[i] = la fila más baja ocupada por alguna card en la columna i.
-  // Se usa como "cursor" de bin-packing por columna.
-  const colBottoms: number[] = new Array(GRID_COLUMNS).fill(0);
-
-  // Pass 1 — Sidebar (cols 3-4). Apilamos ship-selector → ship-card →
-  // dps-detail, cada una ocupa 2 columnas de ancho.
-  {
+  for (let col = 0; col < COLUMN_PLAN.length; col++) {
     let row = 0;
-    for (const wId of SIDEBAR_WIDGETS) {
+    for (const wId of COLUMN_PLAN[col]) {
       if (!visible.has(wId)) continue;
-      result.set(wId, { col: SIDEBAR_COL_START, row });
+      result.set(wId, { col, row });
       row += blocks[wId];
     }
-    colBottoms[SIDEBAR_COL_START]     = row;
-    colBottoms[SIDEBAR_COL_START + 1] = row;
   }
-
-  // Pass 2 — Bin-pack de widgets de ancho 1 en las cols izquierdas (0..2).
-  // Para cada widget, elegimos la columna con la fila libre más alta.
-  const LEFT_END = SIDEBAR_COL_START; // cols válidas: 0..LEFT_END-1
-  for (const wId of LEFT_BINPACK_ORDER) {
-    if (!visible.has(wId)) continue;
-    let bestCol = 0;
-    for (let i = 1; i < LEFT_END; i++) {
-      if (colBottoms[i] < colBottoms[bestCol]) bestCol = i;
-    }
-    const row = colBottoms[bestCol];
-    result.set(wId, { col: bestCol, row });
-    colBottoms[bestCol] = row + blocks[wId];
-  }
-
-  // Pass 3 — flight-dynamics-3d (ancho 2). Buscamos el mejor par de columnas
-  // adyacentes (el que minimice el max-bottom) entre los pares disponibles.
-  if (visible.has("flight-dynamics-3d")) {
-    const w = WIDGET_WIDTH["flight-dynamics-3d"]; // 2
-    let bestStart = 0;
-    let bestMax = Math.max(colBottoms[0], colBottoms[1]);
-    for (let i = 1; i <= GRID_COLUMNS - w; i++) {
-      const m = Math.max(colBottoms[i], colBottoms[i + 1]);
-      if (m < bestMax) { bestMax = m; bestStart = i; }
-    }
-    const row = bestMax;
-    result.set("flight-dynamics-3d", { col: bestStart, row });
-    const newBottom = row + blocks["flight-dynamics-3d"];
-    colBottoms[bestStart]     = newBottom;
-    colBottoms[bestStart + 1] = newBottom;
-  }
-
   return result;
 }
 
-// ─── localStorage (v6: guardamos i/col/row — coordenadas discretas de la grilla) ──
-const LAYOUT_STORAGE_KEY = "al-filo-layout-v6";
+// ─── localStorage (v8: i/col/row con layout 5-col categorizado) ─────────────
+// Bump de versión porque los widgets 2-col bajaron a 1-col → las posiciones
+// persistidas de v6/v7 ya no tienen sentido (apuntarían a cols/rows que no
+// corresponden al nuevo esquema categorizado).
+const LAYOUT_STORAGE_KEY = "al-filo-layout-v8";
 
 type SavedPos = { i: string; col: number; row: number };
 
@@ -563,14 +523,15 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const mountedRef = useRef(false);
   const overrideCountRef = useRef(0);
 
-  // ─── Geometric grid layout (v6 — UNIT-based, discrete (col, row)) ──────────
+  // ─── Geometric grid layout (v8 — UNIT-based + categorizado 5-col) ─────────
   // Estrategia:
   //  1. Medimos el ancho del contenedor con ResizeObserver → getUnit().
-  //  2. Cada widget tiene una cantidad fija de bloques verticales + un ancho
-  //     en columnas (1 o 2). Las dimensiones se derivan todas de UNIT.
-  //  3. Las posiciones son discretas (col, row) — no hay free positioning.
-  //     El drag snapea continuamente a la grilla mientras se mueve el mouse.
-  //  4. Persistimos en localStorage `al-filo-layout-v6` como {i, col, row}.
+  //  2. Cada widget tiene una cantidad fija de bloques verticales y TODOS son
+  //     1-col (v8). Las dimensiones se derivan todas de UNIT.
+  //  3. Las posiciones default se computan por COLUMN_PLAN categorizado:
+  //     offense | defense+power | nav+sensors | flight charts | ship info.
+  //  4. Las posiciones son discretas (col, row) — el drag permite reubicar.
+  //  5. Persistimos en localStorage `al-filo-layout-v8` como {i, col, row}.
   const [savedPositions, setSavedPositions] = useState<SavedPos[] | null>(null);
   const [userPositions, setUserPositions] = useState<Map<WidgetId, { col: number; row: number }>>(
     () => new Map(),
@@ -954,8 +915,11 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
           continuamente a la celda más cercana de la grilla 5×N. */}
       <div
         ref={gridContainerRef}
-        className="w-full relative"
-        style={{ minHeight: totalHeight > 0 ? totalHeight : undefined }}
+        className="w-full relative mx-auto"
+        style={{
+          minHeight: totalHeight > 0 ? totalHeight : undefined,
+          maxWidth: GRID_COLUMNS * MAX_UNIT_PX,
+        }}
         onMouseDown={handleContainerMouseDown}
       >
         {layoutMounted && gridWidth > 0 && layout.map((item) => {
