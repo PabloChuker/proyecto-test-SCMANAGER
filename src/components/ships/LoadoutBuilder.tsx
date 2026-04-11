@@ -532,6 +532,10 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     () => new Map(),
   );
   const [layoutMounted, setLayoutMounted] = useState(false);
+  // Z-order dinámico: el último widget tocado va al frente (z-index más alto).
+  // Esto arregla el bug donde, tras arrastrar un widget encima de otro, los
+  // clicks sobre el header del widget "tapado" los comía el que quedó encima.
+  const [zOrder, setZOrder] = useState<WidgetId[]>([]);
 
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [gridWidth, setGridWidth] = useState<number>(1400);
@@ -539,6 +543,12 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   // Drag state: widget being dragged + offset pointer-from-widget-origin
   const [dragWidget, setDragWidget] = useState<WidgetId | null>(null);
   const dragOffsetRef = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
+  // Snapshot del layout al inicio del drag, para calcular snap candidates
+  // sin referenciar el layout mutable de cada render.
+  const snapSnapshotRef = useRef<{ id: WidgetId; x: number; y: number; w: number; h: number }[]>([]);
+  // Ref al layout actual, así el mousedown handler (declarado antes del memo
+  // de layout) puede leer el último valor sin crear ciclos de dependencias.
+  const layoutRef = useRef<{ id: WidgetId; x: number; y: number; w: number; h: number }[]>([]);
 
   useEffect(() => {
     const saved = loadSavedPositions();
@@ -572,11 +582,39 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 
     const onMove = (e: MouseEvent) => {
       const rect = el.getBoundingClientRect();
-      const x = e.clientX - rect.left - dragOffsetRef.current.dx;
-      const y = e.clientY - rect.top - dragOffsetRef.current.dy;
+      const rawX = e.clientX - rect.left - dragOffsetRef.current.dx;
+      const rawY = e.clientY - rect.top - dragOffsetRef.current.dy;
+      let x = Math.max(0, rawX);
+      let y = Math.max(0, rawY);
+
+      // Snap con Shift: X a la columna más cercana (grilla de 5 cols),
+      // Y al top/bottom+GAP más cercano de cualquier otro widget visible.
+      if (e.shiftKey) {
+        const unit = unitWidth(rect.width);
+        const step = unit + GAP;
+        const col = Math.max(0, Math.round(x / step));
+        x = col * step;
+
+        // Candidates de Y: 0 + tops + (bottoms + GAP) de los demás widgets
+        // Usamos el snapshot capturado al mousedown para evitar closure stale.
+        const candidates: number[] = [0];
+        for (const item of snapSnapshotRef.current) {
+          if (item.id === dragWidget) continue;
+          candidates.push(item.y);
+          candidates.push(item.y + item.h + GAP);
+        }
+        let bestY = y;
+        let bestDist = Infinity;
+        for (const cy of candidates) {
+          const d = Math.abs(cy - y);
+          if (d < bestDist) { bestDist = d; bestY = cy; }
+        }
+        y = Math.max(0, bestY);
+      }
+
       setUserPositions((prev) => {
         const next = new Map(prev);
-        next.set(dragWidget, { x: Math.max(0, x), y: Math.max(0, y) });
+        next.set(dragWidget, { x, y });
         return next;
       });
     };
@@ -627,6 +665,14 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
       dx: e.clientX - widgetRect.left,
       dy: e.clientY - widgetRect.top,
     };
+    // Snapshot del layout actual para el snap con Shift.
+    snapSnapshotRef.current = layoutRef.current.map((it) => ({ id: it.id, x: it.x, y: it.y, w: it.w, h: it.h }));
+    // Subir este widget al tope del z-order (último tocado = más adelante).
+    setZOrder((prev) => {
+      const filtered = prev.filter((x) => x !== id);
+      filtered.push(id);
+      return filtered;
+    });
     setDragWidget(id);
     e.preventDefault();
   }, []);
@@ -733,6 +779,10 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     });
     return result;
   }, [layoutMounted, gridWidth, visibleIds, widgetHeights, userPositions]);
+
+  // Mantener el ref sincronizado con el layout actual (lo usa el mousedown
+  // handler que está declarado antes del memo).
+  useEffect(() => { layoutRef.current = layout; }, [layout]);
 
   // Alto total del container = máximo y+h de todos los widgets
   const totalHeight = useMemo(() => {
@@ -854,6 +904,15 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
       >
         {layoutMounted && gridWidth > 0 && layout.map((item) => {
           const isDragging = dragWidget === item.id;
+          // z-index dinámico: último tocado > previos tocados > default.
+          // ship-selector se queda arriba siempre (dropdown), dragging por encima de todo.
+          const touchedIdx = zOrder.indexOf(item.id);
+          const dynZ = touchedIdx >= 0 ? 30 + touchedIdx : 10;
+          const zIndex = isDragging
+            ? 1000
+            : item.id === "ship-selector"
+              ? 500
+              : dynZ;
           return (
             <div
               key={item.id}
@@ -863,7 +922,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
                 top: item.y,
                 width: item.w,
                 height: item.h,
-                zIndex: isDragging ? 40 : item.id === "ship-selector" ? 20 : 10,
+                zIndex,
                 transition: isDragging ? "none" : "left 120ms ease, top 120ms ease",
                 willChange: isDragging ? "left, top" : undefined,
               }}
