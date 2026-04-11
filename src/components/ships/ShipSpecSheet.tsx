@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { ShipDetailResponseV2, FlatHardpoint } from "@/types/ships";
 import { useHangarStore } from "@/store/useHangarStore";
 import { ShipViewer3D } from "@/components/shared/flight-dynamics/ShipViewer3D";
+import { shipGlbUrl } from "@/lib/shipGlb";
 
 // ── Helpers ──
 
@@ -320,7 +321,11 @@ export default function ShipSpecSheet({ shipId, onShipLoaded }: ShipSpecSheetPro
           <span className="ml-auto text-[9px] font-mono text-zinc-700">LMB rotar · Scroll zoom · RMB pan</span>
         </div>
         <div className="h-[220px]">
-          <ShipViewer3D rotationAxis="free" animate={false} />
+          <ShipViewer3D
+            rotationAxis="free"
+            animate={false}
+            glbUrl={shipGlbUrl(ship.reference)}
+          />
         </div>
       </div>
 
