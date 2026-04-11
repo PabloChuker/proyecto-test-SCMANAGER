@@ -1,21 +1,23 @@
 // =============================================================================
-// AL FILO — LoadoutBuilder v17 (Drag & Drop Desktop Layout)
+// AL FILO — LoadoutBuilder v18 (Dynamic Grid Layout with react-grid-layout)
 //
-// Layout panels are draggable — click and hold to rearrange columns.
-// Order persists in localStorage per ship.
+// Widgets se mueven libremente en una grilla 15-col tipo Gridstack/RGL:
+//   - Drag por el header para reordenar
+//   - Sin resize (tamaños fijos en código)
+//   - Compactación vertical automática
+//   - Layout persistido en localStorage `al-filo-layout-v2`
 //
-// Panels:
-//   weapons    — Weapons + Missiles + Acceleration Radar
-//   systems    — Shields, Power Plants, Coolers + Maneuverability Radar
-//   modules    — QT Drives, Radar, Tractor/PDC/Utility + Combat Summary
-//   power      — Power Management (Erkul grid) + Signatures + Balance
-//   shipcard   — Ship Card (full Erkul stats) + DPS Panel
+// Panels: weapons, missiles, shields, power-plants, coolers, quantum, radar,
+//   utility, combat-summary, power-grid, signatures, balance, ship-selector,
+//   ship-card, dps-detail, strafe-profile, turning-profile, maneuver-radar,
+//   flight-dynamics-3d.
 // =============================================================================
 
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import GridLayout, { WidthProvider, type Layout } from "react-grid-layout";
 import { useLoadoutStore } from "@/store/useLoadoutStore";
 import type { ResolvedHardpoint, EquippedItem } from "@/store/useLoadoutStore";
 import { useAuth } from "@/contexts/AuthContext";
@@ -27,6 +29,11 @@ import { ShipSelector } from "./ShipSelector";
 import { fmtStat, fmtDps } from "./loadout-utils";
 import { ShipFlightDynamicsSingle } from "@/components/dps/flight-dynamics";
 import { shipGlbUrl } from "@/lib/shipGlb";
+
+// WidthProvider measures the container and passes width to GridLayout.
+// Creamos la instancia UNA sola vez a nivel módulo para evitar recrearla en
+// cada render (lo cual rompería el drag state interno de RGL).
+const ResponsiveGridLayout = WidthProvider(GridLayout);
 
 const WEAPON_GROUPS = new Set(["WEAPON", "TURRET"]);
 const MISSILE_GROUPS = new Set(["MISSILE_RACK"]);
@@ -76,7 +83,7 @@ const CAT_CONFIG: Record<string, { label: string; icon: string; accent: string }
   UTILITY: { label: "UTILITY", icon: "/icons/tractor_beam.png", accent: "#94a3b8" },
 };
 
-// ÔöÇÔöÇ Drag & Drop Widget System (individual blocks) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+// ÔöÇÔöÇ Widget System (react-grid-layout) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 type WidgetId =
   | "weapons" | "missiles" | "strafe-profile" | "turning-profile"
   | "shields" | "powerplants" | "coolers" | "maneuver-radar"
@@ -85,16 +92,43 @@ type WidgetId =
   | "ship-selector" | "ship-card" | "dps-detail"
   | "flight-dynamics-3d";
 
-// Default column assignments — 5 columns
-// Nota: "flight-dynamics-3d" NO vive en ninguna columna. Se renderiza como
-// una fila ancha (col-span 2) debajo del grid principal, porque necesita más
-// espacio horizontal que una sola columna para visualizarse bien.
-const DEFAULT_COLUMNS: WidgetId[][] = [
-  ["weapons", "missiles", "strafe-profile"],                                  // Col 1
-  ["shields", "powerplants", "coolers", "turning-profile"],                   // Col 2
-  ["quantum", "radar", "utility", "combat-summary"],                          // Col 3
-  ["power-grid", "signatures", "balance", "maneuver-radar"],                  // Col 4
-  ["ship-selector", "ship-card", "dps-detail"],                               // Col 5
+// ─── Grid dimensions ────────────────────────────────────────────────────────
+// 15 cols = 5 grupos de 3 cols (parecido al layout 5-col anterior).
+// flight-dynamics-3d ocupa w=6 (2 grupos) para los 3 viewports grandes.
+const GRID_COLS = 15;
+const ROW_HEIGHT = 18; // px por unidad de h
+const GRID_MARGIN: [number, number] = [8, 8];
+
+// Altura default por widget (en unidades de ROW_HEIGHT = 18px).
+// Son estimaciones iniciales; el usuario puede mover los paneles a su gusto.
+// Si un widget renderiza más alto que su `h`, RGL le corta con overflow: hidden
+// del lado del item. Para evitarlo, los estimamos generosos.
+const DEFAULT_LAYOUT: Layout[] = [
+  // Col 1 (x=0, w=3)
+  { i: "weapons",          x: 0,  y: 0,  w: 3, h: 11 },
+  { i: "missiles",         x: 0,  y: 11, w: 3, h: 6  },
+  { i: "strafe-profile",   x: 0,  y: 17, w: 3, h: 11 },
+  // Col 2 (x=3, w=3)
+  { i: "shields",          x: 3,  y: 0,  w: 3, h: 6  },
+  { i: "powerplants",      x: 3,  y: 6,  w: 3, h: 6  },
+  { i: "coolers",          x: 3,  y: 12, w: 3, h: 5  },
+  { i: "turning-profile",  x: 3,  y: 17, w: 3, h: 12 },
+  // Col 3 (x=6, w=3)
+  { i: "quantum",          x: 6,  y: 0,  w: 3, h: 5  },
+  { i: "radar",            x: 6,  y: 5,  w: 3, h: 5  },
+  { i: "utility",          x: 6,  y: 10, w: 3, h: 6  },
+  { i: "combat-summary",   x: 6,  y: 16, w: 3, h: 8  },
+  // Col 4 (x=9, w=3)
+  { i: "power-grid",       x: 9,  y: 0,  w: 3, h: 16 },
+  { i: "signatures",       x: 9,  y: 16, w: 3, h: 6  },
+  { i: "balance",          x: 9,  y: 22, w: 3, h: 6  },
+  { i: "maneuver-radar",   x: 9,  y: 28, w: 3, h: 12 },
+  // Col 5 (x=12, w=3)
+  { i: "ship-selector",    x: 12, y: 0,  w: 3, h: 8  },
+  { i: "ship-card",        x: 12, y: 8,  w: 3, h: 24 },
+  { i: "dps-detail",       x: 12, y: 32, w: 3, h: 15 },
+  // Flight dynamics 3D — spans 2 grupos (cols 3-4), fila inferior
+  { i: "flight-dynamics-3d", x: 6, y: 24, w: 6, h: 18 },
 ];
 
 const WIDGET_LABELS: Record<WidgetId, string> = {
@@ -106,69 +140,60 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   "flight-dynamics-3d": "FLIGHT DYNAMICS 3D",
 };
 
-const ALL_WIDGET_IDS = DEFAULT_COLUMNS.flat();
+const ALL_WIDGET_IDS: WidgetId[] = DEFAULT_LAYOUT.map((l) => l.i as WidgetId);
 
-function loadColumns(): WidgetId[][] {
+// ─── localStorage (NEW key v2 — reset total, no migra el layout viejo) ───────
+const LAYOUT_STORAGE_KEY = "al-filo-layout-v2";
+
+function loadLayout(): Layout[] {
   try {
-    const raw = localStorage.getItem("al-filo-widget-cols");
+    const raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
     if (raw) {
-      const parsed = JSON.parse(raw) as WidgetId[][];
-      const flat = parsed.flat();
-      // Validate all widgets present
-      if (ALL_WIDGET_IDS.every(w => flat.includes(w)) && parsed.length === 5) {
-        return parsed;
+      const parsed = JSON.parse(raw) as Layout[];
+      // Validar: todos los widgets deben estar presentes
+      const ids = new Set(parsed.map((l) => l.i));
+      if (ALL_WIDGET_IDS.every((id) => ids.has(id))) {
+        // Devolver merge con los defaults para tener w/h siempre correctos
+        // por si se actualizaron en código. Solo x,y vienen del localStorage.
+        return DEFAULT_LAYOUT.map((def) => {
+          const saved = parsed.find((l) => l.i === def.i);
+          return saved
+            ? { ...def, x: saved.x, y: saved.y }
+            : def;
+        });
       }
     }
   } catch {}
-  return DEFAULT_COLUMNS.map(c => [...c]);
+  return DEFAULT_LAYOUT.map((l) => ({ ...l }));
 }
 
-function saveColumns(cols: WidgetId[][]) {
-  try { localStorage.setItem("al-filo-widget-cols", JSON.stringify(cols)); } catch {}
+function saveLayout(layout: Layout[]) {
+  try {
+    // Solo persistimos i/x/y (w/h/static vienen del código).
+    const slim = layout.map(({ i, x, y }) => ({ i, x, y }));
+    localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(slim));
+  } catch {}
 }
 
-function DragWidget({ id, label, children, dragState, onDragStart, onDragOver, onDrop, onDragEnd }: {
+// ─── Widget visual wrapper (header + content) ────────────────────────────────
+// RGL maneja el drag vía className ".rgl-drag-handle" configurado en el
+// draggableHandle de GridLayout. El header es esa zona arrastrable.
+function WidgetShell({ id, label, children }: {
   id: WidgetId;
   label: string;
   children: React.ReactNode;
-  dragState: { dragging: WidgetId | null; over: WidgetId | null };
-  onDragStart: (id: WidgetId) => void;
-  onDragOver: (e: React.DragEvent, id: WidgetId) => void;
-  onDrop: (e: React.DragEvent, id: WidgetId) => void;
-  onDragEnd: () => void;
 }) {
-  const isDragging = dragState.dragging === id;
-  const isOver = dragState.over === id && dragState.dragging !== id;
-
   return (
-    <div
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", id);
-        onDragStart(id);
-      }}
-      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; onDragOver(e, id); }}
-      onDrop={(e) => { e.preventDefault(); onDrop(e, id); }}
-      onDragEnd={onDragEnd}
-      className="relative transition-all duration-150"
-      style={{
-        ...(isDragging ? { opacity: 0.35 } : {}),
-        ...(isOver ? { transform: "scale(0.97)" } : {}),
-      }}
-    >
-      {/* Drop indicator glow */}
-      {isOver && (
-        <div className="absolute inset-0 border-2 border-yellow-500/60 rounded z-20 pointer-events-none animate-pulse" />
-      )}
-      {/* Drag handle */}
-      <div className="flex items-center gap-1 px-1.5 py-[2px] bg-zinc-950/60 border border-zinc-800/30 border-b-0 cursor-grab active:cursor-grabbing select-none group rounded-t-sm">
+    <div className="h-full flex flex-col overflow-hidden" data-widget-id={id}>
+      <div className="rgl-drag-handle flex items-center gap-1 px-1.5 py-[2px] bg-zinc-950/60 border border-zinc-800/30 border-b-0 cursor-grab active:cursor-grabbing select-none group rounded-t-sm shrink-0">
         <span className="text-[7px] text-zinc-700 group-hover:text-yellow-600 transition-colors">⟲</span>
         <span className="text-[6px] font-mono text-zinc-700 tracking-[0.15em] group-hover:text-zinc-500 transition-colors uppercase">{label}</span>
         <span className="flex-1" />
         <span className="text-[7px] text-zinc-800 group-hover:text-zinc-600 transition-colors">⋮⋮</span>
       </div>
-      {children}
+      <div className="flex-1 min-h-0 overflow-auto">
+        {children}
+      </div>
     </div>
   );
 }
@@ -176,11 +201,10 @@ function DragWidget({ id, label, children, dragState, onDragStart, onDragOver, o
 // ÔöÇÔöÇ Widget renderer — maps a WidgetId to its JSX content ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 function renderWidget(
   wId: WidgetId,
-  dp: { dragState: { dragging: WidgetId | null; over: WidgetId | null }; onDragStart: (id: WidgetId) => void; onDragOver: (e: React.DragEvent, id: WidgetId) => void; onDrop: (e: React.DragEvent, id: WidgetId) => void; onDragEnd: () => void },
   ctx: any,
 ): React.ReactNode {
   const { weaponHps, missileHps, useful, store, setPickerHp, si, shipInfo, stats, flightMode, setFlightMode, fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount } = ctx;
-  const W = (children: React.ReactNode) => <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}>{children}</DragWidget>;
+  const W = (children: React.ReactNode) => <WidgetShell id={wId} label={WIDGET_LABELS[wId]}>{children}</WidgetShell>;
 
   switch (wId) {
     case "weapons":
@@ -369,60 +393,27 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const mountedRef = useRef(false);
   const overrideCountRef = useRef(0);
 
-  // ÔöÇÔöÇ Drag & Drop state (widget-level, column-aware) ÔöÇÔöÇ
-  const [columns, setColumns] = useState<WidgetId[][]>(DEFAULT_COLUMNS.map(c => [...c]));
-  const [dragState, setDragState] = useState<{ dragging: WidgetId | null; over: WidgetId | null }>({ dragging: null, over: null });
+  // ─── Dynamic grid layout (react-grid-layout) ─────────────────────────────
+  // `mounted` evita el primer render con el default antes de leer localStorage
+  // (así no parpadea y no choca con SSR hydration).
+  const [layout, setLayout] = useState<Layout[]>(() => DEFAULT_LAYOUT.map((l) => ({ ...l })));
+  const [layoutMounted, setLayoutMounted] = useState(false);
 
-  useEffect(() => { setColumns(loadColumns()); }, []);
-
-  const handleDragStart = useCallback((id: WidgetId) => {
-    setDragState({ dragging: id, over: null });
+  useEffect(() => {
+    setLayout(loadLayout());
+    setLayoutMounted(true);
   }, []);
 
-  const handleDragOver = useCallback((_e: React.DragEvent, id: WidgetId) => {
-    setDragState(prev => prev.over === id ? prev : { ...prev, over: id });
-  }, []);
-
-  const handleDrop = useCallback((_e: React.DragEvent, targetId: WidgetId) => {
-    setDragState(prev => {
-      const sourceId = prev.dragging;
-      if (sourceId && sourceId !== targetId) {
-        setColumns(prevCols => {
-          const next = prevCols.map(col => [...col]);
-          // Find source and target positions
-          let srcCol = -1, srcIdx = -1, tgtCol = -1, tgtIdx = -1;
-          for (let c = 0; c < next.length; c++) {
-            const si = next[c].indexOf(sourceId);
-            if (si !== -1) { srcCol = c; srcIdx = si; }
-            const ti = next[c].indexOf(targetId);
-            if (ti !== -1) { tgtCol = c; tgtIdx = ti; }
-          }
-          if (srcCol === -1 || tgtCol === -1) return prevCols;
-          // Remove from source
-          next[srcCol].splice(srcIdx, 1);
-          // Insert at target position
-          const newTgtIdx = next[tgtCol].indexOf(targetId);
-          if (newTgtIdx !== -1) {
-            next[tgtCol].splice(newTgtIdx, 0, sourceId);
-          } else {
-            next[tgtCol].push(sourceId);
-          }
-          saveColumns(next);
-          return next;
-        });
-      }
-      return { dragging: null, over: null };
-    });
-  }, []);
-
-  const handleDragEnd = useCallback(() => {
-    setDragState({ dragging: null, over: null });
-  }, []);
+  const handleLayoutChange = useCallback((newLayout: Layout[]) => {
+    if (!layoutMounted) return;
+    setLayout(newLayout);
+    saveLayout(newLayout);
+  }, [layoutMounted]);
 
   const handleResetLayout = useCallback(() => {
-    const reset = DEFAULT_COLUMNS.map(c => [...c]);
-    setColumns(reset);
-    saveColumns(reset);
+    const reset = DEFAULT_LAYOUT.map((l) => ({ ...l }));
+    setLayout(reset);
+    saveLayout(reset);
   }, []);
 
   useEffect(() => { if (mountedRef.current) return; mountedRef.current = true; const urlShip = searchParams.get("ship"); loadShip(urlShip || shipId, searchParams.get("build") || null); }, [shipId]);
@@ -509,6 +500,13 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const fmtDec = (v: number | null) => v != null && v > 0 ? v.toFixed(1) : "—";
   const fmtMass = (v: number | null) => { if (!v || v <= 0) return "—"; if (v >= 1000000) return (v / 1000000).toFixed(1) + "M"; if (v >= 1000) return Math.round(v / 1000).toLocaleString() + "k"; return Math.round(v).toLocaleString(); };
 
+  // Contexto compartido para renderWidget (evita pasar 15 props por llamada).
+  const ctx = {
+    weaponHps, missileHps, useful, store, setPickerHp,
+    si, shipInfo, stats, flightMode, setFlightMode,
+    fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount,
+  };
+
   return (
     <div className="space-y-2">
       {/* ÔöÇÔöÇ Top Bar ÔöÇÔöÇ */}
@@ -528,32 +526,31 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
         </div>
       </div>
 
-      {/* ÔöÇÔöÇ Main Grid — original 5-column layout, each block draggable ÔöÇÔöÇ */}
-      {/* flight-dynamics-3d se renderiza aparte como fila ancha (col-span 2) */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_1fr_1fr_340px] gap-2">
-        {columns.map((colWidgets, colIdx) => (
-          <div key={colIdx} className="space-y-2">
-            {colWidgets
-              .filter((w) => w !== "flight-dynamics-3d")
-              .map((wId) => renderWidget(wId, { dragState, onDragStart: handleDragStart, onDragOver: handleDragOver, onDrop: handleDrop, onDragEnd: handleDragEnd }, { weaponHps, missileHps, useful, store, setPickerHp, si, shipInfo, stats, flightMode, setFlightMode, fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount }))}
-          </div>
-        ))}
-        {/* FLIGHT DYNAMICS 3D — fila 2, cols 3-4 (span 2) para mejor visualización */}
-        <div className="lg:col-start-3 lg:col-span-2">
-          <div className="flex items-center gap-1 px-1.5 py-[2px] bg-zinc-950/60 border border-zinc-800/30 border-b-0 select-none rounded-t-sm">
-            <span className="text-[6px] font-mono text-zinc-700 tracking-[0.15em] uppercase">{WIDGET_LABELS["flight-dynamics-3d"]}</span>
-          </div>
-          <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
-            <ShipFlightDynamicsSingle
-              shipName={shipInfo.localizedName || shipInfo.name}
-              pitchRate={si.pitchRate}
-              yawRate={si.yawRate}
-              rollRate={si.rollRate}
-              glbUrl={shipGlbUrl(shipInfo.reference)}
-            />
-          </div>
-        </div>
-      </div>
+      {/* ── Main Grid — react-grid-layout (drag libre, compact vertical) ── */}
+      {/* layoutMounted gate: el primer render se hace con defaults, y solo
+          después de leer localStorage montamos el GridLayout real. Esto evita
+          que RGL guarde el layout default pisando lo persistido. */}
+      {layoutMounted && (
+        <ResponsiveGridLayout
+          className="layout"
+          layout={layout}
+          cols={GRID_COLS}
+          rowHeight={ROW_HEIGHT}
+          margin={GRID_MARGIN}
+          isResizable={false}
+          isDraggable={true}
+          draggableHandle=".rgl-drag-handle"
+          compactType="vertical"
+          preventCollision={false}
+          onLayoutChange={handleLayoutChange}
+        >
+          {layout.map((item) => (
+            <div key={item.i}>
+              {renderWidget(item.i as WidgetId, ctx)}
+            </div>
+          ))}
+        </ResponsiveGridLayout>
+      )}
 
       {pickerHp && <ComponentPicker hardpoint={pickerHp} currentItemId={getEffectiveItem(pickerHp.id)?.id ?? null} onSelect={handleSelect} onClear={handleClear} onClose={() => setPickerHp(null)} />}
 

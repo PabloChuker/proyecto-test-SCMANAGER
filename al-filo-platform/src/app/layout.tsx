@@ -2,6 +2,11 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ReferralTracker from "@/components/streamers/ReferralTracker";
+// react-grid-layout base CSS (draggable items, placeholders, etc).
+// En Next.js App Router solo el root layout puede importar CSS global,
+// así que lo hacemos acá en vez de con @import desde globals.css.
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
 import "./globals.css";
 
 const geistSans = Geist({
