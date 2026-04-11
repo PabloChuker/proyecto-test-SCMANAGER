@@ -110,8 +110,8 @@ const GRID_ROWS           = 100;
 const ROW_HEIGHT_RATIO    = 0.25;
 const ANCHOR_OFFSET_RATIO = 0.05;
 const MARGIN_RATIO        = 0.1;        // gap total entre cards = 0.1 * UNIT
-const MIN_UNIT_PX         = 160;        // clamp inferior del UNIT
-const MAX_UNIT_PX         = 260;        // clamp superior del UNIT (compacto: todo entra en 1 pantalla)
+const MIN_UNIT_PX         = 240;        // clamp inferior del UNIT (+50% desde 160)
+const MAX_UNIT_PX         = 390;        // clamp superior del UNIT (+50% desde 260)
 
 // Ancho de card en columnas: 1 o 2. (Max permitido por la spec = 2.)
 // v8: TODAS las cards son 1-col para que el layout categorizado 5-col quede
