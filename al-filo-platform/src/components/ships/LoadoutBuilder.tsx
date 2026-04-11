@@ -88,48 +88,42 @@ type WidgetId =
   | "flight-dynamics-3d";
 
 // ─── Grid dimensions ────────────────────────────────────────────────────────
-// Grilla estandarizada: 5 "columnas visuales" (1 unidad cada una) subdivididas
-// en 4 subcolumnas de 0.25 cada una → 20 cols totales.
-// Cada sub-celda es CUADRADA: rowHeight se calcula dinámicamente = colWidth.
-// Así un widget w=4 h=4 es un cuadrado de 1x1 unidades visuales.
-// Widgets normales: w=4 (1 unidad). flight-dynamics-3d: w=8 (2 unidades).
-// El margin entre items define el "aire" entre las cards y las líneas
-// imaginarias del grid, quedando visualmente en ~0.9 de la unidad.
+// Zona "viva" fija: 5 columnas visuales (unidades) subdivididas en 4 subcols
+// de 0.25 c/u → 20 cols totales. Cada sub-celda es CUADRADA (rowHeight=colWidth
+// dinámico vía ResizeObserver), así la subunidad de 0.25 mide lo mismo en
+// ancho y alto. El margin (12px) deja "aire" entre cada card y sus líneas
+// imaginarias del grid, visualmente ~0.9 por unidad.
+// Anchos fijos en código: widgets normales w=4 (1 unidad), flight-dynamics w=8.
+// Altos dinámicos: se calculan por nave según el contenido de cada widget,
+// siempre en múltiplos enteros de la subunidad (0.25).
 const GRID_COLS = 20;
 const GRID_MARGIN: [number, number] = [12, 12];
 const MIN_ROW_HEIGHT = 32; // piso para viewports muy chicos
 
-// Layout default — x,y,w,h en unidades de 0.25.
-// Cada "columna visual" del layout 5-col anterior equivale a 4 subcolumnas:
-//   col 1: x=0  | col 2: x=4 | col 3: x=8 | col 4: x=12 | col 5: x=16
-// Las alturas son múltiplos enteros de la subunidad (cells cuadradas).
-const DEFAULT_LAYOUT: Layout[] = [
-  // Col 1 (x=0, w=4) — armamento
-  { i: "weapons",          x: 0,  y: 0,  w: 4, h: 4 },
-  { i: "missiles",         x: 0,  y: 4,  w: 4, h: 2 },
-  { i: "strafe-profile",   x: 0,  y: 6,  w: 4, h: 4 },
-  // Col 2 (x=4, w=4) — defensa y maniobra
-  { i: "shields",          x: 4,  y: 0,  w: 4, h: 2 },
-  { i: "powerplants",      x: 4,  y: 2,  w: 4, h: 2 },
-  { i: "coolers",          x: 4,  y: 4,  w: 4, h: 2 },
-  { i: "turning-profile",  x: 4,  y: 6,  w: 4, h: 4 },
-  // Col 3 (x=8, w=4) — módulos
-  { i: "quantum",          x: 8,  y: 0,  w: 4, h: 2 },
-  { i: "radar",            x: 8,  y: 2,  w: 4, h: 2 },
-  { i: "utility",          x: 8,  y: 4,  w: 4, h: 2 },
-  { i: "combat-summary",   x: 8,  y: 6,  w: 4, h: 3 },
-  // Col 4 (x=12, w=4) — power
-  { i: "power-grid",       x: 12, y: 0,  w: 4, h: 5 },
-  { i: "signatures",       x: 12, y: 5,  w: 4, h: 2 },
-  { i: "balance",          x: 12, y: 7,  w: 4, h: 2 },
-  { i: "maneuver-radar",   x: 12, y: 9,  w: 4, h: 4 },
-  // Col 5 (x=16, w=4) — ship info + DPS
-  { i: "ship-selector",    x: 16, y: 0,  w: 4, h: 3 },
-  { i: "ship-card",        x: 16, y: 3,  w: 4, h: 8 },
-  { i: "dps-detail",       x: 16, y: 11, w: 4, h: 5 },
-  // Flight dynamics 3D — 2 unidades de ancho (w=8), fila inferior cols 3-4
-  { i: "flight-dynamics-3d", x: 8, y: 9, w: 8, h: 6 },
+// Widget widths (constantes — los altos son dinámicos por nave)
+const WIDGET_W: Record<WidgetId, number> = {
+  weapons: 4, missiles: 4, "strafe-profile": 4, "turning-profile": 4,
+  shields: 4, powerplants: 4, coolers: 4, "maneuver-radar": 4,
+  quantum: 4, radar: 4, utility: 4, "combat-summary": 4,
+  "power-grid": 4, signatures: 4, balance: 4,
+  "ship-selector": 4, "ship-card": 4, "dps-detail": 4,
+  "flight-dynamics-3d": 8,
+};
+
+// Layout por columnas — réplica de la distribución 5-col original.
+// Cada sub-array representa los widgets apilados verticalmente en esa columna.
+// Las alturas se calculan dinámicamente por nave; acá sólo definimos orden y
+// en qué "columna visual" va cada widget.
+const COLUMN_LAYOUT: { x: number; widgets: WidgetId[] }[] = [
+  { x: 0,  widgets: ["weapons", "missiles", "strafe-profile"] },
+  { x: 4,  widgets: ["shields", "powerplants", "coolers", "turning-profile"] },
+  { x: 8,  widgets: ["quantum", "radar", "utility", "combat-summary"] },
+  { x: 12, widgets: ["power-grid", "signatures", "balance", "maneuver-radar"] },
+  { x: 16, widgets: ["ship-selector", "ship-card", "dps-detail"] },
 ];
+
+// flight-dynamics-3d (w=8) va en la fila inferior bajo cols 3+4 (x=8)
+const WIDE_WIDGETS: WidgetId[] = ["flight-dynamics-3d"];
 
 const WIDGET_LABELS: Record<WidgetId, string> = {
   weapons: "WEAPONS", missiles: "MISSILES", "strafe-profile": "STRAFE PROFILE", "turning-profile": "TURNING PROFILES",
@@ -140,38 +134,111 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   "flight-dynamics-3d": "FLIGHT DYNAMICS 3D",
 };
 
-const ALL_WIDGET_IDS: WidgetId[] = DEFAULT_LAYOUT.map((l) => l.i as WidgetId);
+const ALL_WIDGET_IDS: WidgetId[] = [
+  ...COLUMN_LAYOUT.flatMap((c) => c.widgets),
+  ...WIDE_WIDGETS,
+];
 
-// ─── localStorage (NEW key v2 — reset total, no migra el layout viejo) ───────
-const LAYOUT_STORAGE_KEY = "al-filo-layout-v2";
+// ─── Dynamic height computation ──────────────────────────────────────────────
+// Cada widget tiene un alto en px (estimado según su contenido real para la
+// nave seleccionada). Luego convertimos a subunidades enteras del grid:
+//   h = ceil((contentPx + marginY) / (rowHeight + marginY))
+// Así el alto del widget en el DOM (h*rowHeight + (h-1)*marginY) es siempre
+// ≥ contentPx, garantizando que el contenido entre sin cortarse, y snapea
+// a múltiplos exactos de la subunidad.
+function widgetContentHeightPx(
+  wId: WidgetId,
+  counts: {
+    weapons: number; missiles: number;
+    shields: number; powerplants: number; coolers: number;
+    quantum: number; radar: number; utility: number;
+  },
+): number {
+  const HDR = 22;        // WidgetShell drag handle bar
+  const GROUP_HDR = 28;  // HpGroup title bar
+  const SLOT = 38;       // HardpointSlot row (avg, sin children)
+  const PAD = 10;
+  const hpGroupPx = (n: number) => HDR + GROUP_HDR + Math.max(1, n) * SLOT + PAD;
 
-function loadLayout(): Layout[] {
-  try {
-    const raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Layout[];
-      // Validar: todos los widgets deben estar presentes
-      const ids = new Set(parsed.map((l) => l.i));
-      if (ALL_WIDGET_IDS.every((id) => ids.has(id))) {
-        // Devolver merge con los defaults para tener w/h siempre correctos
-        // por si se actualizaron en código. Solo x,y vienen del localStorage.
-        return DEFAULT_LAYOUT.map((def) => {
-          const saved = parsed.find((l) => l.i === def.i);
-          return saved
-            ? { ...def, x: saved.x, y: saved.y }
-            : def;
-        });
-      }
-    }
-  } catch {}
-  return DEFAULT_LAYOUT.map((l) => ({ ...l }));
+  switch (wId) {
+    case "weapons":          return hpGroupPx(counts.weapons);
+    case "missiles":         return hpGroupPx(counts.missiles);
+    case "shields":          return hpGroupPx(counts.shields);
+    case "powerplants":      return hpGroupPx(counts.powerplants);
+    case "coolers":          return hpGroupPx(counts.coolers);
+    case "quantum":          return hpGroupPx(counts.quantum);
+    case "radar":            return hpGroupPx(counts.radar);
+    case "utility":          return hpGroupPx(counts.utility);
+    case "combat-summary":   return HDR + 160;
+    case "power-grid":       return HDR + 340;
+    case "signatures":       return HDR + 90;
+    case "balance":          return HDR + 110;
+    case "strafe-profile":   return HDR + 240;
+    case "turning-profile":  return HDR + 260;
+    case "maneuver-radar":   return HDR + 260;
+    case "ship-selector":    return HDR + 150;
+    case "ship-card":        return HDR + 430;
+    case "dps-detail":       return HDR + 280;
+    case "flight-dynamics-3d": return HDR + 360;
+  }
 }
 
-function saveLayout(layout: Layout[]) {
+function pxToSubunits(px: number, rowHeight: number, marginY: number): number {
+  const denom = rowHeight + marginY;
+  if (denom <= 0) return 1;
+  return Math.max(1, Math.ceil((px + marginY) / denom));
+}
+
+// Construye el layout default packeado en la distribución 5-col original,
+// usando los altos dinámicos. Sólo incluye widgets visibles (aquellos con
+// contenido para la nave actual).
+function buildDefaultPositions(
+  visible: Set<WidgetId>,
+  heights: Record<WidgetId, number>,
+): Array<{ i: WidgetId; x: number; y: number }> {
+  const result: Array<{ i: WidgetId; x: number; y: number }> = [];
+  const colBottoms: Record<number, number> = {};
+
+  for (const col of COLUMN_LAYOUT) {
+    let y = 0;
+    for (const wId of col.widgets) {
+      if (!visible.has(wId)) continue;
+      result.push({ i: wId, x: col.x, y });
+      y += heights[wId];
+    }
+    colBottoms[col.x] = y;
+  }
+
+  // flight-dynamics-3d: spans col3+col4, placed at max bottom of those cols
+  if (visible.has("flight-dynamics-3d")) {
+    const fy = Math.max(colBottoms[8] ?? 0, colBottoms[12] ?? 0);
+    result.push({ i: "flight-dynamics-3d", x: 8, y: fy });
+  }
+  return result;
+}
+
+// ─── localStorage (sólo guardamos i/x/y — los altos siempre se recalculan) ──
+const LAYOUT_STORAGE_KEY = "al-filo-layout-v3";
+
+type SavedPos = { i: string; x: number; y: number };
+
+function loadSavedPositions(): SavedPos[] | null {
   try {
-    // Solo persistimos i/x/y (w/h/static vienen del código).
-    const slim = layout.map(({ i, x, y }) => ({ i, x, y }));
-    localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(slim));
+    const raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return parsed
+      .filter((p) => p && typeof p.i === "string" && typeof p.x === "number" && typeof p.y === "number")
+      .map((p) => ({ i: p.i, x: p.x, y: p.y }));
+  } catch {
+    return null;
+  }
+}
+
+function savePositions(positions: SavedPos[]) {
+  try {
+    localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(positions));
   } catch {}
 }
 
@@ -394,21 +461,23 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const overrideCountRef = useRef(0);
 
   // ─── Dynamic grid layout (react-grid-layout) ─────────────────────────────
-  // layoutMounted evita renderizar con el default antes de leer localStorage
-  // (así no parpadea y no choca con SSR hydration).
-  const [layout, setLayout] = useState<Layout[]>(() => DEFAULT_LAYOUT.map((l) => ({ ...l })));
+  // Estrategia:
+  //  1. Medimos el ancho del contenedor con ResizeObserver → rowHeight (celdas
+  //     cuadradas, subunidad de 0.25 igual en ancho y alto).
+  //  2. Calculamos altos por widget (h en subunidades enteras) según el
+  //     contenido real de la nave seleccionada (weaponHps, etc).
+  //  3. El layout final = posiciones (x,y) del usuario (localStorage) o
+  //     defaults packeados en la distribución 5-col + altos dinámicos.
+  //  4. Persistimos sólo {i,x,y} en localStorage — los altos siempre se
+  //     recalculan en runtime para adaptarse a la nave activa.
+  const [savedPositions, setSavedPositions] = useState<SavedPos[] | null>(null);
   const [layoutMounted, setLayoutMounted] = useState(false);
 
-  // Medimos el ancho del contenedor con ResizeObserver para calcular un
-  // rowHeight dinámico que haga cada celda perfectamente cuadrada:
-  //   colWidth = (width - margin * (cols - 1)) / cols
-  //   rowHeight = colWidth  (celdas cuadradas → la subunidad de 0.25 es igual
-  //                           en ancho y alto, como pidió el diseño).
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [gridWidth, setGridWidth] = useState<number>(1400);
 
   useEffect(() => {
-    setLayout(loadLayout());
+    setSavedPositions(loadSavedPositions());
     setLayoutMounted(true);
   }, []);
 
@@ -430,16 +499,16 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     return Math.max(colWidth, MIN_ROW_HEIGHT);
   }, [gridWidth]);
 
-  const handleLayoutChange = useCallback((newLayout: Layout[]) => {
+  const handleDragStop = useCallback((newLayout: Layout[]) => {
     if (!layoutMounted) return;
-    setLayout(newLayout);
-    saveLayout(newLayout);
+    const slim: SavedPos[] = newLayout.map((item) => ({ i: item.i, x: item.x, y: item.y }));
+    setSavedPositions(slim);
+    savePositions(slim);
   }, [layoutMounted]);
 
   const handleResetLayout = useCallback(() => {
-    const reset = DEFAULT_LAYOUT.map((l) => ({ ...l }));
-    setLayout(reset);
-    saveLayout(reset);
+    setSavedPositions(null);
+    try { localStorage.removeItem(LAYOUT_STORAGE_KEY); } catch {}
   }, []);
 
   useEffect(() => { if (mountedRef.current) return; mountedRef.current = true; const urlShip = searchParams.get("ship"); loadShip(urlShip || shipId, searchParams.get("build") || null); }, [shipId]);
@@ -533,6 +602,85 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount,
   };
 
+  // ─── Visibilidad por widget (ocultamos los que no tienen contenido) ──────
+  const shieldCount = useful.filter((hp) => hp.resolvedCategory === "SHIELD").length;
+  const powerPlantCount = useful.filter((hp) => hp.resolvedCategory === "POWER_PLANT").length;
+  const coolerCount = useful.filter((hp) => hp.resolvedCategory === "COOLER").length;
+  const quantumCount = useful.filter((hp) => hp.resolvedCategory === "QUANTUM_DRIVE").length;
+  const radarCount = useful.filter((hp) => hp.resolvedCategory === "RADAR").length;
+  const utilityCount = useful.filter((hp) => hp.resolvedCategory === "UTILITY" || hp.resolvedCategory === "MINING").length;
+
+  const visibleIds = useMemo<Set<WidgetId>>(() => {
+    const s = new Set<WidgetId>();
+    for (const id of ALL_WIDGET_IDS) {
+      if (id === "weapons"      && weaponHps.length === 0) continue;
+      if (id === "missiles"     && missileHps.length === 0) continue;
+      if (id === "shields"      && shieldCount === 0) continue;
+      if (id === "powerplants"  && powerPlantCount === 0) continue;
+      if (id === "coolers"      && coolerCount === 0) continue;
+      if (id === "quantum"      && quantumCount === 0) continue;
+      if (id === "radar"        && radarCount === 0) continue;
+      if (id === "utility"      && utilityCount === 0) continue;
+      s.add(id);
+    }
+    return s;
+  }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
+
+  // ─── Altos dinámicos por widget (subunidades enteras) ────────────────────
+  const widgetHeights = useMemo<Record<WidgetId, number>>(() => {
+    const counts = {
+      weapons: weaponHps.length,
+      missiles: missileHps.length,
+      shields: shieldCount,
+      powerplants: powerPlantCount,
+      coolers: coolerCount,
+      quantum: quantumCount,
+      radar: radarCount,
+      utility: utilityCount,
+    };
+    const out = {} as Record<WidgetId, number>;
+    for (const id of ALL_WIDGET_IDS) {
+      out[id] = pxToSubunits(
+        widgetContentHeightPx(id, counts),
+        rowHeight,
+        GRID_MARGIN[1],
+      );
+    }
+    return out;
+  }, [rowHeight, weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
+
+  // ─── Layout final = posiciones (user o default) + altos dinámicos ───────
+  const layout = useMemo<Layout[]>(() => {
+    if (!layoutMounted) return [];
+
+    // Si el usuario tiene posiciones guardadas, las usamos para los widgets
+    // que hayan sido guardados; el resto usa defaults packeados.
+    const defaults = buildDefaultPositions(visibleIds, widgetHeights);
+    const positions = new Map<string, { x: number; y: number }>();
+    for (const d of defaults) positions.set(d.i, { x: d.x, y: d.y });
+
+    if (savedPositions && savedPositions.length > 0) {
+      for (const p of savedPositions) {
+        if (visibleIds.has(p.i as WidgetId)) {
+          positions.set(p.i, { x: p.x, y: p.y });
+        }
+      }
+    }
+
+    const result: Layout[] = [];
+    for (const id of Array.from(visibleIds)) {
+      const pos = positions.get(id) ?? { x: 0, y: 0 };
+      result.push({
+        i: id,
+        x: pos.x,
+        y: pos.y,
+        w: WIDGET_W[id],
+        h: widgetHeights[id],
+      });
+    }
+    return result;
+  }, [layoutMounted, savedPositions, visibleIds, widgetHeights]);
+
   return (
     <div className="space-y-2">
       {/* ÔöÇÔöÇ Top Bar ÔöÇÔöÇ */}
@@ -558,7 +706,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
           visualmente cuadrada. El gate `layoutMounted` evita pisar el layout
           persistido con los defaults en el primer render. */}
       <div ref={gridContainerRef} className="w-full">
-        {layoutMounted && gridWidth > 0 && (
+        {layoutMounted && gridWidth > 0 && layout.length > 0 && (
           <GridLayout
             className="layout"
             layout={layout}
@@ -572,7 +720,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
             draggableHandle=".rgl-drag-handle"
             compactType="vertical"
             preventCollision={false}
-            onLayoutChange={handleLayoutChange}
+            onDragStop={handleDragStop}
           >
             {layout.map((item) => (
               <div key={item.i}>
