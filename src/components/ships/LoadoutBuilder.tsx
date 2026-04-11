@@ -317,6 +317,11 @@ function savePositions(positions: SavedPos[]) {
 // selector) para que el dropdown pueda invadir los vecinos sin clippear.
 // Las alturas son 100% estáticas (derivadas de getWidgetBlocks × UNIT) — no
 // medimos el contenido en runtime porque eso crea loops con ResizeObserver.
+// WidgetShell — content-sized card (v10). La card crece con su contenido: el
+// outer contenedor NO tiene altura fija. El header se mantiene compacto y el
+// children renderiza en su tamaño natural. `overflow="visible"` sólo aplica a
+// widgets que abren popups (ship-selector) para que los dropdowns invadan
+// vecinos sin clip.
 function WidgetShell({ id, label, children, overflow = "hidden" }: {
   id: WidgetId;
   label: string;
@@ -324,16 +329,13 @@ function WidgetShell({ id, label, children, overflow = "hidden" }: {
   overflow?: "hidden" | "visible";
 }) {
   const outerOverflow = overflow === "visible" ? "overflow-visible" : "overflow-hidden";
-  const innerOverflow = overflow === "visible" ? "overflow-visible" : "overflow-hidden";
   return (
-    <div className={`h-full flex flex-col ${outerOverflow}`} data-widget-id={id}>
-      <div className="rgl-drag-handle flex items-center gap-1 px-1.5 py-[2px] bg-zinc-950/60 border border-zinc-800/30 border-b-0 cursor-grab active:cursor-grabbing select-none group rounded-t-sm shrink-0">
-        <span className="text-[7px] text-zinc-700 group-hover:text-yellow-600 transition-colors">⟲</span>
+    <div className={`flex flex-col ${outerOverflow} rounded-sm`} data-widget-id={id}>
+      <div className="flex items-center gap-1 px-1.5 py-[2px] bg-zinc-950/60 border border-zinc-800/30 border-b-0 select-none group rounded-t-sm shrink-0">
         <span className="text-[6px] font-mono text-zinc-700 tracking-[0.15em] group-hover:text-zinc-500 transition-colors uppercase">{label}</span>
         <span className="flex-1" />
-        <span className="text-[7px] text-zinc-800 group-hover:text-zinc-600 transition-colors">⋮⋮</span>
       </div>
-      <div className={`flex-1 min-h-0 ${innerOverflow}`}>
+      <div className="min-h-0">
         {children}
       </div>
     </div>
@@ -828,6 +830,21 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     return (maxBottomRow * ROW_HEIGHT_RATIO + ANCHOR_OFFSET_RATIO) * unit + 16;
   }, [layout, gridWidth]);
 
+  // ─── Column buckets (v10 — CSS-driven auto-height layout) ────────────────
+  // En v10 dejamos caer el absolute-positioning con UNIT y pasamos a un CSS
+  // grid de 5 columnas (3 lanes 1-col + 1 sidebar 2-col). Cada tarjeta crece
+  // con su contenido. Las categorías siguen declaradas en COLUMN_PLAN_1COL /
+  // COLUMN_PLAN_2COL, esto sólo las filtra por visibilidad.
+  const columnBuckets = useMemo(() => {
+    const bucket = (ids: WidgetId[]) => ids.filter((id) => visibleIds.has(id));
+    return {
+      col0: bucket(COLUMN_PLAN_1COL[0]),
+      col1: bucket(COLUMN_PLAN_1COL[1]),
+      col2: bucket(COLUMN_PLAN_1COL[2]),
+      sidebar: bucket(COLUMN_PLAN_2COL),
+    };
+  }, [visibleIds]);
+
   const { user } = useAuth();
   const supabaseClient = createClient();
 
@@ -925,50 +942,42 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
         </div>
       </div>
 
-      {/* ── Main Grid — UNIT-based geometric layout + snap drag ── */}
-      {/* gridContainerRef mide el ancho real del contenedor (vía ResizeObserver).
-          Cada widget se renderiza como un <div absolute> con sus px derivados
-          de (col, row, widthType, blocks) y UNIT. El handler onMouseDown
-          detecta clicks sobre .rgl-drag-handle y arranca un drag que snapea
-          continuamente a la celda más cercana de la grilla 5×N. */}
-      <div
-        ref={gridContainerRef}
-        className="w-full relative mx-auto"
-        style={{
-          minHeight: totalHeight > 0 ? totalHeight : undefined,
-          maxWidth: GRID_COLUMNS * MAX_UNIT_PX,
-        }}
-        onMouseDown={handleContainerMouseDown}
-      >
-        {layoutMounted && gridWidth > 0 && layout.map((item) => {
-          const isDragging = dragWidget === item.id;
-          // z-index dinámico: último tocado > previos tocados > default.
-          // ship-selector se queda arriba siempre (dropdown), dragging por encima de todo.
-          const touchedIdx = zOrder.indexOf(item.id);
-          const dynZ = touchedIdx >= 0 ? 30 + touchedIdx : 10;
-          const zIndex = isDragging
-            ? 1000
-            : item.id === "ship-selector"
-              ? 500
-              : dynZ;
-          return (
-            <div
-              key={item.id}
-              style={{
-                position: "absolute",
-                left: item.x,
-                top: item.y,
-                width: item.w,
-                height: item.h,
-                zIndex,
-                transition: isDragging ? "none" : "left 120ms ease, top 120ms ease",
-                willChange: isDragging ? "left, top" : undefined,
-              }}
-            >
-              {renderWidget(item.id, ctx)}
-            </div>
-          );
-        })}
+      {/* ── Main Grid — CSS column layout (v10) ── */}
+      {/* 5 columnas: 3 lanes 1-col para widgets categorizados + 1 sidebar 2-col
+          para los widgets "hero" (search, ship card, flight dynamics 3D). Cada
+          tarjeta crece con su contenido vía `h-auto`; los gaps son flex-gap en
+          el flex-col de cada columna. El outer limita el ancho total en ultra-
+          wide para que las cards 1-col no se estiren a >400px. */}
+      <div className="w-full mx-auto" style={{ maxWidth: 1900 }}>
+        <div
+          className="grid gap-2"
+          style={{ gridTemplateColumns: "repeat(5, minmax(0, 1fr))" }}
+        >
+          {/* Col 0 — OFFENSE */}
+          <div className="flex flex-col gap-2 min-w-0">
+            {columnBuckets.col0.map((id) => (
+              <div key={id}>{renderWidget(id, ctx)}</div>
+            ))}
+          </div>
+          {/* Col 1 — DEFENSE & POWER */}
+          <div className="flex flex-col gap-2 min-w-0">
+            {columnBuckets.col1.map((id) => (
+              <div key={id}>{renderWidget(id, ctx)}</div>
+            ))}
+          </div>
+          {/* Col 2 — NAV, SENSORS & FLIGHT STATS */}
+          <div className="flex flex-col gap-2 min-w-0">
+            {columnBuckets.col2.map((id) => (
+              <div key={id}>{renderWidget(id, ctx)}</div>
+            ))}
+          </div>
+          {/* Sidebar — SHIP INFO (2-col wide, cols 4-5) */}
+          <div className="col-span-2 flex flex-col gap-2 min-w-0">
+            {columnBuckets.sidebar.map((id) => (
+              <div key={id}>{renderWidget(id, ctx)}</div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {pickerHp && <ComponentPicker hardpoint={pickerHp} currentItemId={getEffectiveItem(pickerHp.id)?.id ?? null} onSelect={handleSelect} onClear={handleClear} onClose={() => setPickerHp(null)} />}
