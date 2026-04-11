@@ -54,6 +54,14 @@ export interface RotationModuleProps {
   compact?: boolean;
 }
 
+// Conversión °/s → rad/s. La rotación visual usa el dato real de la nave.
+// Aplicamos un factor de 0.5 para que un ship tipo Gladius con roll 190°/s
+// (~3.3 rad/s = una revolución cada ~1.9s) siga siendo legible sin marear.
+const DEG2RAD = Math.PI / 180;
+const VISUAL_SPEED_FACTOR = 0.5;
+// Fallback si el rate viene null/0: mantenemos la velocidad visual anterior.
+const FALLBACK_SPEED_RADS = 0.78;
+
 export function RotationModule({
   axis,
   rate,
@@ -63,6 +71,12 @@ export function RotationModule({
 }: RotationModuleProps) {
   const meta    = AXIS_META[axis];
   const canvasH = compact ? "h-[90px]" : "h-[140px]";
+
+  // Velocidad de animación derivada del rate real de la nave (°/s → rad/s)
+  const animationSpeed =
+    rate != null && rate > 0
+      ? rate * DEG2RAD * VISUAL_SPEED_FACTOR
+      : FALLBACK_SPEED_RADS;
 
   return (
     <div className="flex flex-col gap-1.5 min-w-0">
@@ -94,7 +108,7 @@ export function RotationModule({
         <ShipViewer3D
           rotationAxis={axis}
           animate
-          animationSpeed={0.78}
+          animationSpeed={animationSpeed}
           shipColor={shipColor}
           glbUrl={glbUrl}
         />

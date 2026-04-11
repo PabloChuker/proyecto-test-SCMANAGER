@@ -23,16 +23,34 @@ const GLB_EXCLUDED = new Set<string>([
   // Mantener vacío por ahora; la mayoría de las naves del catálogo tienen GLB.
 ]);
 
+// Warning one-shot si NEXT_PUBLIC_GLB_BASE_URL no está en el bundle.
+// Next.js inlinea las vars NEXT_PUBLIC_* en compile-time, así que si esta
+// está undefined lo más probable es que el dev server no haya reiniciado
+// después de agregarla al .env.
+let baseUrlWarned = false;
+
+function getBaseUrl(): string | null {
+  const base = process.env.NEXT_PUBLIC_GLB_BASE_URL;
+  if (!base) {
+    if (!baseUrlWarned && typeof window !== "undefined") {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[shipGlb] NEXT_PUBLIC_GLB_BASE_URL no está definido en el bundle. " +
+        "Reiniciá el dev server (Ctrl+C + npm run dev) y borrá .next/ si persiste."
+      );
+      baseUrlWarned = true;
+    }
+    return null;
+  }
+  return base.endsWith("/") ? base.slice(0, -1) : base;
+}
+
 export function shipGlbUrl(reference: string | null | undefined): string | null {
   if (!reference) return null;
   if (GLB_EXCLUDED.has(reference)) return null;
-
-  const base = process.env.NEXT_PUBLIC_GLB_BASE_URL;
+  const base = getBaseUrl();
   if (!base) return null;
-
-  // Eliminar trailing slash si existe para componer limpio
-  const cleanBase = base.endsWith("/") ? base.slice(0, -1) : base;
-  return `${cleanBase}/EntityClassDefinition.${reference}.glb`;
+  return `${base}/EntityClassDefinition.${reference}.glb`;
 }
 
 /**
@@ -42,8 +60,7 @@ export function shipGlbUrl(reference: string | null | undefined): string | null 
  */
 export function shipGlbUrlFromKey(glbKey: string | null | undefined): string | null {
   if (!glbKey) return null;
-  const base = process.env.NEXT_PUBLIC_GLB_BASE_URL;
+  const base = getBaseUrl();
   if (!base) return null;
-  const cleanBase = base.endsWith("/") ? base.slice(0, -1) : base;
-  return `${cleanBase}/EntityClassDefinition.${glbKey}.glb`;
+  return `${base}/EntityClassDefinition.${glbKey}.glb`;
 }
