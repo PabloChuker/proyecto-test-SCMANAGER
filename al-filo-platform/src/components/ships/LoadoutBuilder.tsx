@@ -524,6 +524,86 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const cmDecoyCount = cmHps.filter(hp => hp.hardpointName.toLowerCase().includes("decoy")).length;
   const cmNoiseCount = cmHps.filter(hp => hp.hardpointName.toLowerCase().includes("noise")).length;
 
+  // ─── Visibilidad por widget (ocultamos los que no tienen contenido) ──────
+  // IMPORTANTE: estos hooks deben ir ANTES de los early returns para no
+  // violar las Rules of Hooks de React (si no, cuando `isLoading`/`!shipInfo`
+  // pasa de true→false el número de hooks cambia y React crashea).
+  const shieldCount = useful.filter((hp) => hp.resolvedCategory === "SHIELD").length;
+  const powerPlantCount = useful.filter((hp) => hp.resolvedCategory === "POWER_PLANT").length;
+  const coolerCount = useful.filter((hp) => hp.resolvedCategory === "COOLER").length;
+  const quantumCount = useful.filter((hp) => hp.resolvedCategory === "QUANTUM_DRIVE").length;
+  const radarCount = useful.filter((hp) => hp.resolvedCategory === "RADAR").length;
+  const utilityCount = useful.filter((hp) => hp.resolvedCategory === "UTILITY" || hp.resolvedCategory === "MINING").length;
+
+  const visibleIds = useMemo<Set<WidgetId>>(() => {
+    const s = new Set<WidgetId>();
+    for (const id of ALL_WIDGET_IDS) {
+      if (id === "weapons"      && weaponHps.length === 0) continue;
+      if (id === "missiles"     && missileHps.length === 0) continue;
+      if (id === "shields"      && shieldCount === 0) continue;
+      if (id === "powerplants"  && powerPlantCount === 0) continue;
+      if (id === "coolers"      && coolerCount === 0) continue;
+      if (id === "quantum"      && quantumCount === 0) continue;
+      if (id === "radar"        && radarCount === 0) continue;
+      if (id === "utility"      && utilityCount === 0) continue;
+      s.add(id);
+    }
+    return s;
+  }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
+
+  // ─── Altos dinámicos por widget (subunidades enteras) ────────────────────
+  const widgetHeights = useMemo<Record<WidgetId, number>>(() => {
+    const counts = {
+      weapons: weaponHps.length,
+      missiles: missileHps.length,
+      shields: shieldCount,
+      powerplants: powerPlantCount,
+      coolers: coolerCount,
+      quantum: quantumCount,
+      radar: radarCount,
+      utility: utilityCount,
+    };
+    const out = {} as Record<WidgetId, number>;
+    for (const id of ALL_WIDGET_IDS) {
+      out[id] = pxToSubunits(
+        widgetContentHeightPx(id, counts),
+        rowHeight,
+        GRID_MARGIN[1],
+      );
+    }
+    return out;
+  }, [rowHeight, weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
+
+  // ─── Layout final = posiciones (user o default) + altos dinámicos ───────
+  const layout = useMemo<Layout[]>(() => {
+    if (!layoutMounted) return [];
+
+    const defaults = buildDefaultPositions(visibleIds, widgetHeights);
+    const positions = new Map<string, { x: number; y: number }>();
+    for (const d of defaults) positions.set(d.i, { x: d.x, y: d.y });
+
+    if (savedPositions && savedPositions.length > 0) {
+      for (const p of savedPositions) {
+        if (visibleIds.has(p.i as WidgetId)) {
+          positions.set(p.i, { x: p.x, y: p.y });
+        }
+      }
+    }
+
+    const result: Layout[] = [];
+    for (const id of Array.from(visibleIds)) {
+      const pos = positions.get(id) ?? { x: 0, y: 0 };
+      result.push({
+        i: id,
+        x: pos.x,
+        y: pos.y,
+        w: WIDGET_W[id],
+        h: widgetHeights[id],
+      });
+    }
+    return result;
+  }, [layoutMounted, savedPositions, visibleIds, widgetHeights]);
+
   const { user } = useAuth();
   const supabaseClient = createClient();
 
@@ -601,85 +681,6 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     si, shipInfo, stats, flightMode, setFlightMode,
     fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount,
   };
-
-  // ─── Visibilidad por widget (ocultamos los que no tienen contenido) ──────
-  const shieldCount = useful.filter((hp) => hp.resolvedCategory === "SHIELD").length;
-  const powerPlantCount = useful.filter((hp) => hp.resolvedCategory === "POWER_PLANT").length;
-  const coolerCount = useful.filter((hp) => hp.resolvedCategory === "COOLER").length;
-  const quantumCount = useful.filter((hp) => hp.resolvedCategory === "QUANTUM_DRIVE").length;
-  const radarCount = useful.filter((hp) => hp.resolvedCategory === "RADAR").length;
-  const utilityCount = useful.filter((hp) => hp.resolvedCategory === "UTILITY" || hp.resolvedCategory === "MINING").length;
-
-  const visibleIds = useMemo<Set<WidgetId>>(() => {
-    const s = new Set<WidgetId>();
-    for (const id of ALL_WIDGET_IDS) {
-      if (id === "weapons"      && weaponHps.length === 0) continue;
-      if (id === "missiles"     && missileHps.length === 0) continue;
-      if (id === "shields"      && shieldCount === 0) continue;
-      if (id === "powerplants"  && powerPlantCount === 0) continue;
-      if (id === "coolers"      && coolerCount === 0) continue;
-      if (id === "quantum"      && quantumCount === 0) continue;
-      if (id === "radar"        && radarCount === 0) continue;
-      if (id === "utility"      && utilityCount === 0) continue;
-      s.add(id);
-    }
-    return s;
-  }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
-
-  // ─── Altos dinámicos por widget (subunidades enteras) ────────────────────
-  const widgetHeights = useMemo<Record<WidgetId, number>>(() => {
-    const counts = {
-      weapons: weaponHps.length,
-      missiles: missileHps.length,
-      shields: shieldCount,
-      powerplants: powerPlantCount,
-      coolers: coolerCount,
-      quantum: quantumCount,
-      radar: radarCount,
-      utility: utilityCount,
-    };
-    const out = {} as Record<WidgetId, number>;
-    for (const id of ALL_WIDGET_IDS) {
-      out[id] = pxToSubunits(
-        widgetContentHeightPx(id, counts),
-        rowHeight,
-        GRID_MARGIN[1],
-      );
-    }
-    return out;
-  }, [rowHeight, weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
-
-  // ─── Layout final = posiciones (user o default) + altos dinámicos ───────
-  const layout = useMemo<Layout[]>(() => {
-    if (!layoutMounted) return [];
-
-    // Si el usuario tiene posiciones guardadas, las usamos para los widgets
-    // que hayan sido guardados; el resto usa defaults packeados.
-    const defaults = buildDefaultPositions(visibleIds, widgetHeights);
-    const positions = new Map<string, { x: number; y: number }>();
-    for (const d of defaults) positions.set(d.i, { x: d.x, y: d.y });
-
-    if (savedPositions && savedPositions.length > 0) {
-      for (const p of savedPositions) {
-        if (visibleIds.has(p.i as WidgetId)) {
-          positions.set(p.i, { x: p.x, y: p.y });
-        }
-      }
-    }
-
-    const result: Layout[] = [];
-    for (const id of Array.from(visibleIds)) {
-      const pos = positions.get(id) ?? { x: 0, y: 0 };
-      result.push({
-        i: id,
-        x: pos.x,
-        y: pos.y,
-        w: WIDGET_W[id],
-        h: widgetHeights[id],
-      });
-    }
-    return result;
-  }, [layoutMounted, savedPositions, visibleIds, widgetHeights]);
 
   return (
     <div className="space-y-2">
