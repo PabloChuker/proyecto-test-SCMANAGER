@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { sql } from "@/lib/db";
 import {
   sanitizeString,
   validateInt,
@@ -113,16 +113,15 @@ async function searchComponents(
   let total = 0;
 
   try {
-    const countResult: any[] = await prisma.$queryRawUnsafe(
+    const countResult: any[] = await sql.unsafe(
       `SELECT COUNT(*)::int as total FROM ${table} ${whereClause}`,
-      ...params,
+      params,
     );
     total = countResult[0]?.total ?? 0;
 
-    rows = await prisma.$queryRawUnsafe(
+    rows = await sql.unsafe(
       `SELECT * FROM ${table} ${whereClause} ORDER BY ${orderCol}${nameCol} ASC LIMIT $${idx}`,
-      ...params,
-      safeLimit,
+      [...params, safeLimit],
     );
   } catch {
     rows = [];

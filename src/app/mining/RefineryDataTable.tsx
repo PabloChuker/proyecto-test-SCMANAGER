@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useMemo } from "react";
 import minerals from "@/data/mining/minerals.json";
@@ -107,7 +107,7 @@ export default function RefineryDataTable() {
                 >
                   <div>{mineral.name}</div>
                   {sortBy === mineral.id && (
-                    <div className="text-[10px]">{sortDir === "desc" ? "Ôû╝" : "Ôû▓"}</div>
+                    <div className="text-[10px]">{sortDir === "desc" ? "▼" : "▲"}</div>
                   )}
                 </th>
               ))}
@@ -122,7 +122,7 @@ export default function RefineryDataTable() {
                 <td className="px-4 py-3 sticky left-0 bg-zinc-950/80 z-10 min-w-[200px]">
                   <div className="text-zinc-100 font-semibold">{refinery.name}</div>
                   <div className="text-[10px] text-zinc-600">
-                    {refinery.system} ÔÇó {refinery.region}
+                    {refinery.system} • {refinery.region}
                   </div>
                 </td>
                 {shipMinerals.map((mineral) => {

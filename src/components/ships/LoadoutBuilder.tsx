@@ -1,28 +1,34 @@
 // =============================================================================
-// AL FILO — LoadoutBuilder v17 (Drag & Drop Desktop Layout)
+// AL FILO — LoadoutBuilder v18 (Dynamic Grid Layout with react-grid-layout)
 //
-// Layout panels are draggable — click and hold to rearrange columns.
-// Order persists in localStorage per ship.
+// Widgets se mueven libremente en una grilla 15-col tipo Gridstack/RGL:
+//   - Drag por el header para reordenar
+//   - Sin resize (tamaños fijos en código)
+//   - Compactación vertical automática
+//   - Layout persistido en localStorage `al-filo-layout-v2`
 //
-// Panels:
-//   weapons    — Weapons + Missiles + Acceleration Radar
-//   systems    — Shields, Power Plants, Coolers + Maneuverability Radar
-//   modules    — QT Drives, Radar, Tractor/PDC/Utility + Combat Summary
-//   power      — Power Management (Erkul grid) + Signatures + Balance
-//   shipcard   — Ship Card (full Erkul stats) + DPS Panel
+// Panels: weapons, missiles, shields, power-plants, coolers, quantum, radar,
+//   utility, combat-summary, power-grid, signatures, balance, ship-selector,
+//   ship-card, dps-detail, strafe-profile, turning-profile, maneuver-radar,
+//   flight-dynamics-3d.
 // =============================================================================
 
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
+import GridLayout, { type Layout } from "react-grid-layout";
 import { useLoadoutStore } from "@/store/useLoadoutStore";
 import type { ResolvedHardpoint, EquippedItem } from "@/store/useLoadoutStore";
+import { useAuth } from "@/contexts/AuthContext";
+import { createClient } from "@/lib/supabase/client";
 import { HardpointSlot, isUsefulSlot } from "./HardpointSlot";
 import { ComponentPicker } from "./ComponentPicker";
 import { PowerManagementPanel } from "./PowerManagementPanel";
 import { ShipSelector } from "./ShipSelector";
 import { fmtStat, fmtDps } from "./loadout-utils";
+import { ShipFlightDynamicsSingle } from "@/components/shared/flight-dynamics";
+import { shipGlbUrl } from "@/lib/shipGlb";
 
 const WEAPON_GROUPS = new Set(["WEAPON", "TURRET"]);
 const MISSILE_GROUPS = new Set(["MISSILE_RACK"]);
@@ -59,7 +65,7 @@ function getShipImageUrl(name: string, manufacturer?: string | null): string {
     .replace(/[^a-z0-9._-]/g, "-")
     .replace(/-+/g, "-")
     .replace(/-$/, "");
-  return `/ships/${slug}.jpg`;
+  return `/ships/${slug}.webp`;
 }
 
 const CAT_CONFIG: Record<string, { label: string; icon: string; accent: string }> = {
@@ -72,22 +78,52 @@ const CAT_CONFIG: Record<string, { label: string; icon: string; accent: string }
   UTILITY: { label: "UTILITY", icon: "/icons/tractor_beam.png", accent: "#94a3b8" },
 };
 
-// ÔöÇÔöÇ Drag & Drop Widget System (individual blocks) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+// ÔöÇÔöÇ Widget System (react-grid-layout) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 type WidgetId =
   | "weapons" | "missiles" | "strafe-profile" | "turning-profile"
   | "shields" | "powerplants" | "coolers" | "maneuver-radar"
   | "quantum" | "radar" | "utility" | "combat-summary"
   | "power-grid" | "signatures" | "balance"
-  | "ship-selector" | "ship-card" | "dps-detail";
+  | "ship-selector" | "ship-card" | "dps-detail"
+  | "flight-dynamics-3d";
 
-// Default column assignments — 5 columns
-const DEFAULT_COLUMNS: WidgetId[][] = [
-  ["weapons", "missiles", "strafe-profile"],                       // Col 1
-  ["shields", "powerplants", "coolers", "turning-profile"],        // Col 2
-  ["quantum", "radar", "utility", "combat-summary"],               // Col 3
-  ["power-grid", "signatures", "balance", "maneuver-radar"],       // Col 4
-  ["ship-selector", "ship-card", "dps-detail"],                    // Col 5
+// ─── Grid dimensions ────────────────────────────────────────────────────────
+// Zona "viva" fija: 5 columnas visuales (unidades) subdivididas en 4 subcols
+// de 0.25 c/u → 20 cols totales. Cada sub-celda es CUADRADA (rowHeight=colWidth
+// dinámico vía ResizeObserver), así la subunidad de 0.25 mide lo mismo en
+// ancho y alto. El margin (12px) deja "aire" entre cada card y sus líneas
+// imaginarias del grid, visualmente ~0.9 por unidad.
+// Anchos fijos en código: widgets normales w=4 (1 unidad), flight-dynamics w=8.
+// Altos dinámicos: se calculan por nave según el contenido de cada widget,
+// siempre en múltiplos enteros de la subunidad (0.25).
+const GRID_COLS = 20;
+const GRID_MARGIN: [number, number] = [12, 12];
+const MIN_ROW_HEIGHT = 32; // piso para viewports muy chicos
+
+// Widget widths (constantes — los altos son dinámicos por nave)
+const WIDGET_W: Record<WidgetId, number> = {
+  weapons: 4, missiles: 4, "strafe-profile": 4, "turning-profile": 4,
+  shields: 4, powerplants: 4, coolers: 4, "maneuver-radar": 4,
+  quantum: 4, radar: 4, utility: 4, "combat-summary": 4,
+  "power-grid": 4, signatures: 4, balance: 4,
+  "ship-selector": 4, "ship-card": 4, "dps-detail": 4,
+  "flight-dynamics-3d": 8,
+};
+
+// Layout por columnas — réplica de la distribución 5-col original.
+// Cada sub-array representa los widgets apilados verticalmente en esa columna.
+// Las alturas se calculan dinámicamente por nave; acá sólo definimos orden y
+// en qué "columna visual" va cada widget.
+const COLUMN_LAYOUT: { x: number; widgets: WidgetId[] }[] = [
+  { x: 0,  widgets: ["weapons", "missiles", "strafe-profile"] },
+  { x: 4,  widgets: ["shields", "powerplants", "coolers", "turning-profile"] },
+  { x: 8,  widgets: ["quantum", "radar", "utility", "combat-summary"] },
+  { x: 12, widgets: ["power-grid", "signatures", "balance", "maneuver-radar"] },
+  { x: 16, widgets: ["ship-selector", "ship-card", "dps-detail"] },
 ];
+
+// flight-dynamics-3d (w=8) va en la fila inferior bajo cols 3+4 (x=8)
+const WIDE_WIDGETS: WidgetId[] = ["flight-dynamics-3d"];
 
 const WIDGET_LABELS: Record<WidgetId, string> = {
   weapons: "WEAPONS", missiles: "MISSILES", "strafe-profile": "STRAFE PROFILE", "turning-profile": "TURNING PROFILES",
@@ -95,71 +131,136 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   quantum: "QT DRIVES", radar: "RADAR", utility: "UTILITY", "combat-summary": "COMBAT",
   "power-grid": "POWER GRID", signatures: "SIGNATURES", balance: "BALANCE",
   "ship-selector": "SEARCH", "ship-card": "SHIP CARD", "dps-detail": "DPS DETAIL",
+  "flight-dynamics-3d": "FLIGHT DYNAMICS 3D",
 };
 
-const ALL_WIDGET_IDS = DEFAULT_COLUMNS.flat();
+const ALL_WIDGET_IDS: WidgetId[] = [
+  ...COLUMN_LAYOUT.flatMap((c) => c.widgets),
+  ...WIDE_WIDGETS,
+];
 
-function loadColumns(): WidgetId[][] {
-  try {
-    const raw = localStorage.getItem("al-filo-widget-cols");
-    if (raw) {
-      const parsed = JSON.parse(raw) as WidgetId[][];
-      const flat = parsed.flat();
-      // Validate all widgets present
-      if (ALL_WIDGET_IDS.every(w => flat.includes(w)) && parsed.length === 5) {
-        return parsed;
-      }
+// ─── Dynamic height computation ──────────────────────────────────────────────
+// Cada widget tiene un alto en px (estimado según su contenido real para la
+// nave seleccionada). Luego convertimos a subunidades enteras del grid:
+//   h = ceil((contentPx + marginY) / (rowHeight + marginY))
+// Así el alto del widget en el DOM (h*rowHeight + (h-1)*marginY) es siempre
+// ≥ contentPx, garantizando que el contenido entre sin cortarse, y snapea
+// a múltiplos exactos de la subunidad.
+function widgetContentHeightPx(
+  wId: WidgetId,
+  counts: {
+    weapons: number; missiles: number;
+    shields: number; powerplants: number; coolers: number;
+    quantum: number; radar: number; utility: number;
+  },
+): number {
+  const HDR = 22;        // WidgetShell drag handle bar
+  const GROUP_HDR = 28;  // HpGroup title bar
+  const SLOT = 38;       // HardpointSlot row (avg, sin children)
+  const PAD = 10;
+  const hpGroupPx = (n: number) => HDR + GROUP_HDR + Math.max(1, n) * SLOT + PAD;
+
+  switch (wId) {
+    case "weapons":          return hpGroupPx(counts.weapons);
+    case "missiles":         return hpGroupPx(counts.missiles);
+    case "shields":          return hpGroupPx(counts.shields);
+    case "powerplants":      return hpGroupPx(counts.powerplants);
+    case "coolers":          return hpGroupPx(counts.coolers);
+    case "quantum":          return hpGroupPx(counts.quantum);
+    case "radar":            return hpGroupPx(counts.radar);
+    case "utility":          return hpGroupPx(counts.utility);
+    case "combat-summary":   return HDR + 160;
+    case "power-grid":       return HDR + 340;
+    case "signatures":       return HDR + 90;
+    case "balance":          return HDR + 110;
+    case "strafe-profile":   return HDR + 240;
+    case "turning-profile":  return HDR + 260;
+    case "maneuver-radar":   return HDR + 260;
+    case "ship-selector":    return HDR + 150;
+    case "ship-card":        return HDR + 430;
+    case "dps-detail":       return HDR + 280;
+    case "flight-dynamics-3d": return HDR + 360;
+  }
+}
+
+function pxToSubunits(px: number, rowHeight: number, marginY: number): number {
+  const denom = rowHeight + marginY;
+  if (denom <= 0) return 1;
+  return Math.max(1, Math.ceil((px + marginY) / denom));
+}
+
+// Construye el layout default packeado en la distribución 5-col original,
+// usando los altos dinámicos. Sólo incluye widgets visibles (aquellos con
+// contenido para la nave actual).
+function buildDefaultPositions(
+  visible: Set<WidgetId>,
+  heights: Record<WidgetId, number>,
+): Array<{ i: WidgetId; x: number; y: number }> {
+  const result: Array<{ i: WidgetId; x: number; y: number }> = [];
+  const colBottoms: Record<number, number> = {};
+
+  for (const col of COLUMN_LAYOUT) {
+    let y = 0;
+    for (const wId of col.widgets) {
+      if (!visible.has(wId)) continue;
+      result.push({ i: wId, x: col.x, y });
+      y += heights[wId];
     }
+    colBottoms[col.x] = y;
+  }
+
+  // flight-dynamics-3d: spans col3+col4, placed at max bottom of those cols
+  if (visible.has("flight-dynamics-3d")) {
+    const fy = Math.max(colBottoms[8] ?? 0, colBottoms[12] ?? 0);
+    result.push({ i: "flight-dynamics-3d", x: 8, y: fy });
+  }
+  return result;
+}
+
+// ─── localStorage (sólo guardamos i/x/y — los altos siempre se recalculan) ──
+const LAYOUT_STORAGE_KEY = "al-filo-layout-v3";
+
+type SavedPos = { i: string; x: number; y: number };
+
+function loadSavedPositions(): SavedPos[] | null {
+  try {
+    const raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return parsed
+      .filter((p) => p && typeof p.i === "string" && typeof p.x === "number" && typeof p.y === "number")
+      .map((p) => ({ i: p.i, x: p.x, y: p.y }));
+  } catch {
+    return null;
+  }
+}
+
+function savePositions(positions: SavedPos[]) {
+  try {
+    localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(positions));
   } catch {}
-  return DEFAULT_COLUMNS.map(c => [...c]);
 }
 
-function saveColumns(cols: WidgetId[][]) {
-  try { localStorage.setItem("al-filo-widget-cols", JSON.stringify(cols)); } catch {}
-}
-
-function DragWidget({ id, label, children, dragState, onDragStart, onDragOver, onDrop, onDragEnd }: {
+// ─── Widget visual wrapper (header + content) ────────────────────────────────
+// RGL maneja el drag vía className ".rgl-drag-handle" configurado en el
+// draggableHandle de GridLayout. El header es esa zona arrastrable.
+function WidgetShell({ id, label, children }: {
   id: WidgetId;
   label: string;
   children: React.ReactNode;
-  dragState: { dragging: WidgetId | null; over: WidgetId | null };
-  onDragStart: (id: WidgetId) => void;
-  onDragOver: (e: React.DragEvent, id: WidgetId) => void;
-  onDrop: (e: React.DragEvent, id: WidgetId) => void;
-  onDragEnd: () => void;
 }) {
-  const isDragging = dragState.dragging === id;
-  const isOver = dragState.over === id && dragState.dragging !== id;
-
   return (
-    <div
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/plain", id);
-        onDragStart(id);
-      }}
-      onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; onDragOver(e, id); }}
-      onDrop={(e) => { e.preventDefault(); onDrop(e, id); }}
-      onDragEnd={onDragEnd}
-      className="relative transition-all duration-150"
-      style={{
-        ...(isDragging ? { opacity: 0.35 } : {}),
-        ...(isOver ? { transform: "scale(0.97)" } : {}),
-      }}
-    >
-      {/* Drop indicator glow */}
-      {isOver && (
-        <div className="absolute inset-0 border-2 border-yellow-500/60 rounded z-20 pointer-events-none animate-pulse" />
-      )}
-      {/* Drag handle */}
-      <div className="flex items-center gap-1 px-1.5 py-[2px] bg-zinc-950/60 border border-zinc-800/30 border-b-0 cursor-grab active:cursor-grabbing select-none group rounded-t-sm">
+    <div className="h-full flex flex-col overflow-hidden" data-widget-id={id}>
+      <div className="rgl-drag-handle flex items-center gap-1 px-1.5 py-[2px] bg-zinc-950/60 border border-zinc-800/30 border-b-0 cursor-grab active:cursor-grabbing select-none group rounded-t-sm shrink-0">
         <span className="text-[7px] text-zinc-700 group-hover:text-yellow-600 transition-colors">⟲</span>
         <span className="text-[6px] font-mono text-zinc-700 tracking-[0.15em] group-hover:text-zinc-500 transition-colors uppercase">{label}</span>
         <span className="flex-1" />
         <span className="text-[7px] text-zinc-800 group-hover:text-zinc-600 transition-colors">⋮⋮</span>
       </div>
-      {children}
+      <div className="flex-1 min-h-0 overflow-auto">
+        {children}
+      </div>
     </div>
   );
 }
@@ -167,11 +268,10 @@ function DragWidget({ id, label, children, dragState, onDragStart, onDragOver, o
 // ÔöÇÔöÇ Widget renderer — maps a WidgetId to its JSX content ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
 function renderWidget(
   wId: WidgetId,
-  dp: { dragState: { dragging: WidgetId | null; over: WidgetId | null }; onDragStart: (id: WidgetId) => void; onDragOver: (e: React.DragEvent, id: WidgetId) => void; onDrop: (e: React.DragEvent, id: WidgetId) => void; onDragEnd: () => void },
   ctx: any,
 ): React.ReactNode {
   const { weaponHps, missileHps, useful, store, setPickerHp, si, shipInfo, stats, flightMode, setFlightMode, fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount } = ctx;
-  const W = (children: React.ReactNode) => <DragWidget key={wId} id={wId} label={WIDGET_LABELS[wId]} {...dp}>{children}</DragWidget>;
+  const W = (children: React.ReactNode) => <WidgetShell id={wId} label={WIDGET_LABELS[wId]}>{children}</WidgetShell>;
 
   switch (wId) {
     case "weapons":
@@ -179,7 +279,7 @@ function renderWidget(
     case "missiles":
       return missileHps.length > 0 ? W(<HpGroup title="MISSILES & BOMBS" icon="/icons/missile.png" hps={missileHps} store={store} onClickHp={setPickerHp} accent="#f97316" />) : null;
     case "strafe-profile":
-      return W(<div className="bg-zinc-900/80 border border-zinc-800/60 p-3"><div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-1 text-center">Strafe Profile</div><div className="flex justify-center"><StrafeProfile3D shipData={si} /></div></div>);
+      return W(<StrafeProfileTabs shipData={si} />);
     case "turning-profile":
       return W(<div className="bg-zinc-900/80 border border-zinc-800/60 p-3"><div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-1 text-center">Turning Profiles</div><div className="flex justify-center"><TurningProfileRadar shipData={si} /></div></div>);
     case "shields": {
@@ -195,7 +295,19 @@ function renderWidget(
       return hps.length > 0 ? W(<HpGroup title={CAT_CONFIG.COOLER.label} icon={CAT_CONFIG.COOLER.icon} hps={hps} store={store} onClickHp={setPickerHp} accent={CAT_CONFIG.COOLER.accent} />) : null;
     }
     case "maneuver-radar":
-      return W(<div className="bg-zinc-900/80 border border-zinc-800/60 p-3"><div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-1 text-center">G-Force Profile</div><div className="flex justify-center"><GForce3DChart shipData={shipInfo} /></div></div>);
+      return W(<GForceProfileTabs shipData={shipInfo} />);
+    case "flight-dynamics-3d":
+      return W(
+        <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
+          <ShipFlightDynamicsSingle
+            shipName={shipInfo.localizedName || shipInfo.name}
+            pitchRate={si.pitchRate}
+            yawRate={si.yawRate}
+            rollRate={si.rollRate}
+            glbUrl={shipGlbUrl(shipInfo.reference)}
+          />
+        </div>
+      );
     case "quantum": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "QUANTUM_DRIVE");
       return hps.length > 0 ? W(<HpGroup title={CAT_CONFIG.QUANTUM_DRIVE.label} icon={CAT_CONFIG.QUANTUM_DRIVE.icon} hps={hps} store={store} onClickHp={setPickerHp} accent={CAT_CONFIG.QUANTUM_DRIVE.accent} />) : null;
@@ -218,6 +330,16 @@ function renderWidget(
             <CompactStat label="SHIELD HP" value={fmtStat(stats.shieldHp)} color="#3b82f6" />
             <CompactStat label="SH REGEN" value={fmtStat(stats.shieldRegen)} color={flightMode === "NAV" ? "#52525b" : "#60a5fa"} />
           </div>
+          {(si.deflectionPhysical || si.deflectionEnergy || si.deflectionDistortion) ? (
+            <div className="border-t border-zinc-800/40 pt-1.5">
+              <div className="text-[8px] font-mono text-zinc-600 tracking-wider uppercase mb-1">Armor Deflection</div>
+              <div className="flex gap-3">
+                {si.deflectionPhysical ? <div className="flex items-center gap-1"><span className="text-[8px] font-mono text-zinc-500">PHY</span><span className="text-[11px] font-mono font-bold text-amber-400">{si.deflectionPhysical}</span></div> : null}
+                {si.deflectionEnergy ? <div className="flex items-center gap-1"><span className="text-[8px] font-mono text-zinc-500">ENG</span><span className="text-[11px] font-mono font-bold text-cyan-400">{si.deflectionEnergy}</span></div> : null}
+                {si.deflectionDistortion ? <div className="flex items-center gap-1"><span className="text-[8px] font-mono text-zinc-500">DST</span><span className="text-[11px] font-mono font-bold text-purple-400">{si.deflectionDistortion}</span></div> : null}
+              </div>
+            </div>
+          ) : null}
         </div>
       );
     case "power-grid":
@@ -259,8 +381,8 @@ function renderWidget(
               <StatRow label="SCM BOOST FWD" value={fmtNum(si.boostSpeedForward)} unit="m/s" />
               <StatRow label="SCM BOOST BWD" value={fmtNum(si.boostSpeedBackward)} unit="m/s" />
               <StatRow label="NAV MAX SPEED" value={fmtNum(si.afterburnerSpeed)} unit="m/s" />
-              <StatRow label="PITCH/YAW/ROLL" value={`${fmtNum(si.pitchRate)} / ${fmtNum(si.yawRate)} / ${fmtNum(si.rollRate)}`} unit="┬░/s" />
-              {(si.boostedPitch || si.boostedYaw || si.boostedRoll) && <StatRow label="BOOSTED MAX" value={`${fmtNum(si.boostedPitch)} / ${fmtNum(si.boostedYaw)} / ${fmtNum(si.boostedRoll)}`} unit="┬░/s" />}
+              <StatRow label="PITCH/YAW/ROLL" value={`${fmtNum(si.pitchRate)} / ${fmtNum(si.yawRate)} / ${fmtNum(si.rollRate)}`} unit="°/s" />
+              {(si.boostedPitch || si.boostedYaw || si.boostedRoll) && <StatRow label="BOOSTED MAX" value={`${fmtNum(si.boostedPitch)} / ${fmtNum(si.boostedYaw)} / ${fmtNum(si.boostedRoll)}`} unit="°/s" />}
               <StatRow label="POWER CONSUMPTION" value={String(Math.round(stats.powerDraw))} />
               <StatRow label="CM DECOY/NOISE" value={`${cmDecoyCount} / ${cmNoiseCount}`} />
               <StatRow label="HP" value={si.hullHp ? fmtMass(si.hullHp) : (si.shieldHpTotal ? fmtStat(si.shieldHpTotal) : "—")} />
@@ -282,7 +404,7 @@ function renderWidget(
           <div className={flightMode === "NAV" ? "opacity-30" : ""}>
             <div className="text-[7px] font-mono text-zinc-600 tracking-wider uppercase mb-0.5">Sustained</div>
             <div className="flex items-baseline gap-3">
-              <span className="text-[11px]" style={{ color: "#ef4444", opacity: 0.5 }}>Ô¼í</span>
+              <img src="/icons/weapons.png" alt="" className="w-4 h-4" style={{ opacity: 0.5 }} />
               <span className="text-2xl font-mono font-bold tabular-nums text-red-500">{fmtDps(stats.totalDps)}</span>
               <span className="text-[10px] font-mono text-zinc-500">dps</span>
               <span className="text-lg font-mono font-bold tabular-nums text-red-400/70">{fmtStat(stats.totalAlpha)}</span>
@@ -298,7 +420,7 @@ function renderWidget(
           </div>
           <div>
             <div className="flex items-baseline gap-3">
-              <span className="text-[11px]" style={{ color: "#eab308", opacity: 0.5 }}>┬╗</span>
+              <span className="text-[11px]" style={{ color: "#eab308", opacity: 0.5 }}>⏱</span>
               <span className="text-lg font-mono font-bold tabular-nums text-amber-500">{stats.shieldRegen > 0 ? (stats.shieldHp / Math.max(stats.shieldRegen, 0.01)).toFixed(1) : "—"}</span>
               <span className="text-[10px] font-mono text-zinc-500">s full regen time</span>
             </div>
@@ -331,63 +453,62 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 
   const [pickerHp, setPickerHp] = useState<ResolvedHardpoint | null>(null);
   const [copied, setCopied] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveModal, setSaveModal] = useState(false);
+  const [saveName, setSaveName] = useState("");
   const mountedRef = useRef(false);
   const overrideCountRef = useRef(0);
 
-  // ÔöÇÔöÇ Drag & Drop state (widget-level, column-aware) ÔöÇÔöÇ
-  const [columns, setColumns] = useState<WidgetId[][]>(DEFAULT_COLUMNS.map(c => [...c]));
-  const [dragState, setDragState] = useState<{ dragging: WidgetId | null; over: WidgetId | null }>({ dragging: null, over: null });
+  // ─── Dynamic grid layout (react-grid-layout) ─────────────────────────────
+  // Estrategia:
+  //  1. Medimos el ancho del contenedor con ResizeObserver → rowHeight (celdas
+  //     cuadradas, subunidad de 0.25 igual en ancho y alto).
+  //  2. Calculamos altos por widget (h en subunidades enteras) según el
+  //     contenido real de la nave seleccionada (weaponHps, etc).
+  //  3. El layout final = posiciones (x,y) del usuario (localStorage) o
+  //     defaults packeados en la distribución 5-col + altos dinámicos.
+  //  4. Persistimos sólo {i,x,y} en localStorage — los altos siempre se
+  //     recalculan en runtime para adaptarse a la nave activa.
+  const [savedPositions, setSavedPositions] = useState<SavedPos[] | null>(null);
+  const [layoutMounted, setLayoutMounted] = useState(false);
 
-  useEffect(() => { setColumns(loadColumns()); }, []);
+  const gridContainerRef = useRef<HTMLDivElement>(null);
+  const [gridWidth, setGridWidth] = useState<number>(1400);
 
-  const handleDragStart = useCallback((id: WidgetId) => {
-    setDragState({ dragging: id, over: null });
+  useEffect(() => {
+    setSavedPositions(loadSavedPositions());
+    setLayoutMounted(true);
   }, []);
 
-  const handleDragOver = useCallback((_e: React.DragEvent, id: WidgetId) => {
-    setDragState(prev => prev.over === id ? prev : { ...prev, over: id });
-  }, []);
+  useEffect(() => {
+    const el = gridContainerRef.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.clientWidth;
+      if (w > 0) setGridWidth(w);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [layoutMounted]);
 
-  const handleDrop = useCallback((_e: React.DragEvent, targetId: WidgetId) => {
-    setDragState(prev => {
-      const sourceId = prev.dragging;
-      if (sourceId && sourceId !== targetId) {
-        setColumns(prevCols => {
-          const next = prevCols.map(col => [...col]);
-          // Find source and target positions
-          let srcCol = -1, srcIdx = -1, tgtCol = -1, tgtIdx = -1;
-          for (let c = 0; c < next.length; c++) {
-            const si = next[c].indexOf(sourceId);
-            if (si !== -1) { srcCol = c; srcIdx = si; }
-            const ti = next[c].indexOf(targetId);
-            if (ti !== -1) { tgtCol = c; tgtIdx = ti; }
-          }
-          if (srcCol === -1 || tgtCol === -1) return prevCols;
-          // Remove from source
-          next[srcCol].splice(srcIdx, 1);
-          // Insert at target position
-          const newTgtIdx = next[tgtCol].indexOf(targetId);
-          if (newTgtIdx !== -1) {
-            next[tgtCol].splice(newTgtIdx, 0, sourceId);
-          } else {
-            next[tgtCol].push(sourceId);
-          }
-          saveColumns(next);
-          return next;
-        });
-      }
-      return { dragging: null, over: null };
-    });
-  }, []);
+  const rowHeight = useMemo(() => {
+    const colWidth = (gridWidth - GRID_MARGIN[0] * (GRID_COLS - 1)) / GRID_COLS;
+    return Math.max(colWidth, MIN_ROW_HEIGHT);
+  }, [gridWidth]);
 
-  const handleDragEnd = useCallback(() => {
-    setDragState({ dragging: null, over: null });
-  }, []);
+  const handleDragStop = useCallback((newLayout: Layout[]) => {
+    if (!layoutMounted) return;
+    const slim: SavedPos[] = newLayout.map((item) => ({ i: item.i, x: item.x, y: item.y }));
+    setSavedPositions(slim);
+    savePositions(slim);
+  }, [layoutMounted]);
 
   const handleResetLayout = useCallback(() => {
-    const reset = DEFAULT_COLUMNS.map(c => [...c]);
-    setColumns(reset);
-    saveColumns(reset);
+    setSavedPositions(null);
+    try { localStorage.removeItem(LAYOUT_STORAGE_KEY); } catch {}
   }, []);
 
   useEffect(() => { if (mountedRef.current) return; mountedRef.current = true; const urlShip = searchParams.get("ship"); loadShip(urlShip || shipId, searchParams.get("build") || null); }, [shipId]);
@@ -403,9 +524,147 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const cmDecoyCount = cmHps.filter(hp => hp.hardpointName.toLowerCase().includes("decoy")).length;
   const cmNoiseCount = cmHps.filter(hp => hp.hardpointName.toLowerCase().includes("noise")).length;
 
+  // ─── Visibilidad por widget (ocultamos los que no tienen contenido) ──────
+  // IMPORTANTE: estos hooks deben ir ANTES de los early returns para no
+  // violar las Rules of Hooks de React (si no, cuando `isLoading`/`!shipInfo`
+  // pasa de true→false el número de hooks cambia y React crashea).
+  const shieldCount = useful.filter((hp) => hp.resolvedCategory === "SHIELD").length;
+  const powerPlantCount = useful.filter((hp) => hp.resolvedCategory === "POWER_PLANT").length;
+  const coolerCount = useful.filter((hp) => hp.resolvedCategory === "COOLER").length;
+  const quantumCount = useful.filter((hp) => hp.resolvedCategory === "QUANTUM_DRIVE").length;
+  const radarCount = useful.filter((hp) => hp.resolvedCategory === "RADAR").length;
+  const utilityCount = useful.filter((hp) => hp.resolvedCategory === "UTILITY" || hp.resolvedCategory === "MINING").length;
+
+  const visibleIds = useMemo<Set<WidgetId>>(() => {
+    const s = new Set<WidgetId>();
+    for (const id of ALL_WIDGET_IDS) {
+      if (id === "weapons"      && weaponHps.length === 0) continue;
+      if (id === "missiles"     && missileHps.length === 0) continue;
+      if (id === "shields"      && shieldCount === 0) continue;
+      if (id === "powerplants"  && powerPlantCount === 0) continue;
+      if (id === "coolers"      && coolerCount === 0) continue;
+      if (id === "quantum"      && quantumCount === 0) continue;
+      if (id === "radar"        && radarCount === 0) continue;
+      if (id === "utility"      && utilityCount === 0) continue;
+      s.add(id);
+    }
+    return s;
+  }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
+
+  // ─── Altos dinámicos por widget (subunidades enteras) ────────────────────
+  const widgetHeights = useMemo<Record<WidgetId, number>>(() => {
+    const counts = {
+      weapons: weaponHps.length,
+      missiles: missileHps.length,
+      shields: shieldCount,
+      powerplants: powerPlantCount,
+      coolers: coolerCount,
+      quantum: quantumCount,
+      radar: radarCount,
+      utility: utilityCount,
+    };
+    const out = {} as Record<WidgetId, number>;
+    for (const id of ALL_WIDGET_IDS) {
+      out[id] = pxToSubunits(
+        widgetContentHeightPx(id, counts),
+        rowHeight,
+        GRID_MARGIN[1],
+      );
+    }
+    return out;
+  }, [rowHeight, weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
+
+  // ─── Layout final = posiciones (user o default) + altos dinámicos ───────
+  const layout = useMemo<Layout[]>(() => {
+    if (!layoutMounted) return [];
+
+    const defaults = buildDefaultPositions(visibleIds, widgetHeights);
+    const positions = new Map<string, { x: number; y: number }>();
+    for (const d of defaults) positions.set(d.i, { x: d.x, y: d.y });
+
+    if (savedPositions && savedPositions.length > 0) {
+      for (const p of savedPositions) {
+        if (visibleIds.has(p.i as WidgetId)) {
+          positions.set(p.i, { x: p.x, y: p.y });
+        }
+      }
+    }
+
+    const result: Layout[] = [];
+    for (const id of Array.from(visibleIds)) {
+      const pos = positions.get(id) ?? { x: 0, y: 0 };
+      result.push({
+        i: id,
+        x: pos.x,
+        y: pos.y,
+        w: WIDGET_W[id],
+        h: widgetHeights[id],
+      });
+    }
+    return result;
+  }, [layoutMounted, savedPositions, visibleIds, widgetHeights]);
+
+  const { user } = useAuth();
+  const supabaseClient = createClient();
+
   const handleSelect = useCallback((item: EquippedItem) => { if (!pickerHp) return; equipItem(pickerHp.id, item); setPickerHp(null); }, [pickerHp, equipItem]);
   const handleClear = useCallback(() => { if (!pickerHp) return; clearSlot(pickerHp.id); setPickerHp(null); }, [pickerHp, clearSlot]);
   const handleCopyLink = useCallback(() => { navigator.clipboard.writeText(window.location.href).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }, []);
+
+  const handleSaveLoadout = useCallback(async () => {
+    if (!user || !shipInfo || !saveName.trim()) return;
+    setSaving(true);
+    const buildCode = encodeBuild();
+
+    // Save loadout
+    const { data: loadout } = await supabaseClient.from("user_loadouts").insert({
+      user_id: user.id,
+      ship_id: shipInfo.reference,
+      ship_name: shipInfo.name,
+      name: saveName.trim(),
+      build_code: buildCode,
+    }).select().single();
+
+    if (loadout) {
+      // Save individual components
+      const items: { loadout_id: string; hardpoint_name: string; item_reference: string; item_name: string; item_type: string; item_size: number | null }[] = [];
+      for (const hp of hardpoints) {
+        const item = getEffectiveItem(hp.id);
+        if (item && item.type !== "FLIGHT_CONTROLLER" && item.type !== "SELF_DESTRUCT") {
+          items.push({
+            loadout_id: loadout.id,
+            hardpoint_name: hp.hardpointName,
+            item_reference: item.reference,
+            item_name: item.name,
+            item_type: item.type,
+            item_size: item.size,
+          });
+        }
+        // Also children (turret sub-weapons)
+        for (const child of hp.children) {
+          if (child.equippedItem) {
+            items.push({
+              loadout_id: loadout.id,
+              hardpoint_name: child.hardpointName,
+              item_reference: child.equippedItem.reference,
+              item_name: child.equippedItem.name,
+              item_type: child.equippedItem.type,
+              item_size: child.equippedItem.size,
+            });
+          }
+        }
+      }
+      if (items.length > 0) {
+        await supabaseClient.from("loadout_items").insert(items);
+      }
+    }
+
+    setSaving(false);
+    setSaved(true);
+    setSaveModal(false);
+    setSaveName("");
+    setTimeout(() => setSaved(false), 3000);
+  }, [user, shipInfo, saveName, encodeBuild, hardpoints, getEffectiveItem, supabaseClient]);
 
   if (isLoading) return (<div className="flex items-center justify-center py-20"><div className="w-4 h-4 border-2 border-zinc-800 border-t-yellow-500 rounded-full animate-spin mr-3" /><span className="text-xs text-zinc-600 font-mono uppercase tracking-widest">Loading...</span></div>);
   if (error) return <div className="border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-400 font-mono">{error}</div>;
@@ -415,6 +674,13 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const fmtNum = (v: number | null) => v != null && v > 0 ? Math.round(v).toString() : "—";
   const fmtDec = (v: number | null) => v != null && v > 0 ? v.toFixed(1) : "—";
   const fmtMass = (v: number | null) => { if (!v || v <= 0) return "—"; if (v >= 1000000) return (v / 1000000).toFixed(1) + "M"; if (v >= 1000) return Math.round(v / 1000).toLocaleString() + "k"; return Math.round(v).toLocaleString(); };
+
+  // Contexto compartido para renderWidget (evita pasar 15 props por llamada).
+  const ctx = {
+    weaponHps, missileHps, useful, store, setPickerHp,
+    si, shipInfo, stats, flightMode, setFlightMode,
+    fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount,
+  };
 
   return (
     <div className="space-y-2">
@@ -429,21 +695,77 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
         </div>
         <div className="flex items-center gap-1.5">
           <button onClick={handleCopyLink} className={copied ? "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border bg-green-950/30 text-green-500 border-green-800/50" : "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-yellow-500 hover:border-yellow-800/50 transition-colors"}>{copied ? "COPIED" : "SHARE"}</button>
+          {user && (saved ? <span className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border bg-green-950/30 text-green-500 border-green-800/50">SAVED ✓</span> : <button onClick={() => { setSaveName(shipInfo?.name ? `${shipInfo.name} Build` : "Mi Build"); setSaveModal(true); }} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-emerald-500 hover:border-emerald-800/50 transition-colors">SAVE</button>)}
           {hasChanges() && <button onClick={resetAll} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-orange-500/80 border-zinc-800 hover:border-orange-800/50 transition-colors">RESET</button>}
           <button onClick={handleResetLayout} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-600 border-zinc-800 hover:text-cyan-500 hover:border-cyan-800/50 transition-colors" title="Reset panel layout to default">⟲ LAYOUT</button>
         </div>
       </div>
 
-      {/* ÔöÇÔöÇ Main Grid — original 5-column layout, each block draggable ÔöÇÔöÇ */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_1fr_1fr_340px] gap-2">
-        {columns.map((colWidgets, colIdx) => (
-          <div key={colIdx} className="space-y-2">
-            {colWidgets.map((wId) => renderWidget(wId, { dragState, onDragStart: handleDragStart, onDragOver: handleDragOver, onDrop: handleDrop, onDragEnd: handleDragEnd }, { weaponHps, missileHps, useful, store, setPickerHp, si, shipInfo, stats, flightMode, setFlightMode, fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount }))}
-          </div>
-        ))}
+      {/* ── Main Grid — react-grid-layout con celdas cuadradas 0.25x0.25 ── */}
+      {/* gridContainerRef mide el ancho real del contenedor (vía ResizeObserver)
+          y pasamos width/rowHeight calculados para que cada subcelda sea
+          visualmente cuadrada. El gate `layoutMounted` evita pisar el layout
+          persistido con los defaults en el primer render. */}
+      <div ref={gridContainerRef} className="w-full">
+        {layoutMounted && gridWidth > 0 && layout.length > 0 && (
+          <GridLayout
+            className="layout"
+            layout={layout}
+            cols={GRID_COLS}
+            width={gridWidth}
+            rowHeight={rowHeight}
+            margin={GRID_MARGIN}
+            containerPadding={[0, 0]}
+            isResizable={false}
+            isDraggable={true}
+            draggableHandle=".rgl-drag-handle"
+            compactType="vertical"
+            preventCollision={false}
+            onDragStop={handleDragStop}
+          >
+            {layout.map((item) => (
+              <div key={item.i}>
+                {renderWidget(item.i as WidgetId, ctx)}
+              </div>
+            ))}
+          </GridLayout>
+        )}
       </div>
 
       {pickerHp && <ComponentPicker hardpoint={pickerHp} currentItemId={getEffectiveItem(pickerHp.id)?.id ?? null} onSelect={handleSelect} onClear={handleClear} onClose={() => setPickerHp(null)} />}
+
+      {/* Save Loadout Modal */}
+      {saveModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setSaveModal(false)}>
+          <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4 w-80 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-sm text-zinc-200 font-medium">Guardar Loadout</h3>
+            <input
+              type="text"
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleSaveLoadout()}
+              placeholder="Nombre del loadout..."
+              className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
+              autoFocus
+            />
+            <div className="text-xs text-zinc-500">
+              {shipInfo?.name} • {overrides.size} componentes modificados
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleSaveLoadout}
+                disabled={saving || !saveName.trim()}
+                className="flex-1 py-1.5 bg-emerald-600/80 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-950 text-sm font-medium rounded transition-colors"
+              >
+                {saving ? "Guardando..." : "Guardar"}
+              </button>
+              <button onClick={() => setSaveModal(false)} className="px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-sm rounded transition-colors">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -608,7 +930,7 @@ function DualRadarChart({ axes, size = 220, gridLevels = 5 }: {
   const boostColor = "#ef4444";
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, overflow: "visible" }}>
+    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, overflow: "hidden" }}>
       {/* Grid */}
       {grids.map((p, i) => <polygon key={i} points={p} fill="none" stroke="#3f3f46" strokeWidth={0.5} opacity={0.4} />)}
       {axes.map((_, i) => { const a = start + i * step; return <line key={i} x1={cx} y1={cy} x2={cx + radius * Math.cos(a)} y2={cy + radius * Math.sin(a)} stroke="#3f3f46" strokeWidth={0.5} opacity={0.3} />; })}
@@ -655,43 +977,43 @@ function StrafeProfile3D({ shipData }: { shipData: any }) {
   const down = shipData.accelDown ?? 0;
   const strafe = shipData.accelStrafe ?? 0;
 
-  // Afterburner estimates from boost speed ratios
   const scmSpd = shipData.scmSpeed ?? 1;
   const boostFwdSpd = shipData.boostSpeedForward ?? scmSpd;
   const boostBwdSpd = shipData.boostSpeedBackward ?? scmSpd;
   const ratioF = scmSpd > 0 ? Math.min(boostFwdSpd / scmSpd, 3) : 1.5;
   const ratioB = scmSpd > 0 ? Math.min(boostBwdSpd / scmSpd, 3) : 1.3;
+  const boostMultUp = shipData.boostMultUp ?? 1.3;
+  const boostMultStrafe = shipData.boostMultStrafe ?? 1.3;
 
   const afbFwd = fwd * ratioF;
   const afbBwd = bwd * ratioB;
-  const afbUp = up;     // no boost data for vertical/lateral
-  const afbDown = down;
-  const afbStrafe = strafe;
+  const afbUp = up * boostMultUp;
+  const afbDown = down * boostMultUp;
+  const afbStrafe = strafe * boostMultStrafe;
 
-  const W = 260, H = 260;
-  const cx = W / 2, cy = H / 2 + 10;
-  const maxVal = Math.max(fwd, bwd, up, down, strafe, afbFwd, afbBwd, 30);
-  const scale = 80 / maxVal; // normalize so largest axis ≈ 80px
+  const W = 280, H = 280;
+  const cx = W / 2, cy = H / 2 + 5;
 
-  // Isometric basis vectors
+  const allVals = [fwd, bwd, up, down, strafe, afbFwd, afbBwd, afbUp, afbDown, afbStrafe].filter(v => v > 0);
+  const maxVal = Math.max(...allVals, 30);
+  const pixScale = 90 / maxVal;
+
   const ix = { x: Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) };
   const iz = { x: -Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) };
   const iy = { x: 0, y: -1 };
 
   const project = (x: number, y: number, z: number) => ({
-    px: cx + (x * ix.x + z * iz.x + y * iy.x) * scale,
-    py: cy + (x * ix.y + z * iz.y + y * iy.y) * scale,
+    px: cx + (x * ix.x + z * iz.x + y * iy.x) * pixScale,
+    py: cy + (x * ix.y + z * iz.y + y * iy.y) * pixScale,
   });
 
-  const axLen = maxVal * 1.35;
+  const axLen = maxVal * 1.05;
   const xPos = project(axLen, 0, 0);
   const xNeg = project(-axLen, 0, 0);
   const yPos = project(0, axLen, 0);
-  const yNeg = project(0, -axLen, 0);
   const zPos = project(0, 0, axLen);
   const zNeg = project(0, 0, -axLen);
 
-  // SCM shape vertices: +X(strafe), +Y(up), +Z(fwd), -X(strafe), -Y(down), -Z(bwd)
   const scmPts = [
     project(strafe, 0, 0), project(0, up, 0), project(0, 0, fwd),
     project(-strafe, 0, 0), project(0, -down, 0), project(0, 0, -bwd),
@@ -701,86 +1023,200 @@ function StrafeProfile3D({ shipData }: { shipData: any }) {
     project(-afbStrafe, 0, 0), project(0, -afbDown, 0), project(0, 0, -afbBwd),
   ];
 
-  const shapeFaces = (pts: { px: number; py: number }[]) => {
-    const eq = [pts[0], pts[2], pts[3], pts[5]];
-    const top = pts[1], bottom = pts[4];
-    return [
-      [eq[0], top, eq[1]], [eq[1], top, eq[2]], [eq[2], top, eq[3]], [eq[3], top, eq[0]],
-      [eq[0], bottom, eq[1]], [eq[1], bottom, eq[2]], [eq[2], bottom, eq[3]], [eq[3], bottom, eq[0]],
+  const edges = (pts: { px: number; py: number }[]) => {
+    const pairs: [number, number][] = [
+      [0,1],[0,2],[0,4],[0,5],[1,2],[1,3],[1,5],[2,4],[3,4],[3,5],[2,3],[4,5],
     ];
+    return pairs;
   };
 
-  const scmFaces = shapeFaces(scmPts);
-  const afbFaces = shapeFaces(afbPts);
   const scmColor = "#f59e0b";
   const afbColor = "#ef4444";
 
-  // Grid ticks
-  const gridMarks = Array.from({ length: 8 }, (_, i) => i + 1).filter(g => g * (30 / maxVal) <= axLen / maxVal * 1.1);
-  const tickGap = Math.ceil(maxVal / 4);
-  const ticks = Array.from({ length: 6 }, (_, i) => (i + 1) * tickGap).filter(v => v < axLen);
-
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H, overflow: "visible" }}>
-      {/* Grid ticks on Y axis */}
-      {ticks.map(v => {
-        const p = project(0, v, 0);
-        return <g key={`t-${v}`} opacity={0.3}>
-          <line x1={p.px - 3} y1={p.py} x2={p.px + 3} y2={p.py} stroke="#71717a" strokeWidth={0.5} />
-          <text x={p.px + 6} y={p.py + 2} style={{ fontSize: "5px", fontFamily: "monospace", fill: "#52525b" }}>{Math.round(v)}</text>
-        </g>;
-      })}
-
-      {/* 3D axes */}
-      <line x1={xNeg.px} y1={xNeg.py} x2={xPos.px} y2={xPos.py} stroke="#71717a" strokeWidth={0.5} opacity={0.4} />
-      <line x1={yNeg.px} y1={yNeg.py} x2={yPos.px} y2={yPos.py} stroke="#71717a" strokeWidth={0.5} opacity={0.4} />
-      <line x1={zNeg.px} y1={zNeg.py} x2={zPos.px} y2={zPos.py} stroke="#71717a" strokeWidth={0.5} opacity={0.4} />
-
-      {/* AFB diamond (behind, dashed) */}
-      {afbFaces.map((face, i) => (
-        <polygon key={`af-${i}`} points={face.map(p => `${p.px},${p.py}`).join(" ")} fill={afbColor} fillOpacity={0.06} stroke={afbColor} strokeWidth={0.6} strokeLinejoin="round" strokeDasharray="3,2" opacity={0.5} />
-      ))}
-      {afbPts.map((p, i) => <circle key={`av-${i}`} cx={p.px} cy={p.py} r={1.5} fill={afbColor} opacity={0.5} />)}
-
-      {/* SCM diamond (front, solid) */}
-      {scmFaces.map((face, i) => (
-        <polygon key={`sf-${i}`} points={face.map(p => `${p.px},${p.py}`).join(" ")} fill={scmColor} fillOpacity={0.1} stroke={scmColor} strokeWidth={0.8} strokeLinejoin="round" opacity={0.7} />
-      ))}
-      {scmPts.map((p, i) => <circle key={`sv-${i}`} cx={p.px} cy={p.py} r={2} fill={scmColor} stroke="#18181b" strokeWidth={0.5} />)}
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H, overflow: "hidden" }}>
+      {/* XYZ axes */}
+      <line x1={xNeg.px} y1={xNeg.py} x2={xPos.px} y2={xPos.py} stroke="#3f3f46" strokeWidth={0.5} />
+      <line x1={cy} y1={project(0, axLen, 0).py} x2={cy} y2={project(0, -axLen * 0.6, 0).py} stroke="#3f3f46" strokeWidth={0.5} />
+      <line x1={zNeg.px} y1={zNeg.py} x2={zPos.px} y2={zPos.py} stroke="#3f3f46" strokeWidth={0.5} />
 
       {/* Axis labels */}
-      <text x={xPos.px + 4} y={xPos.py + 2} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Strafe R</text>
-      <text x={xNeg.px - 34} y={xNeg.py + 2} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Strafe L</text>
-      <text x={zPos.px - 18} y={zPos.py + 12} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Fwd</text>
-      <text x={zNeg.px + 4} y={zNeg.py - 4} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Bwd</text>
-      <text x={yPos.px + 4} y={yPos.py + 3} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Up</text>
-      <text x={yNeg.px + 4} y={yNeg.py + 3} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Down</text>
+      {[
+        { p: xPos, text: "Strafe", dx: 4, dy: 3 },
+        { p: zPos, text: "Fwd", dx: -8, dy: 12 },
+        { p: zNeg, text: "Bwd", dx: 2, dy: -4 },
+        { p: yPos, text: "Up", dx: 4, dy: 2 },
+      ].map((item, i) => (
+        <text key={`al-${i}`} x={item.p.px + item.dx} y={item.p.py + item.dy}
+          style={{ fontSize: "7px", fontFamily: "monospace", fill: "#52525b" }}>{item.text}</text>
+      ))}
+
+      {/* AFB wireframe (red) */}
+      {edges(afbPts).map(([a, b], i) => (
+        <line key={`ae-${i}`} x1={afbPts[a].px} y1={afbPts[a].py} x2={afbPts[b].px} y2={afbPts[b].py}
+          stroke={afbColor} strokeWidth={0.8} opacity={0.5} />
+      ))}
+
+      {/* SCM wireframe (orange) */}
+      {edges(scmPts).map(([a, b], i) => (
+        <line key={`se-${i}`} x1={scmPts[a].px} y1={scmPts[a].py} x2={scmPts[b].px} y2={scmPts[b].py}
+          stroke={scmColor} strokeWidth={1.2} opacity={0.85} />
+      ))}
+
+      {/* SCM vertices */}
+      {scmPts.map((p, i) => <circle key={`sv-${i}`} cx={p.px} cy={p.py} r={2} fill={scmColor} />)}
+      {/* AFB vertices */}
+      {afbPts.map((p, i) => <circle key={`av-${i}`} cx={p.px} cy={p.py} r={1.5} fill={afbColor} opacity={0.5} />)}
+    </svg>
+  );
+}
+
+/** Strafe Profile — Hex radar (6-axis) for acceleration */
+function StrafeProfileRadar({ shipData }: { shipData: any }) {
+  const fwd = shipData.accelForward ?? 0;
+  const bwd = shipData.accelBackward ?? 0;
+  const up = shipData.accelUp ?? 0;
+  const down = shipData.accelDown ?? 0;
+  const strafe = shipData.accelStrafe ?? 0;
+
+  const scmSpd = shipData.scmSpeed ?? 1;
+  const boostFwdSpd = shipData.boostSpeedForward ?? scmSpd;
+  const boostBwdSpd = shipData.boostSpeedBackward ?? scmSpd;
+  const ratioF = scmSpd > 0 ? Math.min(boostFwdSpd / scmSpd, 3) : 1.5;
+  const ratioB = scmSpd > 0 ? Math.min(boostBwdSpd / scmSpd, 3) : 1.3;
+  const boostMultUp = shipData.boostMultUp ?? 1.3;
+  const boostMultStrafe = shipData.boostMultStrafe ?? 1.3;
+
+  const afbFwd = fwd * ratioF;
+  const afbBwd = bwd * ratioB;
+  const afbUp = up * boostMultUp;
+  const afbDown = down * boostMultUp;
+  const afbStrafe = strafe * boostMultStrafe;
+
+  const axes = [
+    { label: "Fwd", scm: fwd, afb: afbFwd },
+    { label: "Strafe R", scm: strafe, afb: afbStrafe },
+    { label: "Down", scm: down, afb: afbDown },
+    { label: "Bwd", scm: bwd, afb: afbBwd },
+    { label: "Strafe L", scm: strafe, afb: afbStrafe },
+    { label: "Up", scm: up, afb: afbUp },
+  ];
+
+  const globalMax = Math.max(...axes.map(a => Math.max(a.scm, a.afb)), 30);
+  const size = 300;
+  const cx = size / 2, cy = size / 2;
+  const radius = size * 0.32;
+  const n = 6;
+  const step = (2 * Math.PI) / n;
+  const startAngle = -Math.PI / 2;
+  const gridLevels = 5;
+
+  const gridStep = globalMax <= 50 ? 10 : globalMax <= 150 ? 25 : globalMax <= 500 ? 50 : 100;
+  const gridValues = Array.from({ length: gridLevels }, (_, i) => Math.round(((i + 1) / gridLevels) * globalMax / gridStep) * gridStep).filter(v => v > 0 && v <= globalMax);
+
+  const ptAt = (i: number, r: number) => {
+    const a = startAngle + i * step;
+    return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+  };
+
+  const polyPts = (vals: number[]) => vals.map((v, i) => {
+    const norm = globalMax > 0 ? Math.min(1, v / globalMax) : 0;
+    const p = ptAt(i, norm * radius);
+    return `${p.x},${p.y}`;
+  }).join(" ");
+
+  const scmVals = axes.map(a => a.scm);
+  const afbVals = axes.map(a => a.afb);
+  const scmColor = "#f59e0b";
+  const afbColor = "#ef4444";
+
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, overflow: "hidden" }}>
+      {/* Grid rings */}
+      {gridValues.map((v, gi) => {
+        const r = (v / globalMax) * radius;
+        const pts = Array.from({ length: n }, (_, i) => ptAt(i, r));
+        return <polygon key={`g-${gi}`} points={pts.map(p => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#3f3f46" strokeWidth={0.5} opacity={0.4} />;
+      })}
+      {/* Axis lines */}
+      {axes.map((_, i) => {
+        const p = ptAt(i, radius);
+        return <line key={`ax-${i}`} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="#3f3f46" strokeWidth={0.5} opacity={0.3} />;
+      })}
+      {/* Grid value labels on first axis */}
+      {gridValues.map((v, gi) => {
+        const r = (v / globalMax) * radius;
+        const p = ptAt(0, r);
+        return <text key={`gv-${gi}`} x={p.x + 4} y={p.y - 3} style={{ fontSize: "6px", fontFamily: "monospace", fill: "#52525b" }}>{v}</text>;
+      })}
+
+      {/* AFB shape (behind) */}
+      <polygon points={polyPts(afbVals)} fill={afbColor} fillOpacity={0.06} stroke={afbColor} strokeWidth={1} strokeLinejoin="round" strokeDasharray="3,2" opacity={0.6} />
+      {afbVals.map((v, i) => {
+        const norm = globalMax > 0 ? Math.min(1, v / globalMax) : 0;
+        const p = ptAt(i, norm * radius);
+        return v > 0 ? <circle key={`ab-${i}`} cx={p.x} cy={p.y} r={1.5} fill={afbColor} opacity={0.5} /> : null;
+      })}
+
+      {/* SCM shape (front) */}
+      <polygon points={polyPts(scmVals)} fill={scmColor} fillOpacity={0.15} stroke={scmColor} strokeWidth={1.5} strokeLinejoin="round" />
+      {scmVals.map((v, i) => {
+        const norm = globalMax > 0 ? Math.min(1, v / globalMax) : 0;
+        const p = ptAt(i, norm * radius);
+        return v > 0 ? <circle key={`sv-${i}`} cx={p.x} cy={p.y} r={2.5} fill={scmColor} stroke="#18181b" strokeWidth={0.6} /> : null;
+      })}
 
       {/* SCM value labels */}
-      {[
-        { pt: scmPts[2], val: fwd, dx: -24, dy: -8 },
-        { pt: scmPts[5], val: bwd, dx: 8, dy: -4 },
-        { pt: scmPts[1], val: up, dx: 8, dy: -2 },
-        { pt: scmPts[4], val: down, dx: 8, dy: 4 },
-        { pt: scmPts[0], val: strafe, dx: 6, dy: -6 },
-      ].map((item, i) => item.val > 0 ? (
-        <text key={`sl-${i}`} x={item.pt.px + item.dx} y={item.pt.py + item.dy} style={{ fontSize: "7px", fontFamily: "monospace", fill: scmColor, fontWeight: 600 }}>{Math.round(item.val)} m/s²</text>
-      ) : null)}
+      {axes.map((a, i) => {
+        if (a.scm <= 0) return null;
+        const norm = Math.min(1, a.scm / globalMax);
+        const p = ptAt(i, norm * radius);
+        const labelX = p.x + (p.x > cx ? 6 : p.x < cx ? -44 : -18);
+        const labelY = p.y + (p.y > cy ? 12 : p.y < cy ? -5 : 3);
+        return (
+          <g key={`sl-${i}`}>
+            <rect x={labelX - 2} y={labelY - 8} width={42} height={11} rx={2} fill="#18181b" fillOpacity={0.85} />
+            <text x={labelX} y={labelY} style={{ fontSize: "7.5px", fontFamily: "monospace", fill: scmColor, fontWeight: 700 }}>{Math.round(a.scm)} m/s²</text>
+          </g>
+        );
+      })}
 
-      {/* AFB value labels (only show if different from SCM) */}
-      {[
-        { pt: afbPts[2], val: afbFwd, scmVal: fwd, dx: -24, dy: 4 },
-        { pt: afbPts[5], val: afbBwd, scmVal: bwd, dx: 8, dy: 8 },
-      ].map((item, i) => item.val > item.scmVal ? (
-        <text key={`al-${i}`} x={item.pt.px + item.dx} y={item.pt.py + item.dy} style={{ fontSize: "6.5px", fontFamily: "monospace", fill: afbColor, fontWeight: 500, opacity: 0.8 }}>{Math.round(item.val)} m/s²</text>
-      ) : null)}
+      {/* Axis labels */}
+      {axes.map((a, i) => {
+        const labelR = radius + 14;
+        const p = ptAt(i, labelR);
+        const anchor = p.x > cx + 5 ? "start" : p.x < cx - 5 ? "end" : "middle";
+        return <text key={`al-${i}`} x={p.x} y={p.y + 3} textAnchor={anchor}
+          style={{ fontSize: "8px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>{a.label}</text>;
+      })}
 
       {/* Legend */}
-      <rect x={4} y={H - 16} width={6} height={6} rx={1} fill={scmColor} opacity={0.8} />
-      <text x={13} y={H - 10} style={{ fontSize: "6px", fontFamily: "monospace", fill: "#71717a" }}>SCM</text>
-      <rect x={40} y={H - 16} width={6} height={6} rx={1} fill={afbColor} opacity={0.6} />
-      <text x={49} y={H - 10} style={{ fontSize: "6px", fontFamily: "monospace", fill: "#71717a" }}>AFB</text>
+      <rect x={6} y={size - 18} width={7} height={7} rx={1.5} fill={scmColor} opacity={0.85} />
+      <text x={16} y={size - 11} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#71717a" }}>SCM</text>
+      <rect x={46} y={size - 18} width={7} height={7} rx={1.5} fill={afbColor} opacity={0.65} />
+      <text x={56} y={size - 11} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#71717a" }}>AFB</text>
     </svg>
+  );
+}
+
+/** Strafe Profile — Tab wrapper for 3D/Radar toggle */
+function StrafeProfileTabs({ shipData }: { shipData: any }) {
+  const [view, setView] = useState<"3d" | "radar">("3d");
+  return (
+    <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase">Strafe Profile</div>
+        <div className="flex gap-0.5 bg-zinc-800/60 rounded p-0.5">
+          <button onClick={() => setView("3d")}
+            className={`px-2 py-0.5 text-[8px] font-mono rounded transition-colors ${view === "3d" ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>3D</button>
+          <button onClick={() => setView("radar")}
+            className={`px-2 py-0.5 text-[8px] font-mono rounded transition-colors ${view === "radar" ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>Radar</button>
+        </div>
+      </div>
+      <div className="flex justify-center">
+        {view === "3d" ? <StrafeProfile3D shipData={shipData} /> : <StrafeProfileRadar shipData={shipData} />}
+      </div>
+    </div>
   );
 }
 
@@ -834,7 +1270,7 @@ function TurningProfileRadar({ shipData }: { shipData: any }) {
   const boostColor = "#ef4444";
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, overflow: "visible" }}>
+    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, overflow: "hidden" }}>
       {/* Grid polygons */}
       {grids.map((p, i) => <polygon key={i} points={p} fill="none" stroke="#3f3f46" strokeWidth={0.5} opacity={0.4} />)}
       {/* Axis lines */}
@@ -890,179 +1326,254 @@ function TurningProfileRadar({ shipData }: { shipData: any }) {
 
 function GForce3DChart({ shipData }: { shipData: any }) {
   const G = 9.81;
-  // SCM accelerations ÔåÆ G
-  const fwdG = (shipData.accelForward ?? 0) / G;
-  const bwdG = (shipData.accelBackward ?? 0) / G;
-  const upG = (shipData.accelUp ?? 0) / G;
-  const downG = (shipData.accelDown ?? 0) / G;
-  const strafeG = (shipData.accelStrafe ?? 0) / G;
+  const fwdG = shipData.accelForwardG ?? (shipData.accelForward ?? 0) / G;
+  const bwdG = shipData.accelBackwardG ?? (shipData.accelBackward ?? 0) / G;
+  const upG = shipData.accelUpG ?? (shipData.accelUp ?? 0) / G;
+  const downG = shipData.accelDownG ?? (shipData.accelDown ?? 0) / G;
+  const strafeG = shipData.accelStrafeG ?? (shipData.accelStrafe ?? 0) / G;
 
-  // Afterburner: estimate boost acceleration from speed ratio
   const scmFwd = shipData.scmSpeed ?? 1;
   const boostFwd = shipData.boostSpeedForward ?? scmFwd;
-  const boostBwd = shipData.boostSpeedBackward ?? (shipData.scmSpeed ?? 1);
-  const boostRatio = scmFwd > 0 ? boostFwd / scmFwd : 1.5;
-  const boostRatioB = scmFwd > 0 ? boostBwd / scmFwd : 1.3;
+  const boostBwd = shipData.boostSpeedBackward ?? scmFwd;
+  const boostRatio = scmFwd > 0 ? Math.min(boostFwd / scmFwd, 3) : 1.5;
+  const boostRatioB = scmFwd > 0 ? Math.min(boostBwd / scmFwd, 3) : 1.3;
+  const boostMultUp = shipData.boostMultUp ?? 1.3;
+  const boostMultStrafe = shipData.boostMultStrafe ?? 1.3;
 
-  const afbFwdG = fwdG * Math.min(boostRatio, 3);
-  const afbBwdG = bwdG * Math.min(boostRatioB, 3);
-  const afbUpG = upG * 1.0;   // no boost data for vertical/lateral
-  const afbDownG = downG * 1.0;
-  const afbStrafeG = strafeG * 1.0;
+  const afbFwdG = fwdG * boostRatio;
+  const afbBwdG = bwdG * boostRatioB;
+  const afbUpG = upG * boostMultUp;
+  const afbDownG = downG * boostMultUp;
+  const afbStrafeG = strafeG * boostMultStrafe;
 
-  // Axes in 3D: X = Strafe, Y = Up/Down, Z = Forward/Back
-  // Isometric projection: xÔåÆ(cos30, sin30), zÔåÆ(-cos30, sin30), yÔåÆ(0,-1)
-  const W = 220, H = 220;
-  const cx = W / 2, cy = H / 2 + 10;
-  const scale = 18; // pixels per G
+  const W = 280, H = 280;
+  const cx = W / 2, cy = H / 2 + 5;
 
-  // Isometric basis vectors
-  const ix = { x: Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) };   // X axis ÔåÆ right-down
-  const iz = { x: -Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) };  // Z axis ÔåÆ left-down
-  const iy = { x: 0, y: -1 };                                           // Y axis ÔåÆ up
+  const allG = [fwdG, bwdG, upG, downG, strafeG, afbFwdG, afbBwdG, afbUpG, afbDownG, afbStrafeG].filter(v => v > 0);
+  const maxG = Math.max(...allG, 3);
+  const pixScale = 90 / maxG;
+
+  const ix = { x: Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) };
+  const iz = { x: -Math.cos(Math.PI / 6), y: Math.sin(Math.PI / 6) };
+  const iy = { x: 0, y: -1 };
 
   const project = (x: number, y: number, z: number) => ({
-    px: cx + (x * ix.x + z * iz.x + y * iy.x) * scale,
-    py: cy + (x * ix.y + z * iz.y + y * iy.y) * scale,
+    px: cx + (x * ix.x + z * iz.x + y * iy.x) * pixScale,
+    py: cy + (x * ix.y + z * iz.y + y * iy.y) * pixScale,
   });
 
-  // Max G for axis length
-  const maxG = Math.max(fwdG, bwdG, upG, downG, strafeG, afbFwdG, afbBwdG, 3);
-  const axLen = maxG * 1.3;
-
-  // Axis endpoints
+  const axLen = maxG * 1.05;
   const xPos = project(axLen, 0, 0);
   const xNeg = project(-axLen, 0, 0);
   const yPos = project(0, axLen, 0);
-  const yNeg = project(0, -axLen, 0);
   const zPos = project(0, 0, axLen);
   const zNeg = project(0, 0, -axLen);
-  // Build 3D shapes for SCM and AFB
-  // SCM shape: a polyhedron projected to 2D (6 vertices: ┬▒X, ┬▒Y, ┬▒Z)
+
   const scmPts = [
-    project(strafeG, 0, 0),    // +X (right strafe)
-    project(0, upG, 0),         // +Y (up)
-    project(0, 0, fwdG),        // +Z (forward)
-    project(-strafeG, 0, 0),   // -X (left strafe)
-    project(0, -downG, 0),      // -Y (down)
-    project(0, 0, -bwdG),       // -Z (backward)
+    project(strafeG, 0, 0), project(0, upG, 0), project(0, 0, fwdG),
+    project(-strafeG, 0, 0), project(0, -downG, 0), project(0, 0, -bwdG),
+  ];
+  const afbPts = [
+    project(afbStrafeG, 0, 0), project(0, afbUpG, 0), project(0, 0, afbFwdG),
+    project(-afbStrafeG, 0, 0), project(0, -afbDownG, 0), project(0, 0, -afbBwdG),
   ];
 
-  const afbPts = [
-    project(afbStrafeG, 0, 0),
-    project(0, afbUpG, 0),
-    project(0, 0, afbFwdG),
-    project(-afbStrafeG, 0, 0),
-    project(0, -afbDownG, 0),
-    project(0, 0, -afbBwdG),
+  const edgePairs: [number, number][] = [
+    [0,1],[0,2],[0,4],[0,5],[1,2],[1,3],[1,5],[2,4],[3,4],[3,5],[2,3],[4,5],
   ];
 
   const scmColor = "#f59e0b";
   const afbColor = "#ef4444";
 
-  const shapePath = (pts: { px: number; py: number }[]) => {
-    // Draw diamond outline: +X ÔåÆ +Z ÔåÆ -X ÔåÆ -Z (equator), then connect top/bottom
-    const equator = [pts[0], pts[2], pts[3], pts[5]];
-    const top = pts[1];
-    const bottom = pts[4];
-    // Draw 8 triangular faces as a wireframe with fill
-    const faces = [
-      [equator[0], top, equator[1]],
-      [equator[1], top, equator[2]],
-      [equator[2], top, equator[3]],
-      [equator[3], top, equator[0]],
-      [equator[0], bottom, equator[1]],
-      [equator[1], bottom, equator[2]],
-      [equator[2], bottom, equator[3]],
-      [equator[3], bottom, equator[0]],
-    ];
-    return faces;
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H, overflow: "hidden" }}>
+      {/* XYZ axes */}
+      <line x1={xNeg.px} y1={xNeg.py} x2={xPos.px} y2={xPos.py} stroke="#3f3f46" strokeWidth={0.5} />
+      <line x1={cx} y1={project(0, axLen, 0).py} x2={cx} y2={project(0, -axLen * 0.6, 0).py} stroke="#3f3f46" strokeWidth={0.5} />
+      <line x1={zNeg.px} y1={zNeg.py} x2={zPos.px} y2={zPos.py} stroke="#3f3f46" strokeWidth={0.5} />
+
+      {/* Axis labels */}
+      {[
+        { p: xPos, text: "Strafe", dx: 4, dy: 3 },
+        { p: zPos, text: "Fwd", dx: -8, dy: 12 },
+        { p: zNeg, text: "Bwd", dx: 2, dy: -4 },
+        { p: yPos, text: "Up", dx: 4, dy: 2 },
+      ].map((item, i) => (
+        <text key={`al-${i}`} x={item.p.px + item.dx} y={item.p.py + item.dy}
+          style={{ fontSize: "7px", fontFamily: "monospace", fill: "#52525b" }}>{item.text}</text>
+      ))}
+
+      {/* AFB wireframe (red) */}
+      {edgePairs.map(([a, b], i) => (
+        <line key={`ae-${i}`} x1={afbPts[a].px} y1={afbPts[a].py} x2={afbPts[b].px} y2={afbPts[b].py}
+          stroke={afbColor} strokeWidth={0.8} opacity={0.5} />
+      ))}
+
+      {/* SCM wireframe (orange) */}
+      {edgePairs.map(([a, b], i) => (
+        <line key={`se-${i}`} x1={scmPts[a].px} y1={scmPts[a].py} x2={scmPts[b].px} y2={scmPts[b].py}
+          stroke={scmColor} strokeWidth={1.2} opacity={0.85} />
+      ))}
+
+      {/* SCM vertices */}
+      {scmPts.map((p, i) => <circle key={`sv-${i}`} cx={p.px} cy={p.py} r={2} fill={scmColor} />)}
+      {/* AFB vertices */}
+      {afbPts.map((p, i) => <circle key={`av-${i}`} cx={p.px} cy={p.py} r={1.5} fill={afbColor} opacity={0.5} />)}
+    </svg>
+  );
+}
+
+/** G-Force Profile — Hex radar (6-axis) for G-forces */
+function GForceRadar({ shipData }: { shipData: any }) {
+  const fwdG = shipData.accelForwardG ?? 0;
+  const bwdG = shipData.accelBackwardG ?? 0;
+  const upG = shipData.accelUpG ?? 0;
+  const downG = shipData.accelDownG ?? 0;
+  const strafeG = shipData.accelStrafeG ?? 0;
+
+  const scmSpd = shipData.scmSpeed ?? 1;
+  const boostFwdSpd = shipData.boostSpeedForward ?? scmSpd;
+  const boostBwdSpd = shipData.boostSpeedBackward ?? scmSpd;
+  const ratioF = scmSpd > 0 ? Math.min(boostFwdSpd / scmSpd, 3) : 1.5;
+  const ratioB = scmSpd > 0 ? Math.min(boostBwdSpd / scmSpd, 3) : 1.3;
+  const boostMultUp = shipData.boostMultUp ?? 1.3;
+  const boostMultStrafe = shipData.boostMultStrafe ?? 1.3;
+
+  const afbFwdG = fwdG * ratioF;
+  const afbBwdG = bwdG * ratioB;
+  const afbUpG = upG * boostMultUp;
+  const afbDownG = downG * boostMultUp;
+  const afbStrafeG = strafeG * boostMultStrafe;
+
+  const axes = [
+    { label: "Fwd", scm: fwdG, afb: afbFwdG },
+    { label: "Strafe R", scm: strafeG, afb: afbStrafeG },
+    { label: "Down", scm: downG, afb: afbDownG },
+    { label: "Bwd", scm: bwdG, afb: afbBwdG },
+    { label: "Strafe L", scm: strafeG, afb: afbStrafeG },
+    { label: "Up", scm: upG, afb: afbUpG },
+  ];
+
+  const globalMax = Math.max(...axes.map(a => Math.max(a.scm, a.afb)), 3);
+  const size = 280;
+  const cx = size / 2, cy = size / 2;
+  const radius = size * 0.32;
+  const n = 6;
+  const step = (2 * Math.PI) / n;
+  const startAngle = -Math.PI / 2;
+
+  const gridMarks = Array.from({ length: Math.ceil(globalMax) }, (_, i) => i + 1).filter(g => g <= globalMax);
+
+  const ptAt = (i: number, r: number) => {
+    const a = startAngle + i * step;
+    return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
   };
 
-  const scmFaces = shapePath(scmPts);
-  const afbFaces = shapePath(afbPts);
+  const polyPts = (vals: number[]) => vals.map((v, i) => {
+    const norm = globalMax > 0 ? Math.min(1, v / globalMax) : 0;
+    const p = ptAt(i, norm * radius);
+    return `${p.x},${p.y}`;
+  }).join(" ");
 
-  // Grid lines along each axis
-  const gridMarks = [1, 2, 3, 4, 5, 6, 7, 8].filter(g => g <= axLen);
+  const scmVals = axes.map(a => a.scm);
+  const afbVals = axes.map(a => a.afb);
+  const scmColor = "#f59e0b";
+  const afbColor = "#ef4444";
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: W, height: H }}>
-      {/* Grid tick marks on axes */}
-      {gridMarks.map(g => {
-        const tickSize = 0.15;
-        // X-axis ticks
-        const xp = project(g, 0, 0);
-        const xn = project(-g, 0, 0);
-        const xpT = project(g, tickSize, 0);
-        const xnT = project(-g, tickSize, 0);
-        // Z-axis ticks
-        const zp = project(0, 0, g);
-        const zn = project(0, 0, -g);
-        const zpT = project(0, tickSize, g);
-        const znT = project(0, tickSize, -g);
-        // Y-axis ticks
-        const yp = project(0, g, 0);
-        const yn = project(0, -g, 0);
-        const ypT = project(tickSize, g, 0);
-        const ynT = project(tickSize, -g, 0);
+    <svg viewBox={`0 0 ${size} ${size}`} style={{ width: size, height: size, overflow: "hidden" }}>
+      {/* Grid rings at each G */}
+      {gridMarks.filter(g => g % (globalMax > 6 ? 2 : 1) === 0).map(g => {
+        const r = (g / globalMax) * radius;
+        const pts = Array.from({ length: n }, (_, i) => ptAt(i, r));
+        return <polygon key={`g-${g}`} points={pts.map(p => `${p.x},${p.y}`).join(" ")} fill="none" stroke="#3f3f46" strokeWidth={0.5} opacity={g % 2 === 0 ? 0.5 : 0.3} />;
+      })}
+      {/* Axis lines */}
+      {axes.map((_, i) => {
+        const p = ptAt(i, radius);
+        return <line key={`ax-${i}`} x1={cx} y1={cy} x2={p.x} y2={p.y} stroke="#3f3f46" strokeWidth={0.5} opacity={0.3} />;
+      })}
+      {/* G labels on first axis */}
+      {gridMarks.filter(g => g % (globalMax > 6 ? 2 : 1) === 0).map(g => {
+        const r = (g / globalMax) * radius;
+        const p = ptAt(0, r);
+        return <text key={`gv-${g}`} x={p.x + 4} y={p.y - 3} style={{ fontSize: "6.5px", fontFamily: "monospace", fill: "#52525b", fontWeight: 600 }}>{g}G</text>;
+      })}
+
+      {/* Human tolerance reference at 9G */}
+      {globalMax > 7 && (() => {
+        const r9 = (9 / globalMax) * radius;
+        const pts9 = Array.from({ length: n }, (_, i) => ptAt(i, r9));
+        return <polygon points={pts9.map(p => `${p.x},${p.y}`).join(" ")}
+          fill="none" stroke="#dc2626" strokeWidth={0.5} strokeDasharray="2,3" opacity={0.4} />;
+      })()}
+
+      {/* AFB shape (behind) */}
+      <polygon points={polyPts(afbVals)} fill={afbColor} fillOpacity={0.06} stroke={afbColor} strokeWidth={1} strokeLinejoin="round" strokeDasharray="3,2" opacity={0.6} />
+      {afbVals.map((v, i) => {
+        const norm = globalMax > 0 ? Math.min(1, v / globalMax) : 0;
+        const p = ptAt(i, norm * radius);
+        return v > 0 ? <circle key={`ab-${i}`} cx={p.x} cy={p.y} r={1.5} fill={afbColor} opacity={0.5} /> : null;
+      })}
+
+      {/* SCM shape (front) */}
+      <polygon points={polyPts(scmVals)} fill={scmColor} fillOpacity={0.15} stroke={scmColor} strokeWidth={1.5} strokeLinejoin="round" />
+      {scmVals.map((v, i) => {
+        const norm = globalMax > 0 ? Math.min(1, v / globalMax) : 0;
+        const p = ptAt(i, norm * radius);
+        return v > 0 ? <circle key={`sv-${i}`} cx={p.x} cy={p.y} r={2.5} fill={scmColor} stroke="#18181b" strokeWidth={0.6} /> : null;
+      })}
+
+      {/* SCM value labels */}
+      {axes.map((a, i) => {
+        if (a.scm <= 0 || (i === 4 && axes[1].scm === a.scm)) return null;
+        const norm = Math.min(1, a.scm / globalMax);
+        const p = ptAt(i, norm * radius);
+        const labelX = p.x + (p.x > cx ? 6 : p.x < cx ? -32 : -14);
+        const labelY = p.y + (p.y > cy ? 12 : p.y < cy ? -5 : 3);
         return (
-          <g key={`grid-${g}`} opacity={0.3}>
-            <line x1={xp.px} y1={xp.py} x2={xpT.px} y2={xpT.py} stroke="#71717a" strokeWidth={0.5} />
-            <line x1={xn.px} y1={xn.py} x2={xnT.px} y2={xnT.py} stroke="#71717a" strokeWidth={0.5} />
-            <line x1={zp.px} y1={zp.py} x2={zpT.px} y2={zpT.py} stroke="#71717a" strokeWidth={0.5} />
-            <line x1={zn.px} y1={zn.py} x2={znT.px} y2={znT.py} stroke="#71717a" strokeWidth={0.5} />
-            <line x1={yp.px} y1={yp.py} x2={ypT.px} y2={ypT.py} stroke="#71717a" strokeWidth={0.5} />
-            <line x1={yn.px} y1={yn.py} x2={ynT.px} y2={ynT.py} stroke="#71717a" strokeWidth={0.5} />
-            {g % 2 === 0 && (
-              <text x={yp.px + 6} y={yp.py + 2} style={{ fontSize: "5px", fontFamily: "monospace", fill: "#52525b" }}>{g}G</text>
-            )}
+          <g key={`sl-${i}`}>
+            <rect x={labelX - 2} y={labelY - 8} width={32} height={11} rx={2} fill="#18181b" fillOpacity={0.85} />
+            <text x={labelX} y={labelY} style={{ fontSize: "7.5px", fontFamily: "monospace", fill: scmColor, fontWeight: 700 }}>{a.scm.toFixed(1)}G</text>
           </g>
         );
       })}
 
-      {/* 3D axes */}
-      <line x1={xNeg.px} y1={xNeg.py} x2={xPos.px} y2={xPos.py} stroke="#71717a" strokeWidth={0.5} opacity={0.4} />
-      <line x1={yNeg.px} y1={yNeg.py} x2={yPos.px} y2={yPos.py} stroke="#71717a" strokeWidth={0.5} opacity={0.4} />
-      <line x1={zNeg.px} y1={zNeg.py} x2={zPos.px} y2={zPos.py} stroke="#71717a" strokeWidth={0.5} opacity={0.4} />
-
-      {/* AFB 3D diamond (behind) */}
-      {afbFaces.map((face, i) => (
-        <polygon key={`afb-f${i}`} points={face.map(p => `${p.px},${p.py}`).join(" ")} fill={afbColor} fillOpacity={0.06} stroke={afbColor} strokeWidth={0.6} strokeLinejoin="round" strokeDasharray="3,2" opacity={0.5} />
-      ))}
-      {/* AFB vertices */}
-      {afbPts.map((p, i) => <circle key={`afb-v${i}`} cx={p.px} cy={p.py} r={1.5} fill={afbColor} opacity={0.5} />)}
-
-      {/* SCM 3D diamond (front) */}
-      {scmFaces.map((face, i) => (
-        <polygon key={`scm-f${i}`} points={face.map(p => `${p.px},${p.py}`).join(" ")} fill={scmColor} fillOpacity={0.1} stroke={scmColor} strokeWidth={0.8} strokeLinejoin="round" opacity={0.7} />
-      ))}
-      {/* SCM vertices */}
-      {scmPts.map((p, i) => <circle key={`scm-v${i}`} cx={p.px} cy={p.py} r={2} fill={scmColor} stroke="#18181b" strokeWidth={0.5} />)}
-
       {/* Axis labels */}
-      <text x={xPos.px + 4} y={xPos.py + 2} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Strafe</text>
-      <text x={xNeg.px - 28} y={xNeg.py + 2} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Strafe</text>
-      <text x={zPos.px - 30} y={zPos.py + 2} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Fwd</text>
-      <text x={zNeg.px + 4} y={zNeg.py + 2} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Bwd</text>
-      <text x={yPos.px + 4} y={yPos.py + 3} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Up</text>
-      <text x={yNeg.px + 4} y={yNeg.py + 3} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>Down</text>
-
-      {/* G-force value labels at vertices */}
-      {[
-        { pt: scmPts[0], val: strafeG, label: "", dx: 6, dy: -4 },
-        { pt: scmPts[1], val: upG, label: "", dx: 8, dy: 0 },
-        { pt: scmPts[2], val: fwdG, label: "", dx: -18, dy: -6 },
-        { pt: scmPts[4], val: downG, label: "", dx: 8, dy: 0 },
-        { pt: scmPts[5], val: bwdG, label: "", dx: 6, dy: -4 },
-      ].map((item, i) => (
-        <text key={`sv-${i}`} x={item.pt.px + item.dx} y={item.pt.py + item.dy} style={{ fontSize: "7px", fontFamily: "monospace", fill: scmColor, fontWeight: 600 }}>{item.val.toFixed(1)}G</text>
-      ))}
+      {axes.map((a, i) => {
+        const labelR = radius + 14;
+        const p = ptAt(i, labelR);
+        const anchor = p.x > cx + 5 ? "start" : p.x < cx - 5 ? "end" : "middle";
+        return <text key={`al-${i}`} x={p.x} y={p.y + 3} textAnchor={anchor}
+          style={{ fontSize: "8px", fontFamily: "monospace", fill: "#a1a1aa", fontWeight: 600 }}>{a.label}</text>;
+      })}
 
       {/* Legend */}
-      <rect x={4} y={H - 16} width={6} height={6} rx={1} fill={scmColor} opacity={0.8} />
-      <text x={13} y={H - 10} style={{ fontSize: "6px", fontFamily: "monospace", fill: "#71717a" }}>SCM</text>
-      <rect x={40} y={H - 16} width={6} height={6} rx={1} fill={afbColor} opacity={0.6} />
-      <text x={49} y={H - 10} style={{ fontSize: "6px", fontFamily: "monospace", fill: "#71717a" }}>AFB</text>
+      <rect x={6} y={size - 18} width={7} height={7} rx={1.5} fill={scmColor} opacity={0.85} />
+      <text x={16} y={size - 11} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#71717a" }}>SCM</text>
+      <rect x={46} y={size - 18} width={7} height={7} rx={1.5} fill={afbColor} opacity={0.65} />
+      <text x={56} y={size - 11} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#71717a" }}>AFB</text>
     </svg>
+  );
+}
+
+/** G-Force Profile — Tab wrapper for 3D/Radar toggle */
+function GForceProfileTabs({ shipData }: { shipData: any }) {
+  const [view, setView] = useState<"3d" | "radar">("3d");
+  return (
+    <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase">G-Force Profile</div>
+        <div className="flex gap-0.5 bg-zinc-800/60 rounded p-0.5">
+          <button onClick={() => setView("3d")}
+            className={`px-2 py-0.5 text-[8px] font-mono rounded transition-colors ${view === "3d" ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>3D</button>
+          <button onClick={() => setView("radar")}
+            className={`px-2 py-0.5 text-[8px] font-mono rounded transition-colors ${view === "radar" ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>Radar</button>
+        </div>
+      </div>
+      <div className="flex justify-center">
+        {view === "3d" ? <GForce3DChart shipData={shipData} /> : <GForceRadar shipData={shipData} />}
+      </div>
+    </div>
   );
 }

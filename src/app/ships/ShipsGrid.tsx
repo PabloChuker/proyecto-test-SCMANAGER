@@ -12,6 +12,10 @@ import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { ShipCard } from "@/components/ships/ShipCard";
 import { ShipFilters } from "@/components/ships/ShipFilters";
+import {
+  ShipContextMenu,
+  type ShipContextMenuTarget,
+} from "@/components/ships/ShipContextMenu";
 import type { ShipListResponse, ShipListItem } from "@/types/ships";
 
 const DEBOUNCE_MS = 300;
@@ -33,6 +37,9 @@ export function ShipsGrid() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // ── Context menu state ──
+  const [contextMenu, setContextMenu] = useState<ShipContextMenuTarget | null>(null);
 
   // ── Sincronizar URL → estado local cuando se navega con back/forward ──
   useEffect(() => {
@@ -156,10 +163,25 @@ export function ShipsGrid() {
             className="animate-in fade-in slide-in-from-bottom-2"
             style={{ animationDelay: `${index * 30}ms`, animationFillMode: "both" }}
           >
-            <ShipCard ship={ship} />
+            <ShipCard
+              ship={ship}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setContextMenu({
+                  reference: ship.reference,
+                  name: ship.localizedName || ship.name,
+                  manufacturer: ship.manufacturer,
+                  x: e.clientX,
+                  y: e.clientY,
+                });
+              }}
+            />
           </div>
         ))}
       </div>
+
+      {/* Context menu global */}
+      <ShipContextMenu target={contextMenu} onClose={() => setContextMenu(null)} />
 
       {/* Estado vacío */}
       {!loading && data?.data.length === 0 && (

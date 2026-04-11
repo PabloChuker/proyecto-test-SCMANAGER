@@ -28,17 +28,48 @@ export type InsuranceType =
 
 export type ItemLocation = "hangar" | "buyback" | "ccu_chain";
 
+export type ItemCategory =
+  | "standalone_ship"
+  | "game_package"
+  | "paint"
+  | "flair"
+  | "gear"
+  | "subscriber"
+  | "upgrade"
+  | "other";
+
+/**
+ * Cómo se obtuvo la nave:
+ *   - "pledge"  → comprada en la tienda de RSI con USD (pledge store)
+ *   - "in_game" → comprada dentro del juego con aUEC
+ * Campo opcional para backward-compat: los items existentes sin este campo
+ * se tratan como "pledge" por default.
+ */
+export type AcquisitionType = "pledge" | "in_game";
+
 export interface HangarShip {
   id: string; // UUID generated on add
   shipReference: string; // matches ships table reference
+  shipName: string; // actual ship name ("Gladius", "Perseus") for image lookup
   pledgeName: string; // "Standalone Ships - Cutlass Black"
   pledgePrice: number; // USD
   insuranceType: InsuranceType;
   location: ItemLocation;
+  itemCategory: ItemCategory; // what kind of pledge item this is
   isGiftable: boolean;
   isMeltable: boolean;
   purchasedDate: string | null; // ISO date
+  imageUrl: string; // RSI CDN image URL
   notes: string;
+  acquisitionType?: AcquisitionType; // pledge (default) o in_game
+
+  // ── Loaner tracking (RSI Loaner Ship Matrix) ──
+  // A "loaner" is a temporary ship granted by RSI while the pledged ship
+  // is not yet Flight Ready. Loaners are auto-added when a pledge ship is
+  // added to the hangar and are auto-removed when the parent pledge is
+  // removed. Loaners cannot be sold/melted.
+  isLoaner?: boolean;        // true → this entry is a loaner, not a real pledge
+  loanerOf?: string;         // id of the parent HangarShip that granted this loaner
 }
 
 export interface HangarCCU {
@@ -75,6 +106,19 @@ export interface CCUChain {
   status: "planning" | "in_progress" | "completed";
 }
 
+export type WishlistPriority = "low" | "medium" | "high";
+
+export interface HangarWishlistItem {
+  id: string;
+  shipReference: string;
+  shipName: string;
+  manufacturer: string | null;
+  priority: WishlistPriority;
+  targetPrice: number | null; // USD - precio esperado de compra
+  notes: string;
+  addedDate: string; // ISO
+}
+
 // =============================================================================
 // Store State & Actions
 // =============================================================================
@@ -83,9 +127,10 @@ export interface HangarStoreState {
   ships: HangarShip[];
   ccus: HangarCCU[];
   chains: CCUChain[];
+  wishlist: HangarWishlistItem[];
 
   // Ship actions
-  addShip: (ship: Omit<HangarShip, "id">) => void;
+  addShip: (ship: Omit<HangarShip, "id">) => string; // returns new ship id
   removeShip: (id: string) => void;
   updateShip: (id: string, updates: Partial<HangarShip>) => void;
 
@@ -99,10 +144,17 @@ export interface HangarStoreState {
   removeChain: (id: string) => void;
   updateChain: (id: string, updates: Partial<CCUChain>) => void;
 
+  // Wishlist actions
+  addToWishlist: (item: Omit<HangarWishlistItem, "id" | "addedDate">) => void;
+  removeFromWishlist: (id: string) => void;
+  updateWishlistItem: (id: string, updates: Partial<HangarWishlistItem>) => void;
+  moveWishlistToFleet: (id: string) => void;
+  isInWishlist: (shipReference: string) => boolean;
+
   // Import/Export
   importFromJSON: (
     data: any
-  ) => { ships: number; ccus: number; errors: string[] };
+  ) => { ships: number; ccus: number; summary: ImportSummary | null; errors: string[] };
   exportToJSON: () => string;
   clearAll: () => void;
 }
@@ -119,10 +171,267 @@ function generateUUID(): string {
 }
 
 /**
- * Parse Guildswarm format JSON
- * Expected structure: array of items with fields like "title", "value", "insurance", "kind", "isGiftable", "isReclaimable", "date", "items"
+ * Clean CCU ship names by removing edition suffixes (Standard Edition, Warbond Edition, etc.)
  */
-function parseGuildswarmFormat(data: any[]): {
+function cleanCCUShipName(raw: string): string {
+  return raw
+    .replace(/\s*[-–]?\s*(Standard|Warbond)\s*(Edition)?.*$/i, "")
+    .replace(/\s*[-–]\s*(LTI|IAE|Invictus|BIS|Best in Show|Anniversary|Citizencon).*$/i, "")
+    .trim();
+}
+
+/**
+ * Parse SC Labs Hangar Importer format JSON
+ * Structure: { version, myHangar: [...], myBuyBack: [...] }
+ * Each item: { id, name, image, lastModification, contained, link, available, category,
+ *              elementData?: { price, shipInThisPackData, alsoContainData },
+ *              ccuInfo?: { toSkuId, fromShipData, toShipData, price } }
+ */
+function parseSCLabsItems(items: any[], location: ItemLocation): {
+  ships: Omit<HangarShip, "id">[];
+  ccus: Omit<HangarCCU, "id">[];
+  skipped: number;
+  errors: string[];
+} {
+  const ships: Omit<HangarShip, "id">[] = [];
+  const ccus: Omit<HangarCCU, "id">[] = [];
+  const errors: string[] = [];
+  const skipped = 0;
+
+  for (const item of items) {
+    try {
+      const category = item.category || "";
+      const name = item.name || "";
+
+      if (category === "upgrade" && item.ccuInfo) {
+        // Parse as CCU upgrade
+        const ci = item.ccuInfo;
+        const rawFrom = ci.fromShipData?.name || "";
+        const rawTo = ci.toShipData?.name || "";
+        const ccu: Omit<HangarCCU, "id"> = {
+          fromShip: cleanCCUShipName(rawFrom),
+          fromShipReference: "",
+          toShip: cleanCCUShipName(rawTo),
+          toShipReference: "",
+          pricePaid: ci.price || 0,
+          isWarbond: rawTo.toLowerCase().includes("warbond") || name.toLowerCase().includes("warbond"),
+          location: location === "ccu_chain" ? "hangar" : location,
+          notes: "",
+        };
+        if (ccu.fromShip && ccu.toShip) {
+          ccus.push(ccu);
+        }
+      } else {
+        // Parse as item (ship, paint, flair, gear, subscriber, etc.)
+        const ed = item.elementData || {};
+        const shipList = ed.shipInThisPackData || [];
+        const price = ed.price || 0;
+        const alsoContains = ed.alsoContainData || [];
+        const imageUrl = item.image || "";
+
+        // Detect insurance from alsoContains and pledge name
+        let insurance: InsuranceType = "unknown";
+        const allTexts = [...alsoContains, name];
+        for (const extra of allTexts) {
+          const extraLower = String(extra).toLowerCase();
+          if (extraLower.includes("lifetime")) { insurance = "LTI"; break; }
+          if (extraLower.includes("120")) { insurance = "120_months"; break; }
+          if (extraLower.includes("72")) { insurance = "72_months"; break; }
+          if (extraLower.includes("48")) { insurance = "48_months"; break; }
+          if (extraLower.includes("24")) { insurance = "24_months"; break; }
+          if (extraLower.includes("10 year") || extraLower.includes("10year") || extraLower.includes("10-year")) { insurance = "120_months"; break; }
+          if (extraLower.includes("6 month")) { insurance = "6_months"; break; }
+          if (extraLower.includes("3 month")) { insurance = "3_months"; break; }
+        }
+
+        // Determine item category
+        const itemCat = detectItemCategory(name, category);
+
+        if ((itemCat === "standalone_ship" || itemCat === "game_package") && shipList.length > 0) {
+          for (const shipInfo of shipList) {
+            const sName = shipInfo.name || "";
+            ships.push({
+              shipReference: "",
+              shipName: sName,
+              pledgeName: name,
+              pledgePrice: shipList.length === 1 ? price : 0,
+              insuranceType: insurance,
+              location,
+              itemCategory: itemCat,
+              isGiftable: item.isGiftable || false,
+              isMeltable: item.isExchangeable || true,
+              purchasedDate: item.lastModification ? parseDateString(item.lastModification) : null,
+              imageUrl,
+              notes: shipList.length > 1 ? `Part of package: ${name}` : "",
+            });
+          }
+        } else {
+          // Single item (ship without detailed data, paint, gear, flair, etc.)
+          const extractedName = (itemCat === "standalone_ship" || itemCat === "game_package")
+            ? extractShipNameFromPledge(name)
+            : extractItemName(name);
+          ships.push({
+            shipReference: "",
+            shipName: extractedName,
+            pledgeName: name,
+            pledgePrice: price,
+            insuranceType: insurance,
+            location,
+            itemCategory: itemCat,
+            isGiftable: item.isGiftable || false,
+            isMeltable: item.isExchangeable || true,
+            purchasedDate: item.lastModification ? parseDateString(item.lastModification) : null,
+            imageUrl,
+            notes: "",
+          });
+        }
+      }
+    } catch (err) {
+      errors.push(
+        `Failed to parse "${item.name || "unknown"}": ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  return { ships, ccus, skipped, errors };
+}
+
+/**
+ * Detect the item category from name and raw category
+ */
+function detectItemCategory(name: string, rawCategory: string): ItemCategory {
+  // If the extension already classified it, trust that
+  if (rawCategory === "standalone_ship") return "standalone_ship";
+  if (rawCategory === "game_package") return "game_package";
+  if (rawCategory === "paint") return "paint";
+  if (rawCategory === "gear") return "gear";
+  if (rawCategory === "flair") return "flair";
+  if (rawCategory === "subscriber") return "subscriber";
+  if (rawCategory === "upgrade") return "upgrade";
+
+  // Name-based detection for items with empty/unknown category
+  const n = name.toLowerCase();
+
+  // CCU / Upgrades
+  if (n.startsWith("upgrade -") || n.startsWith("upgrade –") || n.startsWith("ship upgrades -") || n.startsWith("ship upgrade")) return "upgrade";
+
+  // Ships
+  if (n.startsWith("standalone ship")) return "standalone_ship";
+
+  // Game packages
+  if (n.startsWith("package -") || n.startsWith("package –") || n.includes("starter pack") || n.includes("game package") || n.includes("squadron 42")) return "game_package";
+
+  // Paints / Skins / Liveries (including BIS reward paints for ships)
+  if (n.startsWith("paints -") || n.startsWith("paint -") || n.includes(" paint") ||
+      n.includes("skin -") || n.includes("livery") || n.includes("coloration")) return "paint";
+  // BIS (Best in Show) ship rewards are typically paints — but NOT pennants, trophies, charms
+  if ((n.includes("bis ") || n.includes("best in show")) && n.includes("reward") &&
+      !n.includes("pennant") && !n.includes("trophy") && !n.includes("charm") &&
+      !n.includes("plushie") && !n.includes("figurine") && !n.includes("poster") &&
+      !n.includes("coin") && !n.includes("badge") && !n.includes("helmet") &&
+      !n.includes("armor") && !n.includes("gear")) return "paint";
+
+  // Gear / Armor / Weapons / Tools / Suits / Packs
+  if (n.startsWith("gear -") || n.startsWith("add-ons -") ||
+      n.includes("armor") || n.includes("helmet") || n.includes("undersuit") ||
+      n.includes("backpack") || n.includes("jacket") || n.includes("weapons pack") || n.includes("weapon pack") ||
+      n.includes("multi-tool") || n.includes("knife") || n.includes("combat knife") ||
+      n.includes("pistol") || n.includes("rifle") || n.includes("shotgun") || n.includes("smg") || n.includes("lmg") ||
+      n.includes("grenade launcher") || n.includes("tractor beam") || n.includes("mining gadget") ||
+      n.includes("repeater") || n.includes("cannon") || n.includes("laser cannon") ||
+      n.includes("hazard suit") || n.includes("refinery suit") || n.includes("service uniform") ||
+      n.includes("medical device") || n.includes("mask") || n.includes("flight blades") ||
+      n.includes("bomb rack") || n.includes("weapon kit") || n.includes("upgrade kit") ||
+      n.includes("quikflare") || n.includes("medivac") || n.includes("purifier") ||
+      n.includes("gear pack") || n.includes("hydration pack")) return "gear";
+
+  // Subscriber items
+  if (n.startsWith("subscribers ") || n.startsWith("subscriber ") || n.includes("subscribers exclusive") ||
+      n.includes("imperator reward") || n.includes("centurion reward") ||
+      n.includes("vip grand admiral") || n.includes("vip high admiral")) return "subscriber";
+
+  // Flair — decorations, trophies, rewards, coins, collectibles, event items
+  if (n.includes("flair") || n.includes("trophy") || n.includes("pennant") ||
+      n.includes("charm") || n.includes("plushie") || n.includes("figurine") || n.includes("poster") ||
+      n.includes("calendar") || n.includes("statue") || n.includes("diorama") ||
+      n.includes("bis ") || n.includes("best in show") ||
+      n.includes("festival") || n.includes("citizencon") ||
+      n.includes("holiday") || n.includes("hangar decoration") || n.includes("flower") ||
+      n.includes("pet") || n.includes("stuffed") || n.includes("bobblehead") ||
+      n.includes("space globe") || n.includes("display case") || n.includes("lamp") ||
+      n.includes("rug") || n.includes("towel") || n.includes("mug") || n.includes("cup") ||
+      n.includes("action figure") || n.includes("badge") || n.includes("pin") ||
+      n.includes("challenge coin") || n.includes("coin") || n.includes("envelope") ||
+      n.includes("year of the") || n.includes("coramor") ||
+      n.includes("reward") || n.includes("goodies") || n.includes("t-shirt") ||
+      n.includes("luminalia") || n.includes("invictus") ||
+      n.includes("advent") || n.includes("referral bonus") ||
+      n.includes("chair") || n.includes("couch") || n.includes("lounge") || n.includes("throne") ||
+      n.includes("nightstand") || n.includes("loveseat") || n.includes("cushion") ||
+      n.includes("vase") || n.includes("plant pot") || n.includes("bust") ||
+      n.includes("banner") || n.includes("specimen tank") || n.includes("cargo collection") ||
+      n.includes("display") || n.includes("die ship") || n.includes("toy pistol") ||
+      n.includes("resource drive") || n.includes("salvaged") ||
+      n.includes("pirate week") || n.includes("xenothreat") ||
+      n.includes("birthday goodies") || n.includes("digital goodies") ||
+      n.includes("killer creature") || n.includes("brands of the") ||
+      n.includes("cold front") || n.includes("cuddly cargo") || n.includes("decorative cargo") ||
+      n.includes("explorer") || n.includes("adventurer") ||
+      n.includes("big winner") || n.includes("completion package") ||
+      n.includes("patch collection") || n.includes("resupply") ||
+      n.includes("academy") || n.includes("grx prototype") ||
+      n.includes("coupon") || n.includes("gourd") || n.includes("ornate")) return "flair";
+
+  // Packs / Bundles
+  if (n.includes("packs -") || n.includes("bundle") || n.includes("combo") ||
+      n.includes("master set")) return "gear";
+
+  return "other";
+}
+
+/**
+ * Extract clean item name from pledge names like "Paints - Hermes - Tripline Paint"
+ */
+function extractItemName(pledgeName: string): string {
+  let name = pledgeName;
+  const prefixes = ["Paints - ", "Paint - ", "Gear - ", "Subscribers Store - ", "Subscribers - "];
+  for (const p of prefixes) {
+    if (name.startsWith(p)) { name = name.slice(p.length); break; }
+  }
+  return name.trim();
+}
+
+/**
+ * Extract ship name from pledge name like "Standalone Ships - Perseus - 10 Year"
+ */
+function extractShipNameFromPledge(pledgeName: string): string {
+  let name = pledgeName;
+  // Remove prefixes
+  const prefixes = ["Standalone Ships - ", "Package - "];
+  for (const p of prefixes) {
+    if (name.startsWith(p)) { name = name.slice(p.length); break; }
+  }
+  // Remove suffixes like "- 10 Year", "- Best in Show 2955 Edition", "- upgraded"
+  name = name.replace(/\s*-\s*(10 Year|Best in Show.*|upgraded|Warbond.*|Standard Edition.*|IAE.*|Invictus.*)$/i, "");
+  return name.trim();
+}
+
+/**
+ * Parse date strings like "March 15, 2026" to ISO
+ */
+function parseDateString(dateStr: string): string | null {
+  try {
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Legacy format parser (older format with kind/title/value)
+ */
+function parseLegacyFormat(data: any[]): {
   ships: Omit<HangarShip, "id">[];
   ccus: Omit<HangarCCU, "id">[];
   errors: string[];
@@ -131,54 +440,42 @@ function parseGuildswarmFormat(data: any[]): {
   const ccus: Omit<HangarCCU, "id">[] = [];
   const errors: string[] = [];
 
-  if (!Array.isArray(data)) {
-    errors.push("Guildswarm format: expected an array");
-    return { ships, ccus, errors };
-  }
-
   for (const item of data) {
     try {
       const kind = item.kind || "";
       const title = item.title || "";
-      const value = item.value || "";
 
       if (kind === "Standalone Ship" || kind.includes("Standalone")) {
-        // Parse as ship
-        const ship: Omit<HangarShip, "id"> = {
-          shipReference: item.shipReference || value,
+        ships.push({
+          shipReference: item.shipReference || "",
+          shipName: extractShipNameFromPledge(title),
           pledgeName: title,
           pledgePrice: parseFloat(item.value) || 0,
           insuranceType: parseInsuranceType(item.insurance),
           location: "hangar",
-          isGiftable: item.isGiftable === true || item.isGiftable === "true",
-          isMeltable: item.isReclaimable === true || item.isReclaimable === "true",
+          itemCategory: "standalone_ship",
+          isGiftable: item.isGiftable === true,
+          isMeltable: item.isReclaimable === true,
           purchasedDate: item.date ? new Date(item.date).toISOString() : null,
-          notes: item.notes || "",
-        };
-        ships.push(ship);
+          imageUrl: "",
+          notes: "",
+        });
       } else if (kind === "CCU" || kind.includes("Upgrade")) {
-        // Parse as CCU
-        const fromShip = item.fromShip || "";
-        const toShip = item.toShip || "";
-
-        if (fromShip && toShip) {
-          const ccu: Omit<HangarCCU, "id"> = {
-            fromShip: fromShip,
+        if (item.fromShip && item.toShip) {
+          ccus.push({
+            fromShip: item.fromShip,
             fromShipReference: item.fromShipReference || "",
-            toShip: toShip,
+            toShip: item.toShip,
             toShipReference: item.toShipReference || "",
             pricePaid: parseFloat(item.pricePaid || item.value) || 0,
-            isWarbond: item.isWarbond === true || item.isWarbond === "true",
+            isWarbond: item.isWarbond === true,
             location: "hangar",
-            notes: item.notes || "",
-          };
-          ccus.push(ccu);
+            notes: "",
+          });
         }
       }
     } catch (err) {
-      errors.push(
-        `Failed to parse item "${item.title || "unknown"}": ${err instanceof Error ? err.message : String(err)}`
-      );
+      errors.push(`Failed to parse "${item.title || "unknown"}"`);
     }
   }
 
@@ -215,17 +512,20 @@ function parseCCUGameFormat(data: any[]): {
       ) {
         const ship: Omit<HangarShip, "id"> = {
           shipReference: item.reference || item.shipReference || "",
+          shipName: item.shipName || extractShipNameFromPledge(name),
           pledgeName: name,
           pledgePrice: parseFloat(item.price || item.value) || 0,
           insuranceType: parseInsuranceType(
             item.insurance || item.insuranceType
           ),
           location: "hangar",
+          itemCategory: "standalone_ship",
           isGiftable: item.giftable === true || item.giftable === "true",
           isMeltable: item.meltable === true || item.meltable === "true",
           purchasedDate: item.purchasedDate
             ? new Date(item.purchasedDate).toISOString()
             : null,
+          imageUrl: item.imageUrl || "",
           notes: item.notes || item.description || "",
         };
         ships.push(ship);
@@ -281,48 +581,100 @@ function parseInsuranceType(value: any): InsuranceType {
 }
 
 /**
- * Detect format of imported data and parse accordingly
+ * Detect format of imported data and parse accordingly.
+ * Supports: SC Labs Hangar Importer, CCU Game, SC Labs backup, legacy formats
  */
 function detectAndParseFormat(data: any): {
   ships: Omit<HangarShip, "id">[];
   ccus: Omit<HangarCCU, "id">[];
+  summary: ImportSummary | null;
   errors: string[];
 } {
+  // ── SC Labs / myHangar+myBuyBack format: { version, myHangar: [...], myBuyBack: [...] }
+  if (data && !Array.isArray(data) && (data.myHangar || data.myBuyBack)) {
+    const allShips: Omit<HangarShip, "id">[] = [];
+    const allCCUs: Omit<HangarCCU, "id">[] = [];
+    const allErrors: string[] = [];
+    let totalSkipped = 0;
+
+    // Parse hangar items (location = "hangar")
+    const hangarItems = data.myHangar || [];
+    if (hangarItems.length > 0) {
+      const h = parseSCLabsItems(hangarItems, "hangar");
+      allShips.push(...h.ships);
+      allCCUs.push(...h.ccus);
+      allErrors.push(...h.errors);
+      totalSkipped += h.skipped;
+    }
+
+    // Parse buyback items (location = "buyback")
+    const buybackItems = data.myBuyBack || [];
+    if (buybackItems.length > 0) {
+      const b = parseSCLabsItems(buybackItems, "buyback");
+      allShips.push(...b.ships);
+      allCCUs.push(...b.ccus);
+      allErrors.push(...b.errors);
+      totalSkipped += b.skipped;
+    }
+
+    const isSCLabs = data.exportedBy && String(data.exportedBy).includes("SC Labs");
+    const summary: ImportSummary = {
+      format: isSCLabs ? "SC Labs Hangar Importer" : "SC Labs v" + (data.version || "1.0"),
+      hangarItemCount: hangarItems.length,
+      buybackItemCount: buybackItems.length,
+      shipsFound: allShips.length,
+      ccusFound: allCCUs.length,
+      skippedItems: totalSkipped,
+      totalValue: allShips.reduce((s, sh) => s + sh.pledgePrice, 0) +
+                  allCCUs.reduce((s, c) => s + c.pricePaid, 0),
+    };
+
+    return { ships: allShips, ccus: allCCUs, summary, errors: allErrors };
+  }
+
+  // From here on, data should be an array
   if (!Array.isArray(data) || data.length === 0) {
     return {
-      ships: [],
-      ccus: [],
-      errors: ["Invalid data format: expected non-empty array"],
+      ships: [], ccus: [], summary: null,
+      errors: ["Invalid data format: expected SC Labs JSON or array"],
     };
   }
 
-  // Check first item to detect format
   const firstItem = data[0];
 
-  // Check for our own backup format (has id, shipReference, pledgeName)
-  if (
-    firstItem.id &&
-    (firstItem.pledgeName || firstItem.fromShip) &&
-    !firstItem.kind &&
-    !firstItem.type
-  ) {
-    // Our own format - just filter ships and ccus
-    const ships = data.filter(
-      (item) => item.pledgeName && !item.fromShip
-    ) as Omit<HangarShip, "id">[];
-    const ccus = data.filter(
-      (item) => item.fromShip && item.toShip
-    ) as Omit<HangarCCU, "id">[];
-    return { ships, ccus, errors: [] };
+  // ── SC Labs own backup format (has id, pledgeName)
+  if (firstItem.id && (firstItem.pledgeName || firstItem.fromShip) && !firstItem.kind && !firstItem.type) {
+    const ships = data.filter((item) => item.pledgeName && !item.fromShip) as Omit<HangarShip, "id">[];
+    const ccus = data.filter((item) => item.fromShip && item.toShip) as Omit<HangarCCU, "id">[];
+    return { ships, ccus, summary: { format: "SC Labs backup", hangarItemCount: data.length, buybackItemCount: 0, shipsFound: ships.length, ccusFound: ccus.length, skippedItems: 0, totalValue: 0 }, errors: [] };
   }
 
-  // Check for CCU Game format (has 'type' or 'reference' fields)
+  // ── CCU Game format (has 'type' or 'reference')
   if (firstItem.type || firstItem.reference) {
-    return parseCCUGameFormat(data);
+    const result = parseCCUGameFormat(data);
+    return { ...result, summary: { format: "CCU Game", hangarItemCount: data.length, buybackItemCount: 0, shipsFound: result.ships.length, ccusFound: result.ccus.length, skippedItems: 0, totalValue: 0 } };
   }
 
-  // Default to Guildswarm format
-  return parseGuildswarmFormat(data);
+  // ── Legacy format (has 'kind' or 'title')
+  if (firstItem.kind || firstItem.title) {
+    const result = parseLegacyFormat(data);
+    return { ...result, summary: { format: "Legacy format", hangarItemCount: data.length, buybackItemCount: 0, shipsFound: result.ships.length, ccusFound: result.ccus.length, skippedItems: 0, totalValue: 0 } };
+  }
+
+  return { ships: [], ccus: [], summary: null, errors: ["Unrecognized format"] };
+}
+
+/**
+ * Import summary for UI display
+ */
+export interface ImportSummary {
+  format: string;
+  hangarItemCount: number;
+  buybackItemCount: number;
+  shipsFound: number;
+  ccusFound: number;
+  skippedItems: number;
+  totalValue: number;
 }
 
 // =============================================================================
@@ -335,26 +687,32 @@ export const useHangarStore = create<HangarStoreState>()(
       ships: [],
       ccus: [],
       chains: [],
+      wishlist: [],
 
       // =========================================================================
       // Ship Actions
       // =========================================================================
 
       addShip: (ship) => {
+        const newId = generateUUID();
         set((state) => ({
           ships: [
             ...state.ships,
             {
               ...ship,
-              id: generateUUID(),
+              id: newId,
             },
           ],
         }));
+        return newId;
       },
 
       removeShip: (id) => {
         set((state) => ({
-          ships: state.ships.filter((ship) => ship.id !== id),
+          // Cascade-remove any loaners attached to this pledged ship.
+          ships: state.ships.filter(
+            (ship) => ship.id !== id && ship.loanerOf !== id,
+          ),
         }));
       },
 
@@ -427,11 +785,79 @@ export const useHangarStore = create<HangarStoreState>()(
       },
 
       // =========================================================================
+      // Wishlist Actions
+      // =========================================================================
+
+      addToWishlist: (item) => {
+        set((state) => {
+          // Evitar duplicados: si ya existe esa nave en wishlist, no agregar
+          if (state.wishlist.some((w) => w.shipReference === item.shipReference)) {
+            return state;
+          }
+          return {
+            wishlist: [
+              ...state.wishlist,
+              {
+                ...item,
+                id: generateUUID(),
+                addedDate: new Date().toISOString(),
+              },
+            ],
+          };
+        });
+      },
+
+      removeFromWishlist: (id) => {
+        set((state) => ({
+          wishlist: state.wishlist.filter((w) => w.id !== id),
+        }));
+      },
+
+      updateWishlistItem: (id, updates) => {
+        set((state) => ({
+          wishlist: state.wishlist.map((w) =>
+            w.id === id ? { ...w, ...updates } : w
+          ),
+        }));
+      },
+
+      moveWishlistToFleet: (id) => {
+        const state = get();
+        const item = state.wishlist.find((w) => w.id === id);
+        if (!item) return;
+        set({
+          wishlist: state.wishlist.filter((w) => w.id !== id),
+          ships: [
+            ...state.ships,
+            {
+              id: generateUUID(),
+              shipReference: item.shipReference,
+              shipName: item.shipName,
+              pledgeName: `Standalone Ship - ${item.shipName}`,
+              pledgePrice: item.targetPrice ?? 0,
+              insuranceType: "unknown",
+              location: "hangar",
+              itemCategory: "standalone_ship",
+              isGiftable: false,
+              isMeltable: true,
+              purchasedDate: new Date().toISOString(),
+              imageUrl: "",
+              notes: item.notes || "",
+            },
+          ],
+        });
+      },
+
+      isInWishlist: (shipReference) => {
+        return get().wishlist.some((w) => w.shipReference === shipReference);
+      },
+
+      // =========================================================================
       // Import/Export
       // =========================================================================
 
       importFromJSON: (data) => {
-        const { ships: parsedShips, ccus: parsedCCUs, errors } =
+        const { ships: parsedShips, ccus: parsedCCUs, summary, errors } =
           detectAndParseFormat(data);
 
         set((state) => ({
@@ -454,6 +880,7 @@ export const useHangarStore = create<HangarStoreState>()(
         return {
           ships: parsedShips.length,
           ccus: parsedCCUs.length,
+          summary,
           errors,
         };
       },
@@ -461,11 +888,12 @@ export const useHangarStore = create<HangarStoreState>()(
       exportToJSON: () => {
         const state = get();
         const exportData = {
-          version: "1.0",
+          version: "1.1",
           exportDate: new Date().toISOString(),
           ships: state.ships,
           ccus: state.ccus,
           chains: state.chains,
+          wishlist: state.wishlist,
         };
         return JSON.stringify(exportData, null, 2);
       },
@@ -475,11 +903,53 @@ export const useHangarStore = create<HangarStoreState>()(
           ships: [],
           ccus: [],
           chains: [],
+          wishlist: [],
         });
       },
     }),
     {
       name: "sc-labs-hangar", // localStorage key
+      onRehydrateStorage: () => (state) => {
+        // Backward compatibility: ensure wishlist exists
+        if (state && !state.wishlist) {
+          state.wishlist = [];
+        }
+        // Backward compatibility: assign itemCategory to old items that lack it
+        if (state && state.ships) {
+          let needsUpdate = false;
+          const patched = state.ships.map((ship) => {
+            if (!ship.itemCategory) {
+              needsUpdate = true;
+              return { ...ship, itemCategory: detectItemCategory(ship.pledgeName || ship.shipName || "", "") as ItemCategory };
+            }
+            return ship;
+          });
+          if (needsUpdate) {
+            state.ships = patched;
+          }
+        }
+        // Clean CCU ship names: remove "Standard Edition", "Warbond Edition" etc.
+        if (state && state.ccus) {
+          let ccuNeedsUpdate = false;
+          const patchedCcus = state.ccus.map((ccu) => {
+            const cleanedFrom = cleanCCUShipName(ccu.fromShip);
+            const cleanedTo = cleanCCUShipName(ccu.toShip);
+            if (cleanedFrom !== ccu.fromShip || cleanedTo !== ccu.toShip) {
+              ccuNeedsUpdate = true;
+              return {
+                ...ccu,
+                fromShip: cleanedFrom,
+                toShip: cleanedTo,
+                isWarbond: ccu.isWarbond || ccu.toShip.toLowerCase().includes("warbond"),
+              };
+            }
+            return ccu;
+          });
+          if (ccuNeedsUpdate) {
+            state.ccus = patchedCcus;
+          }
+        }
+      },
     }
   )
 );

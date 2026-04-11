@@ -10,6 +10,28 @@ import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import Header from "@/app/assets/header/Header";
+import {
+  ShipContextMenu,
+  type ShipContextMenuTarget,
+} from "@/components/ships/ShipContextMenu";
+import {
+  ComponentContextMenu,
+  type ComponentContextMenuTarget,
+} from "@/components/components/ComponentContextMenu";
+
+// Mapeo de nombres de tabla a item_type usado en user_inventory / user_wishlist
+const TABLE_TO_ITEM_TYPE: Record<string, string> = {
+  weapon_guns: "WEAPON",
+  missiles: "MISSILE",
+  emps: "EMP",
+  shields: "SHIELD",
+  power_plants: "POWER_PLANT",
+  coolers: "COOLER",
+  quantum_drives: "QUANTUM_DRIVE",
+  mining_lasers: "MINING",
+  turrets: "TURRET",
+  quantum_interdiction_generators: "QED",
+};
 
 // ─── Category Definitions ────────────────────────────────────────────────────
 
@@ -109,6 +131,11 @@ function ComponentsPageInner() {
   const [sortDir, setSortDir] = useState<"ASC" | "DESC">("ASC");
   const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Context menu state (ships vs componentes) ──
+  const [contextMenu, setContextMenu] = useState<ShipContextMenuTarget | null>(null);
+  const [componentContextMenu, setComponentContextMenu] =
+    useState<ComponentContextMenuTarget | null>(null);
+
   // Sync with ?tab= param changes
   useEffect(() => {
     if (tabParam) {
@@ -126,7 +153,9 @@ function ComponentsPageInner() {
   const fetchData = useCallback(async (cat: CategoryDef, s: string, size: string, sort: string, dir: string) => {
     setLoading(true);
     try {
-      const body: Record<string, any> = { table: cat.table, sort, dir, limit: 200 };
+      // 5000 es el tope configurado en /api/components/browse (ver validateInt en el route).
+      // Con esto entran de un saque todas las ships (~300) y weapons (~1000-2000), etc.
+      const body: Record<string, any> = { table: cat.table, sort, dir, limit: 5000 };
       if (s) body.search = s;
       if (size) body.size = size;
       const res = await fetch(`/api/components/browse`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -134,7 +163,7 @@ function ComponentsPageInner() {
       if (json.rows) {
         setRows(json.rows);
         setColumns(json.columns || []);
-        setMeta(json.meta || { total: 0, limit: 200, offset: 0 });
+        setMeta(json.meta || { total: 0, limit: 5000, offset: 0 });
       }
     } catch (e) {
       console.error("Failed to fetch components:", e);
@@ -264,9 +293,24 @@ function ComponentsPageInner() {
           )}
 
           {/* Count badge */}
-          <span className="text-[10px] font-mono text-zinc-600">
-            {rows.length} / {meta.total} rows
-          </span>
+          {(() => {
+            const truncated = meta.total > rows.length;
+            return (
+              <span
+                className={`text-[10px] font-mono ${
+                  truncated ? "text-amber-500" : "text-zinc-600"
+                }`}
+                title={
+                  truncated
+                    ? `Mostrando las primeras ${rows.length} filas de ${meta.total}. Usá la búsqueda o los filtros para acotar.`
+                    : undefined
+                }
+              >
+                {rows.length} / {meta.total} rows
+                {truncated && <span className="ml-1">⚠</span>}
+              </span>
+            );
+          })()}
         </div>
 
         {/* ── Data Table ── */}
@@ -318,6 +362,40 @@ function ComponentsPageInner() {
                 {rows.map((row, i) => (
                   <tr
                     key={row.id || row.uuid || i}
+                    onContextMenu={(e) => {
+                      // Ships → menú de hangar/wishlist de naves
+                      if (activeCategory.table === "ships" && row.reference) {
+                        e.preventDefault();
+                        setContextMenu({
+                          reference: row.reference,
+                          name: row.localizedName || row.name,
+                          manufacturer: row.manufacturer ?? null,
+                          x: e.clientX,
+                          y: e.clientY,
+                        });
+                        return;
+                      }
+                      // Componentes → menú de inventario/wishlist de componentes
+                      const itemType = TABLE_TO_ITEM_TYPE[activeCategory.table];
+                      const componentRef =
+                        row.reference ||
+                        row.class_name ||
+                        row.className ||
+                        row.uuid ||
+                        row.id;
+                      if (itemType && componentRef && row.name) {
+                        e.preventDefault();
+                        setComponentContextMenu({
+                          reference: String(componentRef),
+                          name: String(row.localizedName || row.name),
+                          itemType,
+                          size: row.size != null ? Number(row.size) : null,
+                          grade: row.grade != null ? String(row.grade) : null,
+                          x: e.clientX,
+                          y: e.clientY,
+                        });
+                      }
+                    }}
                     className="border-b border-zinc-800/20 hover:bg-zinc-800/20 transition-colors"
                   >
                     {columns.map((col) => {
@@ -364,6 +442,15 @@ function ComponentsPageInner() {
         </div>
       </div>
       </div>
+
+      {/* Context menu global para ships */}
+      <ShipContextMenu target={contextMenu} onClose={() => setContextMenu(null)} />
+
+      {/* Context menu global para componentes */}
+      <ComponentContextMenu
+        target={componentContextMenu}
+        onClose={() => setComponentContextMenu(null)}
+      />
     </main>
   );
 }

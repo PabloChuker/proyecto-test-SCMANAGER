@@ -1,7 +1,8 @@
 "use client";
 // =============================================================================
-// SC LABS — Horizontal Bar Chart for ship stat comparison
-// Shows bars for up to 3 ships per metric
+// SC LABS — Compare Bar Chart v2
+// Clean stat-row style: thin colored bars with values on the right.
+// Each ship gets a row with name, thin bar, and numeric value.
 // =============================================================================
 
 interface BarEntry {
@@ -19,33 +20,58 @@ interface CompareBarChartProps {
 
 export function CompareBarChart({ title, unit = "", entries, maxValue }: CompareBarChartProps) {
   const max = maxValue || Math.max(...entries.map((e) => e.value), 1);
+  const bestVal = Math.max(...entries.map((e) => e.value));
+  const allZero = entries.every((e) => e.value === 0);
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-baseline justify-between">
-        <span className="text-xs font-medium tracking-wider uppercase text-zinc-400">{title}</span>
-        {unit && <span className="text-[10px] text-zinc-600">{unit}</span>}
+    <div className="group">
+      {/* Title row */}
+      <div className="flex items-baseline justify-between mb-1.5">
+        <span className="text-[11px] font-medium tracking-wide uppercase text-zinc-400">
+          {title}
+        </span>
+        {unit && (
+          <span className="text-[10px] text-zinc-600 font-mono">{unit}</span>
+        )}
       </div>
-      <div className="space-y-1.5">
+
+      {/* Stat rows */}
+      <div className="space-y-1">
         {entries.map((entry) => {
-          const pct = (entry.value / max) * 100;
+          const pct = allZero ? 0 : (entry.value / max) * 100;
+          const isBest = entry.value === bestVal && !allZero && entries.length > 1;
+
           return (
-            <div key={entry.label} className="group">
-              <div className="flex items-center gap-2">
-                <div className="w-20 text-[11px] text-zinc-500 truncate">{entry.label}</div>
-                <div className="flex-1 h-5 bg-zinc-900 rounded-sm overflow-hidden relative">
-                  <div
-                    className="h-full rounded-sm transition-all duration-500"
-                    style={{
-                      width: `${Math.max(pct, 1)}%`,
-                      backgroundColor: entry.color,
-                      opacity: 0.8,
-                    }}
-                  />
-                  <span className="absolute right-1.5 top-0 h-full flex items-center text-[10px] font-mono text-zinc-300">
-                    {formatValue(entry.value)}
-                  </span>
-                </div>
+            <div key={entry.label} className="flex items-center gap-2">
+              {/* Ship name — fixed width, right-aligned */}
+              <div
+                className="w-[72px] shrink-0 text-[10px] text-right truncate"
+                style={{ color: entry.color }}
+                title={entry.label}
+              >
+                {shortenName(entry.label)}
+              </div>
+
+              {/* Bar track */}
+              <div className="flex-1 h-[6px] bg-zinc-900/80 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500 ease-out"
+                  style={{
+                    width: `${Math.max(pct, 0.5)}%`,
+                    backgroundColor: entry.color,
+                    opacity: isBest ? 1 : 0.6,
+                  }}
+                />
+              </div>
+
+              {/* Value */}
+              <div
+                className={`w-[56px] shrink-0 text-right text-[11px] font-mono tabular-nums ${
+                  isBest ? "font-semibold" : "text-zinc-400"
+                }`}
+                style={isBest ? { color: entry.color } : {}}
+              >
+                {entry.value === 0 ? "—" : formatValue(entry.value)}
               </div>
             </div>
           );
@@ -55,11 +81,17 @@ export function CompareBarChart({ title, unit = "", entries, maxValue }: Compare
   );
 }
 
+/** Shorten "Aegis Avenger Titan" → "Avenger Titan" for compact display */
+function shortenName(name: string): string {
+  const parts = name.split(" ");
+  if (parts.length > 2) return parts.slice(1).join(" ");
+  return name;
+}
+
 function formatValue(v: number): string {
-  if (v === 0) return "—";
   if (v >= 1000000) return (v / 1000000).toFixed(1) + "M";
   if (v >= 10000) return (v / 1000).toFixed(1) + "k";
-  if (v >= 1000) return (v / 1000).toFixed(2) + "k";
-  if (Number.isInteger(v)) return v.toLocaleString();
+  if (v >= 1000) return v.toLocaleString();
+  if (Number.isInteger(v)) return v.toString();
   return v.toFixed(1);
 }

@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(node -e \"const p = require\\('./node_modules/three/package.json'\\); console.log\\('three version:', p.version\\)\")",
+      "Bash(npx tsc:*)",
+      "Bash(npx next:*)",
+      "Bash(npx prisma:*)",
+      "Bash(ls \"C:\\\\Users\\\\Usuario\\\\Desktop\\\\SCLabs\\\\proyecto-test-SCMANAGER\\\\al-filo-platform\\\\.env\"*)",
+      "Bash(node -e ':*)",
+      "Bash(xargs grep:*)",
+      "Bash(grep -v \"//.*\\\\.from\\(\")",
+      "Bash(python3 -c \"from reportlab.lib.pagesizes import A4; print\\('reportlab OK'\\)\")",
+      "Bash(py --version)",
+      "Bash(python -c \"import reportlab; print\\('OK', reportlab.Version\\)\")",
+      "Bash(python -m pip install reportlab --quiet)",
+      "Bash(python generate_audit_pdf.py)"
+    ]
+  }
+}

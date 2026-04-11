@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { sql } from "@/lib/db";
 import {
   sanitizeString,
   validateInt,
@@ -35,6 +35,8 @@ const SORT_MAP: Record<string, string> = {
   size: "s.size",
   role: "s.role",
   mass: "s.mass",
+  msrpUsd: "s.msrp_usd",
+  price: "s.msrp_usd",
 };
 
 interface ShipsQueryParams {
@@ -95,32 +97,32 @@ async function handleShipsQuery(params: ShipsQueryParams) {
     const whereClause = conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
 
     // Count total
-    const countResult: any[] = await prisma.$queryRawUnsafe(
+    const countResult: any[] = await sql.unsafe(
       `SELECT COUNT(*)::int as total FROM ships s ${whereClause}`,
-      ...queryParams,
+      queryParams,
     );
     const total = countResult[0]?.total ?? 0;
 
     // Fetch ships with optional LEFT JOIN to flight_stats for speed data
     const offset = (page - 1) * limit;
     const joinClause = `LEFT JOIN ship_flight_stats fs ON fs.ship_id = s.id`;
-    const ships: any[] = await prisma.$queryRawUnsafe(
+    const ships: any[] = await sql.unsafe(
       `SELECT s.id, s.reference, s.name, s.manufacturer, s.role, s.size,
               s.max_crew, s.mass, s.cargo_capacity, s.game_version,
+              s.msrp_usd, s.warbond_usd,
               fs.scm_speed, fs.max_speed as afterburner_speed
        FROM ships s
        ${joinClause}
        ${whereClause}
        ORDER BY ${sortCol} ${sortOrder} NULLS LAST
        LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
-      ...queryParams,
-      limit,
-      offset,
+      [...queryParams, limit, offset],
     );
 
     // Get manufacturer list for filter dropdown
-    const mfrs: any[] = await prisma.$queryRawUnsafe(
+    const mfrs: any[] = await sql.unsafe(
       `SELECT DISTINCT manufacturer FROM ships WHERE manufacturer IS NOT NULL ORDER BY manufacturer ASC`,
+      [],
     );
 
     // Map to expected format
@@ -133,6 +135,8 @@ async function handleShipsQuery(params: ShipsQueryParams) {
       size: s.size,
       manufacturer: s.manufacturer,
       gameVersion: s.game_version,
+      msrpUsd: s.msrp_usd != null ? Number(s.msrp_usd) : null,
+      warbondUsd: s.warbond_usd != null ? Number(s.warbond_usd) : null,
       ship: {
         maxCrew: s.max_crew,
         mass: s.mass != null ? Number(s.mass) : null,

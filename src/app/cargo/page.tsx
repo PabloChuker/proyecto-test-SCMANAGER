@@ -1,9 +1,8 @@
-import type { Metadata } from "next";
 import { CargoPage } from "@/components/cargo/CargoPage";
 
-export const metadata: Metadata = {
+export const metadata = {
   title: "Cargo Grid Visualizer — SC LABS",
-  description: "3D visualization of Star Citizen ship cargo grids. Paint SCU cells by cargo type.",
+  description: "Visualización 3D de cargo grids de naves Star Citizen.",
 };
 
 export default function CargoGridPage() {

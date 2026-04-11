@@ -64,9 +64,11 @@ export interface ShipInfo {
   accelForward: number | null; accelBackward: number | null;
   accelUp: number | null; accelDown: number | null; accelStrafe: number | null;
   boostSpeedForward: number | null; boostSpeedBackward: number | null;
+  boostMultUp: number | null; boostMultStrafe: number | null;
   boostedPitch: number | null; boostedYaw: number | null; boostedRoll: number | null;
   mass: number | null; hydrogenCapacity: number | null; quantumFuelCapacity: number | null;
   shieldHpTotal: number | null; powerGeneration: number | null; hullHp: number | null;
+  deflectionPhysical: number | null; deflectionEnergy: number | null; deflectionDistortion: number | null;
 }
 
 export type FlightMode = "SCM" | "NAV";
@@ -193,15 +195,84 @@ const SYSTEM_CATS = new Set(["SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE",
 
 function emptyCat(): CategoryPowerInfo { return { minDraw: 0, allocated: 0, componentCount: 0, activeCount: 0 }; }
 
+/**
+ * Combine multiple power plant outputs into a single effective total,
+ * applying in-game diminishing returns.
+ *
+ * Empirical formula (2026-04 — validada con Erkul):
+ *
+ * Rama A — Plantas MIXTAS (ratings distintos):
+ *     Total = floor(bestRating * 0.95) + round( sum(rest) / 3 )
+ *   La mejor paga un ~5% de overhead y cada planta extra aporta ~⅓ de
+ *   su rating al bus compartido.
+ *
+ * Rama B — Plantas IDÉNTICAS (todas mismo rating r):
+ *     Total = floor(r * factor(n))     con factor dependiente de n:
+ *       n=1 → 0.95
+ *       n=2 → 1.20
+ *       n=3 → 1.65
+ *       n≥4 → 0.95 + 0.25*(n-1) + 0.10*(n-1)*(n-2)  (extrapolación cuadrática)
+ *
+ *   Las plantas idénticas NO crecen linealmente con la cantidad: el primer
+ *   duplicado suma poco (n=2: +0.25), pero el tercero aporta más por tener
+ *   una carga más distribuida (n=3: +0.45). Comportamiento observado en
+ *   Erkul y reproducido en el juego.
+ *
+ * Validation (rating → effective total, todos verificados en Erkul):
+ *   [21]            → 19   (rama A, 1 plant)
+ *   [20]            → 19   (rama A, 1 plant)
+ *   [19]            → 18   (rama A, 1 plant)
+ *   [21, 20]        → 26   (rama A, mixta: 19 + round(20/3) = 19 + 7)
+ *   [21, 19]        → 25   (rama A, mixta: 19 + round(19/3) = 19 + 6)
+ *   [21, 20, 19]    → 32   (rama A, mixta: 19 + round(39/3) = 19 + 13)
+ *   [20, 20]        → 24   (rama B, idénticas n=2: floor(20*1.20))   ← Asgard
+ *   [20, 20, 20]    → 33   (rama B, idénticas n=3: floor(20*1.65))   ← Paladin
+ *
+ * NOTA: La rama B está calibrada sobre datos de rating 20 únicamente.
+ * Si aparecen naves con plantas idénticas de otro rating (e.g. [18,18] o
+ * [21,21,21]) y los totales no cierran, hay que re-calibrar factor(n).
+ */
+function combinePowerPlantOutputs(outputs: number[]): number {
+  if (outputs.length === 0) return 0;
+  // Sort descending so index 0 is the best plant.
+  const sorted = [...outputs].sort((a, b) => b - a);
+  const n = sorted.length;
+  const best = sorted[0];
+
+  // Rama B — todas las plantas idénticas: factor empírico por cantidad.
+  const allIdentical = sorted.every((r) => r === best);
+  if (allIdentical) {
+    let factor: number;
+    if (n === 1) factor = 0.95;
+    else if (n === 2) factor = 1.20;
+    else if (n === 3) factor = 1.65;
+    else factor = 0.95 + 0.25 * (n - 1) + 0.10 * (n - 1) * (n - 2);
+    return Math.max(0, Math.floor(best * factor));
+  }
+
+  // Rama A — plantas mixtas: best paga 5% y cada extra aporta ~⅓.
+  const rest = sorted.slice(1);
+  const restSum = rest.reduce((acc, v) => acc + v, 0);
+  const effectiveBest = Math.floor(best * 0.95);
+  const effectiveRest = Math.round(restSum / 3);
+  return Math.max(0, effectiveBest + effectiveRest);
+}
+
 function computeStats(
   hardpoints: ResolvedHardpoint[], overrides: Map<string, EquippedItem | null>,
   componentStates: Record<string, boolean>, flightMode: FlightMode,
   instancePower: Record<string, number>,  // hardpointName -> allocated pips
   shipInfo: ShipInfo | null,
   shipPowerGen: number,  // from ship-power-data.json
+  flightControllerPower: any | null,  // from power-network-lookup (Controller_Flight_*)
 ): ComputedStats {
   let totalDps = 0, totalAlpha = 0, shieldHp = 0, shieldRegen = 0;
   let powerOutput = 0, coolingRate = 0, thermalOutput = 0, emSig = 0, irSig = 0;
+  // Individual power plant outputs — accumulated separately so we can apply
+  // diminishing returns at the end (Star Citizen in-game behavior: the best
+  // plant contributes near-full output minus fixed overhead, and each extra
+  // plant only contributes ~⅓ of its rating). See combinePowerPlantOutputs().
+  const powerPlantOutputs: number[] = [];
   let activeComponents = 0, totalComponents = 0;
   const summary = { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0, activeComponents: 0, totalComponents: 0 };
   const cats: Record<PowerCategory, CategoryPowerInfo> = {} as any;
@@ -233,6 +304,19 @@ function computeStats(
   let weaponCount = 0;
   let weaponActiveCount = 0;
   const WEAPON_POWER_ID = "__weapons_combined__";
+
+  // ── Shields: accumulate into a single combined power column ──
+  // (game mechanic: in Star Citizen shields are always represented as 1 column)
+  let shieldPowerMin = 0;
+  let shieldPowerMax = 0;
+  let shieldEmMax = 0;
+  let shieldIrMax = 0;
+  let shieldGenPower = 0;
+  let shieldGenCoolant = 0;
+  let shieldCount = 0;
+  let shieldActiveCount = 0;
+  let shieldFirstHpName: string | null = null;
+  const SHIELD_POWER_ID = "__shields_combined__";
 
   for (const hp of hardpoints) {
     const cat = hp.resolvedCategory;
@@ -308,6 +392,22 @@ function computeStats(
           weaponCount++;
           if (isOn) weaponActiveCount++;
         }
+      } else if (pCat === "shields") {
+        // SHIELDS → accumulate into single combined column
+        // (in Star Citizen the HUD always shows shields as a unified single column)
+        if (totalPips > 0) {
+          shieldPowerMin += powerMin;
+          shieldPowerMax += powerMax;
+          shieldEmMax += pn?.em ?? pickNum(s, "emSignature");
+          shieldIrMax += pn?.ir ?? pickNum(s, "irSignature");
+          shieldGenPower += pn?.genP ?? 0;
+          shieldGenCoolant += pn?.genC ?? 0;
+          shieldCount++;
+          if (isOn) shieldActiveCount++;
+          // Remember the first shield hardpointName so the merged column
+          // can control allocation/toggle via an existing store key.
+          if (!shieldFirstHpName) shieldFirstHpName = hp.hardpointName;
+        }
       } else if (totalPips > 0) {
         // Non-weapons: individual instance per component (as before)
         const ranges = (pn?.ranges ?? []).map(r => ({ start: r.s, modifier: r.m, range: r.r }));
@@ -334,11 +434,13 @@ function computeStats(
       }
     }
 
-    // Power plants: always output — prefer DB value over static JSON
+    // Power plants: always output — prefer DB value over static JSON.
+    // Collect each plant's rated output; the combined total is computed
+    // AFTER the loop using diminishing returns (see combinePowerPlantOutputs).
     if (cat === "POWER_PLANT") {
       const dbPower = pickNum(s, "powerOutput");
       const ppOutput = dbPower > 0 ? dbPower : (pn?.genP ?? 0);
-      powerOutput += ppOutput;
+      if (ppOutput > 0) powerPlantOutputs.push(ppOutput);
       if (isOn) { activeComponents++; }
       // EM from power network data
       if (pn?.em) emSig += pn.em;
@@ -393,6 +495,40 @@ function computeStats(
     }
   }
 
+  // ── Push synthetic thrusters column (from FlightController power data) ──
+  // Thrusters are not regular hardpoints, so we inject a single column based on
+  // the ship's Controller_Flight_* entry in power-network-lookup.json.
+  const THRUSTERS_POWER_ID = "__thrusters_combined__";
+  if (flightControllerPower && (flightControllerPower.pMax ?? 0) > 0) {
+    const thrPMin = Number(flightControllerPower.pMin ?? 0);
+    const thrPMax = Number(flightControllerPower.pMax ?? 0);
+    const thrustPips = Math.min(6, Math.max(1, Math.ceil(thrPMax)));
+    const thrustAllocPips = instancePower[THRUSTERS_POWER_ID] ?? 0;
+
+    cats.thrusters.componentCount += 1;
+    cats.thrusters.activeCount += 1;
+    cats.thrusters.minDraw += thrPMin;
+    cats.thrusters.allocated += thrustAllocPips;
+
+    instances.push({
+      hardpointId: THRUSTERS_POWER_ID,
+      hardpointName: THRUSTERS_POWER_ID,
+      componentName: "Thrusters",
+      category: "thrusters",
+      type: "FlightController",
+      totalPips: thrustPips,
+      allocatedPips: Math.min(thrustAllocPips, thrustPips),
+      ranges: [{ start: 0, modifier: 1, range: thrustPips }],
+      powerMin: thrPMin,
+      powerMax: thrPMax,
+      genPower: 0,
+      genCoolant: 0,
+      emMax: Number(flightControllerPower.em ?? 0),
+      irMax: Number(flightControllerPower.ir ?? 0),
+      isOn: true,
+    });
+  }
+
   // ── Push single combined weapons column ──
   if (weaponCount > 0) {
     const weaponAllocPips = instancePower[WEAPON_POWER_ID] ?? 0;
@@ -418,9 +554,48 @@ function computeStats(
     });
   }
 
+  // ── Push single combined shields column ──
+  // In Star Citizen the HUD always shows a single shield column, regardless
+  // of how many shield generators the ship has. We aggregate all shield
+  // generators into one visual column matching the weapons treatment.
+  if (shieldCount > 0) {
+    const shieldAllocPips = instancePower[SHIELD_POWER_ID] ?? 0;
+    const combinedShieldPips = Math.min(6, Math.max(1, Math.ceil(shieldPowerMax)));
+    // Override the per-shield allocated counts with the single combined allocation
+    cats.shields.allocated = shieldAllocPips;
+    instances.push({
+      hardpointId: SHIELD_POWER_ID,
+      hardpointName: SHIELD_POWER_ID,
+      componentName: `Shields (${shieldCount})`,
+      category: "shields",
+      type: "Shield",
+      totalPips: combinedShieldPips,
+      allocatedPips: Math.min(shieldAllocPips, combinedShieldPips),
+      ranges: [{ start: 0, modifier: 1, range: combinedShieldPips }],
+      powerMin: shieldPowerMin,
+      powerMax: shieldPowerMax,
+      genPower: shieldGenPower,
+      genCoolant: shieldGenCoolant,
+      emMax: shieldEmMax,
+      irMax: shieldIrMax,
+      isOn: shieldActiveCount > 0,
+    });
+  }
+
+  // Apply diminishing returns to combine multiple power plants.
+  // Empirical formula derived from in-game observations (2026-04):
+  //
+  //   Total = round( (bestRating - 2) + sum(rest) / 3 )
+  //
+  // The first plant loses a fixed "connection tax" of 2 points, and every
+  // additional plant only contributes ~1/3 of its rated output. This matches
+  // Star Citizen's actual behavior: stacking identical plants gives sharply
+  // diminishing gains (e.g. 21+20+19 rated → ~32 effective, not 60).
+  powerOutput = combinePowerPlantOutputs(powerPlantOutputs);
+
   // Prefer component-level power output (from equipped power plants) over ship-level static data.
   // Ship-level is only a fallback when no power plant components are found.
-  const totalPO = powerOutput > 0 ? Math.round(powerOutput) : (shipPowerGen > 0 ? shipPowerGen : 0);
+  const totalPO = powerOutput > 0 ? powerOutput : (shipPowerGen > 0 ? shipPowerGen : 0);
 
   let totalAllocated = 0, totalMinDraw = 0;
   for (const c of POWER_CATEGORIES) {
@@ -486,6 +661,8 @@ interface LoadoutState {
   instancePower: Record<string, number>;
   /** Ship-level power generation from sc-unpacked */
   shipPowerGen: number;
+  /** Flight controller power data (for thrusters column) */
+  flightControllerPower: any | null;
   // Legacy: keep for backward compat but internally maps to instancePower
   allocatedPower: Record<PowerCategory, number>;
   isLoading: boolean; error: string | null;
@@ -513,14 +690,14 @@ interface LoadoutState {
 export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   shipId: null, shipInfo: null, hardpoints: [], overrides: new Map(),
   componentStates: {}, flightMode: "SCM" as FlightMode,
-  instancePower: {}, shipPowerGen: 0,
+  instancePower: {}, shipPowerGen: 0, flightControllerPower: null,
   allocatedPower: { ...ZERO_ALLOC }, isLoading: false, error: null,
 
   getStats: () => {
     const s = get();
     return s.hardpoints.length === 0
       ? EMPTY_STATS
-      : computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, s.instancePower, s.shipInfo, s.shipPowerGen);
+      : computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, s.instancePower, s.shipInfo, s.shipPowerGen, s.flightControllerPower);
   },
   getEffectiveItem: (hpId) => { const { hardpoints, overrides } = get(); if (overrides.has(hpId)) return overrides.get(hpId) ?? null; return hardpoints.find(h => h.id === hpId)?.defaultItem ?? null; },
   isComponentOn: (hpName) => get().componentStates[hpName] !== false,
@@ -539,6 +716,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
       // Ship-level power from sc-unpacked
       const shipPower = json.shipPower;
       const shipPowerGen = shipPower?.gen ?? 0;
+      const flightControllerPower = json.flightController ?? null;
 
       const shipInfo: ShipInfo = {
         id: data.id ?? "", reference: data.reference ?? "", name: data.name ?? "",
@@ -557,6 +735,8 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
         accelStrafe: toNumOrNull(sd?.accelStrafe),
         boostSpeedForward: toNumOrNull(sd?.boostSpeedForward),
         boostSpeedBackward: toNumOrNull(sd?.boostSpeedBackward),
+        boostMultUp: toNumOrNull(sd?.boostMultUp),
+        boostMultStrafe: toNumOrNull(sd?.boostMultStrafe),
         boostedPitch: toNumOrNull(sd?.boostedPitch),
         boostedYaw: toNumOrNull(sd?.boostedYaw),
         boostedRoll: toNumOrNull(sd?.boostedRoll),
@@ -566,6 +746,9 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
         shieldHpTotal: toNumOrNull(sd?.shieldHpTotal),
         powerGeneration: toNumOrNull(sd?.powerGeneration),
         hullHp: toNumOrNull(sd?.hullHp),
+        deflectionPhysical: toNumOrNull(sd?.deflectionPhysical),
+        deflectionEnergy: toNumOrNull(sd?.deflectionEnergy),
+        deflectionDistortion: toNumOrNull(sd?.deflectionDistortion),
       };
 
       // Parse flatHardpoints with children
@@ -573,7 +756,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
       const resolved: ResolvedHardpoint[] = rawHps.map((hp: any) => {
         const item = parseEquipped(hp.equippedItem);
 
-        const rawChildren: any[] = hp.children ?? [];
+        const rawChildren: any[] = hp.childWeapons ?? hp.children ?? [];
         const children: ResolvedChild[] = rawChildren.map((ch: any) => ({
           id: ch.id ?? "",
           hardpointName: ch.hardpointName ?? "",
@@ -622,7 +805,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
       set({
         shipId: id, shipInfo, hardpoints: resolved, overrides: restored,
         componentStates: states, flightMode: "SCM",
-        instancePower: {}, shipPowerGen,
+        instancePower: {}, shipPowerGen, flightControllerPower,
         allocatedPower: { ...ZERO_ALLOC },
         isLoading: false, error: null,
       });
@@ -661,7 +844,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   autoAllocatePower: () => {
     const s = get();
     // Compute stats with zero allocation to get instance list
-    const probe = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, {}, s.shipInfo, s.shipPowerGen);
+    const probe = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, {}, s.shipInfo, s.shipPowerGen, s.flightControllerPower);
     const total = probe.powerNetwork.totalOutput;
     const newAlloc: Record<string, number> = {};
     let rem = total;

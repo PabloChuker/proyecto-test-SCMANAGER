@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useHangarStore, type InsuranceType, type ItemLocation, type CCUChain } from "@/store/useHangarStore";
+import { useEffect, useRef, useState } from "react";
+import { useHangarStore, type InsuranceType, type ItemCategory, type CCUChain, type WishlistPriority, type HangarShip } from "@/store/useHangarStore";
+import { getLoanersFor } from "@/lib/loaners";
 import { FleetGrid } from "./FleetGrid";
 import { ImportModal } from "./ImportModal";
 import { AddShipModal } from "./AddShipModal";
@@ -9,65 +10,178 @@ import { CCUGrid } from "./CCUGrid";
 import { AddCCUModal } from "./AddCCUModal";
 import { ChainList } from "./ChainList";
 import { ChainBuilder } from "./ChainBuilder";
+import { CCUChainCalculator } from "./CCUChainCalculator";
+import { QuickAddShip } from "./QuickAddShip";
+import { WishlistGrid } from "./WishlistGrid";
 
-type TabType = "Fleet" | "CCUs" | "CCU Chains";
+type TabType = "My Fleet" | "Buyback" | "Wishlist" | "CCU Chains";
+
+const CATEGORY_OPTIONS: { value: ItemCategory | "all" | "ccu" | "fleet"; label: string }[] = [
+  { value: "all", label: "All Items" },
+  { value: "fleet", label: "Fleet" },
+  { value: "standalone_ship", label: "Ships" },
+  { value: "game_package", label: "Packages" },
+  { value: "ccu", label: "CCU / Upgrades" },
+  { value: "paint", label: "Paints" },
+  { value: "gear", label: "Gear / Armor" },
+  { value: "flair", label: "Flair" },
+  { value: "subscriber", label: "Subscriber" },
+  { value: "other", label: "Other" },
+];
+
+// Fleet = todas las naves "reales" (standalone + game packages), incluyendo loaners
+// y naves adquiridas in-game.
+const isFleetItem = (s: HangarShip) =>
+  s.itemCategory === "standalone_ship" || s.itemCategory === "game_package";
+
+// Ships = solo naves de pledge store puras (sin loaners, sin in-game).
+const isPledgeShip = (s: HangarShip) =>
+  s.itemCategory === "standalone_ship" &&
+  (s.acquisitionType ?? "pledge") === "pledge" &&
+  !s.isLoaner;
 
 export function HangarDashboard() {
-  const [activeTab, setActiveTab] = useState<TabType>("Fleet");
+  const [activeTab, setActiveTab] = useState<TabType>("My Fleet");
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAddShipModal, setShowAddShipModal] = useState(false);
   const [showAddCCUModal, setShowAddCCUModal] = useState(false);
   const [showChainBuilder, setShowChainBuilder] = useState(false);
   const [editingChain, setEditingChain] = useState<CCUChain | undefined>(undefined);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [showBulkMoveConfirm, setShowBulkMoveConfirm] = useState(false);
 
-  // Fleet filters
+  // Shared filters
   const [searchQuery, setSearchQuery] = useState("");
   const [filterInsurance, setFilterInsurance] = useState<InsuranceType | "all">("all");
-  const [filterLocation, setFilterLocation] = useState<ItemLocation | "all">("all");
+  const [filterCategory, setFilterCategory] = useState<ItemCategory | "all" | "ccu" | "fleet">("all");
   const [sortBy, setSortBy] = useState<"name" | "price" | "date">("name");
-
-  // CCU filters
-  const [ccuSearch, setCcuSearch] = useState("");
-  const [ccuFilterLocation, setCcuFilterLocation] = useState<"all" | "hangar" | "buyback">("all");
-  const [ccuFilterWarbond, setCcuFilterWarbond] = useState<"all" | "warbond" | "standard">("all");
-  const [ccuSortBy, setCcuSortBy] = useState<"from" | "to" | "price">("from");
 
   const ships = useHangarStore((state) => state.ships);
   const ccus = useHangarStore((state) => state.ccus);
   const chains = useHangarStore((state) => state.chains);
+  const wishlist = useHangarStore((state) => state.wishlist);
   const exportToJSON = useHangarStore((state) => state.exportToJSON);
+  const clearAll = useHangarStore((state) => state.clearAll);
+  const updateShip = useHangarStore((state) => state.updateShip);
+  const addShip = useHangarStore((state) => state.addShip);
+
+  // ── Auto-backfill de loaners ──
+  // Al montar el hangar, recorre las naves de pledge puras sin loaners asociados
+  // y fetchea la matriz RSI (/api/loaners) para agregar los que falten.
+  // Solo corre una vez por sesi\u00f3n (guard con useRef) para no spamear la API
+  // ni re-triggerearse cuando el store cambia al agregar los propios loaners.
+  const loanersBackfilledRef = useRef(false);
+  useEffect(() => {
+    if (loanersBackfilledRef.current) return;
+    loanersBackfilledRef.current = true;
+
+    let cancelled = false;
+    (async () => {
+      const initialShips = useHangarStore.getState().ships;
+      const pledgeShips = initialShips.filter(
+        (s) =>
+          s.location === "hangar" &&
+          s.itemCategory === "standalone_ship" &&
+          (s.acquisitionType ?? "pledge") === "pledge" &&
+          !s.isLoaner,
+      );
+
+      for (const parent of pledgeShips) {
+        if (cancelled) return;
+        try {
+          const loaners = await getLoanersFor(parent.shipName);
+          if (cancelled || loaners.length === 0) continue;
+
+          // Dedupe: no agregar si ya existe un loaner con el mismo nombre
+          // asociado a este mismo parent (por loanerOf + shipName).
+          const currentShips = useHangarStore.getState().ships;
+          const existingForParent = new Set(
+            currentShips
+              .filter((s) => s.isLoaner && s.loanerOf === parent.id)
+              .map((s) => s.shipName.toLowerCase()),
+          );
+
+          for (const loaner of loaners) {
+            if (existingForParent.has(loaner.name.toLowerCase())) continue;
+            addShip({
+              shipReference: "",
+              shipName: loaner.name,
+              pledgeName: `Loaner - ${loaner.name}`,
+              pledgePrice: 0,
+              insuranceType: "unknown",
+              location: "hangar",
+              itemCategory: "standalone_ship",
+              isGiftable: false,
+              isMeltable: false,
+              purchasedDate: null,
+              imageUrl: "",
+              notes: loaner.note ?? "",
+              isLoaner: true,
+              loanerOf: parent.id,
+            });
+          }
+        } catch (err) {
+          console.error("[HangarDashboard] Loaner backfill failed for", parent.shipName, err);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Wishlist filter state
+  const [wishlistPriorityFilter, setWishlistPriorityFilter] = useState<WishlistPriority | "all">("all");
+  const [wishlistSearch, setWishlistSearch] = useState("");
+
+  // ── Split by location ──
+  const fleetShips = ships.filter((s) => s.location === "hangar");
+  const buybackShips = ships.filter((s) => s.location === "buyback");
+  const fleetCCUs = ccus.filter((c) => c.location === "hangar");
+  const buybackCCUs = ccus.filter((c) => c.location === "buyback");
+
+  // ── Category counts (for active tab) ──
+  const getCountsByCategory = (items: typeof ships, ccuItems: typeof ccus) => {
+    const counts: Record<string, number> = { all: items.length + ccuItems.length, ccu: ccuItems.length };
+    items.forEach((s) => { counts[s.itemCategory] = (counts[s.itemCategory] || 0) + 1; });
+    // Fleet: standalone_ship + game_package (incluye loaners e in-game)
+    counts["fleet"] = items.filter(isFleetItem).length;
+    // Ships: solo pledge puras (override del conteo "standalone_ship")
+    counts["standalone_ship"] = items.filter(isPledgeShip).length;
+    return counts;
+  };
+
+  const isFleetTab = activeTab === "My Fleet";
+  const isBuybackTab = activeTab === "Buyback";
+  const sourceShips = isFleetTab ? fleetShips : isBuybackTab ? buybackShips : [];
+  const sourceCCUs = isFleetTab ? fleetCCUs : isBuybackTab ? buybackCCUs : [];
+  const categoryCounts = getCountsByCategory(sourceShips, sourceCCUs);
 
   // ── Fleet stats ──
-  const totalShips = ships.length;
-  const totalFleetValue = ships.reduce((sum, ship) => sum + ship.pledgePrice, 0);
-  const ltiCount = ships.filter((s) => s.insuranceType === "LTI").length;
-  const months120Count = ships.filter((s) => s.insuranceType === "120_months").length;
-  const otherInsuranceCount = ships.filter((s) => s.insuranceType !== "LTI" && s.insuranceType !== "120_months").length;
-  const hangarCount = ships.filter((s) => s.location === "hangar").length;
-  const buybackCount = ships.filter((s) => s.location === "buyback").length;
+  const fleetShipCount = fleetShips.filter((s) => s.itemCategory === "standalone_ship" || s.itemCategory === "game_package").length;
+  const fleetValue = fleetShips.reduce((sum, s) => sum + s.pledgePrice, 0) + fleetCCUs.reduce((sum, c) => sum + c.pricePaid, 0);
+  const buybackValue = buybackShips.reduce((sum, s) => sum + s.pledgePrice, 0) + buybackCCUs.reduce((sum, c) => sum + c.pricePaid, 0);
+  const totalCCUValue = ccus.reduce((sum, c) => sum + c.pricePaid, 0);
 
-  // ── CCU stats ──
-  const totalCCUs = ccus.length;
-  const totalCCUValue = ccus.reduce((sum, ccu) => sum + ccu.pricePaid, 0);
-  const warbondCount = ccus.filter((c) => c.isWarbond).length;
-  const ccuHangarCount = ccus.filter((c) => c.location === "hangar").length;
-  const ccuBuybackCount = ccus.filter((c) => c.location === "buyback").length;
+  // ── Filter and sort items ──
+  const showCCUs = filterCategory === "all" || filterCategory === "ccu";
+  const showItems = filterCategory !== "ccu";
 
-  // ── Chain stats ──
-  const totalChains = chains.length;
-  const totalChainCost = chains.reduce((sum, chain) => sum + chain.steps.reduce((s, step) => s + step.ccuPrice, 0), 0);
-  const completedChains = chains.filter((c) => c.status === "completed").length;
-  const inProgressChains = chains.filter((c) => c.status === "in_progress").length;
-
-  // ── Filter and sort ships ──
-  let filteredShips = ships.filter((ship) => {
-    const matchesSearch = searchQuery === "" || ship.pledgeName.toLowerCase().includes(searchQuery.toLowerCase());
+  let filteredShips = showItems ? sourceShips.filter((ship) => {
+    const name = (ship.shipName || ship.pledgeName || "").toLowerCase();
+    const matchesSearch = searchQuery === "" || name.includes(searchQuery.toLowerCase()) || ship.pledgeName.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesInsurance = filterInsurance === "all" || ship.insuranceType === filterInsurance;
-    const matchesLocation = filterLocation === "all" || ship.location === filterLocation;
-    return matchesSearch && matchesInsurance && matchesLocation;
-  });
+    let matchesCategory: boolean;
+    if (filterCategory === "all") matchesCategory = true;
+    else if (filterCategory === "fleet") matchesCategory = isFleetItem(ship);
+    else if (filterCategory === "standalone_ship") matchesCategory = isPledgeShip(ship);
+    else matchesCategory = ship.itemCategory === filterCategory;
+    return matchesSearch && matchesInsurance && matchesCategory;
+  }) : [];
 
-  if (sortBy === "name") filteredShips.sort((a, b) => a.pledgeName.localeCompare(b.pledgeName));
+  if (sortBy === "name") filteredShips.sort((a, b) => (a.shipName || a.pledgeName).localeCompare(b.shipName || b.pledgeName));
   else if (sortBy === "price") filteredShips.sort((a, b) => b.pledgePrice - a.pledgePrice);
   else if (sortBy === "date") filteredShips.sort((a, b) => {
     const dateA = a.purchasedDate ? new Date(a.purchasedDate).getTime() : 0;
@@ -75,21 +189,15 @@ export function HangarDashboard() {
     return dateB - dateA;
   });
 
-  // ── Filter and sort CCUs ──
-  let filteredCCUs = ccus.filter((ccu) => {
-    const matchesSearch = ccuSearch === "" ||
-      ccu.fromShip.toLowerCase().includes(ccuSearch.toLowerCase()) ||
-      ccu.toShip.toLowerCase().includes(ccuSearch.toLowerCase());
-    const matchesLocation = ccuFilterLocation === "all" || ccu.location === ccuFilterLocation;
-    const matchesWarbond = ccuFilterWarbond === "all" ||
-      (ccuFilterWarbond === "warbond" && ccu.isWarbond) ||
-      (ccuFilterWarbond === "standard" && !ccu.isWarbond);
-    return matchesSearch && matchesLocation && matchesWarbond;
-  });
+  let filteredCCUs = showCCUs ? sourceCCUs.filter((ccu) => {
+    const matchesSearch = searchQuery === "" ||
+      ccu.fromShip.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      ccu.toShip.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesSearch;
+  }) : [];
 
-  if (ccuSortBy === "from") filteredCCUs.sort((a, b) => a.fromShip.localeCompare(b.fromShip));
-  else if (ccuSortBy === "to") filteredCCUs.sort((a, b) => a.toShip.localeCompare(b.toShip));
-  else if (ccuSortBy === "price") filteredCCUs.sort((a, b) => b.pricePaid - a.pricePaid);
+  if (sortBy === "name") filteredCCUs.sort((a, b) => a.fromShip.localeCompare(b.fromShip));
+  else if (sortBy === "price") filteredCCUs.sort((a, b) => b.pricePaid - a.pricePaid);
 
   const handleExport = () => {
     const json = exportToJSON();
@@ -102,150 +210,289 @@ export function HangarDashboard() {
     URL.revokeObjectURL(url);
   };
 
-  const handleOpenChainBuilder = (chain?: CCUChain) => {
-    setEditingChain(chain);
-    setShowChainBuilder(true);
+  const handleBulkMoveToFleet = () => {
+    buybackShips.forEach((ship) => { updateShip(ship.id, { location: "hangar" }); });
+    setShowBulkMoveConfirm(false);
   };
 
-  const handleCloseChainBuilder = () => {
-    setShowChainBuilder(false);
-    setEditingChain(undefined);
+  const handleOpenChainBuilder = (chain?: CCUChain) => { setEditingChain(chain); setShowChainBuilder(true); };
+  const handleCloseChainBuilder = () => { setShowChainBuilder(false); setEditingChain(undefined); };
+
+  // Reset category filter when switching tabs
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab);
+    setFilterCategory("all");
+    setSearchQuery("");
   };
+
+  // Tab config
+  const TABS: { id: TabType; label: string; count: number }[] = [
+    { id: "My Fleet", label: "My Fleet", count: fleetShips.length + fleetCCUs.length },
+    { id: "Buyback", label: "Buyback", count: buybackShips.length + buybackCCUs.length },
+    { id: "Wishlist", label: "Wishlist", count: wishlist.length },
+    { id: "CCU Chains", label: "CCU Chains", count: chains.length },
+  ];
+
+  // ── Wishlist filtering ──
+  const filteredWishlist = wishlist.filter((w) => {
+    if (wishlistPriorityFilter !== "all" && w.priority !== wishlistPriorityFilter) return false;
+    if (wishlistSearch) {
+      const q = wishlistSearch.toLowerCase();
+      return w.shipName.toLowerCase().includes(q) || (w.manufacturer || "").toLowerCase().includes(q);
+    }
+    return true;
+  });
+  const wishlistTotalValue = wishlist.reduce((sum, w) => sum + (w.targetPrice || 0), 0);
+  const wishlistHighPriority = wishlist.filter((w) => w.priority === "high").length;
 
   return (
     <div className="space-y-6">
-      {/* Tab Navigation */}
-      <div className="flex gap-2 border-b border-zinc-800/50 pb-4">
-        {(["Fleet", "CCUs", "CCU Chains"] as const).map((tab) => (
+      {/* ── Tab Navigation ── */}
+      <div className="flex gap-1 border-b border-zinc-800/50 pb-4 overflow-x-auto">
+        {TABS.map((tab) => (
           <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-medium tracking-wide transition-all duration-300 border-b-2 ${
-              activeTab === tab
-                ? "border-amber-500 text-amber-500"
+            key={tab.id}
+            onClick={() => handleTabChange(tab.id)}
+            className={`px-4 py-2 text-sm font-medium tracking-wide transition-all duration-300 border-b-2 whitespace-nowrap ${
+              activeTab === tab.id
+                ? "border-amber-500 text-amber-400"
                 : "border-transparent text-zinc-400 hover:text-zinc-300"
             }`}
           >
-            {tab}
-            {tab === "Fleet" && ships.length > 0 && (
-              <span className="ml-2 text-[10px] text-zinc-500">{ships.length}</span>
-            )}
-            {tab === "CCUs" && ccus.length > 0 && (
-              <span className="ml-2 text-[10px] text-zinc-500">{ccus.length}</span>
-            )}
-            {tab === "CCU Chains" && chains.length > 0 && (
-              <span className="ml-2 text-[10px] text-zinc-500">{chains.length}</span>
+            {tab.label}
+            {tab.count > 0 && (
+              <span className={`ml-2 text-[10px] ${activeTab === tab.id ? "text-amber-500/70" : "text-zinc-600"}`}>
+                {tab.count}
+              </span>
             )}
           </button>
         ))}
+
+        {/* Import / Export / Clear */}
+        <div className="ml-auto flex gap-2 pl-4 items-center">
+          <button onClick={() => setShowImportModal(true)} className="px-3 py-1.5 bg-amber-500/20 border border-amber-500/50 rounded-sm text-amber-400 text-[12px] font-medium hover:bg-amber-500/30 transition-all duration-300">Import</button>
+          <button onClick={handleExport} className="px-3 py-1.5 bg-cyan-500/20 border border-cyan-500/50 rounded-sm text-cyan-400 text-[12px] font-medium hover:bg-cyan-500/30 transition-all duration-300">Export</button>
+          {showClearConfirm ? (
+            <div className="flex gap-1.5 items-center">
+              <span className="text-[11px] text-red-400">Clear all?</span>
+              <button onClick={() => { clearAll(); setShowClearConfirm(false); }} className="px-2 py-1 bg-red-500/30 border border-red-500/50 rounded-sm text-red-400 text-[11px] font-medium hover:bg-red-500/40 transition-all duration-300">Yes</button>
+              <button onClick={() => setShowClearConfirm(false)} className="px-2 py-1 bg-zinc-800/50 border border-zinc-700/50 rounded-sm text-zinc-400 text-[11px] hover:bg-zinc-800 transition-all duration-300">No</button>
+            </div>
+          ) : (
+            <button onClick={() => setShowClearConfirm(true)} className="px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded-sm text-red-400/70 text-[12px] font-medium hover:bg-red-500/20 hover:text-red-400 transition-all duration-300">Clear</button>
+          )}
+        </div>
       </div>
 
       {/* ════════════════════════════════════════════════════════════════════════
-         FLEET TAB
+         MY FLEET / BUYBACK TAB — All items by location
          ════════════════════════════════════════════════════════════════════════ */}
-      {activeTab === "Fleet" && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard label="Total Ships" value={totalShips.toString()} />
-            <StatCard label="Fleet Value" value={`$${totalFleetValue.toLocaleString()}`} />
-            <StatCard label="Insurance" value={`LTI: ${ltiCount} | 120m: ${months120Count} | Other: ${otherInsuranceCount}`} />
-            <StatCard label="Location" value={`Hangar: ${hangarCount} | Buyback: ${buybackCount}`} />
-          </div>
+      {(activeTab === "My Fleet" || activeTab === "Buyback") && (
+        <div className="space-y-5">
+          {/* Stats */}
+          {activeTab === "My Fleet" ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard label="Active Ships" value={fleetShipCount.toString()} accent="cyan" />
+              <StatCard label="Fleet Value" value={`$${fleetValue.toLocaleString()}`} accent="emerald" />
+              <StatCard label="All Items" value={(fleetShips.length + fleetCCUs.length).toString()} />
+              <StatCard label="Total Investment" value={`$${(fleetValue + buybackValue + totalCCUValue).toLocaleString()}`} accent="amber" />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard label="Buyback Items" value={(buybackShips.length + buybackCCUs.length).toString()} accent="orange" />
+              <StatCard label="Buyback Value" value={`$${buybackValue.toLocaleString()}`} accent="amber" />
+              <StatCard label="Ships" value={buybackShips.filter((s) => s.itemCategory === "standalone_ship" || s.itemCategory === "game_package").length.toString()} />
+              <StatCard label="CCUs" value={buybackCCUs.length.toString()} />
+            </div>
+          )}
 
-          <div className="flex gap-3">
-            <button onClick={() => setShowImportModal(true)} className="px-4 py-2 bg-amber-500/20 border border-amber-500/50 rounded-sm text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-all duration-300">
-              Import Fleet
-            </button>
-            <button onClick={handleExport} className="px-4 py-2 bg-cyan-500/20 border border-cyan-500/50 rounded-sm text-cyan-400 text-sm font-medium hover:bg-cyan-500/30 transition-all duration-300">
-              Export Fleet
-            </button>
-          </div>
+          {/* Buyback info banner with bulk move */}
+          {activeTab === "Buyback" && buybackShips.length > 0 && (
+            <div className="p-3 bg-orange-500/10 border border-orange-500/20 rounded-sm flex items-center justify-between gap-4">
+              <p className="text-[12px] text-orange-300/80">
+                Use <span className="text-orange-300">&quot;→ Fleet&quot;</span> on each card to move items, or move them all at once.
+              </p>
+              {showBulkMoveConfirm ? (
+                <div className="flex gap-1.5 items-center shrink-0">
+                  <span className="text-[11px] text-cyan-400">Move {buybackShips.length} to fleet?</span>
+                  <button onClick={handleBulkMoveToFleet} className="px-2 py-1 bg-cyan-500/30 border border-cyan-500/50 rounded-sm text-cyan-400 text-[11px] font-medium hover:bg-cyan-500/40 transition-all duration-300">Yes</button>
+                  <button onClick={() => setShowBulkMoveConfirm(false)} className="px-2 py-1 bg-zinc-800/50 border border-zinc-700/50 rounded-sm text-zinc-400 text-[11px] hover:bg-zinc-800 transition-all duration-300">No</button>
+                </div>
+              ) : (
+                <button onClick={() => setShowBulkMoveConfirm(true)} className="shrink-0 px-3 py-1.5 bg-cyan-500/20 border border-cyan-500/50 rounded-sm text-cyan-400 text-[11px] font-medium hover:bg-cyan-500/30 transition-all duration-300">Move All to Fleet</button>
+              )}
+            </div>
+          )}
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input type="text" placeholder="Search by ship name..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-              className="flex-1 px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-amber-500/50 transition-all duration-300" />
-            <select value={filterInsurance} onChange={(e) => setFilterInsurance(e.target.value as InsuranceType | "all")}
-              className="px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm focus:outline-none focus:border-amber-500/50 transition-all duration-300">
-              <option value="all">All Insurance</option>
-              <option value="LTI">LTI</option>
-              <option value="120_months">120 Months</option>
-              <option value="72_months">72 Months</option>
-              <option value="48_months">48 Months</option>
-              <option value="24_months">24 Months</option>
-              <option value="6_months">6 Months</option>
-              <option value="3_months">3 Months</option>
-              <option value="unknown">Unknown</option>
-            </select>
-            <select value={filterLocation} onChange={(e) => setFilterLocation(e.target.value as ItemLocation | "all")}
-              className="px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm focus:outline-none focus:border-amber-500/50 transition-all duration-300">
-              <option value="all">All Locations</option>
-              <option value="hangar">Hangar</option>
-              <option value="buyback">Buyback</option>
-              <option value="ccu_chain">CCU Chain</option>
-            </select>
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as "name" | "price" | "date")}
-              className="px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm focus:outline-none focus:border-amber-500/50 transition-all duration-300">
-              <option value="name">Sort: Name</option>
-              <option value="price">Sort: Price</option>
-              <option value="date">Sort: Date</option>
-            </select>
-            <button onClick={() => setShowAddShipModal(true)} className="px-4 py-2 bg-amber-500/20 border border-amber-500/50 rounded-sm text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-all duration-300">
-              Add Ship
-            </button>
-          </div>
+          {/* Quick Add Ship — always visible for manual entry */}
+          <QuickAddShip defaultLocation={activeTab === "Buyback" ? "buyback" : "hangar"} />
 
-          <FleetGrid ships={filteredShips} />
+          {/* Empty fleet → redirect to buyback */}
+          {activeTab === "My Fleet" && fleetShips.length === 0 && fleetCCUs.length === 0 && (buybackShips.length > 0 || buybackCCUs.length > 0) && (
+            <div className="text-center py-16 px-8">
+              <p className="text-lg text-zinc-400 font-medium mb-2">Your fleet is empty</p>
+              <p className="text-sm text-zinc-500 mb-4 max-w-lg mx-auto">
+                All your items ({buybackShips.length + buybackCCUs.length}) are in the Buyback tab. You can move them to your active fleet.
+              </p>
+              <button onClick={() => handleTabChange("Buyback")} className="px-6 py-2.5 bg-orange-500/20 border border-orange-500/50 rounded-sm text-orange-400 text-sm font-medium hover:bg-orange-500/30 transition-all duration-300">Go to Buyback Tab</button>
+            </div>
+          )}
+
+          {/* Category filter chips */}
+          {(sourceShips.length > 0 || sourceCCUs.length > 0) && (
+            <>
+              <div className="flex flex-wrap gap-1.5">
+                {CATEGORY_OPTIONS.map((opt) => {
+                  const count = categoryCounts[opt.value] || 0;
+                  if (count === 0 && opt.value !== "all") return null;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => setFilterCategory(opt.value)}
+                      className={`px-3 py-1 rounded-full text-[11px] font-medium transition-all duration-200 ${
+                        filterCategory === opt.value
+                          ? "bg-amber-500/30 text-amber-400 border border-amber-500/50"
+                          : "bg-zinc-800/50 text-zinc-400 border border-zinc-700/30 hover:border-zinc-600/50"
+                      }`}
+                    >
+                      {opt.label}
+                      {count > 0 && <span className="ml-1.5 text-[9px] opacity-60">{count}</span>}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Search + sort + actions */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  placeholder="Search items..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="flex-1 px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-amber-500/50 transition-all duration-300"
+                />
+                <select value={filterInsurance} onChange={(e) => setFilterInsurance(e.target.value as InsuranceType | "all")} className="px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm focus:outline-none focus:border-amber-500/50 transition-all duration-300">
+                  <option value="all">All Insurance</option>
+                  <option value="LTI">LTI</option>
+                  <option value="120_months">120 Months</option>
+                  <option value="72_months">72 Months</option>
+                  <option value="48_months">48 Months</option>
+                  <option value="24_months">24 Months</option>
+                  <option value="6_months">6 Months</option>
+                  <option value="3_months">3 Months</option>
+                  <option value="unknown">Unknown</option>
+                </select>
+                <select value={sortBy} onChange={(e) => setSortBy(e.target.value as "name" | "price" | "date")} className="px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm focus:outline-none focus:border-amber-500/50 transition-all duration-300">
+                  <option value="name">Sort: Name</option>
+                  <option value="price">Sort: Price</option>
+                  <option value="date">Sort: Date</option>
+                </select>
+                <button onClick={() => setShowAddShipModal(true)} className="px-4 py-2 bg-amber-500/20 border border-amber-500/50 rounded-sm text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-all duration-300">Add Ship</button>
+                {(filterCategory === "all" || filterCategory === "ccu") && (
+                  <button onClick={() => setShowAddCCUModal(true)} className="px-4 py-2 bg-cyan-500/20 border border-cyan-500/50 rounded-sm text-cyan-400 text-sm font-medium hover:bg-cyan-500/30 transition-all duration-300">Add CCU</button>
+                )}
+              </div>
+
+              {/* Items grid */}
+              {filteredShips.length > 0 && <FleetGrid ships={filteredShips} />}
+
+              {/* CCUs grid (inline within the same tab) */}
+              {filteredCCUs.length > 0 && (
+                <div className="space-y-3">
+                  {filteredShips.length > 0 && filterCategory === "all" && (
+                    <h3 className="text-[12px] text-zinc-500 tracking-[0.12em] uppercase font-medium pt-2 border-t border-zinc-800/30">
+                      CCU / Upgrades ({filteredCCUs.length})
+                    </h3>
+                  )}
+                  <CCUGrid ccus={filteredCCUs} />
+                </div>
+              )}
+
+              {filteredShips.length === 0 && filteredCCUs.length === 0 && (
+                <div className="text-center py-12">
+                  <p className="text-sm text-zinc-500">No items match your filters.</p>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Truly empty state */}
+          {sourceShips.length === 0 && sourceCCUs.length === 0 && !(activeTab === "My Fleet" && (buybackShips.length > 0 || buybackCCUs.length > 0)) && (
+            <EmptyState
+              title={activeTab === "My Fleet" ? "No active fleet" : "No buyback items"}
+              description={activeTab === "My Fleet" ? "Import your hangar using the SC Labs extension or add items manually." : "Import your hangar using the SC Labs extension to see buyback items here."}
+              onImport={() => setShowImportModal(true)}
+            />
+          )}
         </div>
       )}
 
       {/* ════════════════════════════════════════════════════════════════════════
-         CCUs TAB
+         WISHLIST TAB — Naves que el usuario quiere conseguir
          ════════════════════════════════════════════════════════════════════════ */}
-      {activeTab === "CCUs" && (
-        <div className="space-y-6">
+      {activeTab === "Wishlist" && (
+        <div className="space-y-5">
+          {/* Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard label="Total CCUs" value={totalCCUs.toString()} />
-            <StatCard label="Total Spent" value={`$${totalCCUValue.toLocaleString()}`} />
-            <StatCard label="Warbond" value={`${warbondCount} of ${totalCCUs}`} />
-            <StatCard label="Location" value={`Hangar: ${ccuHangarCount} | Buyback: ${ccuBuybackCount}`} />
+            <StatCard label="Total Wishlist" value={wishlist.length.toString()} accent="purple" />
+            <StatCard label="Alta Prioridad" value={wishlistHighPriority.toString()} accent="orange" />
+            <StatCard label="Presupuesto Estimado" value={`$${wishlistTotalValue.toLocaleString()}`} accent="amber" />
+            <StatCard label="Restantes" value={(wishlist.length - wishlistHighPriority).toString()} />
           </div>
 
-          <div className="flex gap-3">
-            <button onClick={() => setShowImportModal(true)} className="px-4 py-2 bg-amber-500/20 border border-amber-500/50 rounded-sm text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-all duration-300">
-              Import CCUs
-            </button>
-            <button onClick={handleExport} className="px-4 py-2 bg-cyan-500/20 border border-cyan-500/50 rounded-sm text-cyan-400 text-sm font-medium hover:bg-cyan-500/30 transition-all duration-300">
-              Export All
-            </button>
+          {/* Banner informativo */}
+          <div className="p-3 bg-fuchsia-500/5 border border-fuchsia-500/20 rounded-sm">
+            <p className="text-[12px] text-fuchsia-300/80">
+              💡 Tu wishlist guarda naves que te interesa comprar. Agregalas desde la página de detalle con el botón <span className="text-fuchsia-300">&quot;＋ Wishlist&quot;</span> o haciendo click derecho en cualquier nave de la lista.
+            </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input type="text" placeholder="Search by ship name..." value={ccuSearch} onChange={(e) => setCcuSearch(e.target.value)}
-              className="flex-1 px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-amber-500/50 transition-all duration-300" />
-            <select value={ccuFilterLocation} onChange={(e) => setCcuFilterLocation(e.target.value as "all" | "hangar" | "buyback")}
-              className="px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm focus:outline-none focus:border-amber-500/50 transition-all duration-300">
-              <option value="all">All Locations</option>
-              <option value="hangar">Hangar</option>
-              <option value="buyback">Buyback</option>
-            </select>
-            <select value={ccuFilterWarbond} onChange={(e) => setCcuFilterWarbond(e.target.value as "all" | "warbond" | "standard")}
-              className="px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm focus:outline-none focus:border-amber-500/50 transition-all duration-300">
-              <option value="all">All Types</option>
-              <option value="warbond">Warbond Only</option>
-              <option value="standard">Standard Only</option>
-            </select>
-            <select value={ccuSortBy} onChange={(e) => setCcuSortBy(e.target.value as "from" | "to" | "price")}
-              className="px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm focus:outline-none focus:border-amber-500/50 transition-all duration-300">
-              <option value="from">Sort: From Ship</option>
-              <option value="to">Sort: To Ship</option>
-              <option value="price">Sort: Price</option>
-            </select>
-            <button onClick={() => setShowAddCCUModal(true)} className="px-4 py-2 bg-amber-500/20 border border-amber-500/50 rounded-sm text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-all duration-300">
-              Add CCU
-            </button>
-          </div>
+          {wishlist.length > 0 && (
+            <>
+              {/* Filtros */}
+              <div className="flex flex-wrap gap-1.5">
+                {(["all", "high", "medium", "low"] as const).map((p) => {
+                  const label = p === "all" ? "Todas" : p === "high" ? "Alta" : p === "medium" ? "Media" : "Baja";
+                  const count = p === "all" ? wishlist.length : wishlist.filter((w) => w.priority === p).length;
+                  if (count === 0 && p !== "all") return null;
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => setWishlistPriorityFilter(p)}
+                      className={`px-3 py-1 rounded-full text-[11px] font-medium transition-all duration-200 ${
+                        wishlistPriorityFilter === p
+                          ? "bg-fuchsia-500/30 text-fuchsia-400 border border-fuchsia-500/50"
+                          : "bg-zinc-800/50 text-zinc-400 border border-zinc-700/30 hover:border-zinc-600/50"
+                      }`}
+                    >
+                      {label}
+                      {count > 0 && <span className="ml-1.5 text-[9px] opacity-60">{count}</span>}
+                    </button>
+                  );
+                })}
+              </div>
 
-          <CCUGrid ccus={filteredCCUs} />
+              {/* Search */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  placeholder="Buscar en wishlist..."
+                  value={wishlistSearch}
+                  onChange={(e) => setWishlistSearch(e.target.value)}
+                  className="flex-1 px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-fuchsia-500/50 transition-all duration-300"
+                />
+              </div>
+            </>
+          )}
+
+          {/* Grid */}
+          <WishlistGrid items={filteredWishlist} />
+
+          {wishlist.length > 0 && filteredWishlist.length === 0 && (
+            <div className="text-center py-12">
+              <p className="text-sm text-zinc-500">Ningún item coincide con los filtros.</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -253,24 +500,31 @@ export function HangarDashboard() {
          CCU CHAINS TAB
          ════════════════════════════════════════════════════════════════════════ */}
       {activeTab === "CCU Chains" && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard label="Total Chains" value={totalChains.toString()} />
-            <StatCard label="Total Chain Cost" value={`$${totalChainCost.toLocaleString()}`} />
-            <StatCard label="Status" value={`Active: ${inProgressChains} | Done: ${completedChains}`} />
-            <StatCard label="Planning" value={`${chains.filter((c) => c.status === "planning").length} chains`} />
+        <div className="space-y-8">
+          {/* ── Chain Calculator (Pathfinding) ── */}
+          <CCUChainCalculator />
+
+          {/* ── Separator ── */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-800/50" /></div>
+            <div className="relative flex justify-center">
+              <span className="bg-zinc-950 px-4 text-[10px] text-zinc-600 uppercase tracking-widest">Manual Chains</span>
+            </div>
           </div>
 
-          <div className="flex gap-3">
-            <button onClick={() => handleOpenChainBuilder()} className="px-4 py-2 bg-amber-500/20 border border-amber-500/50 rounded-sm text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-all duration-300">
-              New Chain
-            </button>
-            <button onClick={handleExport} className="px-4 py-2 bg-cyan-500/20 border border-cyan-500/50 rounded-sm text-cyan-400 text-sm font-medium hover:bg-cyan-500/30 transition-all duration-300">
-              Export All
-            </button>
+          {/* ── Manual Chain Builder (existing) ── */}
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard label="Total Chains" value={chains.length.toString()} accent="purple" />
+              <StatCard label="Total Chain Cost" value={`$${chains.reduce((sum, chain) => sum + chain.steps.reduce((s, step) => s + step.ccuPrice, 0), 0).toLocaleString()}`} />
+              <StatCard label="Status" value={`Active: ${chains.filter((c) => c.status === "in_progress").length} | Done: ${chains.filter((c) => c.status === "completed").length}`} />
+              <StatCard label="Planning" value={`${chains.filter((c) => c.status === "planning").length} chains`} />
+            </div>
+            <div className="flex gap-3">
+              <button onClick={() => handleOpenChainBuilder()} className="px-4 py-2 bg-amber-500/20 border border-amber-500/50 rounded-sm text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-all duration-300">New Chain</button>
+            </div>
+            <ChainList chains={chains} onEditChain={handleOpenChainBuilder} />
           </div>
-
-          <ChainList chains={chains} onEditChain={handleOpenChainBuilder} />
         </div>
       )}
 
@@ -283,11 +537,24 @@ export function HangarDashboard() {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+// ─── Reusable Components ─────────────────────────────────────────────────────
+
+function StatCard({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  const borderColor = accent === "cyan" ? "border-cyan-500/20" : accent === "emerald" ? "border-emerald-500/20" : accent === "amber" ? "border-amber-500/20" : accent === "orange" ? "border-orange-500/20" : accent === "purple" ? "border-purple-500/20" : "border-zinc-800/50";
   return (
-    <div className="p-4 bg-zinc-900/60 backdrop-blur-sm border border-zinc-800/50 rounded-sm">
+    <div className={`p-4 bg-zinc-900/60 backdrop-blur-sm border ${borderColor} rounded-sm`}>
       <p className="text-[11px] text-zinc-500 tracking-[0.12em] uppercase font-medium">{label}</p>
       <p className="text-sm text-zinc-100 font-medium mt-2">{value}</p>
+    </div>
+  );
+}
+
+function EmptyState({ title, description, onImport }: { title: string; description: string; onImport: () => void }) {
+  return (
+    <div className="text-center py-16 px-8">
+      <p className="text-lg text-zinc-400 font-medium mb-2">{title}</p>
+      <p className="text-sm text-zinc-500 mb-6 max-w-md mx-auto">{description}</p>
+      <button onClick={onImport} className="px-6 py-2.5 bg-amber-500/20 border border-amber-500/50 rounded-sm text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-all duration-300">Import Hangar</button>
     </div>
   );
 }

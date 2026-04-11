@@ -8,25 +8,25 @@ const PANELS = [
   {
     id: "dps",
     label: "DPS Calculator & Stats",
-    video: "/media/videos/dps.mp4",
+    video: "/videos/dps.mp4",
     href: "/dps",
   },
   {
     id: "compare",
     label: "Ship Comparator",
-    video: "/media/videos/comparador.mp4",
+    video: "/videos/comparador.mp4",
     href: "/compare",
   },
   {
     id: "mining",
     label: "Mining & Industry",
-    video: "/media/videos/mineria.mp4",
+    video: "/videos/mineria.mp4",
     href: "/mining",
   },
   {
     id: "crafting",
     label: "Crafting",
-    video: "/media/videos/crafting.mp4",
+    video: "/videos/crafting.mp4",
     href: "/crafting",
   },
 ];
@@ -55,7 +55,7 @@ export default function Home() {
         playsInline
         className="absolute inset-0 w-full h-full object-cover opacity-30 pointer-events-none"
       >
-        <source src="/media/videos/bg.mp4" type="video/mp4" />
+        <source src="/videos/bg.mp4" type="video/mp4" />
       </video>
 
       {/* Overlay oscuro sobre el video */}
@@ -85,7 +85,7 @@ export default function Home() {
         }}
       >
         <Image
-          src="/media/images/sclabs-logo.png"
+          src="/sclabs-logo.png"
           alt="SC LABS"
           fill
           className="object-contain drop-shadow-[0_0_40px_rgba(232,137,12,0.35)]"

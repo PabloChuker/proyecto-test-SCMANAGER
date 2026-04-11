@@ -7,12 +7,14 @@ import Header from "@/app/assets/header/Header";
 import { SIDEBAR_ITEMS } from "@/app/assets/header/navigation";
 import MiningLoadoutCalculator from "./MiningLoadoutCalculator";
 import WorkOrderCalculator from "./WorkOrderCalculator";
+import WorkOrderDashboard from "./WorkOrderDashboard";
 import RockCalculator from "./RockCalculator";
 import RefineryDataTable from "./RefineryDataTable";
 
 const TABS = [
   { id: "loadout", label: "Loadout Calculator", icon: "⛏" },
   { id: "workorder", label: "Work Order", icon: "📈" },
+  { id: "dashboard", label: "Dashboard", icon: "📊" },
   { id: "rock", label: "Rock Calculator", icon: "🪨" },
   { id: "refinery", label: "Refinery Data", icon: "🏚" },
 ];
@@ -85,6 +87,7 @@ export default function MiningPage() {
             <div className="mt-6">
               {activeTab === "loadout" && <MiningLoadoutCalculator />}
               {activeTab === "workorder" && <WorkOrderCalculator />}
+              {activeTab === "dashboard" && <WorkOrderDashboard />}
               {activeTab === "rock" && <RockCalculator />}
               {activeTab === "refinery" && <RefineryDataTable />}
             </div>

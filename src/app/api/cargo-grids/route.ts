@@ -1,19 +1,27 @@
 export const dynamic = "force-dynamic";
 // =============================================================================
 // SC LABS — /api/cargo-grids
-// Returns all cargo grids with valid positive dimensions and SCU capacity.
-// Used by the 3D Cargo Grid Visualizer module.
+// Devuelve todos los cargo grids con dimensiones válidas y SCU > 0.
+// Usa postgres.js (sql from @/lib/db) → Supabase PostgreSQL.
 // =============================================================================
 
-import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { NextResponse } from "next/server";
+import { sql } from "@/lib/db";
 import { secureHeaders } from "@/lib/api-security";
 
 export const revalidate = 300;
 
-export async function GET(_request: NextRequest) {
+interface CargoGridRow {
+  id: string;
+  class_name: string;
+  name: string;
+  scu_capacity: number;
+  dimensions: { x: number; y: number; z: number };
+}
+
+export async function GET() {
   try {
-    const rows: any[] = await prisma.$queryRawUnsafe(`
+    const rows = await sql<CargoGridRow[]>`
       SELECT id, class_name, name, scu_capacity, dimensions
       FROM cargo_grids
       WHERE scu_capacity > 0
@@ -23,7 +31,7 @@ export async function GET(_request: NextRequest) {
         AND COALESCE((dimensions->>'y')::float, 0) > 0
         AND COALESCE((dimensions->>'z')::float, 0) > 0
       ORDER BY class_name ASC
-    `);
+    `;
 
     return NextResponse.json(
       {
@@ -32,7 +40,7 @@ export async function GET(_request: NextRequest) {
           className: String(r.class_name),
           name: String(r.name),
           scuCapacity: Number(r.scu_capacity),
-          dimensions: r.dimensions as { x: number; y: number; z: number },
+          dimensions: r.dimensions,
         })),
       },
       { headers: secureHeaders() },

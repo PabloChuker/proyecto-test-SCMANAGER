@@ -8,7 +8,7 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { sql } from "@/lib/db";
 import powerNetworkLookup from "@/data/power-network-lookup.json";
 import shipPowerData from "@/data/ship-power-data.json";
 
@@ -132,6 +132,8 @@ function buildWeaponItem(row: any): any {
       fireMode: row.fire_mode ?? null,
       heatPerShot: numOrNull(row.heat_per_shot),
       emSignature: numOrNull(row.emission_em_max),
+      penetrationDistance: numOrNull(row.penetration_distance),
+      maxPenetrationThickness: numOrNull(row.max_penetration_thickness),
     },
     powerNetwork: getPowerNetworkInfo(row.class_name),
   };
@@ -415,16 +417,25 @@ export async function GET(
   try {
     const { id } = await params;
 
-    // ── 1. Find the ship ──
-    const shipRows: any[] = await prisma.$queryRawUnsafe(
-      `SELECT * FROM ships
+    // ── 1. Find the ship (exact matches prioritized over partial) ──
+    const shipRows: any[] = await sql.unsafe(
+      `SELECT *,
+         CASE
+           WHEN reference = $1 THEN 0
+           WHEN reference ILIKE $1 THEN 1
+           WHEN id::text = $1 THEN 2
+           WHEN name ILIKE $1 THEN 3
+           WHEN reference ILIKE '%' || $1 || '%' THEN 4
+         END AS match_rank
+       FROM ships
        WHERE reference = $1
           OR reference ILIKE $1
           OR name ILIKE $1
           OR id::text = $1
           OR reference ILIKE '%' || $1 || '%'
+       ORDER BY match_rank ASC
        LIMIT 1`,
-      String(id),
+      [String(id)],
     );
 
     if (shipRows.length === 0) {
@@ -438,9 +449,9 @@ export async function GET(
     let fuelStats: any = null;
 
     try {
-      const fsRows: any[] = await prisma.$queryRawUnsafe(
+      const fsRows: any[] = await sql.unsafe(
         `SELECT * FROM ship_flight_stats WHERE ship_id::text = $1 LIMIT 1`,
-        String(ship.id),
+        [String(ship.id)],
       );
       if (fsRows.length > 0) flightStats = fsRows[0];
     } catch (e) {
@@ -448,9 +459,9 @@ export async function GET(
     }
 
     try {
-      const fRows: any[] = await prisma.$queryRawUnsafe(
+      const fRows: any[] = await sql.unsafe(
         `SELECT * FROM ship_fuel WHERE ship_id::text = $1 LIMIT 1`,
-        String(ship.id),
+        [String(ship.id)],
       );
       if (fRows.length > 0) fuelStats = fRows[0];
     } catch (e) {
@@ -458,11 +469,11 @@ export async function GET(
     }
 
     // ── 3. Get hardpoints from NEW schema (match by ship reference) ──
-    const hardpointRows: any[] = await prisma.$queryRawUnsafe(
+    const hardpointRows: any[] = await sql.unsafe(
       `SELECT * FROM ship_hardpoints
        WHERE ship_reference = $1
        ORDER BY hardpoint_type, max_size DESC, hardpoint_name ASC`,
-      String(ship.reference),
+      [String(ship.reference)],
     );
 
     // ── 4. Collect all default_item_class values for batch lookup ──
@@ -502,9 +513,9 @@ export async function GET(
       if (classes.length === 0) return;
       try {
         const placeholders = classes.map((_, i) => `$${i + 1}`).join(",");
-        const rows: any[] = await prisma.$queryRawUnsafe(
+        const rows: any[] = await sql.unsafe(
           `SELECT * FROM ${table} WHERE ${classCol} IN (${placeholders})`,
-          ...classes,
+          classes,
         );
         for (const row of rows) {
           componentMap.set(row[classCol], { table, row });
@@ -613,7 +624,7 @@ export async function GET(
             finalCategory !== "TURRET" &&
             finalCategory !== "MISSILE_RACK",
           equippedItem,
-          children,
+          childWeapons: children,
         };
       })
       .filter(Boolean);
@@ -634,6 +645,8 @@ export async function GET(
       manufacturer: ship.manufacturer,
       gameVersion: col(ship, "game_version", "gameVersion") ?? "",
       type: "SHIP",
+      msrpUsd: numOrNull(ship.msrp_usd),
+      warbondUsd: numOrNull(ship.warbond_usd),
       ship: {
         scmSpeed,
         afterburnerSpeed,
@@ -648,7 +661,7 @@ export async function GET(
         focus: null,
         career: null,
         size: ship.size ?? null,
-        mass: numOrNull(ship.mass),
+        mass: numOrNull(ship.mass) ?? numOrNull(col(flightStats, "mass_total", "mass_loadout", "mass_empty")),
         boostSpeedForward: numOrNull(
           col(flightStats, "boost_speed_forward", "boostSpeedForward"),
         ),
@@ -665,6 +678,12 @@ export async function GET(
         ),
         boostSpeedBackward: numOrNull(
           col(flightStats, "boost_speed_backward", "boostSpeedBackward"),
+        ),
+        boostMultUp: numOrNull(
+          col(flightStats, "boost_mult_up", "boostMultUp"),
+        ),
+        boostMultStrafe: numOrNull(
+          col(flightStats, "boost_mult_strafe", "boostMultStrafe"),
         ),
         boostedPitch: numOrNull(
           col(flightStats, "pitch_boosted", "boosted_pitch", "boostedPitch"),
@@ -689,6 +708,9 @@ export async function GET(
           col(fuelStats, "power_generation", "powerGeneration"),
         ),
         hullHp: numOrNull(col(fuelStats, "hull_hp", "hullHp")),
+        deflectionPhysical: numOrNull(ship.deflection_physical),
+        deflectionEnergy: numOrNull(ship.deflection_energy),
+        deflectionDistortion: numOrNull(ship.deflection_distortion),
       },
     };
 
@@ -696,8 +718,71 @@ export async function GET(
     const shipClassName = ship.reference || ship.class_name || "";
     const shipPower = spLookup[shipClassName] ?? null;
 
+    // Flight controller (thrusters) power data — looked up by Controller_Flight_{className}
+    const flightController =
+      pnLookup[`Controller_Flight_${shipClassName}`] ?? null;
+
+    // ── Compute stats from flatHardpoints for ShipSpecSheet ──
+    let totalDps = 0, totalAlphaDamage = 0, totalShieldHp = 0, totalShieldRegen = 0;
+    let totalPowerDraw = 0, totalPowerOutput = 0, totalCooling = 0, totalThermalOutput = 0;
+    let totalEmSignature = 0, totalIrSignature = 0;
+    let weaponCount = 0, missileCount = 0, shieldCount = 0, coolerCount = 0, powerPlantCount = 0, quantumDriveCount = 0;
+
+    for (const hp of flatHardpoints as any[]) {
+      const cat = hp.category;
+      const eq = hp.equippedItem;
+      const cs = eq?.componentStats;
+
+      if (cat === "WEAPON" || cat === "TURRET") {
+        weaponCount++;
+        const cws = hp.childWeapons ?? [];
+        if (cws.length > 0) {
+          for (const cw of cws) {
+            totalDps += cw.equippedItem?.componentStats?.dps ?? 0;
+            totalAlphaDamage += cw.equippedItem?.componentStats?.alphaDamage ?? 0;
+          }
+        } else if (cs) {
+          totalDps += cs.dps ?? 0;
+          totalAlphaDamage += cs.alphaDamage ?? 0;
+        }
+      } else if (cat === "MISSILE_RACK") {
+        missileCount++;
+      } else if (cat === "SHIELD" && cs) {
+        shieldCount++;
+        totalShieldHp += cs.shieldHp ?? 0;
+        totalShieldRegen += cs.shieldRegen ?? 0;
+      } else if (cat === "POWER_PLANT" && cs) {
+        powerPlantCount++;
+        totalPowerOutput += cs.powerOutput ?? 0;
+      } else if (cat === "COOLER" && cs) {
+        coolerCount++;
+        totalCooling += cs.coolingRate ?? 0;
+      } else if (cat === "QUANTUM_DRIVE") {
+        quantumDriveCount++;
+      }
+
+      if (cs) {
+        totalPowerDraw += cs.powerDraw ?? 0;
+        totalThermalOutput += cs.thermalOutput ?? 0;
+        totalEmSignature += cs.emSignature ?? 0;
+        totalIrSignature += cs.irSignature ?? 0;
+      }
+    }
+
+    const computed = {
+      totalDps, totalAlphaDamage, totalShieldHp, totalShieldRegen,
+      totalPowerDraw, totalPowerOutput, totalCooling, totalThermalOutput,
+      powerBalance: totalPowerOutput - totalPowerDraw,
+      thermalBalance: totalCooling - totalThermalOutput,
+      totalEmSignature, totalIrSignature,
+      hardpointSummary: {
+        weapons: weaponCount, missiles: missileCount, shields: shieldCount,
+        coolers: coolerCount, powerPlants: powerPlantCount, quantumDrives: quantumDriveCount,
+      },
+    };
+
     return NextResponse.json(
-      { data, flatHardpoints, shipPower },
+      { data, flatHardpoints, computed, shipPower, flightController },
       {
         headers: {
           "Cache-Control":
