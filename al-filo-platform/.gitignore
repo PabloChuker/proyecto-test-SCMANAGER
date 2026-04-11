@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 3D model assets — hosted en Cloudflare R2, NO en git
+Modulos 3d/GLB/
+*.glb

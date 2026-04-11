@@ -25,6 +25,8 @@ import { ComponentPicker } from "./ComponentPicker";
 import { PowerManagementPanel } from "./PowerManagementPanel";
 import { ShipSelector } from "./ShipSelector";
 import { fmtStat, fmtDps } from "./loadout-utils";
+import { ShipFlightDynamicsSingle } from "@/components/dps/flight-dynamics";
+import { shipGlbUrl } from "@/lib/shipGlb";
 
 const WEAPON_GROUPS = new Set(["WEAPON", "TURRET"]);
 const MISSILE_GROUPS = new Set(["MISSILE_RACK"]);
@@ -80,15 +82,16 @@ type WidgetId =
   | "shields" | "powerplants" | "coolers" | "maneuver-radar"
   | "quantum" | "radar" | "utility" | "combat-summary"
   | "power-grid" | "signatures" | "balance"
-  | "ship-selector" | "ship-card" | "dps-detail";
+  | "ship-selector" | "ship-card" | "dps-detail"
+  | "flight-dynamics-3d";
 
 // Default column assignments — 5 columns
 const DEFAULT_COLUMNS: WidgetId[][] = [
-  ["weapons", "missiles", "strafe-profile"],                       // Col 1
-  ["shields", "powerplants", "coolers", "turning-profile"],        // Col 2
-  ["quantum", "radar", "utility", "combat-summary"],               // Col 3
-  ["power-grid", "signatures", "balance", "maneuver-radar"],       // Col 4
-  ["ship-selector", "ship-card", "dps-detail"],                    // Col 5
+  ["weapons", "missiles", "strafe-profile"],                                  // Col 1
+  ["shields", "powerplants", "coolers", "turning-profile"],                   // Col 2
+  ["quantum", "radar", "utility", "combat-summary"],                          // Col 3
+  ["power-grid", "signatures", "balance", "maneuver-radar", "flight-dynamics-3d"], // Col 4
+  ["ship-selector", "ship-card", "dps-detail"],                               // Col 5
 ];
 
 const WIDGET_LABELS: Record<WidgetId, string> = {
@@ -97,6 +100,7 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   quantum: "QT DRIVES", radar: "RADAR", utility: "UTILITY", "combat-summary": "COMBAT",
   "power-grid": "POWER GRID", signatures: "SIGNATURES", balance: "BALANCE",
   "ship-selector": "SEARCH", "ship-card": "SHIP CARD", "dps-detail": "DPS DETAIL",
+  "flight-dynamics-3d": "FLIGHT DYNAMICS 3D",
 };
 
 const ALL_WIDGET_IDS = DEFAULT_COLUMNS.flat();
@@ -198,6 +202,18 @@ function renderWidget(
     }
     case "maneuver-radar":
       return W(<GForceProfileTabs shipData={shipInfo} />);
+    case "flight-dynamics-3d":
+      return W(
+        <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
+          <ShipFlightDynamicsSingle
+            shipName={shipInfo.localizedName || shipInfo.name}
+            pitchRate={si.pitchRate}
+            yawRate={si.yawRate}
+            rollRate={si.rollRate}
+            glbUrl={shipGlbUrl(shipInfo.reference)}
+          />
+        </div>
+      );
     case "quantum": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "QUANTUM_DRIVE");
       return hps.length > 0 ? W(<HpGroup title={CAT_CONFIG.QUANTUM_DRIVE.label} icon={CAT_CONFIG.QUANTUM_DRIVE.icon} hps={hps} store={store} onClickHp={setPickerHp} accent={CAT_CONFIG.QUANTUM_DRIVE.accent} />) : null;
