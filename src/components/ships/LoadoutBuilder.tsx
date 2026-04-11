@@ -102,7 +102,7 @@ const WIDGET_WU: Record<WidgetId, number> = {
   quantum: 1, radar: 1, utility: 1, "combat-summary": 1,
   "power-grid": 1, signatures: 1, balance: 1,
   "ship-selector": 1, "ship-card": 1, "dps-detail": 1,
-  "flight-dynamics-3d": 2,
+  "flight-dynamics-3d": 3,
 };
 
 // Distribución default — columnas lógicas (0..4) con widgets apilados.
@@ -171,7 +171,7 @@ function widgetContentHeightPx(
     case "ship-selector":    return HDR + 44;
     case "ship-card":        return HDR + 430;
     case "dps-detail":       return HDR + 280;
-    case "flight-dynamics-3d": return HDR + 420;
+    case "flight-dynamics-3d": return HDR + 470;
   }
 }
 
@@ -241,13 +241,13 @@ function buildDefaultPositions(
     colBottoms[minCol] = y + heights[wId] + GAP;
   }
 
-  // Pass 2 — flight-dynamics-3d (ocupa 2 cols). Buscamos el par adyacente
+  // Pass 2 — flight-dynamics-3d (ocupa 3 cols). Buscamos el triple adyacente
   // con menor max-bottom: ahí cabe con menos hueco desperdiciado.
   if (visible.has("flight-dynamics-3d")) {
     let bestStart = 0;
-    let bestMax = Math.max(colBottoms[0], colBottoms[1]);
-    for (let i = 1; i < N_COLS - 1; i++) {
-      const m = Math.max(colBottoms[i], colBottoms[i + 1]);
+    let bestMax = Math.max(colBottoms[0], colBottoms[1], colBottoms[2]);
+    for (let i = 1; i <= N_COLS - 3; i++) {
+      const m = Math.max(colBottoms[i], colBottoms[i + 1], colBottoms[i + 2]);
       if (m < bestMax) { bestMax = m; bestStart = i; }
     }
     result.set("flight-dynamics-3d", {
@@ -257,6 +257,7 @@ function buildDefaultPositions(
     const newBottom = bestMax + heights["flight-dynamics-3d"] + GAP;
     colBottoms[bestStart]     = newBottom;
     colBottoms[bestStart + 1] = newBottom;
+    colBottoms[bestStart + 2] = newBottom;
   }
 
   return result;
