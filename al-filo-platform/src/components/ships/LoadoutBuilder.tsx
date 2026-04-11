@@ -15,9 +15,9 @@
 
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import GridLayout, { WidthProvider, type Layout } from "react-grid-layout";
+import GridLayout, { type Layout } from "react-grid-layout";
 import { useLoadoutStore } from "@/store/useLoadoutStore";
 import type { ResolvedHardpoint, EquippedItem } from "@/store/useLoadoutStore";
 import { useAuth } from "@/contexts/AuthContext";
@@ -29,11 +29,6 @@ import { ShipSelector } from "./ShipSelector";
 import { fmtStat, fmtDps } from "./loadout-utils";
 import { ShipFlightDynamicsSingle } from "@/components/dps/flight-dynamics";
 import { shipGlbUrl } from "@/lib/shipGlb";
-
-// WidthProvider measures the container and passes width to GridLayout.
-// Creamos la instancia UNA sola vez a nivel módulo para evitar recrearla en
-// cada render (lo cual rompería el drag state interno de RGL).
-const ResponsiveGridLayout = WidthProvider(GridLayout);
 
 const WEAPON_GROUPS = new Set(["WEAPON", "TURRET"]);
 const MISSILE_GROUPS = new Set(["MISSILE_RACK"]);
@@ -93,42 +88,47 @@ type WidgetId =
   | "flight-dynamics-3d";
 
 // ─── Grid dimensions ────────────────────────────────────────────────────────
-// 15 cols = 5 grupos de 3 cols (parecido al layout 5-col anterior).
-// flight-dynamics-3d ocupa w=6 (2 grupos) para los 3 viewports grandes.
-const GRID_COLS = 15;
-const ROW_HEIGHT = 18; // px por unidad de h
-const GRID_MARGIN: [number, number] = [8, 8];
+// Grilla estandarizada: 5 "columnas visuales" (1 unidad cada una) subdivididas
+// en 4 subcolumnas de 0.25 cada una → 20 cols totales.
+// Cada sub-celda es CUADRADA: rowHeight se calcula dinámicamente = colWidth.
+// Así un widget w=4 h=4 es un cuadrado de 1x1 unidades visuales.
+// Widgets normales: w=4 (1 unidad). flight-dynamics-3d: w=8 (2 unidades).
+// El margin entre items define el "aire" entre las cards y las líneas
+// imaginarias del grid, quedando visualmente en ~0.9 de la unidad.
+const GRID_COLS = 20;
+const GRID_MARGIN: [number, number] = [12, 12];
+const MIN_ROW_HEIGHT = 32; // piso para viewports muy chicos
 
-// Altura default por widget (en unidades de ROW_HEIGHT = 18px).
-// Son estimaciones iniciales; el usuario puede mover los paneles a su gusto.
-// Si un widget renderiza más alto que su `h`, RGL le corta con overflow: hidden
-// del lado del item. Para evitarlo, los estimamos generosos.
+// Layout default — x,y,w,h en unidades de 0.25.
+// Cada "columna visual" del layout 5-col anterior equivale a 4 subcolumnas:
+//   col 1: x=0  | col 2: x=4 | col 3: x=8 | col 4: x=12 | col 5: x=16
+// Las alturas son múltiplos enteros de la subunidad (cells cuadradas).
 const DEFAULT_LAYOUT: Layout[] = [
-  // Col 1 (x=0, w=3)
-  { i: "weapons",          x: 0,  y: 0,  w: 3, h: 11 },
-  { i: "missiles",         x: 0,  y: 11, w: 3, h: 6  },
-  { i: "strafe-profile",   x: 0,  y: 17, w: 3, h: 11 },
-  // Col 2 (x=3, w=3)
-  { i: "shields",          x: 3,  y: 0,  w: 3, h: 6  },
-  { i: "powerplants",      x: 3,  y: 6,  w: 3, h: 6  },
-  { i: "coolers",          x: 3,  y: 12, w: 3, h: 5  },
-  { i: "turning-profile",  x: 3,  y: 17, w: 3, h: 12 },
-  // Col 3 (x=6, w=3)
-  { i: "quantum",          x: 6,  y: 0,  w: 3, h: 5  },
-  { i: "radar",            x: 6,  y: 5,  w: 3, h: 5  },
-  { i: "utility",          x: 6,  y: 10, w: 3, h: 6  },
-  { i: "combat-summary",   x: 6,  y: 16, w: 3, h: 8  },
-  // Col 4 (x=9, w=3)
-  { i: "power-grid",       x: 9,  y: 0,  w: 3, h: 16 },
-  { i: "signatures",       x: 9,  y: 16, w: 3, h: 6  },
-  { i: "balance",          x: 9,  y: 22, w: 3, h: 6  },
-  { i: "maneuver-radar",   x: 9,  y: 28, w: 3, h: 12 },
-  // Col 5 (x=12, w=3)
-  { i: "ship-selector",    x: 12, y: 0,  w: 3, h: 8  },
-  { i: "ship-card",        x: 12, y: 8,  w: 3, h: 24 },
-  { i: "dps-detail",       x: 12, y: 32, w: 3, h: 15 },
-  // Flight dynamics 3D — spans 2 grupos (cols 3-4), fila inferior
-  { i: "flight-dynamics-3d", x: 6, y: 24, w: 6, h: 18 },
+  // Col 1 (x=0, w=4) — armamento
+  { i: "weapons",          x: 0,  y: 0,  w: 4, h: 4 },
+  { i: "missiles",         x: 0,  y: 4,  w: 4, h: 2 },
+  { i: "strafe-profile",   x: 0,  y: 6,  w: 4, h: 4 },
+  // Col 2 (x=4, w=4) — defensa y maniobra
+  { i: "shields",          x: 4,  y: 0,  w: 4, h: 2 },
+  { i: "powerplants",      x: 4,  y: 2,  w: 4, h: 2 },
+  { i: "coolers",          x: 4,  y: 4,  w: 4, h: 2 },
+  { i: "turning-profile",  x: 4,  y: 6,  w: 4, h: 4 },
+  // Col 3 (x=8, w=4) — módulos
+  { i: "quantum",          x: 8,  y: 0,  w: 4, h: 2 },
+  { i: "radar",            x: 8,  y: 2,  w: 4, h: 2 },
+  { i: "utility",          x: 8,  y: 4,  w: 4, h: 2 },
+  { i: "combat-summary",   x: 8,  y: 6,  w: 4, h: 3 },
+  // Col 4 (x=12, w=4) — power
+  { i: "power-grid",       x: 12, y: 0,  w: 4, h: 5 },
+  { i: "signatures",       x: 12, y: 5,  w: 4, h: 2 },
+  { i: "balance",          x: 12, y: 7,  w: 4, h: 2 },
+  { i: "maneuver-radar",   x: 12, y: 9,  w: 4, h: 4 },
+  // Col 5 (x=16, w=4) — ship info + DPS
+  { i: "ship-selector",    x: 16, y: 0,  w: 4, h: 3 },
+  { i: "ship-card",        x: 16, y: 3,  w: 4, h: 8 },
+  { i: "dps-detail",       x: 16, y: 11, w: 4, h: 5 },
+  // Flight dynamics 3D — 2 unidades de ancho (w=8), fila inferior cols 3-4
+  { i: "flight-dynamics-3d", x: 8, y: 9, w: 8, h: 6 },
 ];
 
 const WIDGET_LABELS: Record<WidgetId, string> = {
@@ -394,15 +394,41 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const overrideCountRef = useRef(0);
 
   // ─── Dynamic grid layout (react-grid-layout) ─────────────────────────────
-  // `mounted` evita el primer render con el default antes de leer localStorage
+  // layoutMounted evita renderizar con el default antes de leer localStorage
   // (así no parpadea y no choca con SSR hydration).
   const [layout, setLayout] = useState<Layout[]>(() => DEFAULT_LAYOUT.map((l) => ({ ...l })));
   const [layoutMounted, setLayoutMounted] = useState(false);
+
+  // Medimos el ancho del contenedor con ResizeObserver para calcular un
+  // rowHeight dinámico que haga cada celda perfectamente cuadrada:
+  //   colWidth = (width - margin * (cols - 1)) / cols
+  //   rowHeight = colWidth  (celdas cuadradas → la subunidad de 0.25 es igual
+  //                           en ancho y alto, como pidió el diseño).
+  const gridContainerRef = useRef<HTMLDivElement>(null);
+  const [gridWidth, setGridWidth] = useState<number>(1400);
 
   useEffect(() => {
     setLayout(loadLayout());
     setLayoutMounted(true);
   }, []);
+
+  useEffect(() => {
+    const el = gridContainerRef.current;
+    if (!el) return;
+    const update = () => {
+      const w = el.clientWidth;
+      if (w > 0) setGridWidth(w);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [layoutMounted]);
+
+  const rowHeight = useMemo(() => {
+    const colWidth = (gridWidth - GRID_MARGIN[0] * (GRID_COLS - 1)) / GRID_COLS;
+    return Math.max(colWidth, MIN_ROW_HEIGHT);
+  }, [gridWidth]);
 
   const handleLayoutChange = useCallback((newLayout: Layout[]) => {
     if (!layoutMounted) return;
@@ -526,31 +552,36 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
         </div>
       </div>
 
-      {/* ── Main Grid — react-grid-layout (drag libre, compact vertical) ── */}
-      {/* layoutMounted gate: el primer render se hace con defaults, y solo
-          después de leer localStorage montamos el GridLayout real. Esto evita
-          que RGL guarde el layout default pisando lo persistido. */}
-      {layoutMounted && (
-        <ResponsiveGridLayout
-          className="layout"
-          layout={layout}
-          cols={GRID_COLS}
-          rowHeight={ROW_HEIGHT}
-          margin={GRID_MARGIN}
-          isResizable={false}
-          isDraggable={true}
-          draggableHandle=".rgl-drag-handle"
-          compactType="vertical"
-          preventCollision={false}
-          onLayoutChange={handleLayoutChange}
-        >
-          {layout.map((item) => (
-            <div key={item.i}>
-              {renderWidget(item.i as WidgetId, ctx)}
-            </div>
-          ))}
-        </ResponsiveGridLayout>
-      )}
+      {/* ── Main Grid — react-grid-layout con celdas cuadradas 0.25x0.25 ── */}
+      {/* gridContainerRef mide el ancho real del contenedor (vía ResizeObserver)
+          y pasamos width/rowHeight calculados para que cada subcelda sea
+          visualmente cuadrada. El gate `layoutMounted` evita pisar el layout
+          persistido con los defaults en el primer render. */}
+      <div ref={gridContainerRef} className="w-full">
+        {layoutMounted && gridWidth > 0 && (
+          <GridLayout
+            className="layout"
+            layout={layout}
+            cols={GRID_COLS}
+            width={gridWidth}
+            rowHeight={rowHeight}
+            margin={GRID_MARGIN}
+            containerPadding={[0, 0]}
+            isResizable={false}
+            isDraggable={true}
+            draggableHandle=".rgl-drag-handle"
+            compactType="vertical"
+            preventCollision={false}
+            onLayoutChange={handleLayoutChange}
+          >
+            {layout.map((item) => (
+              <div key={item.i}>
+                {renderWidget(item.i as WidgetId, ctx)}
+              </div>
+            ))}
+          </GridLayout>
+        )}
+      </div>
 
       {pickerHp && <ComponentPicker hardpoint={pickerHp} currentItemId={getEffectiveItem(pickerHp.id)?.id ?? null} onSelect={handleSelect} onClear={handleClear} onClose={() => setPickerHp(null)} />}
 
