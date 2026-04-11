@@ -86,30 +86,32 @@ type WidgetId =
   | "ship-selector" | "ship-card" | "dps-detail"
   | "flight-dynamics-3d";
 
-// ─── Geometric grid: UNIT-based positioning (v6) ────────────────────────────
-// Todas las dimensiones derivan de `UNIT` (el ancho de una columna en px).
-// Grid: GRID_COLUMNS columnas × GRID_ROWS filas virtuales.
-//   col width  = 1 * UNIT
-//   row height = ROW_HEIGHT_RATIO * UNIT
-// Cada celda (col, row) tiene un anchor con offset `ANCHOR_OFFSET_RATIO * UNIT`
-// en ambos ejes — ahí empieza visualmente la card.
-// Cards:
-//   ancho 1-col:  CARD_WIDTH_1 = 1 * UNIT
-//   ancho 2-col:  CARD_WIDTH_2 = 2 * UNIT - FIX
-//   alto X blocks: cardHeight(X) = (ROW_HEIGHT_RATIO * UNIT * X) - FIX
-// FIX es un margen fijo en px que NO escala con UNIT — pequeño gap visual
-// entre cards adyacentes. (Spec: "0.1 fijo, no escala"; interpretado como
-// una constante en px.)
-// La altura de cada card es FIJA por la cantidad de bloques que ocupa; nunca
-// se ajusta automáticamente al contenido, puede quedar espacio vacío dentro
-// — eso está bien según la spec.
-const GRID_COLUMNS       = 5;
-const GRID_ROWS          = 120;
-const ROW_HEIGHT_RATIO   = 0.25;
+// ─── Geometric grid: UNIT-based positioning (v7) ────────────────────────────
+// Spec (Pablo, 2026-04-11):
+//   Todas las dimensiones derivan de `UNIT` — el ancho de 1 columna en px.
+//
+//   Grid:  GRID_COLUMNS × GRID_ROWS  (5 × ~100)
+//     col width   = 1                    * UNIT
+//     row height  = ROW_HEIGHT_RATIO     * UNIT  (0.25)
+//     anchor      = ANCHOR_OFFSET_RATIO  * UNIT  (0.05) desde top-left de cada celda
+//
+//   Margen implícito por tarjeta = MARGIN_RATIO/2 * UNIT  en cada lado.
+//   → Spacing TOTAL entre dos tarjetas adyacentes = MARGIN_RATIO * UNIT  (0.1).
+//   → NO se usa flex/grid `gap` — el espacio es consecuencia de la geometría.
+//
+//   Cards:
+//     CARD_WIDTH(n)  = (n - MARGIN_RATIO) * UNIT            (n = 1 o 2)
+//     cardHeight(X)  = (ROW_HEIGHT_RATIO * X - MARGIN_RATIO) * UNIT
+//
+//   La altura de una card es FIJA por la cantidad de bloques que ocupa:
+//   nunca se ajusta al contenido. Puede quedar espacio vacío dentro; OK.
+const GRID_COLUMNS        = 5;
+const GRID_ROWS           = 100;
+const ROW_HEIGHT_RATIO    = 0.25;
 const ANCHOR_OFFSET_RATIO = 0.05;
-const FIX                = 8;          // px fijo, no escala con UNIT
-const MIN_UNIT_PX        = 180;        // clamp inferior del UNIT
-const MAX_UNIT_PX        = 340;        // clamp superior del UNIT
+const MARGIN_RATIO        = 0.1;        // gap total entre cards = 0.1 * UNIT
+const MIN_UNIT_PX         = 180;        // clamp inferior del UNIT
+const MAX_UNIT_PX         = 340;        // clamp superior del UNIT
 
 // Ancho de card en columnas: 1 o 2. (Max permitido por la spec = 2.)
 // flight-dynamics-3d baja de 4 → 2 cols por la regla estricta.
@@ -159,14 +161,17 @@ function getAnchorY(row: number, unit: number): number {
 }
 
 // Ancho de card según tipo (1 o 2 cols) — en px.
+// CARD_WIDTH_n = (n - MARGIN_RATIO) * UNIT  →  deja MARGIN_RATIO*UNIT de gap
+// con la próxima celda; respetando el margen 0.05*UNIT de cada lado.
 function getCardWidth(widthType: CardWidth, unit: number): number {
-  if (widthType === 1) return 1 * unit - FIX;
-  return 2 * unit - FIX;
+  return (widthType - MARGIN_RATIO) * unit;
 }
 
 // Alto de card en px dado un número de bloques verticales (X ∈ ℤ+).
+// cardHeight(X) = (0.25 * X - MARGIN_RATIO) * UNIT  →  deja MARGIN_RATIO*UNIT
+// de gap con la card de abajo. El mínimo útil es X=1 (0.15*UNIT ≈ pocos px).
 function getCardHeight(blocks: number, unit: number): number {
-  return (ROW_HEIGHT_RATIO * unit * blocks) - FIX;
+  return (ROW_HEIGHT_RATIO * blocks - MARGIN_RATIO) * unit;
 }
 
 // Valida y clamp de (col, row) para que la card quepa en la grilla.
