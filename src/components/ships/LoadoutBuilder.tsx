@@ -147,9 +147,9 @@ function widgetContentHeightPx(
   },
 ): number {
   const HDR = 22;        // WidgetShell drag handle bar
-  const GROUP_HDR = 28;  // HpGroup title bar
-  const SLOT = 38;       // HardpointSlot row (avg, sin children)
-  const PAD = 10;
+  const GROUP_HDR = 32;  // HpGroup title bar
+  const SLOT = 54;       // HardpointSlot row (generoso para evitar scrollbars)
+  const PAD = 14;
   const hpGroupPx = (n: number) => HDR + GROUP_HDR + Math.max(1, n) * SLOT + PAD;
 
   switch (wId) {
@@ -161,16 +161,16 @@ function widgetContentHeightPx(
     case "quantum":          return hpGroupPx(counts.quantum);
     case "radar":            return hpGroupPx(counts.radar);
     case "utility":          return hpGroupPx(counts.utility);
-    case "combat-summary":   return HDR + 160;
-    case "power-grid":       return HDR + 340;
-    case "signatures":       return HDR + 90;
-    case "balance":          return HDR + 110;
-    case "strafe-profile":   return HDR + 240;
-    case "turning-profile":  return HDR + 260;
-    case "maneuver-radar":   return HDR + 260;
+    case "combat-summary":   return HDR + 180;
+    case "power-grid":       return HDR + 360;
+    case "signatures":       return HDR + 110;
+    case "balance":          return HDR + 130;
+    case "strafe-profile":   return HDR + 260;
+    case "turning-profile":  return HDR + 280;
+    case "maneuver-radar":   return HDR + 280;
     case "ship-selector":    return HDR + 44;
-    case "ship-card":        return HDR + 430;
-    case "dps-detail":       return HDR + 280;
+    case "ship-card":        return HDR + 460;
+    case "dps-detail":       return HDR + 300;
     case "flight-dynamics-3d": return HDR + 470;
   }
 }
@@ -292,46 +292,16 @@ function savePositions(positions: SavedPos[]) {
 // El header tiene la clase ".rgl-drag-handle" para que el drag custom lo
 // detecte. `overflow="visible"` se usa en widgets que abren popups (ship-
 // selector) para que el dropdown pueda invadir los vecinos sin clippear.
-// `onMeasure` reporta la altura REAL del contenido (scrollHeight + HDR) al
-// parent, que la usa para redimensionar el widget y evitar scrollbars.
-const WIDGET_HDR_PX = 22;
-
-function WidgetShell({ id, label, children, overflow = "hidden", onMeasure }: {
+// Las alturas son 100% estáticas (widgetContentHeightPx) — no medimos el
+// contenido en runtime porque eso crea loops con ResizeObserver + flex.
+function WidgetShell({ id, label, children, overflow = "hidden" }: {
   id: WidgetId;
   label: string;
   children: React.ReactNode;
   overflow?: "hidden" | "visible";
-  onMeasure?: (id: WidgetId, height: number) => void;
 }) {
-  const innerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!onMeasure) return;
-    const el = innerRef.current;
-    if (!el) return;
-    const report = () => {
-      // scrollHeight del contenedor interior = alto real del contenido.
-      // Le sumamos el header (WIDGET_HDR_PX) para tener el total del widget.
-      const h = el.scrollHeight;
-      if (h > 0) onMeasure(id, h + WIDGET_HDR_PX);
-    };
-    report();
-    const ro = new ResizeObserver(report);
-    ro.observe(el);
-    for (const child of Array.from(el.children)) ro.observe(child as Element);
-    // re-observar si cambian los hijos del contenedor interno
-    const mo = new MutationObserver(() => {
-      ro.disconnect();
-      ro.observe(el);
-      for (const child of Array.from(el.children)) ro.observe(child as Element);
-      report();
-    });
-    mo.observe(el, { childList: true });
-    return () => { ro.disconnect(); mo.disconnect(); };
-  }, [id, onMeasure, children]);
-
   const outerOverflow = overflow === "visible" ? "overflow-visible" : "overflow-hidden";
-  const innerOverflow = overflow === "visible" ? "overflow-visible" : "overflow-auto";
+  const innerOverflow = overflow === "visible" ? "overflow-visible" : "overflow-hidden";
   return (
     <div className={`h-full flex flex-col ${outerOverflow}`} data-widget-id={id}>
       <div className="rgl-drag-handle flex items-center gap-1 px-1.5 py-[2px] bg-zinc-950/60 border border-zinc-800/30 border-b-0 cursor-grab active:cursor-grabbing select-none group rounded-t-sm shrink-0">
@@ -340,7 +310,7 @@ function WidgetShell({ id, label, children, overflow = "hidden", onMeasure }: {
         <span className="flex-1" />
         <span className="text-[7px] text-zinc-800 group-hover:text-zinc-600 transition-colors">⋮⋮</span>
       </div>
-      <div ref={innerRef} className={`flex-1 min-h-0 ${innerOverflow}`}>
+      <div className={`flex-1 min-h-0 ${innerOverflow}`}>
         {children}
       </div>
     </div>
@@ -352,9 +322,9 @@ function renderWidget(
   wId: WidgetId,
   ctx: any,
 ): React.ReactNode {
-  const { weaponHps, missileHps, useful, store, setPickerHp, si, shipInfo, stats, flightMode, setFlightMode, fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount, onMeasure } = ctx;
+  const { weaponHps, missileHps, useful, store, setPickerHp, si, shipInfo, stats, flightMode, setFlightMode, fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount } = ctx;
   const W = (children: React.ReactNode) => (
-    <WidgetShell id={wId} label={WIDGET_LABELS[wId]} onMeasure={onMeasure}>{children}</WidgetShell>
+    <WidgetShell id={wId} label={WIDGET_LABELS[wId]}>{children}</WidgetShell>
   );
 
   switch (wId) {
@@ -445,7 +415,7 @@ function renderWidget(
       );
     case "ship-selector":
       return (
-        <WidgetShell id={wId} label={WIDGET_LABELS[wId]} overflow="visible" onMeasure={onMeasure}>
+        <WidgetShell id={wId} label={WIDGET_LABELS[wId]} overflow="visible">
           <ShipSelector />
         </WidgetShell>
       );
@@ -561,23 +531,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const [userPositions, setUserPositions] = useState<Map<WidgetId, { x: number; y: number }>>(
     () => new Map(),
   );
-  const [measuredHeights, setMeasuredHeights] = useState<Map<WidgetId, number>>(
-    () => new Map(),
-  );
   const [layoutMounted, setLayoutMounted] = useState(false);
-
-  // Callback estable para que WidgetShell reporte su altura real (scrollHeight
-  // + header). Sólo actualizamos si el nuevo valor difiere del anterior para
-  // evitar renders infinitos.
-  const handleMeasure = useCallback((id: WidgetId, h: number) => {
-    setMeasuredHeights((prev) => {
-      const current = prev.get(id);
-      if (current != null && Math.abs(current - h) < 2) return prev;
-      const next = new Map(prev);
-      next.set(id, h);
-      return next;
-    });
-  }, []);
 
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [gridWidth, setGridWidth] = useState<number>(1400);
@@ -723,10 +677,9 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     return s;
   }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
 
-  // ─── Altos por widget (medidos + fallback estimado) ──────────────────────
-  // Usamos la altura reportada por el ResizeObserver del WidgetShell si está
-  // disponible (contenido REAL), o caemos a la estimación de `widgetContentHeightPx`.
-  // El max() garantiza que nunca achiquemos el widget por debajo del mínimo.
+  // ─── Altos por widget (estimación estática) ──────────────────────────────
+  // Usamos sólo las estimaciones de `widgetContentHeightPx` — no medimos el
+  // contenido en runtime porque ResizeObserver + flex-1 causa loops.
   const widgetHeights = useMemo<Record<WidgetId, number>>(() => {
     const counts = {
       weapons: weaponHps.length,
@@ -740,12 +693,10 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     };
     const out = {} as Record<WidgetId, number>;
     for (const id of ALL_WIDGET_IDS) {
-      const estimated = widgetContentHeightPx(id, counts);
-      const measured = measuredHeights.get(id) ?? 0;
-      out[id] = Math.max(estimated, measured);
+      out[id] = widgetContentHeightPx(id, counts);
     }
     return out;
-  }, [measuredHeights, weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
+  }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
 
   // ─── Layout final: array de widgets con posición absoluta en px ─────────
   type AbsoluteItem = { id: WidgetId; x: number; y: number; w: number; h: number };
@@ -869,7 +820,6 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     weaponHps, missileHps, useful, store, setPickerHp,
     si, shipInfo, stats, flightMode, setFlightMode,
     fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount,
-    onMeasure: handleMeasure,
   };
 
   return (
