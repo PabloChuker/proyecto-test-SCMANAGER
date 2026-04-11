@@ -92,17 +92,19 @@ type WidgetId =
 // header y el widget sigue al mouse sin snapear a celdas. Los defaults
 // todavía organizan los widgets en 5 columnas a lo ancho del contenedor.
 const GAP = 12;         // separación visual entre widgets (px)
-const N_COLS = 5;       // columnas visuales del layout default
-const MIN_UNIT_W = 180; // ancho mínimo por columna (px)
+const N_COLS = 6;       // columnas visuales del layout default
+const MIN_UNIT_W = 170; // ancho mínimo por columna (px)
 
-// Widget widths en unidades de columna (1 = una columna, 2 = dos columnas)
+// Widget widths en unidades de columna (1 = una columna, 2+ = columnas múltiples)
+// El sidebar derecho (ship-selector, ship-card, dps-detail) usa WU=2 para
+// formar una columna ancha con el info de la nave, como el mockup.
 const WIDGET_WU: Record<WidgetId, number> = {
   weapons: 1, missiles: 1, "strafe-profile": 1, "turning-profile": 1,
   shields: 1, powerplants: 1, coolers: 1, "maneuver-radar": 1,
   quantum: 1, radar: 1, utility: 1, "combat-summary": 1,
   "power-grid": 1, signatures: 1, balance: 1,
-  "ship-selector": 1, "ship-card": 1, "dps-detail": 1,
-  "flight-dynamics-3d": 3,
+  "ship-selector": 2, "ship-card": 2, "dps-detail": 2,
+  "flight-dynamics-3d": 4,
 };
 
 // Distribución default — columnas lógicas (0..4) con widgets apilados.
@@ -192,23 +194,25 @@ function colToX(col: number, containerWidth: number): number {
   return col * (unitWidth(containerWidth) + GAP);
 }
 
-// Orden semántico en el que los widgets entran al bin-packing. Los más
-// "ancla" (ship-selector, ship-card) primero para que caigan arriba; los
-// paneles de combate a continuación; los sensores/utility al final.
-const DEFAULT_ORDER: WidgetId[] = [
-  "ship-selector",
-  "ship-card",
-  "dps-detail",
-  "combat-summary",
+// Columnas reservadas al sidebar derecho (ship info). En un grid de 6 cols,
+// las cols 4 y 5 forman un bloque ancho donde van ship-selector, ship-card
+// y dps-detail apilados verticalmente — el usuario puede moverlos después.
+const RIGHT_SIDEBAR_COL_START = N_COLS - 2; // 4
+const RIGHT_SIDEBAR: WidgetId[] = ["ship-selector", "ship-card", "dps-detail"];
+
+// Orden del bin-pack para las cols izquierdas (0..3). Agrupaciones lógicas:
+// armas, defensa, movilidad/sensores, stats de combate, perfiles.
+const LEFT_BINPACK_ORDER: WidgetId[] = [
   "weapons",
   "missiles",
   "shields",
   "powerplants",
-  "power-grid",
   "coolers",
   "quantum",
   "radar",
   "utility",
+  "combat-summary",
+  "power-grid",
   "signatures",
   "balance",
   "strafe-profile",
@@ -216,10 +220,8 @@ const DEFAULT_ORDER: WidgetId[] = [
   "maneuver-radar",
 ];
 
-// Posiciones default: greedy bin-packing sobre N_COLS columnas. Cada widget
-// 1-col entra en la columna con menor bottom actual (empates → izquierda).
-// flight-dynamics-3d (2-col) se coloca al final en el par de columnas
-// adyacentes cuyo max-bottom sea mínimo, minimizando el hueco total.
+// Posiciones default: sidebar derecho fijo + greedy bin-packing en la zona
+// izquierda. flight-dynamics-3d (WU=4) va al final en el mejor span.
 function buildDefaultPositions(
   visible: Set<WidgetId>,
   heights: Record<WidgetId, number>,
@@ -228,12 +230,25 @@ function buildDefaultPositions(
   const result = new Map<WidgetId, { x: number; y: number }>();
   const colBottoms: number[] = new Array(N_COLS).fill(0);
 
-  // Pass 1 — widgets de 1 columna (DEFAULT_ORDER excluye flight-dynamics-3d)
-  for (const wId of DEFAULT_ORDER) {
+  // Pass 1 — Sidebar derecho (cols 4-5). Apilamos ship-selector → ship-card
+  // → dps-detail. Ambas colBottoms[4] y colBottoms[5] avanzan juntas.
+  {
+    let y = 0;
+    for (const wId of RIGHT_SIDEBAR) {
+      if (!visible.has(wId)) continue;
+      result.set(wId, { x: colToX(RIGHT_SIDEBAR_COL_START, containerWidth), y });
+      y += heights[wId] + GAP;
+    }
+    colBottoms[RIGHT_SIDEBAR_COL_START]     = y;
+    colBottoms[RIGHT_SIDEBAR_COL_START + 1] = y;
+  }
+
+  // Pass 2 — Bin-pack de los widgets 1-col en las cols izquierdas (0..3).
+  const LEFT_END = RIGHT_SIDEBAR_COL_START; // búsqueda limitada a cols 0..3
+  for (const wId of LEFT_BINPACK_ORDER) {
     if (!visible.has(wId)) continue;
-    // pick la columna con menor bottom (empates → la de menor índice)
     let minCol = 0;
-    for (let i = 1; i < N_COLS; i++) {
+    for (let i = 1; i < LEFT_END; i++) {
       if (colBottoms[i] < colBottoms[minCol]) minCol = i;
     }
     const y = colBottoms[minCol];
@@ -241,30 +256,33 @@ function buildDefaultPositions(
     colBottoms[minCol] = y + heights[wId] + GAP;
   }
 
-  // Pass 2 — flight-dynamics-3d (ocupa 3 cols). Buscamos el triple adyacente
-  // con menor max-bottom: ahí cabe con menos hueco desperdiciado.
+  // Pass 3 — flight-dynamics-3d (WU=4). Buscamos el mejor span de 4 cols
+  // adyacentes con menor max-bottom entre las 6 columnas.
   if (visible.has("flight-dynamics-3d")) {
+    const wu = WIDGET_WU["flight-dynamics-3d"];
     let bestStart = 0;
-    let bestMax = Math.max(colBottoms[0], colBottoms[1], colBottoms[2]);
-    for (let i = 1; i <= N_COLS - 3; i++) {
-      const m = Math.max(colBottoms[i], colBottoms[i + 1], colBottoms[i + 2]);
+    let bestMax = -Infinity;
+    {
+      let m = 0;
+      for (let k = 0; k < wu; k++) m = Math.max(m, colBottoms[k]);
+      bestMax = m;
+    }
+    for (let i = 1; i <= N_COLS - wu; i++) {
+      let m = 0;
+      for (let k = 0; k < wu; k++) m = Math.max(m, colBottoms[i + k]);
       if (m < bestMax) { bestMax = m; bestStart = i; }
     }
-    result.set("flight-dynamics-3d", {
-      x: colToX(bestStart, containerWidth),
-      y: bestMax,
-    });
-    const newBottom = bestMax + heights["flight-dynamics-3d"] + GAP;
-    colBottoms[bestStart]     = newBottom;
-    colBottoms[bestStart + 1] = newBottom;
-    colBottoms[bestStart + 2] = newBottom;
+    const y = bestMax;
+    result.set("flight-dynamics-3d", { x: colToX(bestStart, containerWidth), y });
+    const newBottom = y + heights["flight-dynamics-3d"] + GAP;
+    for (let k = 0; k < wu; k++) colBottoms[bestStart + k] = newBottom;
   }
 
   return result;
 }
 
-// ─── localStorage (guardamos i/x/y en PÍXELES — v4) ─────────────────────────
-const LAYOUT_STORAGE_KEY = "al-filo-layout-v4";
+// ─── localStorage (guardamos i/x/y en PÍXELES — v5: 6-col + sidebar) ─────────
+const LAYOUT_STORAGE_KEY = "al-filo-layout-v5";
 
 type SavedPos = { i: string; x: number; y: number };
 
