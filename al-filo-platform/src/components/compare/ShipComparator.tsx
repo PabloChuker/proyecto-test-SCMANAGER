@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { ShipSearchDropdown } from "./ShipSearchDropdown";
 import { RadarChart } from "./RadarChart";
 import { CompareBarChart } from "./CompareBarChart";
+import { ShipFlightDynamicsComparator } from "@/components/ships/flight-dynamics/ShipFlightDynamicsComparator";
 
 const SHIP_COLORS = ["#CDEB63", "#EB7163", "#639CEA"];
 
@@ -110,6 +111,7 @@ const DEFAULT_PANEL_ORDER: PanelDef[] = [
   { id: "speed", title: "Speed", span: "half" },
   { id: "propulsion", title: "Propulsion (G-Force)", span: "half" },
   { id: "rotation", title: "Axis Rotation", span: "half" },
+  { id: "flight-dynamics", title: "Flight Dynamics 3D", span: "full" },
   { id: "maneuverability", title: "Maneuverability Radar", span: "half" },
   { id: "shield", title: "Shield", span: "half" },
   { id: "hull", title: "Hull & Durability", span: "half" },
@@ -306,6 +308,18 @@ export function ShipComparator() {
             <CompareBarChart title="Boosted Yaw" unit="\u00B0/s" entries={makeEntries((s) => s.ship?.boostedYaw || 0)} />
             <CompareBarChart title="Boosted Roll" unit="\u00B0/s" entries={makeEntries((s) => s.ship?.boostedRoll || 0)} />
           </>
+        );
+      case "flight-dynamics":
+        return (
+          <ShipFlightDynamicsComparator
+            ships={activeShips.map((ship) => ({
+              shipName: ship.name,
+              color:    getColor(ship),
+              pitchRate: ship.ship?.pitchRate,
+              yawRate:   ship.ship?.yawRate,
+              rollRate:  ship.ship?.rollRate,
+            }))}
+          />
         );
       case "maneuverability":
         return (

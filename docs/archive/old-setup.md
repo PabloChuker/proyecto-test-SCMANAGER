@@ -1,5 +1,9 @@
 # =============================================================================
-# AL FILO — Guía de Setup Local (Fase 1)
+# [ARCHIVED] AL FILO — Old Project Setup (Phase 1)
+# =============================================================================
+# WARNING: This documentation is purely historical and no longer represents
+# the current project state. Prisma has been removed from the stack, and
+# database access now uses raw SQL via postgres.js.
 # =============================================================================
 #
 # Prerequisitos:

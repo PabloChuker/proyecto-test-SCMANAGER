@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import type { ShipDetailResponseV2, FlatHardpoint } from "@/types/ships";
 import { useHangarStore } from "@/store/useHangarStore";
+import { ShipViewer3D } from "@/components/ships/flight-dynamics/ShipViewer3D";
 
 // ── Helpers ──
 
@@ -309,6 +310,18 @@ export default function ShipSpecSheet({ shipId, onShipLoaded }: ShipSpecSheetPro
         <QuickStat label="Shield HP" value={fmt(computed.totalShieldHp)} color="text-blue-400" />
         <QuickStat label="Hull HP" value={fmt(null)} color="text-amber-400" />
         <QuickStat label="Masa" value={fmt(null)} unit="kg" />
+      </div>
+
+      {/* ── 3D Ship Viewer ── */}
+      <div className="rounded border border-zinc-800/50 bg-zinc-900/30 overflow-hidden">
+        <div className="px-3 py-2 border-b border-zinc-800/40 bg-zinc-800/20 flex items-center gap-2">
+          <span className="text-xs">🛸</span>
+          <span className="text-[11px] text-zinc-400 uppercase tracking-wider font-medium">3D Viewer</span>
+          <span className="ml-auto text-[9px] font-mono text-zinc-700">LMB rotar · Scroll zoom · RMB pan</span>
+        </div>
+        <div className="h-[220px]">
+          <ShipViewer3D rotationAxis="free" animate={false} />
+        </div>
       </div>
 
       {/* ── Stats grid ── */}
