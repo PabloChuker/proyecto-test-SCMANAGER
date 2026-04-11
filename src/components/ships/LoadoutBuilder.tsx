@@ -114,17 +114,20 @@ const MIN_UNIT_PX         = 240;        // clamp inferior del UNIT (+50% desde 1
 const MAX_UNIT_PX         = 390;        // clamp superior del UNIT (+50% desde 260)
 
 // Ancho de card en columnas: 1 o 2. (Max permitido por la spec = 2.)
-// v8: TODAS las cards son 1-col para que el layout categorizado 5-col quede
-// uniforme y no se pierda espacio. flight-dynamics-3d, ship-card, dps-detail
-// y ship-selector bajan a 1-col (se re-dimensionan internamente).
+// v9: search (ship-selector), ship-card y flight-dynamics-3d vuelven a 2-col
+// porque son widgets "hero" que necesitan ancho para respirar. El resto se
+// queda en 1-col. dps-detail sigue 1-col para dejarlo compacto junto a las
+// stats derivadas.
 type CardWidth = 1 | 2;
 const WIDGET_WIDTH: Record<WidgetId, CardWidth> = {
   weapons: 1, missiles: 1, "strafe-profile": 1, "turning-profile": 1,
   shields: 1, powerplants: 1, coolers: 1, "maneuver-radar": 1,
   quantum: 1, radar: 1, utility: 1, "combat-summary": 1,
   "power-grid": 1, signatures: 1, balance: 1,
-  "ship-selector": 1, "ship-card": 1, "dps-detail": 1,
-  "flight-dynamics-3d": 1,
+  "ship-selector": 2,           // search → 2-col
+  "ship-card": 2,               // ship card → 2-col
+  "dps-detail": 1,              // stays 1-col
+  "flight-dynamics-3d": 2,      // 3D viewer → 2-col
 };
 
 const WIDGET_LABELS: Record<WidgetId, string> = {
@@ -226,50 +229,65 @@ function getWidgetBlocks(
   }
 }
 
-// ─── Category-based 5-column layout (v8) ────────────────────────────────────
-// Distribución determinística por categoría — armas con armas, componentes con
-// componentes, charts con charts, ship-info con ship-info. Cada columna apila
-// sus widgets en orden, sin bin-packing. La idea: mirar una columna = ver una
-// familia de info. Los widgets ocultos (sin hardpoints del tipo) se saltan,
-// pero NO se re-balancea entre columnas para conservar la identidad visual.
-const COLUMN_PLAN: WidgetId[][] = [
-  // Col 0 — OFFENSE: armas + missiles + resumen de combate
-  ["weapons", "missiles", "combat-summary"],
-  // Col 1 — DEFENSE & POWER: shields + plantas + coolers + signatures
-  ["shields", "powerplants", "coolers", "signatures"],
-  // Col 2 — NAV & SENSORS: QT, radar, utility, power grid
-  ["quantum", "radar", "utility", "power-grid"],
-  // Col 3 — FLIGHT CHARTS: strafe, turning, g-forces, balance
-  ["strafe-profile", "turning-profile", "maneuver-radar", "balance"],
-  // Col 4 — SHIP INFO: selector, card, dps detail, 3D viewer (vertical)
-  ["ship-selector", "ship-card", "dps-detail", "flight-dynamics-3d"],
+// ─── Category-based layout (v9) ─────────────────────────────────────────────
+// Zone A — 1-col widgets apilados en cols 0..2 (3 columnas, categorizado).
+// Zone B — 2-col widgets "hero" apilados en cols 3..4 (sidebar de ship info).
+// Cada zona ordena sus widgets en la lista del plan; widgets ocultos se
+// saltan sin rebalanceo para conservar la identidad visual de cada columna.
+const COLUMN_PLAN_1COL: WidgetId[][] = [
+  // Col 0 — OFFENSE
+  ["weapons", "missiles", "combat-summary", "strafe-profile"],
+  // Col 1 — DEFENSE & POWER
+  ["shields", "powerplants", "coolers", "signatures", "turning-profile"],
+  // Col 2 — NAV & SENSORS + flight stats
+  ["quantum", "radar", "utility", "power-grid", "maneuver-radar", "balance", "dps-detail"],
 ];
 
-// Posiciones default en coordenadas (col, row). Cada widget va a su columna
-// fija según COLUMN_PLAN, apilado verticalmente en el orden del plan. Los
-// widgets ocultos NO ocupan espacio. Sin bin-packing, sin optimización: el
-// layout es determinístico y categorizado.
+// Sidebar 2-col (cols 3-4). Widgets hero de ship info apilados vertical.
+const COLUMN_PLAN_2COL_START = 3;
+const COLUMN_PLAN_2COL: WidgetId[] = [
+  "ship-selector",     // search
+  "ship-card",
+  "flight-dynamics-3d",
+];
+
+// Posiciones default en coordenadas (col, row). Pass 1: Zone A (1-col, cols
+// 0-2). Pass 2: Zone B (2-col, cols 3-4). Los widgets ocultos NO ocupan
+// espacio. Determinístico — sin bin-packing.
 function buildDefaultPositions(
   visible: Set<WidgetId>,
   blocks: Record<WidgetId, number>,
 ): Map<WidgetId, { col: number; row: number }> {
   const result = new Map<WidgetId, { col: number; row: number }>();
-  for (let col = 0; col < COLUMN_PLAN.length; col++) {
+
+  // Zone A — 1-col en cols 0..2
+  for (let col = 0; col < COLUMN_PLAN_1COL.length; col++) {
     let row = 0;
-    for (const wId of COLUMN_PLAN[col]) {
+    for (const wId of COLUMN_PLAN_1COL[col]) {
       if (!visible.has(wId)) continue;
       result.set(wId, { col, row });
       row += blocks[wId];
     }
   }
+
+  // Zone B — 2-col en cols 3-4 (siempre arrancan en col=3)
+  {
+    let row = 0;
+    for (const wId of COLUMN_PLAN_2COL) {
+      if (!visible.has(wId)) continue;
+      result.set(wId, { col: COLUMN_PLAN_2COL_START, row });
+      row += blocks[wId];
+    }
+  }
+
   return result;
 }
 
-// ─── localStorage (v8: i/col/row con layout 5-col categorizado) ─────────────
-// Bump de versión porque los widgets 2-col bajaron a 1-col → las posiciones
-// persistidas de v6/v7 ya no tienen sentido (apuntarían a cols/rows que no
-// corresponden al nuevo esquema categorizado).
-const LAYOUT_STORAGE_KEY = "al-filo-layout-v8";
+// ─── localStorage (v9: search/ship-card/flight-3d 2-col + sidebar) ──────────
+// Bump porque los widgets ship-selector / ship-card / flight-dynamics-3d
+// volvieron a ancho 2 y ahora viven en cols 3-4 como sidebar. Las posiciones
+// persistidas de v8 (todo 1-col) ya no encajan en el nuevo esquema.
+const LAYOUT_STORAGE_KEY = "al-filo-layout-v9";
 
 type SavedPos = { i: string; col: number; row: number };
 
