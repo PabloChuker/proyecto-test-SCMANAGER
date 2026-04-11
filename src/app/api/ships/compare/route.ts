@@ -240,6 +240,7 @@ async function compareShips(ids: string[]) {
 
       return {
         id: String(ship.id),
+        reference: String(ship.reference || ""),
         name: ship.name || "",
         localizedName: null,
         manufacturer: ship.manufacturer || null,

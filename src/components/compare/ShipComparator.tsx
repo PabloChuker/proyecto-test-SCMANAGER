@@ -10,6 +10,7 @@ import { ShipSearchDropdown } from "./ShipSearchDropdown";
 import { RadarChart } from "@/components/shared/charts/RadarChart";
 import { CompareBarChart } from "./CompareBarChart";
 import { ShipFlightDynamicsComparator } from "@/components/shared/flight-dynamics/ShipFlightDynamicsComparator";
+import { shipGlbUrl } from "@/lib/shipGlb";
 
 const SHIP_COLORS = ["#CDEB63", "#EB7163", "#639CEA"];
 
@@ -36,6 +37,7 @@ function getShipThumbUrl(name: string, manufacturer?: string | null): string {
 
 interface ShipData {
   id: string;
+  reference: string;
   name: string;
   manufacturer: string | null;
   size: number | null;
@@ -318,6 +320,7 @@ export function ShipComparator() {
               pitchRate: ship.ship?.pitchRate,
               yawRate:   ship.ship?.yawRate,
               rollRate:  ship.ship?.rollRate,
+              glbUrl:    shipGlbUrl(ship.reference),
             }))}
           />
         );
