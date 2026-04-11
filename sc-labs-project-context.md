@@ -1,1112 +1,598 @@
-# SC Labs Hangar Management System — Complete Project Context
+# SC Labs — Project Context
 
-**Last Updated:** April 7, 2026
-**Status:** Active Development
+**Last Updated:** April 11, 2026
+**Status:** Active development — post-refactor (flat repo structure)
+**Deployment:** sclabs.space (Vercel auto-deploy from `master`)
+**Repository:** github.com/PabloChuker/proyecto-test-SCMANAGER
 
 ---
 
 ## Table of Contents
 
-1. [Project Overview](#project-overview)
-2. [Chrome Extension (v1.2.0)](#chrome-extension-v120)
-3. [Platform — Hangar Store](#platform--hangar-store)
-4. [Platform — UI Components](#platform--ui-components)
-5. [Known Issues & Recent Fixes](#known-issues--recent-fixes)
-6. [Pending Tasks](#pending-tasks)
-7. [Important Paths](#important-paths)
+1. [Project Overview](#1-project-overview)
+2. [Repository Structure (post-refactor)](#2-repository-structure-post-refactor)
+3. [Tech Stack](#3-tech-stack)
+4. [Application Modules](#4-application-modules)
+5. [Database Layer](#5-database-layer)
+6. [DPS / LoadoutBuilder (current focus)](#6-dps--loadoutbuilder-current-focus)
+7. [Hangar Store & Chrome Extension](#7-hangar-store--chrome-extension)
+8. [Known Quirks & Workarounds](#8-known-quirks--workarounds)
+9. [Important Paths](#9-important-paths)
+10. [Working State & Open Threads](#10-working-state--open-threads)
 
 ---
 
 ## 1. Project Overview
 
-### What is SC Labs?
+SC Labs is a community-driven fleet management and ship analysis platform for **Star Citizen** players. It started as a hangar importer + CCU planner and has grown into a multi-module tool that covers:
 
-SC Labs is a community-driven fleet management tool for **Star Citizen** players. The project consists of two main components:
+- **Hangar management** — import pledges/buybacks, CCU chains, fleet value
+- **Ship analysis** — DPS/loadout builder with flight dynamics, 3D viewer
+- **Crafting & mining & cargo** — resources, boxes, cargo grids
+- **Trade** — commodities, terminals, routes
+- **Org / party / friends / streamers** — social features
+- **Activities / profiles / auth** — account plumbing via Supabase
 
-1. **Chrome Extension (SC Labs Hangar Importer)** — Scrapes player hangar data from robertsspaceindustries.com and exports to JSON
-2. **Web Platform (al-filo-platform)** — Next.js-based frontend to manage ships, CCUs, and CCU upgrade chains
+It consists of two pieces that ship together:
 
-### Tech Stack
+1. **Web platform** — Next.js 16 App Router app (this repo)
+2. **Chrome extension** — `sc-labs-hangar-extension/` folder, scrapes RSI hangar pages and exports JSON for import into the platform
 
-- **Extension:** Manifest V3, vanilla JavaScript
-- **Platform:** Next.js (React), TypeScript, Zustand (state management), Tailwind CSS
-- **Deployment:** GitHub → Vercel auto-deploy
-- **Styling:** Dark theme with Tailwind; color accents (amber for primary, cyan for highlights)
+---
 
-### Repository Structure
+## 2. Repository Structure (post-refactor)
+
+On April 11, 2026 the repo was flattened (commit `150fab5 refactor(repo): unify src structure and remove legacy directories`). **There is no more `al-filo-platform/` subfolder.** Next.js lives at the repo root.
 
 ```
-Git Repo: C:\Users\carsd\OneDrive\Documentos\web alfilo
-(mounted at /sessions/clever-loving-carson/mnt/web alfilo)
-
-├── sc-labs-hangar-extension/     (Chrome Extension)
-│   ├── manifest.json              (v1.2.0)
-│   ├── content.js                 (RSI page scraper)
-│   ├── popup.html                 (UI for exporting)
-│   ├── popup.js                   (Export handler & stats)
-│   ├── background.js              (MV3 service worker)
-│   └── icons/                     (16x32x48x128 PNG)
+proyecto-test-SCMANAGER/                 ← repo root (also Next.js root)
 │
-└── al-filo-platform/              (Next.js Web App)
-    ├── src/
-    │   ├── app/
-    │   │   ├── hangar/            (Hangar page)
-    │   │   │   └── page.tsx
-    │   │   ├── ships/             (Other modules)
-    │   │   ├── dps/
-    │   │   └── ...
-    │   ├── components/hangar/     (Hangar UI components)
-    │   │   ├── HangarDashboard.tsx
-    │   │   ├── HangarShipCard.tsx
-    │   │   ├── CCUCard.tsx
-    │   │   ├── EditShipModal.tsx
-    │   │   ├── EditCCUModal.tsx
-    │   │   ├── AddShipModal.tsx
-    │   │   ├── AddCCUModal.tsx
-    │   │   ├── ImportModal.tsx
-    │   │   ├── ChainBuilder.tsx
-    │   │   ├── ChainList.tsx
-    │   │   ├── FleetGrid.tsx
-    │   │   └── CCUGrid.tsx
-    │   └── store/
-    │       └── useHangarStore.ts  (Zustand store)
-    ├── public/
-    │   ├── ships/                 (Ship thumbnails: *.jpg)
-    │   └── videos/
-    └── ...
+├── package.json                         ← name: "sc-manager-canonical" v1.0.0
+├── next.config.mjs                      ← Next 16.2.1
+├── tsconfig.json                        ← TS 5, strict
+├── eslint.config.mjs
+├── postcss.config.mjs                   ← Tailwind v4
+├── .env.example
+├── .gitignore
+├── .claude/                             ← local AI settings (not shipped)
+├── sc-labs-project-context.md           ← this file
+│
+├── src/
+│   ├── app/                             ← Next.js App Router
+│   │   ├── layout.tsx                   ← root layout
+│   │   ├── page.tsx                     ← landing
+│   │   ├── globals.css
+│   │   ├── assets/header/               ← header images
+│   │   ├── api/                         ← route handlers
+│   │   │   ├── activities/
+│   │   │   ├── auth/
+│   │   │   ├── cargo-grids/
+│   │   │   ├── catalog/                 ← /api/catalog route.ts
+│   │   │   ├── ccu/
+│   │   │   ├── components/              ← /api/components/browse/, /route.ts
+│   │   │   ├── crafting/
+│   │   │   ├── loaners/
+│   │   │   ├── mining/
+│   │   │   ├── referral/
+│   │   │   ├── ships/                   ← /api/ships/[id]/, /compare/, /route.ts
+│   │   │   └── trade/
+│   │   ├── activities/
+│   │   ├── auth/
+│   │   ├── cargo/
+│   │   ├── compare/
+│   │   ├── components/                  ← components browser page
+│   │   ├── crafting/
+│   │   ├── dps/                         ← DPS/LoadoutBuilder page (sclabs.space/dps)
+│   │   ├── friends/
+│   │   ├── hangar/
+│   │   ├── login/
+│   │   ├── mining/
+│   │   ├── my-account/
+│   │   ├── org/
+│   │   ├── party/
+│   │   ├── profile/
+│   │   ├── ships/
+│   │   ├── streamers/
+│   │   └── trade/
+│   │
+│   ├── components/
+│   │   ├── cargo/                       ← CargoGrid3D.tsx, CargoPage.tsx
+│   │   ├── compare/
+│   │   ├── components/                  ← generic/shared primitives
+│   │   ├── domain/
+│   │   │   └── dps/                     ← PowerStatusGrid, StatsPanel
+│   │   ├── hangar/                      ← AddShipModal, CCUCard, ChainBuilder,
+│   │   │                                  CCUGrid, ChainList, EditShipModal,
+│   │   │                                  EditCCUModal, FleetGrid, CCUChainCalculator…
+│   │   ├── notifications/
+│   │   ├── shared/
+│   │   │   ├── PageVideoBackground.tsx
+│   │   │   ├── charts/                  ← RadarChart.tsx
+│   │   │   └── flight-dynamics/         ← RotationModule, ShipViewer3D,
+│   │   │                                  ShipFlightDynamicsSingle/Comparator, utils/
+│   │   ├── ships/                       ← LoadoutBuilder.tsx (main DPS UI),
+│   │   │                                  ComponentPicker, HardpointGroup/Slot,
+│   │   │                                  PowerManagementPanel, ShipCard, ShipHero,
+│   │   │                                  ShipFilters, ShipSelector, ShipSpecSheet,
+│   │   │                                  ShipSpecs, StatGauge, loadout-utils.ts
+│   │   ├── streamers/
+│   │   └── trade/                       ← CommodityBrowser, TerminalDirectory, TradeRoutes
+│   │
+│   ├── contexts/
+│   │   └── AuthContext.tsx
+│   │
+│   ├── data/                            ← static JSON data
+│   │   ├── activities/
+│   │   ├── crafting/
+│   │   ├── mining/
+│   │   ├── power-network-lookup.json
+│   │   └── ship-power-data.json
+│   │
+│   ├── lib/
+│   │   ├── api-security.ts
+│   │   ├── ccu-engine.ts
+│   │   ├── computeStats.ts              ← ship/loadout stats aggregator
+│   │   ├── db.ts                        ← postgres client (`postgres` pkg)
+│   │   ├── loaners.ts
+│   │   ├── notifications.ts
+│   │   ├── shipGlb.ts                   ← GLB model resolver (R2 / local)
+│   │   ├── workOrderStore.ts
+│   │   └── supabase/
+│   │       ├── admin.ts                 ← service-role client
+│   │       ├── client.ts                ← browser client
+│   │       ├── middleware.ts
+│   │       └── server.ts                ← RSC/route-handler client
+│   │
+│   ├── store/
+│   │   ├── useHangarStore.ts            ← Zustand hangar store (unchanged from old)
+│   │   └── useLoadoutStore.ts           ← Zustand loadout store
+│   │
+│   └── types/
+│       └── ships.ts
+│
+├── database/                            ← SQL-only (no Prisma runtime)
+│   ├── migrations/                      ← 32 numbered + 3 legacy
+│   │   ├── 001_create_manufacturers.sql
+│   │   ├── 002_create_armors.sql
+│   │   ├── …
+│   │   ├── 032_create_weapon_guns.sql
+│   │   ├── legacy_001_satellite_tables.sql
+│   │   ├── legacy_002_fix_crew.sql
+│   │   └── legacy_003_fix_hardpoints.sql
+│   └── seeds/                           ← matching per-table seeds
+│
+├── prisma/                              ← schema + migrations folder preserved
+│                                          after runtime removal (commit 5ad4652)
+│
+├── docs/
+│   ├── architecture/
+│   │   └── diagrams/
+│   ├── archive/
+│   │   ├── legacy-sql/                  ← equipment_load, fix_crew_and_children,
+│   │   │                                  hardpoints_remaining, satellite_tables
+│   │   └── old-setup.md                 ← [ARCHIVED] Phase 1 setup notes
+│   └── business/
+│       └── SCLABS_Analisis_Competitivo.docx
+│
+├── scripts/                             ← ingest / import / migration utilities
+│   ├── data/
+│   ├── importers/
+│   ├── sql/
+│   ├── ingest_scunpacked.py
+│   ├── ingest_v2.py
+│   ├── ingest_v3.py
+│   ├── extract_ship_hardpoints.py
+│   ├── debug_stats.py  debug_missing.py  debug_unpacked.py
+│   ├── migrate-turret-loadouts.{mjs,py}
+│   ├── populate_prices.mjs
+│   ├── seed-glb-keys.mjs
+│   ├── upload-glb-r2.mjs
+│   └── ship_hardpoints_export.csv
+│
+├── public/                              ← static assets (ship thumbnails, videos…)
+├── precios_naves/                       ← scraped ship prices data
+├── sc-labs-hangar-extension/            ← Chrome Extension (Manifest V3)
+│
+├── cws-*.png / cws-icon-128.png         ← Chrome Web Store assets
+├── SC_Labs_Hangar_Manager_Proposal.docx
+├── GuildSwarm_Analysis_Report.pdf
+├── PRIVACY_POLICY.md
+├── INSTRUCCIONES_MERGE_XOLI.md
+└── chart-preview.html
 ```
 
 ---
 
-## 2. Chrome Extension (v1.2.0)
+## 3. Tech Stack
 
-### Overview
+**Runtime / Framework**
 
-The extension scrapes Star Citizen hangar and buyback data from RSI account pages and exports it as JSON for import into the platform.
+- Next.js **16.2.1** (App Router, React Server Components)
+- React **19.2.4**, React DOM **19.2.4**
+- TypeScript 5 (strict)
+- Babel: `babel-plugin-react-compiler` 1.0.0
 
-**Version:** 1.2.0
-**Manifest Version:** 3
-**Target Pages:** `https://robertsspaceindustries.com/account/pledges*` and `*/account/buy-back-pledges*`
+**Styling**
 
-### File Structure
+- Tailwind CSS v4 (`@tailwindcss/postcss`)
+- `clsx` + `tailwind-merge`
+- `lucide-react` icons
+- Dark theme, amber-primary / cyan-accents design language
 
-| File | Purpose |
-|------|---------|
-| `manifest.json` | Extension metadata and permissions (v1.2.0) |
-| `content.js` | Content script that runs on RSI pages, scrapes HTML, exports data |
-| `popup.html` | Dark-themed UI with status, options, progress, stats, logs |
-| `popup.js` | Popup controller: status check, export trigger, stats calculation |
-| `background.js` | Service worker: message routing between popup and content script |
-| `icons/` | 16x32x48x128 PNG icons (generated from SCLABS.jpg) |
+**State**
 
-### manifest.json
+- Zustand 5 (`useHangarStore`, `useLoadoutStore`)
 
-```json
-{
-  "manifest_version": 3,
-  "name": "SC Labs Hangar Importer",
-  "version": "1.2.0",
-  "description": "Export your Star Citizen hangar and buyback pledges for use in SC Labs fleet management tools.",
-  "permissions": ["activeTab"],
-  "host_permissions": ["https://robertsspaceindustries.com/*"],
-  "background": { "service_worker": "background.js" },
-  "content_scripts": [
-    {
-      "matches": [
-        "https://robertsspaceindustries.com/account/pledges*",
-        "https://robertsspaceindustries.com/en/account/pledges*",
-        "https://robertsspaceindustries.com/account/buy-back-pledges*",
-        "https://robertsspaceindustries.com/en/account/buy-back-pledges*"
-      ],
-      "js": ["content.js"],
-      "run_at": "document_idle"
-    }
-  ],
-  "action": {
-    "default_popup": "popup.html",
-    "default_icon": {
-      "16": "icons/icon16.png",
-      "32": "icons/icon32.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
-    }
-  },
-  "icons": {
-    "16": "icons/icon16.png",
-    "32": "icons/icon32.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
-  }
-}
-```
+**Data / DB**
 
-### How content.js Works
+- Supabase (`@supabase/ssr`, `@supabase/supabase-js`) — auth + database
+- `postgres` (Porsager) — direct SQL client in `src/lib/db.ts`
+- Raw SQL migrations (no Prisma runtime after commit `5ad4652`)
+- Schemas still preserved in `prisma/` for reference
 
-The content script is injected on RSI account pages and performs these steps:
+**3D / Visualization**
 
-1. **Prevent double-injection:** Checks `window.__scLabsHangarInjected` flag
-2. **Check login status:** Verifies user is on `/account/` page (login check)
-3. **Fetch pages:** Paginated requests to hangar and buyback endpoints
-4. **Parse HTML:** Converts HTML to DOM and extracts data
-5. **Scrape data:** Extracts pledge details, images, prices, items
-6. **Build export:** Formats as `{ version, exportedBy, exportDate, myHangar, myBuyBack }`
-7. **Send progress:** Updates popup via `chrome.runtime.sendMessage()`
+- Three.js `0.183.2` + `@types/three` — flight dynamics & cargo grids
+- `react-grid-layout` 1.5 — DPS LoadoutBuilder grid
+- `html-to-image` — screenshot/export
 
-#### detectCategory() Function
+**Infra / misc**
 
-Classifies pledges by name pattern. **FULL CODE:**
+- AWS S3 client (`@aws-sdk/client-s3`) — Cloudflare R2 for GLB models
+- `dotenv` for scripts
 
-```javascript
-function detectCategory(name) {
-  const n = name.toLowerCase();
+**Deployment**
 
-  // CCU / Upgrades — "Upgrade -", "Ship Upgrades -"
-  if (n.startsWith("upgrade -") || n.startsWith("upgrade –") || n.startsWith("ship upgrades -") || n.startsWith("ship upgrade")) return "upgrade";
-
-  // Ships (standalone)
-  if (n.startsWith("standalone ship")) return "standalone_ship";
-
-  // Game packages
-  if (n.startsWith("package -") || n.startsWith("package –") || n.includes("starter pack") || n.includes("game package") || n.includes("squadron 42")) return "game_package";
-
-  // Paints / Skins / Liveries (including BIS reward paints for ships)
-  if (n.startsWith("paints -") || n.startsWith("paint -") || n.includes(" paint") ||
-      n.includes("skin -") || n.includes("livery") || n.includes("coloration")) return "paint";
-  // BIS (Best in Show) ship rewards are typically paints — but NOT pennants, trophies, charms
-  if ((n.includes("bis ") || n.includes("best in show")) && n.includes("reward") &&
-      !n.includes("pennant") && !n.includes("trophy") && !n.includes("charm") &&
-      !n.includes("plushie") && !n.includes("figurine") && !n.includes("poster") &&
-      !n.includes("coin") && !n.includes("badge") && !n.includes("helmet") &&
-      !n.includes("armor") && !n.includes("gear")) return "paint";
-
-  // Gear / Armor / Weapons / Tools / Suits / Packs
-  if (n.startsWith("gear -") || n.startsWith("add-ons -") ||
-      n.includes("armor") || n.includes("helmet") || n.includes("undersuit") ||
-      n.includes("backpack") || n.includes("jacket") || n.includes("weapons pack") || n.includes("weapon pack") ||
-      n.includes("multi-tool") || n.includes("knife") || n.includes("combat knife") ||
-      n.includes("pistol") || n.includes("rifle") || n.includes("shotgun") || n.includes("smg") || n.includes("lmg") ||
-      n.includes("grenade launcher") || n.includes("tractor beam") || n.includes("mining gadget") ||
-      n.includes("repeater") || n.includes("cannon") || n.includes("laser cannon") ||
-      n.includes("hazard suit") || n.includes("refinery suit") || n.includes("service uniform") ||
-      n.includes("medical device") || n.includes("mask") || n.includes("flight blades") ||
-      n.includes("bomb rack") || n.includes("weapon kit") || n.includes("upgrade kit") ||
-      n.includes("quikflare") || n.includes("medivac") || n.includes("purifier") ||
-      n.includes("gear pack") || n.includes("hydration pack")) return "gear";
-
-  // Subscriber items
-  if (n.startsWith("subscribers ") || n.startsWith("subscriber ") || n.includes("subscribers exclusive") ||
-      n.includes("imperator reward") || n.includes("centurion reward") ||
-      n.includes("vip grand admiral") || n.includes("vip high admiral")) return "subscriber";
-
-  // Flair — decorations, trophies, rewards, coins, collectibles, event items
-  if (n.includes("flair") || n.includes("trophy") || n.includes("pennant") ||
-      n.includes("charm") || n.includes("plushie") || n.includes("figurine") || n.includes("poster") ||
-      n.includes("calendar") || n.includes("statue") || n.includes("diorama") ||
-      n.includes("bis ") || n.includes("best in show") ||
-      n.includes("festival") || n.includes("citizencon") ||
-      n.includes("holiday") || n.includes("hangar decoration") || n.includes("flower") ||
-      n.includes("pet") || n.includes("stuffed") || n.includes("bobblehead") ||
-      n.includes("space globe") || n.includes("display case") || n.includes("lamp") ||
-      n.includes("rug") || n.includes("towel") || n.includes("mug") || n.includes("cup") ||
-      n.includes("action figure") || n.includes("badge") || n.includes("pin") ||
-      n.includes("challenge coin") || n.includes("coin") || n.includes("envelope") ||
-      n.includes("year of the") || n.includes("coramor") ||
-      n.includes("reward") || n.includes("goodies") || n.includes("t-shirt") ||
-      n.includes("luminalia") || n.includes("invictus") ||
-      n.includes("advent") || n.includes("referral bonus") ||
-      n.includes("chair") || n.includes("couch") || n.includes("lounge") || n.includes("throne") ||
-      n.includes("nightstand") || n.includes("loveseat") || n.includes("cushion") ||
-      n.includes("vase") || n.includes("plant pot") || n.includes("bust") ||
-      n.includes("banner") || n.includes("specimen tank") || n.includes("cargo collection") ||
-      n.includes("display") || n.includes("die ship") || n.includes("toy pistol") ||
-      n.includes("resource drive") || n.includes("salvaged") ||
-      n.includes("pirate week") || n.includes("xenothreat") ||
-      n.includes("birthday goodies") || n.includes("digital goodies") ||
-      n.includes("killer creature") || n.includes("brands of the") ||
-      n.includes("cold front") || n.includes("cuddly cargo") || n.includes("decorative cargo") ||
-      n.includes("explorer") || n.includes("adventurer") ||
-      n.includes("big winner") || n.includes("completion package") ||
-      n.includes("patch collection") || n.includes("resupply") ||
-      n.includes("academy") || n.includes("grx prototype") ||
-      n.includes("coupon") || n.includes("gourd") || n.includes("ornate")) return "flair";
-
-  // Packs / Bundles
-  if (n.includes("packs -") || n.includes("bundle") || n.includes("combo") ||
-      n.includes("master set")) return "gear";
-
-  // UEC / Credits
-  if (n.includes("uec") || n.includes("credits") || n.includes("starting money")) return "other";
-
-  return "other";
-}
-```
-
-#### parseCCUFromName() Function
-
-Extracts CCU upgrade path from pledge name like `"Upgrade - Ship A to Ship B [- Edition]"`:
-
-```javascript
-function parseCCUFromName(name, price) {
-  const m = name.match(/Upgrade\s*[-–]\s*(.+?)\s+to\s+(.+?)(?:\s+[-–]\s+(?:Standard|Warbond).*)?$/i);
-  if (!m) return null;
-  return {
-    toSkuId: "",
-    fromShipData: { id: 0, name: m[1].trim() },
-    toShipData: { id: 0, name: m[2].trim().replace(/\s*[-–]\s*(Standard|Warbond).*$/i, "") },
-    price,
-  };
-}
-```
-
-#### parseHangarPage() and parseBuybackPage()
-
-**HTML Selectors for MY HANGAR** (`/account/pledges`):
-
-```
-ul.list-items > li                      (each pledge item)
-  h3                                    (pledge name)
-  input.js-pledge-id                    (RSI ID)
-  input.js-pledge-value                 (price like "$55.00 USD")
-  .date-col                             (created date)
-  .items-col                            (contained items text)
-  .image (style=background-image)       (pledge image)
-  .with-images .item                    (each contained item)
-    .title                              (item name)
-    .kind                               (item type: Ship, Insurance, etc.)
-    img                                 (item image)
-  .without-images .item                 (items without images)
-  .also-contains .item                  (also contains items)
-  .js-gift                              (if giftable)
-  .js-reclaim                           (if exchangeable)
-```
-
-**HTML Selectors for BUYBACK** (`/account/buy-back-pledges`):
-
-```
-article.pledge                          (each buyback item)
-  h1                                    (pledge name)
-  figure > img                          (image src)
-  dl > dt/dd                            (metadata: Last Modified, Contained, Cost, Price, Value, etc.)
-  .unavailable .caption                 (if "Not available")
-```
-
-**Key Fields Extracted:**
-
-- **All items:** id, name, image URL, lastModification, contained, category, link, available
-- **For upgrades (category="upgrade"):** ccuInfo { toSkuId, fromShipData, toShipData, price }
-- **For other items:** elementData { price, shipInThisPackData[], alsoContainData[] }
-
-#### Image Handling
-
-- **Hangar items:** Image from CSS `background-image: url(...)` in `.image` element
-- **Buyback items:** Image from `img src` attribute in `figure` or generic `img`
-- **URL conversion:** Converts `/` prefix to RSI base URL, `//` to `https:`
-
-#### Export Format
-
-```typescript
-{
-  version: "1.0",
-  exportedBy: "SC Labs Hangar Importer",
-  exportDate: "2026-04-07T13:00:00.000Z",
-  myHangar: [
-    {
-      id: "sclabs-...",
-      name: "Standalone Ships - Cutlass Black - LTI",
-      image: "https://...",
-      lastModification: "March 25, 2026",
-      contained: "Contains: Cutlass Black and 1 item",
-      category: "standalone_ship",
-      link: "https://robertsspaceindustries.com/account/pledges?...",
-      available: true,
-      isGiftable: false,
-      isExchangeable: true,
-      elementData: {
-        price: 159.99,
-        shipInThisPackData: [{ name: "Cutlass Black", image: "..." }],
-        alsoContainData: ["Self-Land Hangar", "Lifetime Insurance"]
-      }
-    },
-    ...
-  ],
-  myBuyBack: [...]
-}
-```
-
-### popup.html
-
-**Dark Theme UI** with orange/amber accents:
-
-- **Header:** SC Labs logo (36x36), title "SC LABS", version badge (v1.1.0)
-- **Status Area:** RSI connection indicator (dot color), status text, hint
-- **Options Row:** Checkboxes for "My Hangar" (checked) and "Buyback" (checked)
-- **Export Button:** Primary amber gradient button
-- **Download Button:** Success green gradient button (hidden until export done)
-- **Progress Bar:** Shows percent, animated fill bar
-- **Stats Grid:** 3-column cards (Ships, CCUs, Paints, Gear, Flair, Subs, Total)
-- **Log Area:** Monospace scrollable log with color-coded lines (info, success, warn, error)
-- **Footer:** "SC LABS — Community Tools" link to sclabs.net
-
-**Colors:**
-- Primary: `#f59e0b` (amber-500)
-- Background: `#09090b` (zinc-950)
-- Borders: `#27272a` (zinc-700)
-- Text: `#e4e4e7` (zinc-200)
-- Cards: `#18181b` (zinc-900)
-
-### popup.js
-
-**Flow:**
-
-1. **checkRSIStatus()** — Called on popup open
-   - Queries active tab URL
-   - Checks if on `robertsspaceindustries.com`
-   - Sends `checkLogin` message to content script
-   - Sets status dot: green (online) or red (offline)
-   - Enables/disables export button
-
-2. **Export Handler (btnExport click)**
-   - Disables button, shows progress
-   - Gets hangar/buyback checkbox states
-   - Sends `exportHangar` action to content script
-   - Listens for progress messages from content script
-
-3. **Progress Updates (export-progress messages)**
-   - Updates progress bar percentage
-   - Updates status label and detail text
-   - Appends log lines with timestamps
-   - Color-codes logs by level (info, success, warn, error)
-
-4. **Export Complete (export-complete message)**
-   - Stores export data in `exportData` variable
-   - Counts items by category
-   - Updates stat cards (ships, ccus, paints, gear, flair, subs, total)
-   - Shows stats grid and download button
-   - Logs breakdown of item counts
-
-5. **Download Handler (btnDownload click)**
-   - Creates JSON blob
-   - Triggers browser download as `sclabs-hangar_YYYY-MM-DD.json`
-
-**Stat Calculation Logic:**
-
-```typescript
-const allItems = [...exportData.myHangar, ...exportData.myBuyBack];
-const ships = allItems.filter(i => i.category === "standalone_ship" || i.category === "game_package").length;
-const ccus = allItems.filter(i => i.category === "upgrade").length;
-const paints = allItems.filter(i => i.category === "paint").length;
-const gear = allItems.filter(i => i.category === "gear").length;
-const flair = allItems.filter(i => i.category === "flair").length;
-const subs = allItems.filter(i => i.category === "subscriber").length;
-const total = allItems.length;
-```
-
-### background.js
-
-**Service Worker (MV3):**
-
-- **Message Routing:** Forwards `export-progress`, `export-complete`, `export-error` messages from content script to popup
-- **Content Script Injection:** When user clicks extension icon on RSI, injects `content.js` if not already present
-- **Logs:** Outputs `[SC Labs]` prefixed messages to console
+- Vercel auto-deploy on push to `master`
+- Domain: **sclabs.space**
+- Build command: `next build`
+- Project name (Vercel): uses repo root directly (no subdir thanks to the refactor)
 
 ---
 
-## 3. Platform — Hangar Store (useHangarStore.ts)
+## 4. Application Modules
 
-**File:** `/sessions/clever-loving-carson/mnt/web alfilo/al-filo-platform/src/store/useHangarStore.ts`
+| Route                | Purpose                                                                        |
+|----------------------|--------------------------------------------------------------------------------|
+| `/`                  | Landing page                                                                   |
+| `/login`, `/auth`    | Supabase-based auth flows                                                      |
+| `/my-account`, `/profile` | User account management                                                    |
+| `/hangar`            | Hangar dashboard (ships, buyback, CCU chains) — backed by `useHangarStore`     |
+| `/ships`             | Ship browser / detail pages                                                    |
+| `/dps`               | **DPS / LoadoutBuilder** — main analysis UI (current focus area)               |
+| `/compare`           | Side-by-side ship comparison                                                   |
+| `/components`        | Component / hardpoint catalog browser                                          |
+| `/cargo`             | Cargo grid visualizer (3D) with ship selector                                  |
+| `/crafting`          | Crafting materials / recipes (joined with resources + box sizes)               |
+| `/mining`            | Mining gadgets / refinery data                                                 |
+| `/trade`             | Commodity browser, terminal directory, trade route planner                    |
+| `/activities`        | Activities catalog                                                             |
+| `/org`, `/party`, `/friends`, `/streamers` | Social features                                          |
 
-### Type Definitions
-
-```typescript
-export type InsuranceType =
-  | "LTI"
-  | "120_months"
-  | "72_months"
-  | "48_months"
-  | "24_months"
-  | "6_months"
-  | "3_months"
-  | "unknown";
-
-export type ItemLocation = "hangar" | "buyback" | "ccu_chain";
-
-export type ItemCategory =
-  | "standalone_ship"
-  | "game_package"
-  | "paint"
-  | "flair"
-  | "gear"
-  | "subscriber"
-  | "upgrade"
-  | "other";
-
-export interface HangarShip {
-  id: string;                       // UUID
-  shipReference: string;            // matches ships table reference (for linking)
-  shipName: string;                 // actual ship name for image lookup ("Gladius", "Perseus")
-  pledgeName: string;               // pledge name from RSI ("Standalone Ships - Cutlass Black")
-  pledgePrice: number;              // USD
-  insuranceType: InsuranceType;
-  location: ItemLocation;           // "hangar", "buyback", "ccu_chain"
-  itemCategory: ItemCategory;
-  isGiftable: boolean;
-  isMeltable: boolean;
-  purchasedDate: string | null;     // ISO date
-  imageUrl: string;                 // RSI CDN URL
-  notes: string;
-}
-
-export interface HangarCCU {
-  id: string;
-  fromShip: string;                 // "Avenger" (ship name)
-  fromShipReference: string;        // (for future ship table lookup)
-  toShip: string;                   // "Aurora MR"
-  toShipReference: string;
-  pricePaid: number;                // USD
-  isWarbond: boolean;
-  location: Exclude<ItemLocation, "ccu_chain">; // "hangar" | "buyback"
-  notes: string;
-}
-
-export interface CCUChainStep {
-  fromShip: string;
-  fromShipReference: string;
-  toShip: string;
-  toShipReference: string;
-  ccuPrice: number;
-  isOwned: boolean;                 // user has this CCU
-  isCompleted: boolean;
-  isWarbond: boolean;
-}
-
-export interface CCUChain {
-  id: string;
-  name: string;                     // "Avenger → Cutlass"
-  startShip: string;
-  startShipReference: string;
-  targetShip: string;
-  targetShipReference: string;
-  steps: CCUChainStep[];
-  status: "planning" | "in_progress" | "completed";
-}
-```
-
-### detectItemCategory() Function
-
-Detects item category from pledge name. **FULL CODE:**
-
-```typescript
-function detectItemCategory(name: string, rawCategory: string): ItemCategory {
-  // If the extension already classified it, trust that
-  if (rawCategory === "standalone_ship") return "standalone_ship";
-  if (rawCategory === "game_package") return "game_package";
-  if (rawCategory === "paint") return "paint";
-  if (rawCategory === "gear") return "gear";
-  if (rawCategory === "flair") return "flair";
-  if (rawCategory === "subscriber") return "subscriber";
-  if (rawCategory === "upgrade") return "upgrade";
-
-  // Name-based detection for items with empty/unknown category
-  const n = name.toLowerCase();
-
-  // CCU / Upgrades
-  if (n.startsWith("upgrade -") || n.startsWith("upgrade –") || n.startsWith("ship upgrades -") || n.startsWith("ship upgrade")) return "upgrade";
-
-  // Ships
-  if (n.startsWith("standalone ship")) return "standalone_ship";
-
-  // Game packages
-  if (n.startsWith("package -") || n.startsWith("package –") || n.includes("starter pack") || n.includes("game package") || n.includes("squadron 42")) return "game_package";
-
-  // Paints / Skins / Liveries (including BIS reward paints for ships)
-  if (n.startsWith("paints -") || n.startsWith("paint -") || n.includes(" paint") ||
-      n.includes("skin -") || n.includes("livery") || n.includes("coloration")) return "paint";
-  // BIS (Best in Show) ship rewards are typically paints — but NOT pennants, trophies, charms
-  if ((n.includes("bis ") || n.includes("best in show")) && n.includes("reward") &&
-      !n.includes("pennant") && !n.includes("trophy") && !n.includes("charm") &&
-      !n.includes("plushie") && !n.includes("figurine") && !n.includes("poster") &&
-      !n.includes("coin") && !n.includes("badge") && !n.includes("helmet") &&
-      !n.includes("armor") && !n.includes("gear")) return "paint";
-
-  // Gear / Armor / Weapons / Tools / Suits / Packs
-  if (n.startsWith("gear -") || n.startsWith("add-ons -") ||
-      n.includes("armor") || n.includes("helmet") || n.includes("undersuit") ||
-      n.includes("backpack") || n.includes("jacket") || n.includes("weapons pack") || n.includes("weapon pack") ||
-      n.includes("multi-tool") || n.includes("knife") || n.includes("combat knife") ||
-      n.includes("pistol") || n.includes("rifle") || n.includes("shotgun") || n.includes("smg") || n.includes("lmg") ||
-      n.includes("grenade launcher") || n.includes("tractor beam") || n.includes("mining gadget") ||
-      n.includes("repeater") || n.includes("cannon") || n.includes("laser cannon") ||
-      n.includes("hazard suit") || n.includes("refinery suit") || n.includes("service uniform") ||
-      n.includes("medical device") || n.includes("mask") || n.includes("flight blades") ||
-      n.includes("bomb rack") || n.includes("weapon kit") || n.includes("upgrade kit") ||
-      n.includes("quikflare") || n.includes("medivac") || n.includes("purifier") ||
-      n.includes("gear pack") || n.includes("hydration pack")) return "gear";
-
-  // Subscriber items
-  if (n.startsWith("subscribers ") || n.startsWith("subscriber ") || n.includes("subscribers exclusive") ||
-      n.includes("imperator reward") || n.includes("centurion reward") ||
-      n.includes("vip grand admiral") || n.includes("vip high admiral")) return "subscriber";
-
-  // Flair — decorations, trophies, rewards, coins, collectibles, event items
-  if (n.includes("flair") || n.includes("trophy") || n.includes("pennant") ||
-      n.includes("charm") || n.includes("plushie") || n.includes("figurine") || n.includes("poster") ||
-      n.includes("calendar") || n.includes("statue") || n.includes("diorama") ||
-      n.includes("bis ") || n.includes("best in show") ||
-      n.includes("festival") || n.includes("citizencon") ||
-      n.includes("holiday") || n.includes("hangar decoration") || n.includes("flower") ||
-      n.includes("pet") || n.includes("stuffed") || n.includes("bobblehead") ||
-      n.includes("space globe") || n.includes("display case") || n.includes("lamp") ||
-      n.includes("rug") || n.includes("towel") || n.includes("mug") || n.includes("cup") ||
-      n.includes("action figure") || n.includes("badge") || n.includes("pin") ||
-      n.includes("challenge coin") || n.includes("coin") || n.includes("envelope") ||
-      n.includes("year of the") || n.includes("coramor") ||
-      n.includes("reward") || n.includes("goodies") || n.includes("t-shirt") ||
-      n.includes("luminalia") || n.includes("invictus") ||
-      n.includes("advent") || n.includes("referral bonus") ||
-      n.includes("chair") || n.includes("couch") || n.includes("lounge") || n.includes("throne") ||
-      n.includes("nightstand") || n.includes("loveseat") || n.includes("cushion") ||
-      n.includes("vase") || n.includes("plant pot") || n.includes("bust") ||
-      n.includes("banner") || n.includes("specimen tank") || n.includes("cargo collection") ||
-      n.includes("display") || n.includes("die ship") || n.includes("toy pistol") ||
-      n.includes("resource drive") || n.includes("salvaged") ||
-      n.includes("pirate week") || n.includes("xenothreat") ||
-      n.includes("birthday goodies") || n.includes("digital goodies") ||
-      n.includes("killer creature") || n.includes("brands of the") ||
-      n.includes("cold front") || n.includes("cuddly cargo") || n.includes("decorative cargo") ||
-      n.includes("explorer") || n.includes("adventurer") ||
-      n.includes("big winner") || n.includes("completion package") ||
-      n.includes("patch collection") || n.includes("resupply") ||
-      n.includes("academy") || n.includes("grx prototype") ||
-      n.includes("coupon") || n.includes("gourd") || n.includes("ornate")) return "flair";
-
-  // Packs / Bundles
-  if (n.includes("packs -") || n.includes("bundle") || n.includes("combo") ||
-      n.includes("master set")) return "gear";
-
-  return "other";
-}
-```
-
-### parseSCLabsItems() Function
-
-Converts extension JSON items to store HangarShip/HangarCCU format. **FULL CODE:**
-
-```typescript
-function parseSCLabsItems(items: any[], location: ItemLocation): {
-  ships: Omit<HangarShip, "id">[];
-  ccus: Omit<HangarCCU, "id">[];
-  skipped: number;
-  errors: string[];
-} {
-  const ships: Omit<HangarShip, "id">[] = [];
-  const ccus: Omit<HangarCCU, "id">[] = [];
-  const errors: string[] = [];
-  const skipped = 0;
-
-  for (const item of items) {
-    try {
-      const category = item.category || "";
-      const name = item.name || "";
-
-      if (category === "upgrade" && item.ccuInfo) {
-        // Parse as CCU upgrade
-        const ci = item.ccuInfo;
-        const ccu: Omit<HangarCCU, "id"> = {
-          fromShip: ci.fromShipData?.name || "",
-          fromShipReference: "",
-          toShip: ci.toShipData?.name || "",
-          toShipReference: "",
-          pricePaid: ci.price || 0,
-          isWarbond: false,
-          location: location === "ccu_chain" ? "hangar" : location,
-          notes: "",
-        };
-        if (ccu.fromShip && ccu.toShip) {
-          ccus.push(ccu);
-        }
-      } else {
-        // Parse as item (ship, paint, flair, gear, subscriber, etc.)
-        const ed = item.elementData || {};
-        const shipList = ed.shipInThisPackData || [];
-        const price = ed.price || 0;
-        const alsoContains = ed.alsoContainData || [];
-        const imageUrl = item.image || "";
-
-        // Detect insurance from alsoContains and pledge name
-        let insurance: InsuranceType = "unknown";
-        const allTexts = [...alsoContains, name];
-        for (const extra of allTexts) {
-          const extraLower = String(extra).toLowerCase();
-          if (extraLower.includes("lifetime")) { insurance = "LTI"; break; }
-          if (extraLower.includes("120")) { insurance = "120_months"; break; }
-          if (extraLower.includes("72")) { insurance = "72_months"; break; }
-          if (extraLower.includes("48")) { insurance = "48_months"; break; }
-          if (extraLower.includes("24")) { insurance = "24_months"; break; }
-          if (extraLower.includes("10 year") || extraLower.includes("10year") || extraLower.includes("10-year")) { insurance = "120_months"; break; }
-          if (extraLower.includes("6 month")) { insurance = "6_months"; break; }
-          if (extraLower.includes("3 month")) { insurance = "3_months"; break; }
-        }
-
-        // Determine item category
-        const itemCat = detectItemCategory(name, category);
-
-        if ((itemCat === "standalone_ship" || itemCat === "game_package") && shipList.length > 0) {
-          for (const shipInfo of shipList) {
-            const sName = shipInfo.name || "";
-            ships.push({
-              shipReference: "",
-              shipName: sName,
-              pledgeName: name,
-              pledgePrice: shipList.length === 1 ? price : 0,
-              insuranceType: insurance,
-              location,
-              itemCategory: itemCat,
-              isGiftable: item.isGiftable || false,
-              isMeltable: item.isExchangeable || true,
-              purchasedDate: item.lastModification ? parseDateString(item.lastModification) : null,
-              imageUrl,
-              notes: shipList.length > 1 ? `Part of package: ${name}` : "",
-            });
-          }
-        } else {
-          // Single item (ship without detailed data, paint, gear, flair, etc.)
-          const extractedName = (itemCat === "standalone_ship" || itemCat === "game_package")
-            ? extractShipNameFromPledge(name)
-            : extractItemName(name);
-          ships.push({
-            shipReference: "",
-            shipName: extractedName,
-            pledgeName: name,
-            pledgePrice: price,
-            insuranceType: insurance,
-            location,
-            itemCategory: itemCat,
-            isGiftable: item.isGiftable || false,
-            isMeltable: item.isExchangeable || true,
-            purchasedDate: item.lastModification ? parseDateString(item.lastModification) : null,
-            imageUrl,
-            notes: "",
-          });
-        }
-      }
-    } catch (err) {
-      errors.push(
-        `Failed to parse "${item.name || "unknown"}": ${err instanceof Error ? err.message : String(err)}`
-      );
-    }
-  }
-
-  return { ships, ccus, skipped, errors };
-}
-```
-
-### Import/Export Flow
-
-**importFromJSON(data)**
-
-1. Calls `detectAndParseFormat(data)` to identify format (SC Labs, CCU Game, legacy, etc.)
-2. Parses hangar items (location="hangar") and buyback items (location="buyback")
-3. Adds parsed items to store with generated UUIDs
-4. Returns summary with item counts, values, and errors
-
-**Supported Formats:**
-
-- **SC Labs Hangar Importer:** `{ version, exportedBy, myHangar, myBuyBack }`
-- **SC Labs backup:** `[{ id, pledgeName, shipName, ... }]`
-- **CCU Game:** `[{ type: "ship"|"ccu", reference, ... }]`
-- **Legacy format:** `[{ kind: "Standalone Ship", title, ... }]`
-
-**exportToJSON()**
-
-Returns JSON string of current store state:
-
-```json
-{
-  "version": "1.0",
-  "exportDate": "2026-04-07T13:00:00.000Z",
-  "ships": [...],
-  "ccus": [...],
-  "chains": [...]
-}
-```
-
-### onRehydrateStorage() Backward Compatibility
-
-When store rehydrates from localStorage, patches old items that lack `itemCategory` field:
-
-```typescript
-onRehydrateStorage: () => (state) => {
-  if (state && state.ships) {
-    let needsUpdate = false;
-    const patched = state.ships.map((ship) => {
-      if (!ship.itemCategory) {
-        needsUpdate = true;
-        return { ...ship, itemCategory: detectItemCategory(ship.pledgeName || ship.shipName || "", "") };
-      }
-      return ship;
-    });
-    if (needsUpdate) state.ships = patched;
-  }
-}
-```
-
-### Store Actions
-
-```typescript
-// Ships
-addShip(ship: Omit<HangarShip, "id">) → void
-removeShip(id: string) → void
-updateShip(id: string, updates: Partial<HangarShip>) → void
-
-// CCUs
-addCCU(ccu: Omit<HangarCCU, "id">) → void
-removeCCU(id: string) → void
-updateCCU(id: string, updates: Partial<HangarCCU>) → void
-
-// Chains
-addChain(chain: Omit<CCUChain, "id">) → void
-removeChain(id: string) → void
-updateChain(id: string, updates: Partial<CCUChain>) → void
-
-// Import/Export
-importFromJSON(data: any) → { ships, ccus, summary, errors }
-exportToJSON() → string (JSON)
-clearAll() → void
-```
+API route handlers live under `src/app/api/*` and mirror most of these modules (`catalog`, `ships`, `components`, `ccu`, `cargo-grids`, `crafting`, `mining`, `trade`, `loaners`, `activities`, `referral`, `auth`).
 
 ---
 
-## 4. Platform — UI Components
+## 5. Database Layer
 
-**Location:** `/sessions/clever-loving-carson/mnt/web alfilo/al-filo-platform/src/components/hangar/`
+**State:** Prisma runtime removed in commit `5ad4652 chore(repo): remove prisma runtime and preserve sql migrations`. The app talks to Postgres via:
 
-### Complete Component Listing
+1. **Supabase** for auth + RLS-gated reads/writes, through `src/lib/supabase/{client,server,admin,middleware}.ts`
+2. **Direct `postgres` client** in `src/lib/db.ts` for server-side queries that don't need Supabase's layers
 
-| Component | Purpose |
-|-----------|---------|
-| **HangarDashboard.tsx** | Main dashboard with tabs (My Fleet, Buyback, CCU Chains), filters, modals |
-| **HangarShipCard.tsx** | Card displaying a single ship/item with image, price, insurance, actions |
-| **CCUCard.tsx** | Card displaying a CCU upgrade with "from" → "to" ships |
-| **EditShipModal.tsx** | Modal to edit ship name, category, price, insurance, location, notes |
-| **EditCCUModal.tsx** | Modal to edit CCU price, location, warbond status, notes |
-| **AddShipModal.tsx** | Modal to manually add a new ship to the hangar |
-| **AddCCUModal.tsx** | Modal to manually add a new CCU to the hangar |
-| **ImportModal.tsx** | Modal to paste/upload JSON export from extension or backup |
-| **ChainBuilder.tsx** | Interactive builder for multi-step CCU upgrade chains |
-| **ChainList.tsx** | Displays all CCU chains with status and steps |
-| **FleetGrid.tsx** | Grid container for HangarShipCard components |
-| **CCUGrid.tsx** | Grid container for CCUCard components |
+Migrations and seeds are plain SQL, applied manually or via scripts (not by Prisma). The `prisma/` folder still exists with the old schema as documentation.
 
-### HangarShipCard.tsx
+### Migrations (`database/migrations/`)
 
-**Purpose:** Displays a ship with image, price, insurance badge, location badge, and action buttons.
+Numbered `001…032`, one table per file:
 
-**Key Features:**
-
-- **Image Fallback Chain:** Local thumbnail → RSI CDN image → Category emoji
-- **Local Thumbnails:** Maps `shipName` to `/ships/{slug}.jpg` files
-- **SLUG_FIXES:** Common name mappings (e.g., "gladiator" → "t8c-gladiator")
-- **Insurance Color Coding:** LTI (green), 120m (amber), 72m (amber), 48m (orange), etc.
-- **Location Badges:** Hangar (cyan) or Buyback (orange)
-- **Category Badges:** Ship, Package, Paint, Gear, Flair, etc.
-- **Actions:** Edit, Move (↔ Fleet/Buyback), Delete
-
-**resolveDisplayName() Function:**
-
-Tries multiple sources for ship name:
-1. Explicit `ship.shipName` field
-2. Parse from `ship.notes` (e.g., "Ship: Cutlass")
-3. Extract from `ship.pledgeName`
-
-**getShipThumbUrl() Function:**
-
-```typescript
-function getShipThumbUrl(shipName: string): string {
-  if (!shipName) return "";
-  const lower = shipName.toLowerCase().trim();
-
-  // Check fixed mappings first
-  if (SLUG_FIXES[lower]) return `/ships/${SLUG_FIXES[lower]}.jpg`;
-
-  const slug = lower
-    .replace(/[''()]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9._-]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/-$/, "");
-  return `/ships/${slug}.jpg`;
-}
+```
+001_create_manufacturers          017_create_missiles
+002_create_armors                  018_create_missile_launchers
+003_create_cargo_grids             019_create_paints
+004_create_containers              020_create_power_plants
+005_create_coolers                 021_create_quantum_drives
+006_create_emps                    022_create_quantum_fuel_tanks
+007_create_flair_cockpit_items     023_create_quantum_interdiction_generators
+008_create_flair_floor_items       025_create_scanners                 ← note: 024 skipped
+009_create_flair_surface_items     026_create_self_destruct_systems
+010_create_flair_wall_items        027_create_shields
+011_create_flight_controllers      028_create_transponders
+012_create_fuel_intakes            029_create_turrets
+013_create_fuel_tanks              030_create_weapon_attachments
+014_create_life_support_generators 031_create_weapon_defensives
+015_create_main_thrusters          032_create_weapon_guns
+016_create_manneuver_thrusters
 ```
 
-**Colors:**
+Plus three legacy files kept for history:
 
-- **Insurance badges:** emerald (LTI), amber (120m, 72m), orange (48m, 24m), violet (6m), rose (3m)
-- **Category badges:** cyan (ship), indigo (package), pink (paint), yellow (flair), teal (gear), violet (sub), sky (ccu)
-- **Location badges:** cyan (hangar), orange (buyback)
+```
+legacy_001_satellite_tables.sql
+legacy_002_fix_crew.sql
+legacy_003_fix_hardpoints.sql
+```
 
-### CCUCard.tsx
+⚠️ **Known gaps to sanity-check before production use:**
+- `024_*` is missing from the numbered sequence
+- Typo in file name: `016_create_manneuver_thrusters.sql` (should be "maneuver")
 
-**Purpose:** Displays a CCU upgrade path with "from ship" → "to ship" visualization.
+### Seeds (`database/seeds/`)
 
-**Key Features:**
+One seed file per table. Several still have placeholder markers in their filenames indicating data that needs to be sourced:
 
-- **Image:** Shows thumbnail of "to" ship (the destination)
-- **Layout:** Compact card with from/to ship names and arrow icon
-- **Warbond Badge:** Shows if this is a warbond CCU
-- **Standard Badge:** Shows if standard (non-warbond)
-- **Price Display:** Price paid for the CCU
-- **Ship References:** Shows short references (e.g., "AVNG" → "CUT")
-- **Edit/Delete:** Action buttons with confirmation
+```
+scanners_seed___BUSCAR___.sql
+transponders_seed___BUSCAR___.sql
+weapon_attachments_seed___BUSCAR.sql
+main_thrusters_seed_____.sql
+manneuver_thrusters_seed_____.sql
+paints_seed_____.sql
+```
 
-### EditShipModal.tsx
+The top-level orchestrator is `001_equipment_load.sql`.
 
-**Purpose:** Edit ship properties (pledge name, category, price, insurance, location, notes, giftable/meltable).
+### Archived SQL
 
-**Features:**
+Historical SQL that no longer runs in prod lives in `docs/archive/legacy-sql/`:
+`equipment_load.sql`, `fix_crew_and_children.sql`, `hardpoints_remaining.sql`, `satellite_tables.sql`.
 
-- **Pledge Name Input:** Text field for pledge name
-- **Category Dropdown:** All 8 categories (Ship, Package, Paint, Gear, Flair, Subscriber, CCU, Other)
-- **Price Input:** Number field (min 0, step 0.01)
-- **Insurance Dropdown:** LTI, 120m, 72m, 48m, 24m, 6m, 3m, Unknown
-- **Location Dropdown:** Hangar, Buyback, CCU Chain
-- **Checkboxes:** Giftable, Meltable
-- **Notes Field:** Textarea for optional notes
-- **Error Handling:** Validation for price field
-- **Save/Cancel:** Action buttons
+### Ingestion scripts (`scripts/`)
 
-### EditCCUModal.tsx
-
-**Purpose:** Edit CCU properties (price paid, location, warbond status, notes).
-
-**Features:**
-
-- **From/To Ships:** Read-only display
-- **Price Paid:** Number input
-- **Location:** Dropdown (Hangar/Buyback)
-- **Warbond:** Checkbox
-- **Notes:** Textarea
-- **Save/Cancel:** Action buttons
-
-### HangarDashboard.tsx
-
-**Purpose:** Main dashboard with tabs, filters, modals, and stats.
-
-**Tabs:**
-
-1. **My Fleet** — Ships/items in "hangar" location
-2. **Buyback** — Ships/items in "buyback" location
-3. **CCU Chains** — Multi-step upgrade chains
-
-**Features:**
-
-- **Stats Cards:** Ship count, fleet value, item count, total investment
-- **Filters:** Category (all, ships, packages, ccu, paints, gear, flair, subscriber, other), Insurance (LTI, 120m, etc.), Search
-- **Sort:** By Name, Price, Date
-- **Bulk Actions:** Bulk move buyback items to fleet, clear all (with confirmation)
-- **Add/Import:** Buttons to import JSON, add ship, add CCU manually
-- **Export/Backup:** Export current state as JSON
-
-**Category Counts:**
-
-Dynamically counts items in each category for filter chip labels.
+- `ingest_scunpacked.py`, `ingest_v2.py`, `ingest_v3.py` — pull data from the SC datamining repo
+- `extract_ship_hardpoints.py` → `ship_hardpoints_export.csv`
+- `migrate-turret-loadouts.{mjs,py}` — one-off migrations
+- `populate_prices.mjs` — prices from `precios_naves/`
+- `seed-glb-keys.mjs`, `upload-glb-r2.mjs` — GLB ship models to Cloudflare R2
+- `debug_stats.py`, `debug_missing.py`, `debug_unpacked.py` — diagnostics
 
 ---
 
-## 5. Known Issues & Recent Fixes
+## 6. DPS / LoadoutBuilder (current focus)
 
-### Fixed Issues
+Route: `sclabs.space/dps`
+Main file: `src/components/ships/LoadoutBuilder.tsx`
 
-#### 1. Buyback Prices Not Showing
+### What it does
 
-**Problem:** Buyback page scraper wasn't finding prices.
+A per-ship combat/power analysis board built on `react-grid-layout`. Users pick a ship, the builder pulls its hardpoints, and renders a dynamic grid of widgets covering weapons, missiles, shields, power plants, coolers, quantum drives, radar, utility, flight dynamics (3D), signatures, power grid, power management, turning/strafe profiles, combat summary, and more.
 
-**Fix:** Added multiple selector fallbacks + USD pattern matching:
+### Grid model
 
-```javascript
-// Try multiple selectors first
-const priceEl = art.querySelector(".js-pledge-value, .price, .amount, .final-amount, .credit-amount, .store-price");
-if (priceEl) price = parseFloat((priceEl.value || priceEl.textContent || "").replace(/[^0-9.]/g, "")) || 0;
+- **20 columns** internal grid = **5 visual units × 4 subcolumns** (each visual unit is 0.25 wide steps)
+- `rowHeight = colWidth` (square cells) driven by a `ResizeObserver` on the grid container
+- Widgets have fixed widths (`WIDGET_W` map) and heights computed from actual content per ship via `widgetContentHeightPx` → `pxToSubunits`
+- Heights snap to multiples of 0.25 vertical units, widths stay fixed
+- Margins `[12, 12]` between cards preserved
 
-// Fallback: look in dt/dd pairs
-if (price === 0) {
-  dts.forEach((dt, idx) => {
-    const key = dt.textContent.trim().toLowerCase();
-    if (key.includes("cost") || key.includes("price") || key.includes("value") || key.includes("pledge")) {
-      const p = parseFloat((dds[idx]?.textContent || "").replace(/[^0-9.]/g, "")) || 0;
-      if (p > 0) price = p;
-    }
-  });
-}
+### Default layout
 
-// Fallback: scan all text for USD pattern
-if (price === 0) {
-  const usdMatch = art.textContent.match(/\$\s*(\d+(?:\.\d{2})?)\s*USD/);
-  if (usdMatch) price = parseFloat(usdMatch[1]) || 0;
-}
-```
+`COLUMN_LAYOUT` distributes 18 widgets across 5 columns (`x: 0, 4, 8, 12, 16`). `flight-dynamics-3d` is a wide widget (w=8) that sits below columns 8 and 12. User-dragged positions persist in `localStorage` under key `al-filo-layout-v3` (bumped from `v2` on reset).
 
-#### 2. CCU Photos Not Showing
+### Recent fixes
 
-**Problem:** CCUCard didn't have image lookup.
+- `8fb0806 LoadoutBuilder: dynamic per-ship widget heights + original 5-column default layout`
+  Replaced the static `DEFAULT_LAYOUT` with a dynamic builder that distributes widgets across 5 columns and sizes each widget's height based on the actual number of hardpoints for the current ship. Fixes Pablo's "desperdigado" (scattered) complaint after the initial react-grid-layout refactor.
 
-**Fix:** Added `getShipThumbUrl()` function and image fallback:
+- `aa112fb fix(LoadoutBuilder): move layout hooks above early returns (Rules of Hooks)`
+  Fixed a client-side crash (`sclabs.space/dps` showing "This page couldn't load") caused by placing `useMemo` hooks (`visibleIds`, `widgetHeights`, `layout`) **after** the early `if (!shipInfo) return null` returns. When React re-rendered from loading → loaded, the number of hooks called changed, violating the Rules of Hooks. All hooks are now defined on lines ~454–614, before the early returns at ~669–671.
 
-```typescript
-const toShipThumb = getShipThumbUrl(ccu.toShip);
-// ... in JSX:
-{!imgError && toShipThumb ? (
-  <img src={toShipThumb} alt={ccu.toShip} onError={() => setImgError(true)} />
-) : (
-  <div>⬆️</div>
-)}
-```
+- `150fab5 refactor(repo): unify src structure and remove legacy directories`
+  Removed the `al-filo-platform/` subfolder. All paths in this file and any scripts should reference the flat structure going forward.
 
-#### 3. Image URLs Not Absolute
+### Related files
 
-**Problem:** RSI CDN URLs started with `/` or `//`, causing broken images.
-
-**Fix:** Convert all image URLs to absolute in content.js and components:
-
-```javascript
-if (url.startsWith("//")) url = "https:" + url;
-else if (url.startsWith("/")) url = RSI_BASE + url;
-
-// In component:
-let fallbackImg = "";
-if (ship.imageUrl && !ship.imageUrl.includes("default-image")) {
-  const raw = ship.imageUrl.trim();
-  if (raw.startsWith("//")) fallbackImg = `https:${raw}`;
-  else if (raw.startsWith("/")) fallbackImg = `https://robertsspaceindustries.com${raw}`;
-  else fallbackImg = raw;
-}
-```
-
-#### 4. BIS Rewards Miscategorized
-
-**Problem:** "BIS ... Reward" items were being marked as flair instead of paint.
-
-**Fix:** Updated `detectCategory()` to classify as paint (ships/liveries), but not pennants, trophies, coins, etc.:
-
-```javascript
-if ((n.includes("bis ") || n.includes("best in show")) && n.includes("reward") &&
-    !n.includes("pennant") && !n.includes("trophy") && !n.includes("charm") &&
-    !n.includes("plushie") && !n.includes("figurine") && !n.includes("poster") &&
-    !n.includes("coin") && !n.includes("badge") && !n.includes("helmet") &&
-    !n.includes("armor") && !n.includes("gear")) return "paint";
-```
-
-### Known Issues Not Yet Fixed
-
-#### 1. OneDrive Sync with Git
-
-**Problem:** OneDrive locks git files (`.git/index.lock` timeout), preventing `git push`.
-
-**Workaround:** User must run git commands from PowerShell (not Command Prompt or WSL):
-
-```powershell
-cd "C:\Users\carsd\OneDrive\Documentos\web alfilo"
-git add .
-git commit -m "message"
-git push
-```
-
-#### 2. Chrome Extension Installation
-
-**Current Status:** Extension v1.2.0 built and ready, but needs to be reinstalled from ZIP after updates:
-
-1. Go to `chrome://extensions`
-2. Enable "Developer mode"
-3. Click "Load unpacked"
-4. Select `/sessions/clever-loving-carson/mnt/web alfilo/sc-labs-hangar-extension/`
+- `src/components/ships/loadout-utils.ts` — helpers
+- `src/components/ships/HardpointGroup.tsx`, `HardpointSlot.tsx`
+- `src/components/ships/PowerManagementPanel.tsx`, `ComponentPicker.tsx`, `StatGauge.tsx`
+- `src/components/domain/dps/PowerStatusGrid.tsx`, `StatsPanel.tsx`
+- `src/components/shared/flight-dynamics/*` — 3D viewer, rotation module, dynamics comparator
+- `src/components/shared/charts/RadarChart.tsx`
+- `src/lib/computeStats.ts` — stats aggregator
+- `src/lib/shipGlb.ts` — GLB model resolver
+- `src/store/useLoadoutStore.ts`
 
 ---
 
-## 6. Pending Tasks
+## 7. Hangar Store & Chrome Extension
 
-### User Action Required
+These modules were the original SC Labs surface and remain in the refactored repo largely unchanged. The store, components, import/export flow, and detection logic described in previous versions of this file still apply; only paths have moved.
 
-1. **Git Push Latest Changes**
-   - Updated files not yet pushed:
-     - `al-filo-platform/src/store/useHangarStore.ts` (improved import logic, BIS reward handling)
-     - `al-filo-platform/src/components/hangar/HangarShipCard.tsx` (image fallback fixes)
-     - `al-filo-platform/src/components/hangar/CCUCard.tsx` (ship image lookup)
-   - **Command (PowerShell):**
-     ```powershell
-     cd "C:\Users\carsd\OneDrive\Documentos\web alfilo"
-     git add .
-     git commit -m "refactor: improve hangar import logic and image handling"
-     git push
-     ```
+### Hangar Store — `src/store/useHangarStore.ts`
 
-2. **Reinstall Extension**
-   - v1.2.0 is built and ready
-   - Go to `chrome://extensions` → Developer mode → Load unpacked
-   - Select `C:\Users\carsd\OneDrive\Documentos\web alfilo\sc-labs-hangar-extension`
+- Types: `InsuranceType`, `ItemLocation`, `ItemCategory`, `HangarShip`, `HangarCCU`, `CCUChainStep`, `CCUChain`
+- Actions: `addShip/removeShip/updateShip`, CCU equivalents, chain actions, `importFromJSON`, `exportToJSON`, `clearAll`
+- `detectItemCategory()` — trusts extension-provided category, else falls back to name-based detection (ships, packages, paints, gear, flair, subscriber, upgrade, other)
+- `parseSCLabsItems()` — converts extension JSON → store shapes, detects insurance from `alsoContains`
+- `onRehydrateStorage()` — backfills `itemCategory` for pre-existing stored ships
+- Supported import formats: SC Labs Hangar Importer (extension), SC Labs backup, CCU Game, legacy
+- Persistence: Zustand persist, localStorage key `"sc-labs-hangar"`
 
-3. **Test After Reinstall**
-   - Export hangar from RSI
-   - Verify: Buyback prices appear in JSON
-   - Verify: CCU photos show in CCUCard
-   - Verify: BIS rewards classified as paint
-   - Import into platform
-   - Check stats match export
+### Hangar UI — `src/components/hangar/`
 
-4. **Eventually: Chrome Web Store Submission**
-   - Get approval from reviewer
-   - Use Chrome Web Store API to publish
-   - v1.2.0 would be first public release
+`HangarDashboard` (not currently present as `HangarDashboard.tsx` in the flat tree — verify), `FleetGrid`, `CCUGrid`, `HangarShipCard` (note: this file wasn't in the `ls` above — check if it was renamed), `CCUCard`, `AddShipModal`, `AddCCUModal`, `EditShipModal`, `EditCCUModal`, `ChainBuilder`, `ChainList`, `CCUChainCalculator`. Ship thumbnails in `public/ships/*.jpg`, slug-based lookup with `SLUG_FIXES` overrides.
+
+### Chrome Extension — `sc-labs-hangar-extension/`
+
+**Version 1.2.0**, Manifest V3. Runs on `robertsspaceindustries.com/account/pledges*` and `…/buy-back-pledges*`. Scrapes hangar + buyback HTML, classifies via `detectCategory()` (same rules as the store), exports JSON in the format:
+
+```ts
+{ version: "1.0", exportedBy, exportDate, myHangar: [...], myBuyBack: [...] }
+```
+
+Files: `manifest.json`, `content.js`, `popup.html`, `popup.js`, `background.js`, `icons/`.
+
+Known fixes already in v1.2.0: buyback price selector fallbacks, CCU image lookup (`getShipThumbUrl`), absolute image URL conversion, BIS-rewards-as-paint classification.
+
+Chrome Web Store assets (icon 128, promo marquee/small, screenshot) live at the repo root (`cws-*.png`) for submission.
 
 ---
 
-## 7. Important Paths
+## 8. Known Quirks & Workarounds
 
-### Git Repository
+### CRLF ↔ LF phantom diffs (after `git pull` on Windows)
 
-- **Repo Root:** `/sessions/clever-loving-carson/mnt/web alfilo/` (C:\Users\carsd\OneDrive\Documentos\web alfilo)
-- **Desktop Copy:** `/sessions/clever-loving-carson/mnt/Escritorio--web alfilo/` (C:\Users\carsd\OneDrive\Escritorio\web alfilo)
+After pulling on Windows with default `autocrlf`, `git status` will show hundreds of "modified" files (~276 at last check) with diffs where the insertions and deletions match exactly (e.g. 39/39). **These are not real changes** — they're pure line-ending flips. Do **not** commit them.
 
-### Extension Files
+Fix options:
+1. `git checkout .` at the repo root to discard them (safe when there's no real WIP)
+2. Add a `.gitattributes` with `* text=auto eol=lf` to lock line endings and prevent recurrence
 
-- **Folder:** `/sessions/clever-loving-carson/mnt/web alfilo/sc-labs-hangar-extension/`
-- **manifest.json:** v1.2.0
-- **Icons:** `icons/icon16.png`, `icon32.png`, `icon48.png`, `icon128.png`
+### OneDrive locks on `.git/index.lock`
 
-### Platform Files
+OneDrive sometimes holds `.git/index.lock` open, causing `git push` or even `git status` to fail with "unable to unlink". Workarounds:
+- Run git from **PowerShell** (not Command Prompt or WSL) on the OneDrive path
+- Or pause OneDrive sync temporarily
+- The "desktop" (Escritorio) copy is usually more reliable than the OneDrive-synced "Documentos" copy
 
-- **App Root:** `/sessions/clever-loving-carson/mnt/web alfilo/al-filo-platform/`
-- **Hangar Store:** `src/store/useHangarStore.ts`
-- **Hangar Components:** `src/components/hangar/`
-- **Hangar Page:** `src/app/hangar/page.tsx`
+### Vercel path issues from nested directories
 
-### Assets
+Historically, running `git add al-filo-platform/src/...` from inside the `al-filo-platform/` directory created doubled paths like `al-filo-platform/al-filo-platform/src/...`. This is now moot after the `150fab5` flat-structure refactor — **Next.js lives at the repo root**, so always run git/Next commands from the repo root.
 
-- **Ship Images:** `al-filo-platform/public/ships/*.jpg` (slugified names)
-- **SC Labs Logo:** `al-filo-platform/LOGOS/SCLABS.jpg` (used for extension icons)
-- **Background Video:** `al-filo-platform/public/videos/bg.mp4`
+### Rules of Hooks in LoadoutBuilder
 
-### Key Configuration
-
-- **Zustand Store Name:** `"sc-labs-hangar"` (localStorage key)
-- **Extension Manifest Version:** 3
-- **Next.js Version:** Latest (from package.json)
-- **Node Version:** See `.nvmrc` or `package.json` engines field
+All `useMemo`/`useState`/`useCallback` calls in `LoadoutBuilder.tsx` must be declared **before** any `if (!shipInfo) return null` style early return. See commit `aa112fb` for the fix template. Adding new hooks after the early returns will silently break the page when the ship data transitions between loading and loaded states.
 
 ---
 
-## Summary for Next Session
+## 9. Important Paths
 
-To pick up exactly where we left off:
+### Git & environment
 
-1. All extension code is complete and ready (v1.2.0)
-2. All platform code is complete with recent fixes for images, prices, BIS rewards
-3. User needs to git push changes from PowerShell
-4. User needs to reinstall extension from Developer mode
-5. After reimport, verify: buyback prices, CCU photos, BIS classifications
-6. Eventually submit to Chrome Web Store
+- **Repo root (canonical working copy):** `C:\Users\carsd\OneDrive\Escritorio\Sc_LABS\proyecto-test-SCMANAGER`
+- **Mount for this AI session:** `/sessions/friendly-festive-ptolemy/mnt/Sc_LABS/proyecto-test-SCMANAGER`
+- **Remote:** `github.com/PabloChuker/proyecto-test-SCMANAGER`
+- **Active working branch:** `master` — contains the full refactor + our LoadoutBuilder fixes. This is the canonical branch going forward.
+- **Other branches on remote:**
+  - `master-backup`, `master-old` — pre-refactor safety snapshots
+  - `refactor/repo-restructure` — older refactor branch (behind `master`, superseded)
+  - `refactor/base-limpia` — mentioned in the refactor report as "nueva base del proyecto", but **not yet present on remote**. If/when Xoli pushes it, evaluate whether to migrate. For now we work directly on `master`.
+- **Environment file:** `.env` at repo root (template in `.env.example`). Expects `DATABASE_URL`, `REDIS_URL`, `SCUNPACKED_REPO_URL`, `SCUNPACKED_LOCAL_PATH`, `GAME_VERSION`. Supabase keys + any Cloudflare R2 credentials live alongside (not in `.env.example`).
 
-The codebase is production-ready. Main work is testing the fixes and ensuring data flows correctly end-to-end.
+### Key source files to remember
+
+- `src/components/ships/LoadoutBuilder.tsx` — main DPS UI
+- `src/components/ships/loadout-utils.ts`
+- `src/lib/computeStats.ts` — stats aggregator
+- `src/lib/db.ts` — postgres client
+- `src/lib/supabase/{client,server,admin,middleware}.ts`
+- `src/lib/shipGlb.ts` — GLB resolver (R2)
+- `src/store/useHangarStore.ts`, `src/store/useLoadoutStore.ts`
+- `src/contexts/AuthContext.tsx`
+- `src/data/ship-power-data.json`, `src/data/power-network-lookup.json`
+
+### Static assets
+
+- **Ship thumbnails:** `public/ships/*.jpg` (slugified)
+- **Background videos:** `public/videos/bg.mp4`
+- **Ship GLB models:** hosted on Cloudflare R2, resolved via `src/lib/shipGlb.ts`
+
+### Extension
+
+- **Folder:** `sc-labs-hangar-extension/`
+- **Install for dev:** `chrome://extensions` → Developer mode → Load unpacked → select that folder
+- **Web Store assets at repo root:** `cws-icon-128.png`, `cws-promo-marquee.png`, `cws-promo-small.png`, `cws-screenshot-1.png`
+
+### Docs & business
+
+- `docs/architecture/diagrams/` — architecture diagrams
+- `docs/archive/` — `old-setup.md`, `legacy-sql/`
+- `docs/business/SCLABS_Analisis_Competitivo.docx`
+- `SC_Labs_Hangar_Manager_Proposal.docx` (root)
+- `GuildSwarm_Analysis_Report.pdf` (root)
+- `PRIVACY_POLICY.md`
+- `INSTRUCCIONES_MERGE_XOLI.md` — collaborator merge instructions
 
 ---
 
-**Generated:** April 7, 2026 13:00 UTC
-**For:** SC Labs Project
+## 10. Refactor Report Summary (`informe_refactor_scmanager`)
+
+A 2-page refactor report was shared on 2026-04-11 summarizing the cleanup that landed in `master`. Key points that are **not** already captured elsewhere in this document:
+
+### Cambios principales (confirmed)
+
+- Legacy structures removed (`al-filo-platform/`, duplicates) — ✅ in commit `150fab5`
+- Component reorg into `domain/` / `shared/` / layout folders — ✅ visible in `src/components/{domain,shared}/`
+- `RadarChart` unified, imports cleaned up — ✅ now single file in `src/components/shared/charts/`
+- Prisma runtime fully removed — ✅ commit `5ad4652`, **0 active Prisma references** in code
+- Direct SQL via `postgres.js` (Porsager) against Supabase Postgres — ✅ in `src/lib/db.ts`
+- `prisma/migrations/` preserved as historical SQL only
+- `package.json` / `package-lock.json` cleaned up
+
+### Estado final (per the report)
+
+- **0 referencias activas a Prisma** in runtime code
+- ~14 historical references remaining only in docs/logs (safe to leave)
+- Build compiles correctly — production failures were due to **env vars**, not code
+- **~54 TypeScript errors** exist but are **non-blocking** (tech debt to clean up over time)
+
+### ⚠️ Vercel — config fixes still required
+
+These are the root cause of the `sclabs.space/dps` production breakage and need to be applied in the Vercel dashboard (not in code):
+
+1. **Root Directory → `.`** (currently still pointing at the removed `al-filo-platform/` subfolder)
+2. **Verify environment variables** are present on Vercel: `DATABASE_URL`, Supabase keys, Cloudflare R2 credentials, etc.
+3. **Confirm production branch** is `master`
+
+Until Root Directory is fixed on Vercel, the deployment will keep failing regardless of what we push.
+
+### Branch strategy (from the report)
+
+- Report proposes a new branch `refactor/base-limpia` as "nueva base del proyecto" with `master` kept as backup
+- **Current reality (2026-04-11):** `refactor/base-limpia` does **not** exist on remote yet. We continue working on `master`, which already contains all the refactor work. If/when `refactor/base-limpia` appears, revisit.
+
+### Siguiente paso estratégico (per the report)
+
+**Unificar modelo de datos** — align the three representations:
+1. JSON files in `src/data/` (`ship-power-data.json`, `power-network-lookup.json`, activities/crafting/mining)
+2. TypeScript types in `src/types/ships.ts` (and any inline types in components)
+3. PostgreSQL schema in `database/migrations/`
+
+This is the top-priority follow-up work after the structural refactor.
+
+---
+
+## 11. Working State & Open Threads
+
+### ✅ Recently finished (2026-04-11)
+
+- Refactor report received and merged into this context doc
+- Dynamic per-ship widget heights + 5-column default layout in LoadoutBuilder (`8fb0806`)
+- Rules-of-Hooks crash on `/dps` fixed (`aa112fb`)
+- Repo flattened, legacy directories removed (`150fab5`)
+- Prisma runtime removed, SQL migrations preserved (`5ad4652`)
+- Context document rewritten to reflect the flat structure
+
+### 🟡 In progress / to revisit
+
+- **Unify data model** — align JSON (`src/data/`) ↔ TS types (`src/types/ships.ts`) ↔ DB schema (`database/migrations/`). This is the headline next task from the refactor report.
+- **Database work** — 32 SQL migrations are in place; gaps to fix:
+  - `024_*` is missing from the numbered sequence
+  - Typo in filename: `016_create_manneuver_thrusters.sql` (should be "maneuver")
+  - Seeds with placeholder markers (missing source data):
+    `scanners_seed___BUSCAR___`, `transponders_seed___BUSCAR___`,
+    `weapon_attachments_seed___BUSCAR`, `main_thrusters_seed_____`,
+    `manneuver_thrusters_seed_____`, `paints_seed_____`
+- **~54 non-blocking TypeScript errors** remaining after the refactor — tech debt to clean up incrementally
+- **`docs/architecture/diagrams/`** currently only has one Gemini-generated PNG — no written architecture doc yet
+
+### 🔴 Open follow-ups (infrastructure)
+
+- **Fix Vercel config** (Root Directory → `.`, verify env vars, confirm production branch = `master`). This is blocking production deployments.
+- Add a `.gitattributes` (`* text=auto eol=lf`) to lock line endings so the CRLF/LF phantom-diff issue stops recurring after every `git pull` on Windows
+- Eventually: Chrome Web Store submission of extension v1.2.0
+
+### 🎯 Suggested next tasks when resuming
+
+1. **Vercel dashboard** — change Root Directory to `.` and verify env vars (unblocks prod)
+2. **Data model unification** — start the JSON ↔ TS ↔ SQL alignment (the headline refactor-report next step)
+3. **Database gaps** — fill the `024_*` migration gap, fix `manneuver_thrusters` typo, complete the `__BUSCAR__` / `_____` seed files
+4. **Line endings** — add `.gitattributes` + one-time normalization to kill the phantom diffs
+5. **TS cleanup** — incremental chip-away at the ~54 non-blocking TypeScript errors
+6. **Architecture doc** — write a proper `docs/architecture/` overview (data flow: RSI extension → hangar store / SC-unpacked ingest → Postgres → API routes → client)
+7. **Smoke test `/dps`** on prod once Vercel is fixed, to confirm our LoadoutBuilder fixes render correctly
+
+---
+
+**Generated:** 2026-04-11 (flat-structure refactor edition, consolidated with `informe_refactor_scmanager.pdf`)
+**Previous version:** 2026-04-07 (described the removed `al-filo-platform/` subfolder layout — now superseded)

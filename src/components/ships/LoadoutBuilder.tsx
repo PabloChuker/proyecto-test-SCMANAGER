@@ -1,11 +1,11 @@
 // =============================================================================
-// AL FILO — LoadoutBuilder v18 (Dynamic Grid Layout with react-grid-layout)
+// AL FILO — LoadoutBuilder v19 (Free-form Absolute Layout)
 //
-// Widgets se mueven libremente en una grilla 15-col tipo Gridstack/RGL:
-//   - Drag por el header para reordenar
-//   - Sin resize (tamaños fijos en código)
-//   - Compactación vertical automática
-//   - Layout persistido en localStorage `al-filo-layout-v2`
+// Widgets se renderizan como divs absolutos con posición en píxeles. El
+// usuario puede arrastrarlos libremente desde el header (drag custom,
+// sin snap a celdas): el widget sigue al mouse y se queda donde se suelta.
+// Default: 5 columnas que cubren el ancho completo del contenedor.
+// Persistido en localStorage `al-filo-layout-v4` (coordenadas en px).
 //
 // Panels: weapons, missiles, shields, power-plants, coolers, quantum, radar,
 //   utility, combat-summary, power-grid, signatures, balance, ship-selector,
@@ -17,7 +17,6 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
-import GridLayout, { type Layout } from "react-grid-layout";
 import { useLoadoutStore } from "@/store/useLoadoutStore";
 import type { ResolvedHardpoint, EquippedItem } from "@/store/useLoadoutStore";
 import { useAuth } from "@/contexts/AuthContext";
@@ -78,7 +77,7 @@ const CAT_CONFIG: Record<string, { label: string; icon: string; accent: string }
   UTILITY: { label: "UTILITY", icon: "/icons/tractor_beam.png", accent: "#94a3b8" },
 };
 
-// ÔöÇÔöÇ Widget System (react-grid-layout) ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+// ── Widget System (free absolute positioning) ──────────────────────────────
 type WidgetId =
   | "weapons" | "missiles" | "strafe-profile" | "turning-profile"
   | "shields" | "powerplants" | "coolers" | "maneuver-radar"
@@ -87,42 +86,37 @@ type WidgetId =
   | "ship-selector" | "ship-card" | "dps-detail"
   | "flight-dynamics-3d";
 
-// ─── Grid dimensions ────────────────────────────────────────────────────────
-// Zona "viva" fija: 5 columnas visuales (unidades) subdivididas en 4 subcols
-// de 0.25 c/u → 20 cols totales. Cada sub-celda es CUADRADA (rowHeight=colWidth
-// dinámico vía ResizeObserver), así la subunidad de 0.25 mide lo mismo en
-// ancho y alto. El margin (12px) deja "aire" entre cada card y sus líneas
-// imaginarias del grid, visualmente ~0.9 por unidad.
-// Anchos fijos en código: widgets normales w=4 (1 unidad), flight-dynamics w=8.
-// Altos dinámicos: se calculan por nave según el contenido de cada widget,
-// siempre en múltiplos enteros de la subunidad (0.25).
-const GRID_COLS = 20;
-const GRID_MARGIN: [number, number] = [12, 12];
-const MIN_ROW_HEIGHT = 32; // piso para viewports muy chicos
+// ─── Free-form layout dimensions ────────────────────────────────────────────
+// Ya no usamos react-grid-layout: cada widget se renderiza como un <div>
+// absoluto con posición en píxeles. El usuario arrastra libremente desde el
+// header y el widget sigue al mouse sin snapear a celdas. Los defaults
+// todavía organizan los widgets en 5 columnas a lo ancho del contenedor.
+const GAP = 12;         // separación visual entre widgets (px)
+const N_COLS = 5;       // columnas visuales del layout default
+const MIN_UNIT_W = 180; // ancho mínimo por columna (px)
 
-// Widget widths (constantes — los altos son dinámicos por nave)
-const WIDGET_W: Record<WidgetId, number> = {
-  weapons: 4, missiles: 4, "strafe-profile": 4, "turning-profile": 4,
-  shields: 4, powerplants: 4, coolers: 4, "maneuver-radar": 4,
-  quantum: 4, radar: 4, utility: 4, "combat-summary": 4,
-  "power-grid": 4, signatures: 4, balance: 4,
-  "ship-selector": 4, "ship-card": 4, "dps-detail": 4,
-  "flight-dynamics-3d": 8,
+// Widget widths en unidades de columna (1 = una columna, 2 = dos columnas)
+const WIDGET_WU: Record<WidgetId, number> = {
+  weapons: 1, missiles: 1, "strafe-profile": 1, "turning-profile": 1,
+  shields: 1, powerplants: 1, coolers: 1, "maneuver-radar": 1,
+  quantum: 1, radar: 1, utility: 1, "combat-summary": 1,
+  "power-grid": 1, signatures: 1, balance: 1,
+  "ship-selector": 1, "ship-card": 1, "dps-detail": 1,
+  "flight-dynamics-3d": 2,
 };
 
-// Layout por columnas — réplica de la distribución 5-col original.
-// Cada sub-array representa los widgets apilados verticalmente en esa columna.
-// Las alturas se calculan dinámicamente por nave; acá sólo definimos orden y
-// en qué "columna visual" va cada widget.
-const COLUMN_LAYOUT: { x: number; widgets: WidgetId[] }[] = [
-  { x: 0,  widgets: ["weapons", "missiles", "strafe-profile"] },
-  { x: 4,  widgets: ["shields", "powerplants", "coolers", "turning-profile"] },
-  { x: 8,  widgets: ["quantum", "radar", "utility", "combat-summary"] },
-  { x: 12, widgets: ["power-grid", "signatures", "balance", "maneuver-radar"] },
-  { x: 16, widgets: ["ship-selector", "ship-card", "dps-detail"] },
+// Distribución default — columnas lógicas (0..4) con widgets apilados.
+// Al computar posiciones, cada columna se convierte a un X en píxeles que
+// depende del ancho real del contenedor.
+const COLUMN_LAYOUT: { col: number; widgets: WidgetId[] }[] = [
+  { col: 0, widgets: ["weapons", "missiles", "strafe-profile"] },
+  { col: 1, widgets: ["shields", "powerplants", "coolers", "turning-profile"] },
+  { col: 2, widgets: ["quantum", "radar", "utility", "combat-summary"] },
+  { col: 3, widgets: ["power-grid", "signatures", "balance", "maneuver-radar"] },
+  { col: 4, widgets: ["ship-selector", "ship-card", "dps-detail"] },
 ];
 
-// flight-dynamics-3d (w=8) va en la fila inferior bajo cols 3+4 (x=8)
+// flight-dynamics-3d ocupa dos columnas de ancho y va debajo de las demás
 const WIDE_WIDGETS: WidgetId[] = ["flight-dynamics-3d"];
 
 const WIDGET_LABELS: Record<WidgetId, string> = {
@@ -140,12 +134,10 @@ const ALL_WIDGET_IDS: WidgetId[] = [
 ];
 
 // ─── Dynamic height computation ──────────────────────────────────────────────
-// Cada widget tiene un alto en px (estimado según su contenido real para la
-// nave seleccionada). Luego convertimos a subunidades enteras del grid:
-//   h = ceil((contentPx + marginY) / (rowHeight + marginY))
-// Así el alto del widget en el DOM (h*rowHeight + (h-1)*marginY) es siempre
-// ≥ contentPx, garantizando que el contenido entre sin cortarse, y snapea
-// a múltiplos exactos de la subunidad.
+// Cada widget tiene un alto en px calculado según su contenido real para la
+// nave seleccionada. Ahora el alto se usa directamente (no hay subunidades
+// de grid). El ship-selector sólo mide el botón colapsado: su dropdown se
+// renderiza absoluto por encima de los widgets vecinos (overflow visible).
 function widgetContentHeightPx(
   wId: WidgetId,
   counts: {
@@ -176,49 +168,59 @@ function widgetContentHeightPx(
     case "strafe-profile":   return HDR + 240;
     case "turning-profile":  return HDR + 260;
     case "maneuver-radar":   return HDR + 260;
-    case "ship-selector":    return HDR + 150;
+    case "ship-selector":    return HDR + 44;
     case "ship-card":        return HDR + 430;
     case "dps-detail":       return HDR + 280;
     case "flight-dynamics-3d": return HDR + 360;
   }
 }
 
-function pxToSubunits(px: number, rowHeight: number, marginY: number): number {
-  const denom = rowHeight + marginY;
-  if (denom <= 0) return 1;
-  return Math.max(1, Math.ceil((px + marginY) / denom));
+// Ancho por columna (unit) a partir del ancho del contenedor
+function unitWidth(containerWidth: number): number {
+  return Math.max(MIN_UNIT_W, (containerWidth - GAP * (N_COLS - 1)) / N_COLS);
 }
 
-// Construye el layout default packeado en la distribución 5-col original,
-// usando los altos dinámicos. Sólo incluye widgets visibles (aquellos con
-// contenido para la nave actual).
+// Ancho en px de un widget (considera WU: 1 o 2 columnas)
+function widgetPxWidth(id: WidgetId, containerWidth: number): number {
+  const u = unitWidth(containerWidth);
+  const wu = WIDGET_WU[id];
+  return u * wu + GAP * (wu - 1);
+}
+
+// X absoluto en px para una columna lógica (0..N_COLS-1)
+function colToX(col: number, containerWidth: number): number {
+  return col * (unitWidth(containerWidth) + GAP);
+}
+
+// Posiciones default: 5 columnas llenas + flight-dynamics-3d debajo de col 2-3.
 function buildDefaultPositions(
   visible: Set<WidgetId>,
   heights: Record<WidgetId, number>,
-): Array<{ i: WidgetId; x: number; y: number }> {
-  const result: Array<{ i: WidgetId; x: number; y: number }> = [];
-  const colBottoms: Record<number, number> = {};
+  containerWidth: number,
+): Map<WidgetId, { x: number; y: number }> {
+  const result = new Map<WidgetId, { x: number; y: number }>();
+  const colBottoms: number[] = new Array(N_COLS).fill(0);
 
   for (const col of COLUMN_LAYOUT) {
     let y = 0;
     for (const wId of col.widgets) {
       if (!visible.has(wId)) continue;
-      result.push({ i: wId, x: col.x, y });
-      y += heights[wId];
+      result.set(wId, { x: colToX(col.col, containerWidth), y });
+      y += heights[wId] + GAP;
     }
-    colBottoms[col.x] = y;
+    colBottoms[col.col] = y;
   }
 
-  // flight-dynamics-3d: spans col3+col4, placed at max bottom of those cols
+  // flight-dynamics-3d: ocupa cols 2-3 y va debajo de ambas
   if (visible.has("flight-dynamics-3d")) {
-    const fy = Math.max(colBottoms[8] ?? 0, colBottoms[12] ?? 0);
-    result.push({ i: "flight-dynamics-3d", x: 8, y: fy });
+    const fy = Math.max(colBottoms[2] ?? 0, colBottoms[3] ?? 0);
+    result.set("flight-dynamics-3d", { x: colToX(2, containerWidth), y: fy });
   }
   return result;
 }
 
-// ─── localStorage (sólo guardamos i/x/y — los altos siempre se recalculan) ──
-const LAYOUT_STORAGE_KEY = "al-filo-layout-v3";
+// ─── localStorage (guardamos i/x/y en PÍXELES — v4) ─────────────────────────
+const LAYOUT_STORAGE_KEY = "al-filo-layout-v4";
 
 type SavedPos = { i: string; x: number; y: number };
 
@@ -243,22 +245,26 @@ function savePositions(positions: SavedPos[]) {
 }
 
 // ─── Widget visual wrapper (header + content) ────────────────────────────────
-// RGL maneja el drag vía className ".rgl-drag-handle" configurado en el
-// draggableHandle de GridLayout. El header es esa zona arrastrable.
-function WidgetShell({ id, label, children }: {
+// El header tiene la clase ".rgl-drag-handle" para que el drag custom lo
+// detecte. `overflow="visible"` se usa en widgets que abren popups (ship-
+// selector) para que el dropdown pueda invadir los vecinos sin clippear.
+function WidgetShell({ id, label, children, overflow = "hidden" }: {
   id: WidgetId;
   label: string;
   children: React.ReactNode;
+  overflow?: "hidden" | "visible";
 }) {
+  const outerOverflow = overflow === "visible" ? "overflow-visible" : "overflow-hidden";
+  const innerOverflow = overflow === "visible" ? "overflow-visible" : "overflow-auto";
   return (
-    <div className="h-full flex flex-col overflow-hidden" data-widget-id={id}>
+    <div className={`h-full flex flex-col ${outerOverflow}`} data-widget-id={id}>
       <div className="rgl-drag-handle flex items-center gap-1 px-1.5 py-[2px] bg-zinc-950/60 border border-zinc-800/30 border-b-0 cursor-grab active:cursor-grabbing select-none group rounded-t-sm shrink-0">
         <span className="text-[7px] text-zinc-700 group-hover:text-yellow-600 transition-colors">⟲</span>
         <span className="text-[6px] font-mono text-zinc-700 tracking-[0.15em] group-hover:text-zinc-500 transition-colors uppercase">{label}</span>
         <span className="flex-1" />
         <span className="text-[7px] text-zinc-800 group-hover:text-zinc-600 transition-colors">⋮⋮</span>
       </div>
-      <div className="flex-1 min-h-0 overflow-auto">
+      <div className={`flex-1 min-h-0 ${innerOverflow}`}>
         {children}
       </div>
     </div>
@@ -360,7 +366,11 @@ function renderWidget(
         </div>
       );
     case "ship-selector":
-      return W(<ShipSelector currentRef={shipInfo.reference} />);
+      return (
+        <WidgetShell id={wId} label={WIDGET_LABELS[wId]} overflow="visible">
+          <ShipSelector />
+        </WidgetShell>
+      );
     case "ship-card":
       return W(
         <div className="bg-zinc-900/80 border border-zinc-800/60">
@@ -460,24 +470,36 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const mountedRef = useRef(false);
   const overrideCountRef = useRef(0);
 
-  // ─── Dynamic grid layout (react-grid-layout) ─────────────────────────────
+  // ─── Free-form layout (absolute positioning + custom drag) ───────────────
   // Estrategia:
-  //  1. Medimos el ancho del contenedor con ResizeObserver → rowHeight (celdas
-  //     cuadradas, subunidad de 0.25 igual en ancho y alto).
-  //  2. Calculamos altos por widget (h en subunidades enteras) según el
-  //     contenido real de la nave seleccionada (weaponHps, etc).
-  //  3. El layout final = posiciones (x,y) del usuario (localStorage) o
-  //     defaults packeados en la distribución 5-col + altos dinámicos.
-  //  4. Persistimos sólo {i,x,y} en localStorage — los altos siempre se
-  //     recalculan en runtime para adaptarse a la nave activa.
+  //  1. Medimos el ancho del contenedor con ResizeObserver → unitWidth.
+  //  2. Los altos por widget se calculan en px directos (ya no hay subunidades).
+  //  3. Las posiciones (x,y en px) son explícitas por widget: arranca con
+  //     defaults en 5 columnas y el usuario puede arrastrar libremente desde el
+  //     header (drag custom). Persistimos en localStorage `al-filo-layout-v4`.
+  //  4. El drag NO snapea a celdas: el widget sigue al mouse y se queda donde
+  //     lo soltamos.
   const [savedPositions, setSavedPositions] = useState<SavedPos[] | null>(null);
+  const [userPositions, setUserPositions] = useState<Map<WidgetId, { x: number; y: number }>>(
+    () => new Map(),
+  );
   const [layoutMounted, setLayoutMounted] = useState(false);
 
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [gridWidth, setGridWidth] = useState<number>(1400);
 
+  // Drag state: widget being dragged + offset pointer-from-widget-origin
+  const [dragWidget, setDragWidget] = useState<WidgetId | null>(null);
+  const dragOffsetRef = useRef<{ dx: number; dy: number }>({ dx: 0, dy: 0 });
+
   useEffect(() => {
-    setSavedPositions(loadSavedPositions());
+    const saved = loadSavedPositions();
+    setSavedPositions(saved);
+    if (saved) {
+      const m = new Map<WidgetId, { x: number; y: number }>();
+      for (const p of saved) m.set(p.i as WidgetId, { x: p.x, y: p.y });
+      setUserPositions(m);
+    }
     setLayoutMounted(true);
   }, []);
 
@@ -494,20 +516,76 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     return () => ro.disconnect();
   }, [layoutMounted]);
 
-  const rowHeight = useMemo(() => {
-    const colWidth = (gridWidth - GRID_MARGIN[0] * (GRID_COLS - 1)) / GRID_COLS;
-    return Math.max(colWidth, MIN_ROW_HEIGHT);
-  }, [gridWidth]);
+  // Drag handlers (window listeners, se activan mientras haya dragWidget)
+  useEffect(() => {
+    if (!dragWidget) return;
+    const el = gridContainerRef.current;
+    if (!el) return;
 
-  const handleDragStop = useCallback((newLayout: Layout[]) => {
-    if (!layoutMounted) return;
-    const slim: SavedPos[] = newLayout.map((item) => ({ i: item.i, x: item.x, y: item.y }));
-    setSavedPositions(slim);
+    const onMove = (e: MouseEvent) => {
+      const rect = el.getBoundingClientRect();
+      const x = e.clientX - rect.left - dragOffsetRef.current.dx;
+      const y = e.clientY - rect.top - dragOffsetRef.current.dy;
+      setUserPositions((prev) => {
+        const next = new Map(prev);
+        next.set(dragWidget, { x: Math.max(0, x), y: Math.max(0, y) });
+        return next;
+      });
+    };
+    const onUp = () => {
+      setDragWidget(null);
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    document.body.style.userSelect = "none";
+    document.body.style.cursor = "grabbing";
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+    };
+  }, [dragWidget]);
+
+  // Persistir cuando el drag termina
+  useEffect(() => {
+    if (dragWidget || !layoutMounted) return;
+    if (userPositions.size === 0) return;
+    const slim: SavedPos[] = Array.from(userPositions.entries()).map(([i, p]) => ({
+      i,
+      x: p.x,
+      y: p.y,
+    }));
     savePositions(slim);
-  }, [layoutMounted]);
+    setSavedPositions(slim);
+  }, [dragWidget, userPositions, layoutMounted]);
+
+  // mousedown en container → si el target está dentro de un .rgl-drag-handle,
+  // identificar el widget por data-widget-id y empezar drag.
+  const handleContainerMouseDown = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    const handle = target.closest(".rgl-drag-handle");
+    if (!handle) return;
+    const widgetEl = handle.closest("[data-widget-id]") as HTMLElement | null;
+    if (!widgetEl) return;
+    const id = widgetEl.getAttribute("data-widget-id") as WidgetId | null;
+    if (!id) return;
+    const wrapper = widgetEl.parentElement;
+    if (!wrapper) return;
+    const widgetRect = wrapper.getBoundingClientRect(); // parent = positioned wrapper
+    dragOffsetRef.current = {
+      dx: e.clientX - widgetRect.left,
+      dy: e.clientY - widgetRect.top,
+    };
+    setDragWidget(id);
+    e.preventDefault();
+  }, []);
 
   const handleResetLayout = useCallback(() => {
     setSavedPositions(null);
+    setUserPositions(new Map());
     try { localStorage.removeItem(LAYOUT_STORAGE_KEY); } catch {}
   }, []);
 
@@ -551,7 +629,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     return s;
   }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
 
-  // ─── Altos dinámicos por widget (subunidades enteras) ────────────────────
+  // ─── Altos dinámicos por widget (en PÍXELES) ─────────────────────────────
   const widgetHeights = useMemo<Record<WidgetId, number>>(() => {
     const counts = {
       weapons: weaponHps.length,
@@ -565,44 +643,56 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     };
     const out = {} as Record<WidgetId, number>;
     for (const id of ALL_WIDGET_IDS) {
-      out[id] = pxToSubunits(
-        widgetContentHeightPx(id, counts),
-        rowHeight,
-        GRID_MARGIN[1],
-      );
+      out[id] = widgetContentHeightPx(id, counts);
     }
     return out;
-  }, [rowHeight, weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
+  }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
 
-  // ─── Layout final = posiciones (user o default) + altos dinámicos ───────
-  const layout = useMemo<Layout[]>(() => {
-    if (!layoutMounted) return [];
+  // ─── Layout final: array de widgets con posición absoluta en px ─────────
+  type AbsoluteItem = { id: WidgetId; x: number; y: number; w: number; h: number };
+  const layout = useMemo<AbsoluteItem[]>(() => {
+    if (!layoutMounted || gridWidth <= 0) return [];
 
-    const defaults = buildDefaultPositions(visibleIds, widgetHeights);
-    const positions = new Map<string, { x: number; y: number }>();
-    for (const d of defaults) positions.set(d.i, { x: d.x, y: d.y });
+    // Defaults packeados en 5 columnas (regenerados cuando cambian anchos)
+    const defaults = buildDefaultPositions(visibleIds, widgetHeights, gridWidth);
 
-    if (savedPositions && savedPositions.length > 0) {
-      for (const p of savedPositions) {
-        if (visibleIds.has(p.i as WidgetId)) {
-          positions.set(p.i, { x: p.x, y: p.y });
-        }
-      }
+    // Posiciones finales: default + override del usuario (si existen)
+    const positions = new Map<WidgetId, { x: number; y: number }>();
+    for (const [id, p] of defaults) positions.set(id, p);
+    for (const [id, p] of userPositions) {
+      if (visibleIds.has(id)) positions.set(id, p);
     }
 
-    const result: Layout[] = [];
+    const result: AbsoluteItem[] = [];
     for (const id of Array.from(visibleIds)) {
       const pos = positions.get(id) ?? { x: 0, y: 0 };
       result.push({
-        i: id,
+        id,
         x: pos.x,
         y: pos.y,
-        w: WIDGET_W[id],
+        w: widgetPxWidth(id, gridWidth),
         h: widgetHeights[id],
       });
     }
+    // ship-selector al final para que su dropdown (z-index) se pinte por
+    // encima de los widgets vecinos sin trucos extra de stacking.
+    result.sort((a, b) => {
+      if (a.id === "ship-selector") return 1;
+      if (b.id === "ship-selector") return -1;
+      return 0;
+    });
     return result;
-  }, [layoutMounted, savedPositions, visibleIds, widgetHeights]);
+  }, [layoutMounted, gridWidth, visibleIds, widgetHeights, userPositions]);
+
+  // Alto total del container = máximo y+h de todos los widgets
+  const totalHeight = useMemo(() => {
+    let max = 0;
+    for (const w of layout) {
+      const bottom = w.y + w.h;
+      if (bottom > max) max = bottom;
+    }
+    return max + GAP;
+  }, [layout]);
 
   const { user } = useAuth();
   const supabaseClient = createClient();
@@ -701,35 +791,37 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
         </div>
       </div>
 
-      {/* ── Main Grid — react-grid-layout con celdas cuadradas 0.25x0.25 ── */}
-      {/* gridContainerRef mide el ancho real del contenedor (vía ResizeObserver)
-          y pasamos width/rowHeight calculados para que cada subcelda sea
-          visualmente cuadrada. El gate `layoutMounted` evita pisar el layout
-          persistido con los defaults en el primer render. */}
-      <div ref={gridContainerRef} className="w-full">
-        {layoutMounted && gridWidth > 0 && layout.length > 0 && (
-          <GridLayout
-            className="layout"
-            layout={layout}
-            cols={GRID_COLS}
-            width={gridWidth}
-            rowHeight={rowHeight}
-            margin={GRID_MARGIN}
-            containerPadding={[0, 0]}
-            isResizable={false}
-            isDraggable={true}
-            draggableHandle=".rgl-drag-handle"
-            compactType="vertical"
-            preventCollision={false}
-            onDragStop={handleDragStop}
-          >
-            {layout.map((item) => (
-              <div key={item.i}>
-                {renderWidget(item.i as WidgetId, ctx)}
-              </div>
-            ))}
-          </GridLayout>
-        )}
+      {/* ── Main Grid — free-form absolute positioning + custom drag ── */}
+      {/* gridContainerRef mide el ancho real del contenedor (vía ResizeObserver).
+          Cada widget se renderiza como un <div absolute> con x,y en px. El
+          handler onMouseDown detecta clicks sobre .rgl-drag-handle y arranca
+          un drag libre (sigue al mouse sin snapear a celdas). */}
+      <div
+        ref={gridContainerRef}
+        className="w-full relative"
+        style={{ minHeight: totalHeight > 0 ? totalHeight : undefined }}
+        onMouseDown={handleContainerMouseDown}
+      >
+        {layoutMounted && gridWidth > 0 && layout.map((item) => {
+          const isDragging = dragWidget === item.id;
+          return (
+            <div
+              key={item.id}
+              style={{
+                position: "absolute",
+                left: item.x,
+                top: item.y,
+                width: item.w,
+                height: item.h,
+                zIndex: isDragging ? 40 : item.id === "ship-selector" ? 20 : 10,
+                transition: isDragging ? "none" : "left 120ms ease, top 120ms ease",
+                willChange: isDragging ? "left, top" : undefined,
+              }}
+            >
+              {renderWidget(item.id, ctx)}
+            </div>
+          );
+        })}
       </div>
 
       {pickerHp && <ComponentPicker hardpoint={pickerHp} currentItemId={getEffectiveItem(pickerHp.id)?.id ?? null} onSelect={handleSelect} onClear={handleClear} onClose={() => setPickerHp(null)} />}
