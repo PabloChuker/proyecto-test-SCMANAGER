@@ -73,7 +73,7 @@ async function loadGlb(url: string): Promise<THREE.Group> {
       root.position.sub(center);
 
       const maxDim = Math.max(size.x, size.y, size.z) || 1;
-      const targetSize = 1.8;
+      const targetSize = 2.4; // antes 1.8 — naves más grandes dentro del viewer
       const scale = targetSize / maxDim;
 
       const holder = new THREE.Group();
@@ -138,8 +138,9 @@ export function ShipViewer3D({
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x09090b); // zinc-950
 
-    const camera = new THREE.PerspectiveCamera(43, W / H, 0.1, 80);
-    camera.position.set(2.2, 1.2, 2.7);
+    // Cámara: fov más cerrado + cámara más cerca ⇒ la nave ocupa más frame
+    const camera = new THREE.PerspectiveCamera(36, W / H, 0.1, 80);
+    camera.position.set(1.7, 0.95, 2.1);
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });

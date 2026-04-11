@@ -171,7 +171,7 @@ function widgetContentHeightPx(
     case "ship-selector":    return HDR + 44;
     case "ship-card":        return HDR + 430;
     case "dps-detail":       return HDR + 280;
-    case "flight-dynamics-3d": return HDR + 360;
+    case "flight-dynamics-3d": return HDR + 420;
   }
 }
 
@@ -192,7 +192,34 @@ function colToX(col: number, containerWidth: number): number {
   return col * (unitWidth(containerWidth) + GAP);
 }
 
-// Posiciones default: 5 columnas llenas + flight-dynamics-3d debajo de col 2-3.
+// Orden semántico en el que los widgets entran al bin-packing. Los más
+// "ancla" (ship-selector, ship-card) primero para que caigan arriba; los
+// paneles de combate a continuación; los sensores/utility al final.
+const DEFAULT_ORDER: WidgetId[] = [
+  "ship-selector",
+  "ship-card",
+  "dps-detail",
+  "combat-summary",
+  "weapons",
+  "missiles",
+  "shields",
+  "powerplants",
+  "power-grid",
+  "coolers",
+  "quantum",
+  "radar",
+  "utility",
+  "signatures",
+  "balance",
+  "strafe-profile",
+  "turning-profile",
+  "maneuver-radar",
+];
+
+// Posiciones default: greedy bin-packing sobre N_COLS columnas. Cada widget
+// 1-col entra en la columna con menor bottom actual (empates → izquierda).
+// flight-dynamics-3d (2-col) se coloca al final en el par de columnas
+// adyacentes cuyo max-bottom sea mínimo, minimizando el hueco total.
 function buildDefaultPositions(
   visible: Set<WidgetId>,
   heights: Record<WidgetId, number>,
@@ -201,21 +228,37 @@ function buildDefaultPositions(
   const result = new Map<WidgetId, { x: number; y: number }>();
   const colBottoms: number[] = new Array(N_COLS).fill(0);
 
-  for (const col of COLUMN_LAYOUT) {
-    let y = 0;
-    for (const wId of col.widgets) {
-      if (!visible.has(wId)) continue;
-      result.set(wId, { x: colToX(col.col, containerWidth), y });
-      y += heights[wId] + GAP;
+  // Pass 1 — widgets de 1 columna (DEFAULT_ORDER excluye flight-dynamics-3d)
+  for (const wId of DEFAULT_ORDER) {
+    if (!visible.has(wId)) continue;
+    // pick la columna con menor bottom (empates → la de menor índice)
+    let minCol = 0;
+    for (let i = 1; i < N_COLS; i++) {
+      if (colBottoms[i] < colBottoms[minCol]) minCol = i;
     }
-    colBottoms[col.col] = y;
+    const y = colBottoms[minCol];
+    result.set(wId, { x: colToX(minCol, containerWidth), y });
+    colBottoms[minCol] = y + heights[wId] + GAP;
   }
 
-  // flight-dynamics-3d: ocupa cols 2-3 y va debajo de ambas
+  // Pass 2 — flight-dynamics-3d (ocupa 2 cols). Buscamos el par adyacente
+  // con menor max-bottom: ahí cabe con menos hueco desperdiciado.
   if (visible.has("flight-dynamics-3d")) {
-    const fy = Math.max(colBottoms[2] ?? 0, colBottoms[3] ?? 0);
-    result.set("flight-dynamics-3d", { x: colToX(2, containerWidth), y: fy });
+    let bestStart = 0;
+    let bestMax = Math.max(colBottoms[0], colBottoms[1]);
+    for (let i = 1; i < N_COLS - 1; i++) {
+      const m = Math.max(colBottoms[i], colBottoms[i + 1]);
+      if (m < bestMax) { bestMax = m; bestStart = i; }
+    }
+    result.set("flight-dynamics-3d", {
+      x: colToX(bestStart, containerWidth),
+      y: bestMax,
+    });
+    const newBottom = bestMax + heights["flight-dynamics-3d"] + GAP;
+    colBottoms[bestStart]     = newBottom;
+    colBottoms[bestStart + 1] = newBottom;
   }
+
   return result;
 }
 
@@ -248,12 +291,44 @@ function savePositions(positions: SavedPos[]) {
 // El header tiene la clase ".rgl-drag-handle" para que el drag custom lo
 // detecte. `overflow="visible"` se usa en widgets que abren popups (ship-
 // selector) para que el dropdown pueda invadir los vecinos sin clippear.
-function WidgetShell({ id, label, children, overflow = "hidden" }: {
+// `onMeasure` reporta la altura REAL del contenido (scrollHeight + HDR) al
+// parent, que la usa para redimensionar el widget y evitar scrollbars.
+const WIDGET_HDR_PX = 22;
+
+function WidgetShell({ id, label, children, overflow = "hidden", onMeasure }: {
   id: WidgetId;
   label: string;
   children: React.ReactNode;
   overflow?: "hidden" | "visible";
+  onMeasure?: (id: WidgetId, height: number) => void;
 }) {
+  const innerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!onMeasure) return;
+    const el = innerRef.current;
+    if (!el) return;
+    const report = () => {
+      // scrollHeight del contenedor interior = alto real del contenido.
+      // Le sumamos el header (WIDGET_HDR_PX) para tener el total del widget.
+      const h = el.scrollHeight;
+      if (h > 0) onMeasure(id, h + WIDGET_HDR_PX);
+    };
+    report();
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    for (const child of Array.from(el.children)) ro.observe(child as Element);
+    // re-observar si cambian los hijos del contenedor interno
+    const mo = new MutationObserver(() => {
+      ro.disconnect();
+      ro.observe(el);
+      for (const child of Array.from(el.children)) ro.observe(child as Element);
+      report();
+    });
+    mo.observe(el, { childList: true });
+    return () => { ro.disconnect(); mo.disconnect(); };
+  }, [id, onMeasure, children]);
+
   const outerOverflow = overflow === "visible" ? "overflow-visible" : "overflow-hidden";
   const innerOverflow = overflow === "visible" ? "overflow-visible" : "overflow-auto";
   return (
@@ -264,20 +339,22 @@ function WidgetShell({ id, label, children, overflow = "hidden" }: {
         <span className="flex-1" />
         <span className="text-[7px] text-zinc-800 group-hover:text-zinc-600 transition-colors">⋮⋮</span>
       </div>
-      <div className={`flex-1 min-h-0 ${innerOverflow}`}>
+      <div ref={innerRef} className={`flex-1 min-h-0 ${innerOverflow}`}>
         {children}
       </div>
     </div>
   );
 }
 
-// ÔöÇÔöÇ Widget renderer — maps a WidgetId to its JSX content ÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇÔöÇ
+// ── Widget renderer — maps a WidgetId to its JSX content ──────────────────
 function renderWidget(
   wId: WidgetId,
   ctx: any,
 ): React.ReactNode {
-  const { weaponHps, missileHps, useful, store, setPickerHp, si, shipInfo, stats, flightMode, setFlightMode, fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount } = ctx;
-  const W = (children: React.ReactNode) => <WidgetShell id={wId} label={WIDGET_LABELS[wId]}>{children}</WidgetShell>;
+  const { weaponHps, missileHps, useful, store, setPickerHp, si, shipInfo, stats, flightMode, setFlightMode, fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount, onMeasure } = ctx;
+  const W = (children: React.ReactNode) => (
+    <WidgetShell id={wId} label={WIDGET_LABELS[wId]} onMeasure={onMeasure}>{children}</WidgetShell>
+  );
 
   switch (wId) {
     case "weapons":
@@ -367,7 +444,7 @@ function renderWidget(
       );
     case "ship-selector":
       return (
-        <WidgetShell id={wId} label={WIDGET_LABELS[wId]} overflow="visible">
+        <WidgetShell id={wId} label={WIDGET_LABELS[wId]} overflow="visible" onMeasure={onMeasure}>
           <ShipSelector />
         </WidgetShell>
       );
@@ -483,7 +560,23 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const [userPositions, setUserPositions] = useState<Map<WidgetId, { x: number; y: number }>>(
     () => new Map(),
   );
+  const [measuredHeights, setMeasuredHeights] = useState<Map<WidgetId, number>>(
+    () => new Map(),
+  );
   const [layoutMounted, setLayoutMounted] = useState(false);
+
+  // Callback estable para que WidgetShell reporte su altura real (scrollHeight
+  // + header). Sólo actualizamos si el nuevo valor difiere del anterior para
+  // evitar renders infinitos.
+  const handleMeasure = useCallback((id: WidgetId, h: number) => {
+    setMeasuredHeights((prev) => {
+      const current = prev.get(id);
+      if (current != null && Math.abs(current - h) < 2) return prev;
+      const next = new Map(prev);
+      next.set(id, h);
+      return next;
+    });
+  }, []);
 
   const gridContainerRef = useRef<HTMLDivElement>(null);
   const [gridWidth, setGridWidth] = useState<number>(1400);
@@ -629,7 +722,10 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     return s;
   }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
 
-  // ─── Altos dinámicos por widget (en PÍXELES) ─────────────────────────────
+  // ─── Altos por widget (medidos + fallback estimado) ──────────────────────
+  // Usamos la altura reportada por el ResizeObserver del WidgetShell si está
+  // disponible (contenido REAL), o caemos a la estimación de `widgetContentHeightPx`.
+  // El max() garantiza que nunca achiquemos el widget por debajo del mínimo.
   const widgetHeights = useMemo<Record<WidgetId, number>>(() => {
     const counts = {
       weapons: weaponHps.length,
@@ -643,10 +739,12 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     };
     const out = {} as Record<WidgetId, number>;
     for (const id of ALL_WIDGET_IDS) {
-      out[id] = widgetContentHeightPx(id, counts);
+      const estimated = widgetContentHeightPx(id, counts);
+      const measured = measuredHeights.get(id) ?? 0;
+      out[id] = Math.max(estimated, measured);
     }
     return out;
-  }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
+  }, [measuredHeights, weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
 
   // ─── Layout final: array de widgets con posición absoluta en px ─────────
   type AbsoluteItem = { id: WidgetId; x: number; y: number; w: number; h: number };
@@ -770,6 +868,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     weaponHps, missileHps, useful, store, setPickerHp,
     si, shipInfo, stats, flightMode, setFlightMode,
     fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount,
+    onMeasure: handleMeasure,
   };
 
   return (

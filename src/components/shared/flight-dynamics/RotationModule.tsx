@@ -70,7 +70,7 @@ export function RotationModule({
   compact = false,
 }: RotationModuleProps) {
   const meta    = AXIS_META[axis];
-  const canvasH = compact ? "h-[90px]" : "h-[140px]";
+  const canvasH = compact ? "h-[110px]" : "h-[190px]";
 
   // Velocidad de animación derivada del rate real de la nave (°/s → rad/s)
   const animationSpeed =
