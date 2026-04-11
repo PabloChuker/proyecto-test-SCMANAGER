@@ -86,11 +86,14 @@ type WidgetId =
   | "flight-dynamics-3d";
 
 // Default column assignments — 5 columns
+// Nota: "flight-dynamics-3d" NO vive en ninguna columna. Se renderiza como
+// una fila ancha (col-span 2) debajo del grid principal, porque necesita más
+// espacio horizontal que una sola columna para visualizarse bien.
 const DEFAULT_COLUMNS: WidgetId[][] = [
   ["weapons", "missiles", "strafe-profile"],                                  // Col 1
   ["shields", "powerplants", "coolers", "turning-profile"],                   // Col 2
   ["quantum", "radar", "utility", "combat-summary"],                          // Col 3
-  ["power-grid", "signatures", "balance", "maneuver-radar", "flight-dynamics-3d"], // Col 4
+  ["power-grid", "signatures", "balance", "maneuver-radar"],                  // Col 4
   ["ship-selector", "ship-card", "dps-detail"],                               // Col 5
 ];
 
@@ -526,12 +529,30 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
       </div>
 
       {/* ÔöÇÔöÇ Main Grid — original 5-column layout, each block draggable ÔöÇÔöÇ */}
+      {/* flight-dynamics-3d se renderiza aparte como fila ancha (col-span 2) */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_1fr_1fr_340px] gap-2">
         {columns.map((colWidgets, colIdx) => (
           <div key={colIdx} className="space-y-2">
-            {colWidgets.map((wId) => renderWidget(wId, { dragState, onDragStart: handleDragStart, onDragOver: handleDragOver, onDrop: handleDrop, onDragEnd: handleDragEnd }, { weaponHps, missileHps, useful, store, setPickerHp, si, shipInfo, stats, flightMode, setFlightMode, fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount }))}
+            {colWidgets
+              .filter((w) => w !== "flight-dynamics-3d")
+              .map((wId) => renderWidget(wId, { dragState, onDragStart: handleDragStart, onDragOver: handleDragOver, onDrop: handleDrop, onDragEnd: handleDragEnd }, { weaponHps, missileHps, useful, store, setPickerHp, si, shipInfo, stats, flightMode, setFlightMode, fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount }))}
           </div>
         ))}
+        {/* FLIGHT DYNAMICS 3D — fila 2, cols 3-4 (span 2) para mejor visualización */}
+        <div className="lg:col-start-3 lg:col-span-2">
+          <div className="flex items-center gap-1 px-1.5 py-[2px] bg-zinc-950/60 border border-zinc-800/30 border-b-0 select-none rounded-t-sm">
+            <span className="text-[6px] font-mono text-zinc-700 tracking-[0.15em] uppercase">{WIDGET_LABELS["flight-dynamics-3d"]}</span>
+          </div>
+          <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
+            <ShipFlightDynamicsSingle
+              shipName={shipInfo.localizedName || shipInfo.name}
+              pitchRate={si.pitchRate}
+              yawRate={si.yawRate}
+              rollRate={si.rollRate}
+              glbUrl={shipGlbUrl(shipInfo.reference)}
+            />
+          </div>
+        </div>
       </div>
 
       {pickerHp && <ComponentPicker hardpoint={pickerHp} currentItemId={getEffectiveItem(pickerHp.id)?.id ?? null} onSelect={handleSelect} onClear={handleClear} onClose={() => setPickerHp(null)} />}
