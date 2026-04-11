@@ -1,2 +1,0 @@
-Prueba de push desde Gemini CLI.
-Fecha: 5 de abril de 2026.
