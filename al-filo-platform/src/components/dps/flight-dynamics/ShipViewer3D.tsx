@@ -63,16 +63,24 @@ async function loadGlb(url: string): Promise<THREE.Group> {
       box.getSize(size);
       box.getCenter(center);
 
-      // Centrar en el origen
+      // IMPORTANTE: no podemos setear position y scale en el mismo nodo,
+      // porque la matriz local se computa como T(position) * S(scale), y
+      // una traslación por -center seguida de escala deja el modelo en
+      // `center * (scale - 1)` — o sea, descentrado del eje de rotación.
+      // Solución: centrar en el nodo interno (position = -center) y
+      // escalar en un Group envolvente. Resultado: S_outer * T_inner * v
+      // = scale * (v - center), centrado correctamente en el origen.
       root.position.sub(center);
 
-      // Escalar a tamaño uniforme
       const maxDim = Math.max(size.x, size.y, size.z) || 1;
       const targetSize = 1.8;
       const scale = targetSize / maxDim;
-      root.scale.setScalar(scale);
 
-      return root;
+      const holder = new THREE.Group();
+      holder.add(root);
+      holder.scale.setScalar(scale);
+
+      return holder;
     })();
     glbCache.set(url, entry);
   }
