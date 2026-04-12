@@ -268,16 +268,16 @@ export function ShipViewer3D({
     };
 
     // Page Visibility API: pausar el RAF cuando el tab está en background.
+    // Evita que múltiples instancias Three.js acumulen GPU time y crasheen
+    // el renderer cuando el usuario tiene varios tabs abiertos.
     const onVisibilityChange = () => {
-      if (document.hidden) stopLoop(); else startLoop();
+      if (document.hidden) {
+        stopLoop();
+      } else {
+        startLoop();
+      }
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
-
-    // DnD: parar el RAF completamente durante drag para no saturar el hilo JS
-    const onDndStart = () => stopLoop();
-    const onDndEnd   = () => { if (!document.hidden) startLoop(); };
-    window.addEventListener("dnd:dragstart", onDndStart);
-    window.addEventListener("dnd:dragend",   onDndEnd);
 
     // Arrancar solo si el tab está visible
     if (!document.hidden) startLoop();
@@ -298,8 +298,6 @@ export function ShipViewer3D({
       cancelled = true;
       stopLoop();
       document.removeEventListener("visibilitychange", onVisibilityChange);
-      window.removeEventListener("dnd:dragstart", onDndStart);
-      window.removeEventListener("dnd:dragend",   onDndEnd);
       ro.disconnect();
       controls?.dispose();
 

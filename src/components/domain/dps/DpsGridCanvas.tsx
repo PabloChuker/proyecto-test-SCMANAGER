@@ -105,7 +105,6 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
 
   // ── Drag start ───────────────────────────────────────────────────────────
   const handleDragStart = useCallback((event: DragStartEvent) => {
-    window.dispatchEvent(new Event("dnd:dragstart"));
     setActiveId(event.active.id as WidgetId);
     setDraftOrder(cloneOrder(columnOrder));
   }, [columnOrder]);
@@ -133,13 +132,15 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
       }
       if (!targetCol) return base;
 
-      // Widgets 2-col: solo se reordenan dentro del sidebar.
-      // Si se mueven a una col de 1-col, Three.js se destruye/recrea docenas
-      // de veces por segundo (un draftOrder por evento de puntero) → OOM crash.
-      if (
-        (draggedId === "flight-dynamics-3d" || draggedId === "ship-card" || draggedId === "ship-selector") &&
-        targetCol !== "sidebar"
-      ) return base;
+      // flight-dynamics-3d / ship-card / ship-selector son widgets 2-col.
+      // Moverlos a cols 1-col destruye/recrea 3 WebGL contexts por evento de
+      // puntero (~60/s) → OOM → crash del tab. Se bloquea solo el preview;
+      // el resto de widgets siguen moviéndose libremente entre columnas.
+      if (targetCol !== "sidebar" && (
+        draggedId === "flight-dynamics-3d" ||
+        draggedId === "ship-card" ||
+        draggedId === "ship-selector"
+      )) return base;
 
       // Sin cambio si ya está en la misma posición
       const sourceItems = base[sourceCol];
@@ -171,7 +172,6 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
 
   // ── Drag end (persistir) ────────────────────────────────────────────────
   const handleDragEnd = useCallback((event: DragEndEvent) => {
-    window.dispatchEvent(new Event("dnd:dragend"));
     const { active } = event;
     const draggedId = active.id as WidgetId;
 
@@ -188,7 +188,6 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
   }, [draftOrder, moveCard]);
 
   const handleDragCancel = useCallback(() => {
-    window.dispatchEvent(new Event("dnd:dragend"));
     setActiveId(null);
     setDraftOrder(null);
   }, []);
