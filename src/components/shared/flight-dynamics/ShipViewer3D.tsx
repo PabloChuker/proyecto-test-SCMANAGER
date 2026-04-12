@@ -230,6 +230,7 @@ export function ShipViewer3D({
     // ─── Loop de animación ────────────────────────────────────────────────
     let lastMs = performance.now();
     let rafId  = 0;
+    let loopRunning = false;
 
     const loop = () => {
       rafId = requestAnimationFrame(loop);
@@ -248,7 +249,34 @@ export function ShipViewer3D({
       if (ctrlReady) controls!.update();
       renderer.render(scene, camera);
     };
-    loop();
+
+    const startLoop = () => {
+      if (loopRunning || cancelled) return;
+      loopRunning = true;
+      lastMs = performance.now();
+      loop();
+    };
+
+    const stopLoop = () => {
+      loopRunning = false;
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    };
+
+    // Page Visibility API: pausar el RAF cuando el tab está en background.
+    // Evita que múltiples instancias Three.js acumulen GPU time y crasheen
+    // el renderer cuando el usuario tiene varios tabs abiertos.
+    const onVisibilityChange = () => {
+      if (document.hidden) {
+        stopLoop();
+      } else {
+        startLoop();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    // Arrancar solo si el tab está visible
+    if (!document.hidden) startLoop();
 
     // ─── Resize observer ──────────────────────────────────────────────────
     const ro = new ResizeObserver(() => {
@@ -264,7 +292,8 @@ export function ShipViewer3D({
     // ─── Cleanup ──────────────────────────────────────────────────────────
     return () => {
       cancelled = true;
-      cancelAnimationFrame(rafId);
+      stopLoop();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       ro.disconnect();
       controls?.dispose();
 
