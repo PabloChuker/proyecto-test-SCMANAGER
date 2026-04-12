@@ -143,23 +143,28 @@ export default function WorkOrderDashboard() {
   const [bestPrices, setBestPrices] = useState<Record<string, SellLocation>>({});
   const [bestPricesLoaded, setBestPricesLoaded] = useState(false);
 
+  // Load localStorage data ONLY when NOT logged in (solo mode)
   useEffect(() => {
+    if (user) return; // Skip localStorage entirely when logged in
     setSessions(getSessions());
     setOrders(getOrders());
     setActiveId(getActiveSessionId());
     setInventory(getInventory());
     setMovements(getMovements());
-  }, [rk]);
+  }, [rk, user]);
 
-  // Tick every second for countdown timers
+  // Tick every second for countdown display + localStorage timer completion
   useEffect(() => {
     const interval = setInterval(() => {
       setNow(Date.now());
-      const completed = tickOrders();
-      if (completed.length > 0) refresh();
+      if (!user) {
+        // Only tick localStorage orders in solo mode
+        const completed = tickOrders();
+        if (completed.length > 0) refresh();
+      }
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [user]);
 
   const refresh = () => setRk((k) => k + 1);
 
@@ -204,11 +209,15 @@ export default function WorkOrderDashboard() {
   }, [orders, sbWorkOrders, sbSessionId]);
 
   const filteredOrders = useMemo(() => {
-    if (!activeId && !sbSessionId) return mergedOrders;
-    return mergedOrders.filter((o) =>
-      (activeId && o.sessionId === activeId) ||
-      (sbSessionId && o.sessionId === sbSessionId)
-    );
+    // In Supabase mode, filter by sbSessionId only
+    if (sbSessionId) {
+      return mergedOrders.filter((o) => o.sessionId === sbSessionId);
+    }
+    // In solo mode, filter by local activeId
+    if (activeId) {
+      return mergedOrders.filter((o) => o.sessionId === activeId);
+    }
+    return mergedOrders;
   }, [mergedOrders, activeId, sbSessionId]);
 
   // Orders by status

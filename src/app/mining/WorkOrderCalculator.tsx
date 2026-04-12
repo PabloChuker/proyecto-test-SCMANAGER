@@ -364,11 +364,17 @@ export default function WorkOrderCalculator() {
   const [submitted, setSubmitted] = useState(false);
 
   const submitOrder = () => {
-    // Ensure a session exists
-    let sessionId = getActiveSessionId();
-    if (!sessionId) {
-      const session = createSession();
-      sessionId = session.id;
+    // Determine save target: Supabase (party) or localStorage (solo)
+    const useSupabase = !!(supabaseSessionId && user);
+
+    // Only create/use localStorage session when NOT in Supabase mode
+    let sessionId = "";
+    if (!useSupabase) {
+      sessionId = getActiveSessionId() || "";
+      if (!sessionId) {
+        const session = createSession();
+        sessionId = session.id;
+      }
     }
 
     // Build ore list
@@ -389,28 +395,30 @@ export default function WorkOrderCalculator() {
       });
     });
 
-    // Save to legacy localStorage store (standalone / offline use)
-    addOrder({
-      sessionId,
-      type: mode,
-      status: timer.totalInputSeconds > 0 && mode === "ship" ? "in_progress" : "completed",
-      refinery: mode === "ship" ? refinery?.name : undefined,
-      method: mode === "ship" ? method?.name : undefined,
-      ores,
-      totalYield: ores.reduce((s, o) => s + o.yieldQty, 0),
-      grossValue: 0,
-      expenses: [],
-      totalExpenses: 0,
-      motraderFee: 0,
-      netProfit: 0,
-      crew: crew.map((c) => ({ name: c.name, share: c.share, payout: 0 })),
-      sellPrice: 0,
-      countdownSeconds: mode === "ship" ? timer.totalInputSeconds : 0,
-      countdownEndsAt: null, // store will calculate this
-    });
+    // Save to localStorage ONLY when NOT connected to a Supabase party session
+    if (!useSupabase) {
+      addOrder({
+        sessionId,
+        type: mode,
+        status: timer.totalInputSeconds > 0 && mode === "ship" ? "in_progress" : "completed",
+        refinery: mode === "ship" ? refinery?.name : undefined,
+        method: mode === "ship" ? method?.name : undefined,
+        ores,
+        totalYield: ores.reduce((s, o) => s + o.yieldQty, 0),
+        grossValue: 0,
+        expenses: [],
+        totalExpenses: 0,
+        motraderFee: 0,
+        netProfit: 0,
+        crew: crew.map((c) => ({ name: c.name, share: c.share, payout: 0 })),
+        sellPrice: 0,
+        countdownSeconds: mode === "ship" ? timer.totalInputSeconds : 0,
+        countdownEndsAt: null,
+      });
+    }
 
-    // ALSO save to Supabase if there's an active mining session (shared with party)
-    if (supabaseSessionId && user) {
+    // Save to Supabase if connected to a party session (shared with all members)
+    if (useSupabase) {
       createWorkOrder({
         session_id: supabaseSessionId,
         order_type: mode,
