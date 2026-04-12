@@ -84,7 +84,7 @@ type WidgetId =
   | "weapons" | "missiles" | "strafe-profile" | "turning-profile"
   | "shields" | "powerplants" | "coolers" | "maneuver-radar"
   | "quantum" | "radar" | "utility" | "combat-summary"
-  | "power-grid" | "signatures" | "balance"
+  | "power-grid" | "balance"
   | "ship-selector" | "ship-card" | "dps-detail"
   | "flight-dynamics-3d";
 
@@ -125,7 +125,7 @@ const WIDGET_WIDTH: Record<WidgetId, CardWidth> = {
   weapons: 1, missiles: 1, "strafe-profile": 1, "turning-profile": 1,
   shields: 1, powerplants: 1, coolers: 1, "maneuver-radar": 1,
   quantum: 1, radar: 1, utility: 1, "combat-summary": 1,
-  "power-grid": 1, signatures: 1, balance: 1,
+  "power-grid": 1, balance: 1,
   "ship-selector": 2,           // search → 2-col
   "ship-card": 2,               // ship card → 2-col
   "dps-detail": 1,              // stays 1-col
@@ -136,7 +136,7 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   weapons: "WEAPONS", missiles: "MISSILES", "strafe-profile": "STRAFE PROFILE", "turning-profile": "TURNING PROFILES",
   shields: "SHIELDS", powerplants: "POWER PLANTS", coolers: "COOLERS", "maneuver-radar": "G-FORCES",
   quantum: "QT DRIVES", radar: "RADAR", utility: "UTILITY", "combat-summary": "COMBAT",
-  "power-grid": "POWER GRID", signatures: "SIGNATURES", balance: "BALANCE",
+  "power-grid": "POWER GRID", balance: "BALANCE",
   "ship-selector": "SEARCH", "ship-card": "SHIP CARD", "dps-detail": "DPS DETAIL",
   "flight-dynamics-3d": "FLIGHT DYNAMICS 3D",
 };
@@ -145,7 +145,7 @@ const ALL_WIDGET_IDS: WidgetId[] = [
   "weapons", "missiles", "strafe-profile", "turning-profile",
   "shields", "powerplants", "coolers", "maneuver-radar",
   "quantum", "radar", "utility", "combat-summary",
-  "power-grid", "signatures", "balance",
+  "power-grid", "balance",
   "ship-selector", "ship-card", "dps-detail",
   "flight-dynamics-3d",
 ];
@@ -219,7 +219,6 @@ function getWidgetBlocks(
     case "utility":            return hpBlocks(counts.utility);
     case "combat-summary":     return 3;
     case "power-grid":         return 4;
-    case "signatures":         return 2;
     case "balance":            return 2;
     case "strafe-profile":     return 4;
     case "turning-profile":    return 4;
@@ -240,7 +239,7 @@ const COLUMN_PLAN_1COL: WidgetId[][] = [
   // Col 0 — OFFENSE
   ["weapons", "missiles", "combat-summary", "strafe-profile"],
   // Col 1 — DEFENSE & POWER
-  ["shields", "powerplants", "coolers", "signatures", "turning-profile"],
+  ["shields", "powerplants", "coolers", "turning-profile"],
   // Col 2 — NAV & SENSORS + flight stats
   ["quantum", "radar", "utility", "power-grid", "maneuver-radar", "balance", "dps-detail"],
 ];
@@ -425,14 +424,6 @@ function renderWidget(
       );
     case "power-grid":
       return W(<PowerManagementPanel stats={stats} flightMode={flightMode} onModeChange={setFlightMode} />);
-    case "signatures":
-      return W(
-        <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-2">
-          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase border-b border-zinc-800/40 pb-1">Signatures</div>
-          <SignatureBar label="EM" value={stats.emSignature} max={20000} color="#a855f7" />
-          <SignatureBar label="IR" value={stats.irSignature} max={20000} color="#f97316" />
-        </div>
-      );
     case "balance":
       return W(
         <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-2">
@@ -804,25 +795,6 @@ function CompactStat({ label, value, color, locked }: { label: string; value: st
       {locked && <div className="absolute inset-0 bg-zinc-950/50 z-10 flex items-center justify-center"><span className="text-[7px] font-mono text-zinc-600 tracking-wider uppercase">NAV</span></div>}
       <div className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</div>
       <div className="text-sm font-mono font-bold tabular-nums" style={{ color }}>{value}</div>
-    </div>
-  );
-}
-
-function SignatureBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
-  const segments = 12;
-  const filled = Math.round((Math.min(100, (value / max) * 100) / 100) * segments);
-  const fmt = (v: number) => v >= 1000 ? (v / 1000).toFixed(1) + "K" : Math.round(v).toString();
-  return (
-    <div>
-      <div className="flex items-baseline justify-between mb-0.5">
-        <span className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label} SIG</span>
-        <span className="text-[11px] font-mono font-bold tabular-nums" style={{ color }}>{fmt(value)}</span>
-      </div>
-      <div className="flex gap-px">
-        {Array.from({ length: segments }, (_, i) => (
-          <div key={i} className="flex-1 h-1 rounded-[1px] transition-all duration-300" style={{ backgroundColor: i < filled ? color : "#27272a", opacity: i < filled ? 0.6 : 0.3 }} />
-        ))}
-      </div>
     </div>
   );
 }

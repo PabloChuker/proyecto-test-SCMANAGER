@@ -11,7 +11,7 @@ export type WidgetId =
   | "weapons" | "missiles" | "strafe-profile" | "turning-profile"
   | "shields" | "powerplants" | "coolers" | "maneuver-radar"
   | "quantum" | "radar" | "utility" | "combat-summary"
-  | "power-grid" | "signatures" | "balance"
+  | "power-grid" | "balance"
   | "ship-selector" | "ship-card" | "dps-detail"
   | "flight-dynamics-3d";
 
