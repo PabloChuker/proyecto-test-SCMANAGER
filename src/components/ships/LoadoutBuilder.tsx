@@ -609,10 +609,9 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     return out;
   }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
 
-  // ─── Layout v11 — useDpsGridLayout + DpsGridCanvas ──────────────────────
+  // ─── Layout v12 — useDpsGridLayout + DpsGridCanvas ──────────────────────
   const gridLayout = useDpsGridLayout({
     visibleIds,
-    widgetBlocks,
     widgetWidth: WIDGET_WIDTH,
     columnPlan1Col: COLUMN_PLAN_1COL,
     columnPlan2Col: COLUMN_PLAN_2COL,

@@ -1,13 +1,12 @@
 // =============================================================================
 // AL FILO — DPS Grid: tipos base
 //
-// Toda la geometría parte de `UNIT` = ancho de 1 columna en px.
-// Las posiciones son coordenadas discretas (col, row) que se proyectan
-// a px en tiempo de render. NUNCA se guardan píxeles, siempre discretas.
+// La geometría UNIT define los ANCHOS de columna.
+// Las alturas son content-sized (el contenido manda, sin scroll).
+// Las posiciones son de columna + orden dentro de la columna.
 // =============================================================================
 
 // ── WidgetId ──────────────────────────────────────────────────────────────────
-// Re-exportado aquí para que los helpers de grid no dependan de LoadoutBuilder.
 export type WidgetId =
   | "weapons" | "missiles" | "strafe-profile" | "turning-profile"
   | "shields" | "powerplants" | "coolers" | "maneuver-radar"
@@ -19,50 +18,30 @@ export type WidgetId =
 // ── Ancho de tarjeta en columnas (1 ó 2) ─────────────────────────────────────
 export type CardWidth = 1 | 2;
 
-// ── Definición de una tarjeta en el grid ─────────────────────────────────────
-// Las coordenadas son discretas. La altura la define `heightBlocks` (cada
-// bloque = 0.25 * UNIT). El contenido nunca colapsa la tarjeta.
-export interface DpsCardDef {
-  id: WidgetId;
-  col: number;          // columna de anclaje [0, GRID_COLUMNS - colSpan]
-  row: number;          // fila de anclaje [0, GRID_ROWS)
-  colSpan: CardWidth;   // 1 = 1 columna, 2 = sidebar
-  heightBlocks: number; // número de bloques verticales (cada bloque = 0.25 UNIT)
-}
+// ── Clave de columna ──────────────────────────────────────────────────────────
+// col0..col2 = zona A (1 columna cada una)
+// sidebar    = zona B (2 columnas, cols 3-4)
+export type ColumnKey = "col0" | "col1" | "col2" | "sidebar";
 
-// ── Rectángulo en píxeles (derivado de DpsCardDef + UNIT) ────────────────────
-export interface DpsCardRect {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
+// ── Orden de tarjetas por columna ────────────────────────────────────────────
+// Representa el layout completo. Se persiste en localStorage.
+export type ColumnOrder = Record<ColumnKey, WidgetId[]>;
 
-// ── Posición persistida en localStorage ──────────────────────────────────────
-export interface SavedCardPos {
-  id: WidgetId;
-  col: number;
-  row: number;
-}
-
-// ── Estado del drag activo ────────────────────────────────────────────────────
-export interface DragState {
-  widgetId: WidgetId;
-  // offset puntero desde la esquina top-left del widget (en px)
-  offsetX: number;
-  offsetY: number;
-  // posición provisional durante el drag (snap continuo)
-  previewCol: number;
-  previewRow: number;
+// ── Rectángulo de columna en px (solo anchos, Y sale del DOM) ────────────────
+export interface DpsColumnRect {
+  x: number;       // left del contenedor de columna
+  w: number;       // ancho del contenedor (incluye el padding interno)
+  colSpan: CardWidth;
 }
 
 // ── Constantes geométricas ────────────────────────────────────────────────────
 export const GRID_COLUMNS        = 5;
-export const GRID_ROWS           = 100;
-export const ROW_HEIGHT_RATIO    = 0.25;   // altura de 1 fila = 0.25 * UNIT
-export const ANCHOR_OFFSET_RATIO = 0.05;   // margen interior = 0.05 * UNIT
-export const MARGIN_RATIO        = 0.10;   // gap total entre cards = 0.10 * UNIT
+export const ANCHOR_OFFSET_RATIO = 0.05;   // padding horizontal interior = 0.05 * UNIT
+export const MARGIN_RATIO        = 0.10;   // gap horizontal entre tarjetas = 0.10 * UNIT
 export const MIN_UNIT_PX         = 240;
 export const MAX_UNIT_PX         = 390;
 
-export const LAYOUT_STORAGE_KEY  = "al-filo-layout-v11";
+// Gap vertical entre tarjetas dentro de la misma columna (px fijo)
+export const CARD_GAP_PX         = 4;
+
+export const LAYOUT_STORAGE_KEY  = "al-filo-layout-v12";
