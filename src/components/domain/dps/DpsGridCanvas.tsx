@@ -59,10 +59,6 @@ function cloneOrder(order: ColumnOrder): ColumnOrder {
   };
 }
 
-// Widgets que ocupan 2 columnas — no pueden entrar en columnas de 1-col
-// (el resize del canvas Three.js en pleno RAF crashea el tab)
-const TWO_COL_WIDGETS = new Set<WidgetId>(["ship-selector", "ship-card", "flight-dynamics-3d"]);
-
 // ── Props ──────────────────────────────────────────────────────────────────────
 interface DpsGridCanvasProps {
   layout: UseDpsGridLayoutResult;
@@ -136,11 +132,6 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
         targetCol = findColumn(overId, base);
       }
       if (!targetCol) return base;
-
-      // Bloquear: widget 2-col no puede entrar en columna 1-col (causaría resize
-      // del canvas Three.js en pleno RAF → crash del tab)
-      const ONE_COL_TARGETS = new Set<ColumnKey>(["col0", "col1", "col2"]);
-      if (TWO_COL_WIDGETS.has(draggedId as WidgetId) && ONE_COL_TARGETS.has(targetCol)) return base;
 
       // Sin cambio si ya está en la misma posición
       const sourceItems = base[sourceCol];
