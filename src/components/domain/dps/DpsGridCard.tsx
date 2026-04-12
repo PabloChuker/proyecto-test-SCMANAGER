@@ -70,6 +70,7 @@ export function DpsGridCard({ id, children, isActive = false, portalTarget }: Dp
         setNodeRef(node);
         (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
       }}
+      data-widget-id={id}
       style={style}
       {...attributes}
       onPointerDown={handlePointerDown}

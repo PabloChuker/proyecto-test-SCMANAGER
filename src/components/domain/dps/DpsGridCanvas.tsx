@@ -8,6 +8,10 @@
 //
 // Grid: 5 columnas iguales (repeat(5, UNIT px)).
 // col0..col2 = zona de 1 col. sidebar = zona de 2 cols (gridColumn 4/span 2).
+//
+// Posición de drop: cuando over.id es el contenedor de columna (dnd-kit no
+// detecta la tarjeta concreta), se calcula la posición de inserción leyendo
+// directamente las posiciones Y del DOM via data-widget-id.
 // =============================================================================
 
 "use client";
@@ -20,9 +24,6 @@ import {
   useSensor,
   useSensors,
   useDroppable,
-  closestCenter,
-  pointerWithin,
-  type CollisionDetection,
   type DragStartEvent,
   type DragEndEvent,
   type DragOverEvent,
@@ -42,9 +43,7 @@ import { DpsGridCard } from "./DpsGridCard";
 // ── Configuración de columnas ─────────────────────────────────────────────────
 const COLUMN_KEYS: ColumnKey[] = ["col0", "col1", "col2", "sidebar"];
 
-// Widgets que ocupan siempre 2 columnas: solo van al sidebar.
-// Bloquear su cruce en handleDragOver evita que el portal target cambie
-// durante el drag (y con ello evita recrear los contextos WebGL).
+// Widgets de 2 columnas: solo van al sidebar.
 const TWO_COL_IDS = new Set<string>(["ship-card", "flight-dynamics-3d", "ship-selector"]);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -62,6 +61,24 @@ function cloneOrder(order: ColumnOrder): ColumnOrder {
     col2:    [...order.col2],
     sidebar: [...order.sidebar],
   };
+}
+
+// Dado el centro Y del elemento arrastrado y el contenedor de columna,
+// devuelve el índice de inserción recorriendo los data-widget-id del DOM.
+// La tarjeta del propio dragged (excludeId) se ignora al calcular posiciones.
+function getInsertIndexByY(
+  colEl: HTMLElement,
+  dragCenterY: number,
+  colItems: WidgetId[],
+): number {
+  for (let i = 0; i < colItems.length; i++) {
+    const id = colItems[i];
+    const cardEl = colEl.querySelector(`[data-widget-id="${id}"]`);
+    if (!cardEl) continue;
+    const rect = cardEl.getBoundingClientRect();
+    if (dragCenterY < rect.top + rect.height / 2) return i;
+  }
+  return colItems.length;
 }
 
 // ── Props ──────────────────────────────────────────────────────────────────────
@@ -95,18 +112,25 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
   const colPadding = getColumnPadding(unit);
 
   // ── Portal targets: refs a los contenedores de columna ──────────────────────
-  // Se usan refs (no state) para evitar re-renders innecesarios.
-  // useLayoutEffect dispara antes del primer paint → no hay flash.
   const col0ElRef    = useRef<HTMLDivElement | null>(null);
   const col1ElRef    = useRef<HTMLDivElement | null>(null);
   const col2ElRef    = useRef<HTMLDivElement | null>(null);
   const sidebarElRef = useRef<HTMLDivElement | null>(null);
 
+  // Trigger re-render antes del primer paint para que los portales se resuelvan
   const [colsReady, setColsReady] = useState(false);
   useLayoutEffect(() => { setColsReady(true); }, []);
 
   const getColEl = (col: ColumnKey): HTMLDivElement | null => {
     if (!colsReady) return null;
+    if (col === "col0")    return col0ElRef.current;
+    if (col === "col1")    return col1ElRef.current;
+    if (col === "col2")    return col2ElRef.current;
+    return sidebarElRef.current;
+  };
+
+  // Lee los refs sin pasar por state (para usar dentro de handlers)
+  const getColElImmediate = (col: ColumnKey): HTMLDivElement | null => {
     if (col === "col0")    return col0ElRef.current;
     if (col === "col1")    return col1ElRef.current;
     if (col === "col2")    return col2ElRef.current;
@@ -119,45 +143,7 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
 
   const liveOrder = draftOrder ?? columnOrder;
 
-  // ── Collision detection personalizada ────────────────────────────────────────
-  // Con un único SortableContext plano, rectIntersection (el default) detecta
-  // primero el contenedor de columna (más grande) en lugar de la tarjeta
-  // específica que hay debajo. Esta función prioriza tarjetas sobre columnas:
-  //   1. Si el puntero está dentro de una tarjeta → esa tarjeta
-  //   2. Si el puntero está en una columna → tarjeta más cercana de esa columna
-  //   3. Fallback → closestCenter global
-  const collisionDetection = useCallback<CollisionDetection>((args) => {
-    const cardContainers = args.droppableContainers.filter(
-      ({ id }) => !COLUMN_KEYS.includes(String(id) as ColumnKey),
-    );
-    const colContainers = args.droppableContainers.filter(
-      ({ id }) => COLUMN_KEYS.includes(String(id) as ColumnKey),
-    );
-
-    // 1. Puntero dentro de una tarjeta específica
-    const withinCard = pointerWithin({ ...args, droppableContainers: cardContainers });
-    if (withinCard.length > 0) return withinCard;
-
-    // 2. Puntero dentro de un contenedor de columna → buscar la tarjeta más cercana
-    const withinCol = pointerWithin({ ...args, droppableContainers: colContainers });
-    if (withinCol.length > 0) {
-      const colId = String(withinCol[0].id) as ColumnKey;
-      const colItemIds = liveOrder[colId];
-      const colCardContainers = args.droppableContainers.filter(
-        ({ id }) => colItemIds.includes(String(id) as WidgetId),
-      );
-      if (colCardContainers.length > 0) {
-        return closestCenter({ ...args, droppableContainers: colCardContainers });
-      }
-      // Columna vacía: usar la columna como target
-      return withinCol;
-    }
-
-    // 3. Fallback
-    return closestCenter(args);
-  }, [liveOrder]);
-
-  // Lista plana de todos los ids: SortableContext los necesita en orden
+  // Lista plana de todos los ids para el SortableContext
   const allItems = [
     ...liveOrder.col0,
     ...liveOrder.col1,
@@ -183,12 +169,24 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
   }, [columnOrder]);
 
   // ── Drag over (movimiento en tiempo real) ────────────────────────────────────
+  // Cuando over.id es un contenedor de columna (dnd-kit no resuelve la tarjeta
+  // concreta en layouts multi-columna con portales), calculamos la posición de
+  // inserción leyendo directamente las posiciones Y del DOM.
   const handleDragOver = useCallback((event: DragOverEvent) => {
     const { active, over } = event;
     if (!over || !active) return;
 
     const draggedId = active.id as string;
     const overId    = over.id as string;
+
+    // Capturar rect y refs ANTES del setState (los refs son síncronos)
+    const translatedRect = active.rect.current?.translated ?? null;
+    const colElMap: Record<ColumnKey, HTMLDivElement | null> = {
+      col0:    col0ElRef.current,
+      col1:    col1ElRef.current,
+      col2:    col2ElRef.current,
+      sidebar: sidebarElRef.current,
+    };
 
     setDraftOrder((prev) => {
       const base = prev ?? cloneOrder(columnOrder);
@@ -205,31 +203,43 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
       }
       if (!targetCol) return base;
 
-      // Widgets de 2 columnas solo van al sidebar.
-      // Bloquear el cruce aquí evita que su portal target cambie durante el
-      // drag → los contextos WebGL nunca se destruyen mientras se arrastra.
+      // Widgets de 2 columnas: solo van al sidebar
       if (TWO_COL_IDS.has(draggedId) && targetCol !== "sidebar") return base;
 
-      const sourceItems = base[sourceCol];
-      const sourceIdx   = sourceItems.indexOf(draggedId as WidgetId);
+      const sourceIdx = base[sourceCol].indexOf(draggedId as WidgetId);
       if (sourceIdx === -1) return base;
 
       const next = cloneOrder(base);
 
       if (sourceCol === targetCol) {
-        // Reorden dentro de la misma columna
+        // ── Reorden dentro de la misma columna ──────────────────────────────
+        if (COLUMN_KEYS.includes(overId as ColumnKey)) {
+          // Sobre el contenedor de columna, no una tarjeta concreta: sin cambio
+          return base;
+        }
         const targetIdx = next[targetCol].indexOf(overId as WidgetId);
         if (targetIdx === -1 || targetIdx === sourceIdx) return base;
         next[targetCol] = arrayMove(next[targetCol], sourceIdx, targetIdx);
       } else {
-        // Mover entre columnas
+        // ── Movimiento entre columnas ────────────────────────────────────────
         next[sourceCol] = next[sourceCol].filter((id) => id !== draggedId);
-        const overIdx = next[targetCol].indexOf(overId as WidgetId);
-        if (overIdx === -1) {
-          next[targetCol].push(draggedId as WidgetId);
+
+        let insertIdx: number;
+
+        if (!COLUMN_KEYS.includes(overId as ColumnKey)) {
+          // over.id es una tarjeta concreta: insertar justo antes de ella
+          insertIdx = next[targetCol].indexOf(overId as WidgetId);
+          if (insertIdx === -1) insertIdx = next[targetCol].length;
+        } else if (translatedRect && colElMap[targetCol]) {
+          // over.id es el contenedor de columna: calcular posición por Y
+          const dragCenterY = translatedRect.top + translatedRect.height / 2;
+          insertIdx = getInsertIndexByY(colElMap[targetCol]!, dragCenterY, next[targetCol]);
         } else {
-          next[targetCol].splice(overIdx, 0, draggedId as WidgetId);
+          // Fallback: añadir al final
+          insertIdx = next[targetCol].length;
         }
+
+        next[targetCol].splice(insertIdx, 0, draggedId as WidgetId);
       }
 
       return next;
@@ -242,21 +252,31 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
     const { active, over } = event;
     const draggedId = active.id as WidgetId;
 
+    const translatedRect = active.rect.current?.translated ?? null;
+
     if (draftOrder) {
       if (TWO_COL_IDS.has(draggedId) && over) {
-        // Para widgets 2-col, el draftOrder no se actualizó cross-column:
-        // calcular columna final desde over.id
+        // Para widgets 2-col, draftOrder no se actualizó cross-column:
+        // calcular columna y posición final ahora
         const overId = over.id as string;
         const finalCol: ColumnKey = COLUMN_KEYS.includes(overId as ColumnKey)
           ? overId as ColumnKey
           : (findColumn(overId, columnOrder) ?? findColumn(draggedId, draftOrder) ?? "sidebar");
-        // Solo permitir caer en sidebar para widgets 2-col
-        const safeCol: ColumnKey = TWO_COL_IDS.has(draggedId) && finalCol !== "sidebar"
-          ? "sidebar"
-          : finalCol;
-        const finalOrder = columnOrder[safeCol].filter(id => id !== draggedId);
-        const overIdx = finalOrder.indexOf(overId as WidgetId);
-        const insertIdx = overIdx >= 0 ? overIdx : finalOrder.length;
+        const safeCol: ColumnKey = finalCol !== "sidebar" ? "sidebar" : finalCol;
+
+        const existingItems = columnOrder[safeCol].filter(id => id !== draggedId);
+        let insertIdx: number;
+
+        if (!COLUMN_KEYS.includes(overId as ColumnKey)) {
+          const overIdx = existingItems.indexOf(overId as WidgetId);
+          insertIdx = overIdx >= 0 ? overIdx : existingItems.length;
+        } else if (translatedRect && getColElImmediate(safeCol)) {
+          const dragCenterY = translatedRect.top + translatedRect.height / 2;
+          insertIdx = getInsertIndexByY(getColElImmediate(safeCol)!, dragCenterY, existingItems);
+        } else {
+          insertIdx = existingItems.length;
+        }
+
         moveCard(draggedId, safeCol, insertIdx);
       } else {
         const targetCol = findColumn(draggedId, draftOrder);
@@ -283,15 +303,12 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
   return (
     <DndContext
       sensors={sensors}
-      collisionDetection={collisionDetection}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      {/* Contenedores de columna: solo son droppable zones + portal targets.
-          Las tarjetas NO se renderizan aquí via React — se portalean desde
-          el SortableContext de abajo. */}
+      {/* Contenedores de columna: droppable zones + portal targets. */}
       <div
         ref={outerRef}
         style={{ display: "grid", gridTemplateColumns: gridCols, alignItems: "start" }}
@@ -323,10 +340,7 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
         />
       </div>
 
-      {/* Un único SortableContext para todas las tarjetas.
-          Cada DpsGridCard se portalea a su columna via portalTarget.
-          Las tarjetas nunca se desmontan al cruzar columnas:
-          solo cambia el DOM node donde vive el portal. */}
+      {/* Un único SortableContext — tarjetas portaleadas a su columna. */}
       <SortableContext items={allItems} strategy={verticalListSortingStrategy}>
         {allItems.map((id) => {
           const col = itemToCol.get(id);
@@ -343,7 +357,6 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
         })}
       </SortableContext>
 
-      {/* Overlay ligero: solo muestra una pastilla con el nombre del widget. */}
       <DragOverlay dropAnimation={null}>
         {activeId ? (
           <div style={{
@@ -371,9 +384,6 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
 }
 
 // ── DropColumn ─────────────────────────────────────────────────────────────────
-// Zona droppable pura. No contiene tarjetas en el árbol React —
-// las tarjetas llegan via createPortal desde el SortableContext superior.
-// El flexbox sí ve los hijos portaleados porque son DOM children reales.
 function DropColumn({
   columnKey,
   gridColumn,
