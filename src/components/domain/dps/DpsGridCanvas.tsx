@@ -28,7 +28,7 @@ import {
   type DragEndEvent,
   type DragOverEvent,
 } from "@dnd-kit/core";
-import { SortableContext } from "@dnd-kit/sortable";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 
 import type { WidgetId, ColumnKey, ColumnOrder } from "@/lib/dps-grid/dpsGridTypes";
 import { CARD_GAP_PX } from "@/lib/dps-grid/dpsGridTypes";
@@ -211,16 +211,27 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
       if (TWO_COL_IDS.has(draggedId) && targetCol !== "sidebar") return base;
 
       const next = cloneOrder(base);
-
-      // Quitar la tarjeta arrastrada de donde esté ahora
       next[sourceCol] = next[sourceCol].filter((id) => id !== draggedId);
-
-      // Ítems de la columna destino sin la tarjeta arrastrada (posiciones DOM estables)
       const targetItems = next[targetCol].filter((id) => id !== (draggedId as WidgetId));
 
-      // Posición de inserción siempre por Y del pointer
       let insertIdx: number;
-      if (colElMap[targetCol]) {
+
+      if (!COLUMN_KEYS.includes(overId as ColumnKey)) {
+        // over.id es una tarjeta concreta: decidir antes/después comparando
+        // pointerY con el centro visual de esa tarjeta. Así funciona con o sin
+        // transforms de sortable, porque comparamos en espacio visual.
+        const overIdxInTarget = targetItems.indexOf(overId as WidgetId);
+        const overEl = colElMap[targetCol]?.querySelector(`[data-widget-id="${overId}"]`);
+        if (overEl) {
+          const rect = overEl.getBoundingClientRect();
+          insertIdx = pointerY < rect.top + rect.height / 2
+            ? Math.max(0, overIdxInTarget)          // encima del centro → antes
+            : Math.max(0, overIdxInTarget) + 1;     // debajo del centro → después
+        } else {
+          insertIdx = overIdxInTarget >= 0 ? overIdxInTarget : targetItems.length;
+        }
+      } else if (colElMap[targetCol]) {
+        // over.id es el contenedor de columna (columna vacía): usar Y del DOM
         insertIdx = getInsertIndexByY(colElMap[targetCol]!, pointerY, targetItems);
       } else {
         insertIdx = targetItems.length;
@@ -328,8 +339,7 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
       </div>
 
       {/* Un único SortableContext — tarjetas portaleadas a su columna. */}
-      {/* strategy noop: sin transforms en tarjetas vecinas → getBoundingClientRect estable para getInsertIndexByY */}
-      <SortableContext items={allItems} strategy={() => null}>
+      <SortableContext items={allItems} strategy={verticalListSortingStrategy}>
         {allItems.map((id) => {
           const col = itemToCol.get(id);
           return (
