@@ -244,9 +244,9 @@ export function ShipViewer3D({
 
       if (animate && rotationAxis !== "free") {
         switch (rotationAxis) {
-          case "pitch": shipGroup.rotation.y += animationSpeed * dt; break; // eje Y
-          case "yaw":   shipGroup.rotation.z += animationSpeed * dt; break; // eje Z
-          case "roll":  shipGroup.rotation.x += animationSpeed * dt; break; // eje X
+          case "pitch": shipGroup.rotation.x += animationSpeed * dt; break;
+          case "yaw":   shipGroup.rotation.y += animationSpeed * dt; break;
+          case "roll":  shipGroup.rotation.z += animationSpeed * dt; break;
         }
       }
 
