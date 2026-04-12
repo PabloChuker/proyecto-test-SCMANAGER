@@ -137,16 +137,6 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
     return sidebarElRef.current;
   };
 
-  // ── Pointer Y tracking ───────────────────────────────────────────────────────
-  // active.rect.current.translated puede llegar null en handleDragOver porque
-  // se actualiza en useIsomorphicLayoutEffect (después del event handler).
-  // Tracking directo con pointermove garantiza el Y correcto siempre.
-  const pointerYRef = useRef(0);
-  useEffect(() => {
-    const update = (e: PointerEvent) => { pointerYRef.current = e.clientY; };
-    window.addEventListener("pointermove", update, { passive: true });
-    return () => window.removeEventListener("pointermove", update);
-  }, []);
 
   // ── Draft order ──────────────────────────────────────────────────────────────
   const [activeId, setActiveId] = useState<WidgetId | null>(null);
@@ -190,8 +180,13 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
     const draggedId = active.id as string;
     const overId    = over.id as string;
 
-    // Leer los refs antes del setState (síncronos, siempre actualizados)
-    const pointerY = pointerYRef.current;
+    // Posición Y actual del pointer: activatorEvent.clientY (pointerdown original)
+    // + event.delta.y (desplazamiento acumulado). Es la forma fiable de obtener
+    // el Y actual durante drag: window/document NO reciben pointermove porque
+    // dnd-kit llama a setPointerCapture() al iniciar el drag.
+    const activatorY = (event.activatorEvent as PointerEvent).clientY ?? 0;
+    const pointerY   = activatorY + event.delta.y;
+
     const colElMap: Record<ColumnKey, HTMLDivElement | null> = {
       col0:    col0ElRef.current,
       col1:    col1ElRef.current,
@@ -262,7 +257,8 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
     const { active, over } = event;
     const draggedId = active.id as WidgetId;
 
-    const pointerY = pointerYRef.current;
+    const activatorY = (event.activatorEvent as PointerEvent).clientY ?? 0;
+    const pointerY   = activatorY + event.delta.y;
 
     if (draftOrder) {
       if (TWO_COL_IDS.has(draggedId) && over) {
