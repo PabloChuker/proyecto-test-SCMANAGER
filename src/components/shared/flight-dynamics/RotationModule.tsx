@@ -20,30 +20,17 @@ type AxisKey = Exclude<RotationAxis, "free">;
 
 interface AxisMeta {
   label: string;
-  color: string;          // CSS hex color
-  dimLabel: string;       // Three.js dimension label
-  description: string;    // descripción visual del movimiento
+  color: string; // CSS hex color
 }
 
+// Colores según la convención de ejes de la nave:
+//   Pitch → eje Y (ala→ala)      → verde
+//   Yaw   → eje Z (panza→arriba) → azul
+//   Roll  → eje X (cola→nariz)   → rojo
 const AXIS_META: Record<AxisKey, AxisMeta> = {
-  pitch: {
-    label:       "PITCH",
-    color:       "#ef4444",
-    dimLabel:    "rot X",
-    description: "Nariz sube / baja",
-  },
-  yaw: {
-    label:       "YAW",
-    color:       "#22c55e",
-    dimLabel:    "rot Y",
-    description: "Nariz gira izq / der",
-  },
-  roll: {
-    label:       "ROLL",
-    color:       "#3b82f6",
-    dimLabel:    "rot Z",
-    description: "Alas se inclinan",
-  },
+  pitch: { label: "PITCH", color: "#22c55e" },
+  yaw:   { label: "YAW",   color: "#3b82f6" },
+  roll:  { label: "ROLL",  color: "#ef4444" },
 };
 
 export interface RotationModuleProps {
@@ -112,25 +99,7 @@ export function RotationModule({
           shipColor={shipColor}
           glbUrl={glbUrl}
         />
-
-        {/* Badge del eje Three.js */}
-        <div
-          className="absolute bottom-1 right-1.5 px-1.5 py-0.5 rounded text-[7px] font-mono pointer-events-none"
-          style={{
-            color:           meta.color,
-            backgroundColor: `${meta.color}14`,
-          }}
-        >
-          {meta.dimLabel}
-        </div>
       </div>
-
-      {/* Descripción (solo en modo full) */}
-      {!compact && (
-        <p className="text-[8px] text-zinc-600 text-center font-mono leading-none">
-          {meta.description}
-        </p>
-      )}
     </div>
   );
 }

@@ -34,11 +34,14 @@ export interface ShipViewer3DProps {
   className?: string;
 }
 
-// Color de cada línea de eje (red/green/blue clásico)
+// Color de cada línea de eje según la convención de la nave:
+//   X (rojo)  — cola → nariz   → Roll gira sobre este eje
+//   Y (verde) — ala  → ala     → Pitch gira sobre este eje
+//   Z (azul)  — panza → arriba → Yaw gira sobre este eje
 const AXIS_LINE_COLORS: Record<Exclude<RotationAxis, "free">, number> = {
-  pitch: 0xef4444, // rojo  — eje X
-  yaw:   0x22c55e, // verde — eje Y
-  roll:  0x3b82f6, // azul  — eje Z
+  pitch: 0x22c55e, // verde — eje Y (ala→ala)
+  yaw:   0x3b82f6, // azul  — eje Z (panza→arriba)
+  roll:  0xef4444, // rojo  — eje X (cola→nariz)
 };
 
 // ─── Cache de GLB por URL ────────────────────────────────────────────────────
@@ -193,12 +196,13 @@ export function ShipViewer3D({
     // ─── Línea del eje de rotación ─────────────────────────────────────────
     let axisLine: THREE.Line | null = null;
     if (rotationAxis !== "free") {
+      // pitch → eje Y (ala→ala), yaw → eje Z (panza→arriba), roll → eje X (cola→nariz)
       const pts =
         rotationAxis === "pitch"
-          ? [new THREE.Vector3(-1.6, 0, 0), new THREE.Vector3(1.6, 0, 0)]
-          : rotationAxis === "yaw"
           ? [new THREE.Vector3(0, -1.6, 0), new THREE.Vector3(0, 1.6, 0)]
-          : [new THREE.Vector3(0, 0, -1.6), new THREE.Vector3(0, 0, 1.6)];
+          : rotationAxis === "yaw"
+          ? [new THREE.Vector3(0, 0, -1.6), new THREE.Vector3(0, 0, 1.6)]
+          : [new THREE.Vector3(-1.6, 0, 0), new THREE.Vector3(1.6, 0, 0)];
 
       const geo = new THREE.BufferGeometry().setFromPoints(pts);
       const mat = new THREE.LineBasicMaterial({
@@ -240,9 +244,9 @@ export function ShipViewer3D({
 
       if (animate && rotationAxis !== "free") {
         switch (rotationAxis) {
-          case "pitch": shipGroup.rotation.x += animationSpeed * dt; break;
-          case "yaw":   shipGroup.rotation.y += animationSpeed * dt; break;
-          case "roll":  shipGroup.rotation.z += animationSpeed * dt; break;
+          case "pitch": shipGroup.rotation.y += animationSpeed * dt; break; // eje Y
+          case "yaw":   shipGroup.rotation.z += animationSpeed * dt; break; // eje Z
+          case "roll":  shipGroup.rotation.x += animationSpeed * dt; break; // eje X
         }
       }
 
