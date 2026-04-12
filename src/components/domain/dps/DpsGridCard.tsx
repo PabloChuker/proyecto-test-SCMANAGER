@@ -59,9 +59,18 @@ export function DpsGridCard({ id, children, isActive = false, portalTarget }: Dp
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition: isDragging ? "none" : transition,
-    opacity: isDragging ? 0.35 : 1,
+    opacity: isDragging ? 0 : 1,
     position: "relative",
     userSelect: isDragging ? "none" : undefined,
+    // Colapsar la tarjeta arrastrada: si ocupa espacio flex, desplaza las vecinas
+    // y corrompe getBoundingClientRect() → getInsertIndexByY siempre devuelve "final".
+    ...(isDragging && {
+      height: 0,
+      minHeight: 0,
+      padding: 0,
+      margin: 0,
+      overflow: "hidden" as const,
+    }),
   };
 
   const card = (
