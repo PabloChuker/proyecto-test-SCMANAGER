@@ -137,6 +137,17 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
     return sidebarElRef.current;
   };
 
+  // ── Pointer Y tracking ───────────────────────────────────────────────────────
+  // active.rect.current.translated puede llegar null en handleDragOver porque
+  // se actualiza en useIsomorphicLayoutEffect (después del event handler).
+  // Tracking directo con pointermove garantiza el Y correcto siempre.
+  const pointerYRef = useRef(0);
+  useEffect(() => {
+    const update = (e: PointerEvent) => { pointerYRef.current = e.clientY; };
+    window.addEventListener("pointermove", update, { passive: true });
+    return () => window.removeEventListener("pointermove", update);
+  }, []);
+
   // ── Draft order ──────────────────────────────────────────────────────────────
   const [activeId, setActiveId] = useState<WidgetId | null>(null);
   const [draftOrder, setDraftOrder] = useState<ColumnOrder | null>(null);
@@ -179,8 +190,8 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
     const draggedId = active.id as string;
     const overId    = over.id as string;
 
-    // Capturar rect y refs ANTES del setState (los refs son síncronos)
-    const translatedRect = active.rect.current?.translated ?? null;
+    // Leer los refs antes del setState (síncronos, siempre actualizados)
+    const pointerY = pointerYRef.current;
     const colElMap: Record<ColumnKey, HTMLDivElement | null> = {
       col0:    col0ElRef.current,
       col1:    col1ElRef.current,
@@ -230,10 +241,9 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
           // over.id es una tarjeta concreta: insertar justo antes de ella
           insertIdx = next[targetCol].indexOf(overId as WidgetId);
           if (insertIdx === -1) insertIdx = next[targetCol].length;
-        } else if (translatedRect && colElMap[targetCol]) {
-          // over.id es el contenedor de columna: calcular posición por Y
-          const dragCenterY = translatedRect.top + translatedRect.height / 2;
-          insertIdx = getInsertIndexByY(colElMap[targetCol]!, dragCenterY, next[targetCol]);
+        } else if (colElMap[targetCol]) {
+          // over.id es el contenedor de columna: calcular posición por Y del pointer
+          insertIdx = getInsertIndexByY(colElMap[targetCol]!, pointerY, next[targetCol]);
         } else {
           // Fallback: añadir al final
           insertIdx = next[targetCol].length;
@@ -252,7 +262,7 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
     const { active, over } = event;
     const draggedId = active.id as WidgetId;
 
-    const translatedRect = active.rect.current?.translated ?? null;
+    const pointerY = pointerYRef.current;
 
     if (draftOrder) {
       if (TWO_COL_IDS.has(draggedId) && over) {
@@ -270,9 +280,8 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
         if (!COLUMN_KEYS.includes(overId as ColumnKey)) {
           const overIdx = existingItems.indexOf(overId as WidgetId);
           insertIdx = overIdx >= 0 ? overIdx : existingItems.length;
-        } else if (translatedRect && getColElImmediate(safeCol)) {
-          const dragCenterY = translatedRect.top + translatedRect.height / 2;
-          insertIdx = getInsertIndexByY(getColElImmediate(safeCol)!, dragCenterY, existingItems);
+        } else if (getColElImmediate(safeCol)) {
+          insertIdx = getInsertIndexByY(getColElImmediate(safeCol)!, pointerY, existingItems);
         } else {
           insertIdx = existingItems.length;
         }
