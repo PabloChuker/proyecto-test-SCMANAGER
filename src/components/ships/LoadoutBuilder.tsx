@@ -133,7 +133,7 @@ const WIDGET_WIDTH: Record<WidgetId, CardWidth> = {
 };
 
 const WIDGET_LABELS: Record<WidgetId, string> = {
-  weapons: "WEAPONS", missiles: "MISSILES & BOMBS", "strafe-profile": "STRAFE PROFILE", "turning-profile": "TURNING PROFILES",
+  weapons: "WEAPONS", missiles: "MISSILES & BOMBS", "strafe-profile": "STRAFE PROFILE", "turning-profile": "TURNING PROFILE",
   shields: "SHIELDS", powerplants: "POWER PLANTS", coolers: "COOLERS", "maneuver-radar": "G-FORCES",
   quantum: "QT DRIVES", radar: "RADAR", utility: "UTILITY", "combat-summary": "COMBAT",
   "power-grid": "POWER GRID", balance: "BALANCE",
@@ -714,20 +714,13 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 
   return (
     <div className="space-y-2">
-      {/* ÔöÇÔöÇ Top Bar ÔöÇÔöÇ */}
-      <div className="flex items-center justify-between px-2.5 py-1.5 bg-zinc-900/80 border border-zinc-800/60">
-        <div className="flex items-center gap-4">
-          <SigBadge icon="/icons/emp.png" label="EM" value={stats.emSignature} color="#a855f7" />
-          <SigBadge icon="/icons/power_plants.png" label="IR" value={stats.irSignature} color="#f97316" />
-          <div className="h-3 w-px bg-zinc-800/60" />
-          <span className="text-[9px] font-mono text-zinc-600 tracking-wider">{stats.summary.activeComponents}/{stats.summary.totalComponents} ACTIVE</span>
-          {hasChanges() && <span className="text-[9px] font-mono text-yellow-500/80 tracking-wider">{overrides.size} MOD</span>}
-        </div>
+      {/* ── Top Bar ── */}
+      <div className="flex items-center justify-end px-2.5 py-1.5 bg-zinc-900/80 border border-zinc-800/60">
         <div className="flex items-center gap-1.5">
           <button onClick={handleCopyLink} className={copied ? "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border bg-green-950/30 text-green-500 border-green-800/50" : "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-yellow-500 hover:border-yellow-800/50 transition-colors"}>{copied ? "COPIED" : "SHARE"}</button>
-          {user && (saved ? <span className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border bg-green-950/30 text-green-500 border-green-800/50">SAVED ✓</span> : <button onClick={() => { setSaveName(shipInfo?.name ? `${shipInfo.name} Build` : "Mi Build"); setSaveModal(true); }} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-emerald-500 hover:border-emerald-800/50 transition-colors">SAVE</button>)}
-          {hasChanges() && <button onClick={resetAll} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-orange-500/80 border-zinc-800 hover:border-orange-800/50 transition-colors">RESET</button>}
-          <button onClick={handleResetLayout} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-600 border-zinc-800 hover:text-cyan-500 hover:border-cyan-800/50 transition-colors" title="Reset panel layout to default">⟲ LAYOUT</button>
+          <button className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-purple-400 hover:border-purple-800/50 transition-colors">SEND TO WISHLIST</button>
+          <button onClick={() => { setSaveName(shipInfo?.name ? `${shipInfo.name} Build` : "Mi Build"); setSaveModal(true); }} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-emerald-500 hover:border-emerald-800/50 transition-colors">SAVE LAYOUT</button>
+          <button onClick={handleResetLayout} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-600 border-zinc-800 hover:text-cyan-500 hover:border-cyan-800/50 transition-colors" title="Reset panel layout to default">RESET LAYOUT</button>
         </div>
       </div>
 
@@ -1202,8 +1195,7 @@ function StrafeProfileTabs({ shipData }: { shipData: any }) {
   const [view, setView] = useState<"3d" | "radar">("3d");
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
-      <div className="flex items-center justify-between mb-1">
-        <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase">Strafe Profile</div>
+      <div className="flex justify-end mb-1">
         <div className="flex gap-0.5 bg-zinc-800/60 rounded p-0.5">
           <button onClick={() => setView("3d")}
             className={`px-2 py-0.5 text-[8px] font-mono rounded transition-colors ${view === "3d" ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>3D</button>

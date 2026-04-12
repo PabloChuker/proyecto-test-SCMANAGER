@@ -177,7 +177,7 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
       isResizable={false}
     >
       {visibleIds.map(id => (
-        <div key={id}>
+        <div key={id} style={id === "ship-selector" ? { zIndex: 20 } : undefined}>
           <div
             data-auto-id={id}
             ref={el => { if (el) roRef.current?.observe(el); }}
