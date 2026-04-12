@@ -92,19 +92,19 @@ export function useMiningRealtime() {
     const debouncedRefreshOrders = () => {
       if (skipRefreshRef.current) return;
       if (workOrderTimer) clearTimeout(workOrderTimer);
-      workOrderTimer = setTimeout(() => fetchWorkOrders(activeSessionId), 400);
+      workOrderTimer = setTimeout(() => fetchWorkOrders(activeSessionId), 150);
     };
 
     const debouncedRefreshInventory = () => {
       if (skipRefreshRef.current) return;
       if (inventoryTimer) clearTimeout(inventoryTimer);
-      inventoryTimer = setTimeout(() => fetchInventory(activeSessionId), 400);
+      inventoryTimer = setTimeout(() => fetchInventory(activeSessionId), 150);
     };
 
     const debouncedRefreshMembers = () => {
       if (skipRefreshRef.current) return;
       if (membersTimer) clearTimeout(membersTimer);
-      membersTimer = setTimeout(() => fetchMembers(activeSessionId), 400);
+      membersTimer = setTimeout(() => fetchMembers(activeSessionId), 150);
     };
 
     const refreshAll = () => {

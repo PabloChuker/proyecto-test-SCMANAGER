@@ -10,13 +10,10 @@ import WorkOrderCalculator from "./WorkOrderCalculator";
 import WorkOrderDashboard from "./WorkOrderDashboard";
 import RockCalculator from "./RockCalculator";
 import RefineryDataTable from "./RefineryDataTable";
-import PartyMiningDashboard from "@/components/mining/PartyMiningDashboard";
-
 const TABS = [
   { id: "loadout", label: "Loadout Calculator", icon: "⛏" },
   { id: "workorder", label: "Work Order", icon: "📈" },
   { id: "dashboard", label: "Dashboard", icon: "📊" },
-  { id: "party", label: "Party Mining", icon: "👥" },
   { id: "rock", label: "Rock Calculator", icon: "🪨" },
   { id: "refinery", label: "Refinery Data", icon: "🏚" },
 ];
@@ -90,7 +87,6 @@ export default function MiningPage() {
               {activeTab === "loadout" && <MiningLoadoutCalculator />}
               {activeTab === "workorder" && <WorkOrderCalculator />}
               {activeTab === "dashboard" && <WorkOrderDashboard />}
-              {activeTab === "party" && <PartyMiningDashboard />}
               {activeTab === "rock" && <RockCalculator />}
               {activeTab === "refinery" && <RefineryDataTable />}
             </div>
