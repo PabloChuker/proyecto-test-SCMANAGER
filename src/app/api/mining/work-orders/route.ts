@@ -140,7 +140,8 @@ export async function PATCH(request: NextRequest) {
       const ores = data.ores as any[];
       for (const ore of ores) {
         if (!ore.yieldQty || ore.yieldQty <= 0) continue;
-        // Upsert inventory
+
+        // Upsert inventory — try with quality first, fallback without if column missing
         const { data: existing } = await supabase
           .from("mining_inventory")
           .select("id, quantity, total_received")
@@ -149,32 +150,51 @@ export async function PATCH(request: NextRequest) {
           .single();
 
         if (existing) {
-          const updates: any = {
+          // Update existing inventory row
+          const updates: Record<string, any> = {
             quantity: existing.quantity + ore.yieldQty,
             total_received: existing.total_received + ore.yieldQty,
           };
-          if (ore.quality) updates.quality = ore.quality;
-          await supabase.from("mining_inventory").update(updates).eq("id", existing.id);
+          if (ore.quality != null) updates.quality = ore.quality;
+          const { error: updErr } = await supabase.from("mining_inventory").update(updates).eq("id", existing.id);
+          // If quality column doesn't exist yet, retry without it
+          if (updErr && ore.quality != null) {
+            delete updates.quality;
+            await supabase.from("mining_inventory").update(updates).eq("id", existing.id);
+          }
         } else {
-          await supabase.from("mining_inventory").insert({
+          // Insert new inventory row
+          const row: Record<string, any> = {
             session_id: data.session_id,
             mineral_id: ore.id,
             mineral_name: ore.name,
             quantity: ore.yieldQty,
             total_received: ore.yieldQty,
-            quality: ore.quality || null,
-          });
+          };
+          if (ore.quality != null) row.quality = ore.quality;
+          const { error: insErr } = await supabase.from("mining_inventory").insert(row);
+          // If quality column doesn't exist yet, retry without it
+          if (insErr && ore.quality != null) {
+            delete row.quality;
+            await supabase.from("mining_inventory").insert(row);
+          }
         }
 
         // Log the movement
-        await supabase.from("mining_movements").insert({
+        const mvRow: Record<string, any> = {
           session_id: data.session_id,
           work_order_id: data.id,
           mineral_id: ore.id,
           mineral_name: ore.name,
           delta: ore.yieldQty,
           reason: "refine_complete",
-        });
+        };
+        if (ore.quality != null) mvRow.quality = ore.quality;
+        const { error: mvErr } = await supabase.from("mining_movements").insert(mvRow);
+        if (mvErr && ore.quality != null) {
+          delete mvRow.quality;
+          await supabase.from("mining_movements").insert(mvRow);
+        }
       }
     }
 
