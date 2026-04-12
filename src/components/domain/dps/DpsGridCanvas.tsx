@@ -1,13 +1,10 @@
 // =============================================================================
 // AL FILO — DpsGridCanvas v5 (react-grid-layout)
 //
-// Reemplaza dnd-kit por react-grid-layout. RGL posiciona los widgets con
-// position: absolute + CSS transforms — los componentes NUNCA se desmontan
-// al mover, por lo que los contextos WebGL (Three.js) sobreviven.
-//
 // Grid: 5 columnas. col0-col2 = w:1, sidebar = w:2 (x:3).
-// Alturas en unidades de ROW_H (30 px). Redimensionable y arrastrable
-// desde .rgl-drag-handle (el header de WidgetShell).
+// Auto-height: un ResizeObserver mide el contenido real de cada widget y
+// ajusta h en tiempo real. rowHeight=1 → precisión de ~4 px.
+// Drag solo desde .rgl-drag-handle (header de WidgetShell).
 // =============================================================================
 
 "use client";
@@ -28,39 +25,28 @@ const COL_X: Record<ColumnKey, number> = { col0: 0, col1: 1, col2: 2, sidebar: 3
 const TWO_COL_IDS = new Set<string>(["ship-card", "flight-dynamics-3d", "ship-selector"]);
 
 const RGL_KEY = "al-filo-rgl-v1";
-const ROW_H = 30;
+const ROW_H = 1;                               // 1 px por fila → alto preciso
+const MARGIN: [number, number] = [4, 4];        // gap entre tarjetas
+const MARGIN_Y = MARGIN[1];
 
-/** Alturas por defecto (en filas de ROW_H px). */
-const DEFAULT_H: Record<string, number> = {
-  "ship-card":          16, // 480 px
-  "flight-dynamics-3d": 16,
-  "ship-selector":       4, // 120 px
-  "strafe-profile":     10, // 300 px
-  "turning-profile":    10,
-  "power-grid":          8, // 240 px
-  "combat-summary":      8,
-  "maneuver-radar":      8,
-  "dps-detail":          8,
-  "balance":             6, // 180 px
-};
-const H_FALLBACK = 8;
+/** px de contenido → unidades h de RGL. */
+function pxToH(px: number): number {
+  return Math.max(1, Math.ceil((px + MARGIN_Y) / (ROW_H + MARGIN_Y)));
+}
+
+// h inicial generoso; el ResizeObserver lo corrige en el primer frame.
+const H_INIT = pxToH(300);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Convierte un ColumnOrder (legacy) a un array de Layout items para RGL. */
 function toRgl(order: ColumnOrder): Layout[] {
   const out: Layout[] = [];
   for (const col of COLUMN_KEYS) {
     let y = 0;
     for (const id of order[col]) {
-      const isTwoCol = TWO_COL_IDS.has(id);
-      const w = isTwoCol ? 2 : 1;
-      const h = DEFAULT_H[id] ?? H_FALLBACK;
-      out.push({
-        i: id, x: COL_X[col], y, w, h,
-        minW: w, maxW: w,               // bloquear ancho
-      });
-      y += h;
+      const w = TWO_COL_IDS.has(id) ? 2 : 1;
+      out.push({ i: id, x: COL_X[col], y, w, h: H_INIT, minW: w, maxW: w });
+      y += H_INIT;
     }
   }
   return out;
@@ -73,22 +59,18 @@ function loadSaved(): Layout[] | null {
   } catch { return null; }
 }
 
-function persist(layout: Layout[]) {
-  try { localStorage.setItem(RGL_KEY, JSON.stringify(layout)); }
-  catch { /* ignore */ }
+function persistLayout(layout: Layout[]) {
+  try { localStorage.setItem(RGL_KEY, JSON.stringify(layout)); } catch { /* noop */ }
 }
 
-/**
- * Fusiona un layout guardado con las posiciones por defecto:
- * - mantiene posiciones guardadas de widgets que siguen visibles,
- * - añade posiciones por defecto para widgets nuevos.
- */
-function merge(saved: Layout[], defaults: Layout[], visible: Set<WidgetId>): Layout[] {
+function mergeSavedWithDefaults(
+  saved: Layout[],
+  defaults: Layout[],
+  visible: Set<WidgetId>,
+): Layout[] {
   const kept = saved.filter(l => visible.has(l.i as WidgetId));
   const keptIds = new Set(kept.map(l => l.i));
-  for (const d of defaults) {
-    if (!keptIds.has(d.i)) kept.push(d);
-  }
+  for (const d of defaults) if (!keptIds.has(d.i)) kept.push(d);
   return kept;
 }
 
@@ -111,15 +93,15 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
 
   const visibleSet = useMemo(() => new Set(visibleIds), [visibleIds]);
 
-  // SSR guard: CSSTransforms solo después de montar
+  // SSR guard
   const [mounted, setMounted] = useState(false);
   useEffect(() => { setMounted(true); }, []);
 
-  // Layout RGL
+  // ── Layout state ──────────────────────────────────────────────────────────
   const [gridLayout, setGridLayout] = useState<Layout[]>(() => {
     const saved = loadSaved();
     const defaults = toRgl(columnOrder);
-    return saved ? merge(saved, defaults, visibleSet) : defaults;
+    return saved ? mergeSavedWithDefaults(saved, defaults, visibleSet) : defaults;
   });
 
   // Re-sync cuando cambian los widgets visibles (cambio de nave)
@@ -127,34 +109,80 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
   useEffect(() => {
     if (prevVisible.current === visibleIds) return;
     prevVisible.current = visibleIds;
-    setGridLayout(prev => {
-      const defaults = toRgl(columnOrder);
-      return merge(prev, defaults, visibleSet);
-    });
+    setGridLayout(prev => mergeSavedWithDefaults(prev, toRgl(columnOrder), visibleSet));
   }, [visibleIds, visibleSet, columnOrder]);
 
-  // Persistir en cada cambio de layout
-  const onLayoutChange = useCallback((cur: Layout[]) => {
-    setGridLayout(cur);
-    persist(cur);
+  // ── Auto-height via ResizeObserver ────────────────────────────────────────
+  const roRef = useRef<ResizeObserver | null>(null);
+  const draggingRef = useRef(false);
+
+  useEffect(() => {
+    const ro = new ResizeObserver(entries => {
+      // No auto-height mientras se arrastra (evita saltos)
+      if (draggingRef.current) return;
+
+      const updates = new Map<string, number>();
+      for (const entry of entries) {
+        const id = (entry.target as HTMLElement).dataset.autoId;
+        if (!id) continue;
+        const px = entry.target.scrollHeight;
+        if (px <= 0) continue;
+        updates.set(id, pxToH(px));
+      }
+      if (updates.size === 0) return;
+
+      setGridLayout(prev => {
+        let changed = false;
+        const next = prev.map(item => {
+          const newH = updates.get(item.i);
+          if (newH != null && newH !== item.h) {
+            changed = true;
+            return { ...item, h: newH };
+          }
+          return item;
+        });
+        return changed ? next : prev;
+      });
+    });
+    roRef.current = ro;
+    return () => { ro.disconnect(); roRef.current = null; };
   }, []);
 
+  // ── Persistencia (debounced) ──────────────────────────────────────────────
+  const persistTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const handleLayoutChange = useCallback((cur: Layout[]) => {
+    setGridLayout(cur);
+    clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(() => persistLayout(cur), 500);
+  }, []);
+
+  const handleDragStart = useCallback(() => { draggingRef.current = true; }, []);
+  const handleDragStop = useCallback(() => { draggingRef.current = false; }, []);
+
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <AutoGrid
       layout={gridLayout}
       cols={5}
       rowHeight={ROW_H}
       draggableHandle=".rgl-drag-handle"
-      onLayoutChange={onLayoutChange}
+      onLayoutChange={handleLayoutChange}
+      onDragStart={handleDragStart}
+      onDragStop={handleDragStop}
       compactType="vertical"
       containerPadding={[0, 0]}
-      margin={[4, 4]}
+      margin={MARGIN}
       useCSSTransforms={mounted}
-      isResizable
+      isResizable={false}
     >
       {visibleIds.map(id => (
-        <div key={id} style={{ overflow: "hidden" }}>
-          {renderWidget(id)}
+        <div key={id}>
+          <div
+            data-auto-id={id}
+            ref={el => { if (el) roRef.current?.observe(el); }}
+          >
+            {renderWidget(id)}
+          </div>
         </div>
       ))}
     </AutoGrid>
