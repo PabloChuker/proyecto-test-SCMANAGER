@@ -163,7 +163,8 @@ export default function WorkOrderDashboard() {
 
   const refresh = () => setRk((k) => k + 1);
 
-  // Merge local orders with Supabase orders (dedup by checking if same refinery+time)
+  // When logged in with Supabase session: show ONLY Supabase data.
+  // When offline / solo: show only localStorage data.
   const mergedOrders = useMemo(() => {
     // Convert Supabase orders to the local WorkOrder shape for display
     const sbConverted: WorkOrder[] = sbWorkOrders.map((o) => ({
@@ -195,16 +196,12 @@ export default function WorkOrderDashboard() {
       _source: "supabase" as const,
     }));
 
-    // Mark local orders
-    const localMarked = orders.map((o) => ({ ...o, _source: "local" as const }));
+    // If logged in with a Supabase session, ONLY show Supabase data
+    if (sbSessionId) return sbConverted;
 
-    // Combine: Supabase orders first, then local-only orders
-    // Deduplicate: if a local order was saved ~same time as a Supabase one, skip the local one
-    const sbIds = new Set(sbConverted.map((o) => o.id));
-    const localOnly = localMarked.filter((o) => !sbIds.has(o.id));
-
-    return [...sbConverted, ...localOnly];
-  }, [orders, sbWorkOrders]);
+    // Solo / offline: show only localStorage data
+    return orders.map((o) => ({ ...o, _source: "local" as const }));
+  }, [orders, sbWorkOrders, sbSessionId]);
 
   const filteredOrders = useMemo(() => {
     if (!activeId && !sbSessionId) return mergedOrders;
@@ -219,8 +216,36 @@ export default function WorkOrderDashboard() {
   const completed = filteredOrders.filter((o) => o.status === "completed");
   const collected = filteredOrders.filter((o) => o.status === "collected");
 
-  const crewShares = useMemo(() => getCrewSharesSummary(activeId || undefined), [activeId, rk]);
-  const stats = useMemo(() => getStats(activeId || undefined), [activeId, rk]);
+  const crewShares = useMemo(() => {
+    if (sbSessionId) {
+      // Party mode: derive crew shares from Supabase members
+      return sbMembers.map((m) => ({
+        name: m.display_name,
+        totalPayout: 0,
+        orderCount: 0,
+        role: m.role,
+      }));
+    }
+    return getCrewSharesSummary(activeId || undefined);
+  }, [activeId, rk, sbSessionId, sbMembers]);
+
+  const stats = useMemo(() => {
+    if (sbSessionId) {
+      // Party mode: compute stats from Supabase orders
+      const totalOrders = filteredOrders.length;
+      const totalYield = filteredOrders.reduce((s, o) => s + (o.totalYield || 0), 0);
+      const totalGross = filteredOrders.reduce((s, o) => s + (o.grossValue || 0), 0);
+      return {
+        totalOrders,
+        totalYield,
+        totalGross,
+        totalExpenses: 0,
+        totalNet: totalGross,
+        avgPerOrder: totalOrders > 0 ? totalGross / totalOrders : 0,
+      };
+    }
+    return getStats(activeId || undefined);
+  }, [activeId, rk, sbSessionId, filteredOrders]);
 
   // Remaining countdown for an order
   const getRemainingSeconds = (order: WorkOrder): number => {
@@ -228,42 +253,38 @@ export default function WorkOrderDashboard() {
     return Math.max(0, Math.floor((new Date(order.countdownEndsAt).getTime() - now) / 1000));
   };
 
-  // Merge local inventory with Supabase inventory
+  // Inventory: Supabase-only when logged in, localStorage-only when solo
   const mergedInventory = useMemo(() => {
-    if (!sbInventory.length) return inventory;
-    // Map Supabase items to local shape
-    const sbConverted = sbInventory.map((i) => ({
-      mineralId: i.mineral_id,
-      mineralName: i.mineral_name,
-      quantity: i.quantity,
-      totalReceived: i.total_received,
-      quality: i.quality,
-      _source: "supabase" as const,
-    }));
-    // Merge: Supabase takes priority, then add local-only items
-    const sbIds = new Set(sbConverted.map((i) => i.mineralId));
-    const localOnly = inventory.filter((i) => !sbIds.has(i.mineralId));
-    return [...sbConverted, ...localOnly];
-  }, [inventory, sbInventory]);
+    if (sbSessionId) {
+      return sbInventory.map((i) => ({
+        mineralId: i.mineral_id,
+        mineralName: i.mineral_name,
+        quantity: i.quantity,
+        totalReceived: i.total_received,
+        quality: i.quality,
+        _source: "supabase" as const,
+      }));
+    }
+    return inventory;
+  }, [inventory, sbInventory, sbSessionId]);
 
-  // Merge movements
+  // Movements: Supabase-only when logged in, localStorage-only when solo
   const mergedMovements = useMemo(() => {
-    if (!sbMovements.length) return movements;
-    const sbConverted = sbMovements.map((mv) => ({
-      id: mv.id,
-      mineralId: mv.mineral_id,
-      mineralName: mv.mineral_name,
-      delta: mv.delta,
-      reason: mv.reason,
-      crewMember: mv.member_name || undefined,
-      createdAt: mv.created_at,
-    }));
-    const sbIds = new Set(sbConverted.map((m) => m.id));
-    const localOnly = movements.filter((m) => !sbIds.has(m.id));
-    return [...sbConverted, ...localOnly].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-    );
-  }, [movements, sbMovements]);
+    if (sbSessionId) {
+      return sbMovements.map((mv) => ({
+        id: mv.id,
+        mineralId: mv.mineral_id,
+        mineralName: mv.mineral_name,
+        delta: mv.delta,
+        reason: mv.reason,
+        crewMember: mv.member_name || undefined,
+        createdAt: mv.created_at,
+      })).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+    }
+    return movements;
+  }, [movements, sbMovements, sbSessionId]);
 
   // ── Handlers ──
   const handleCreateSession = () => {
@@ -313,53 +334,64 @@ export default function WorkOrderDashboard() {
   };
 
   const handleClearInventory = () => {
-    // Clear Supabase inventory (shared / party)
     if (sbSessionId) {
+      // Party mode: clear only Supabase
       sbClearInventory(sbSessionId);
       broadcast("inventory_cleared");
+    } else {
+      // Solo mode: clear only localStorage
+      clearInventoryData();
+      setInventory([]);
+      setMovements([]);
     }
-    // Clear localStorage inventory (solo / offline)
-    clearInventoryData();
-    setInventory([]);
-    setMovements([]);
     setShowClearConfirm(false);
     refresh();
   };
 
   const handleResetAll = async () => {
-    // Clear localStorage
-    clearAllData();
-
-    // Clear Supabase if connected
     if (sbSessionId) {
-      // Delete all work orders
+      // Party mode: clear only Supabase data
       for (const order of sbWorkOrders) {
         await sbDeleteOrder(order.id);
       }
-      // Clear inventory
       await sbClearInventory(sbSessionId);
-      // Broadcast to party members
       broadcast("full_sync");
+    } else {
+      // Solo mode: clear only localStorage
+      clearAllData();
+      setSessions([]);
+      setOrders([]);
+      setActiveId(null);
+      setInventory([]);
+      setMovements([]);
     }
 
-    // Reset local state
-    setSessions([]);
-    setOrders([]);
-    setActiveId(null);
-    setInventory([]);
-    setMovements([]);
     setShowResetConfirm(false);
-
-    // Refresh
     refresh();
   };
 
   const handleInvAction = () => {
     if (!invAction || invAction.qty <= 0) return;
     const { mineralId, mineralName, qty, type, member } = invAction;
-    if (type === "sell") sellFromInventory(mineralId, mineralName, qty);
-    else if (type === "craft") useForCrafting(mineralId, mineralName, qty);
-    else if (type === "distribute") distributeToMember(mineralId, mineralName, qty, member);
+
+    if (sbSessionId) {
+      // Party mode: use Supabase
+      sbRecordInventoryAction({
+        session_id: sbSessionId,
+        mineral_id: mineralId,
+        mineral_name: mineralName,
+        quantity: -qty,
+        reason: type,
+        member_name: member || undefined,
+      });
+      broadcast("inventory_changed");
+    } else {
+      // Solo mode: use localStorage
+      if (type === "sell") sellFromInventory(mineralId, mineralName, qty);
+      else if (type === "craft") useForCrafting(mineralId, mineralName, qty);
+      else if (type === "distribute") distributeToMember(mineralId, mineralName, qty, member);
+    }
+
     setInvAction(null);
     refresh();
   };
@@ -487,7 +519,8 @@ export default function WorkOrderDashboard() {
             </div>
           </div>
 
-          {/* Local Sessions */}
+          {/* Local Sessions — only show when NOT logged in with Supabase */}
+          {!sbSessionId && (
           <div>
             <div className="text-xs tracking-[0.1em] uppercase text-zinc-500 font-bold mb-2">Local Sessions</div>
             {sessions.length === 0 ? (
@@ -522,6 +555,7 @@ export default function WorkOrderDashboard() {
               })
             )}
           </div>
+          )}
 
           {/* Supabase Sessions (Party Sessions) */}
           {sbSessions.length > 0 && (
