@@ -209,10 +209,28 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
         ))}
       </div>
 
+      {/* Overlay ligero: solo muestra una pastilla con el nombre del widget.
+          NO renderiza el contenido del widget para evitar instanciar Two.js /
+          SVG pesado / Three.js por segunda vez mientras el drag está activo. */}
       <DragOverlay dropAnimation={null}>
         {activeId ? (
-          <div style={{ opacity: 0.85, pointerEvents: "none" }}>
-            {renderWidget(activeId)}
+          <div style={{
+            background: "rgba(24,24,27,0.92)",
+            border: "1px solid rgba(234,179,8,0.45)",
+            borderRadius: "2px",
+            padding: "4px 10px",
+            pointerEvents: "none",
+            whiteSpace: "nowrap",
+          }}>
+            <span style={{
+              fontSize: "9px",
+              fontFamily: "monospace",
+              color: "#a1a1aa",
+              letterSpacing: "0.15em",
+              textTransform: "uppercase",
+            }}>
+              {activeId.replace(/-/g, " ")}
+            </span>
           </div>
         ) : null}
       </DragOverlay>
