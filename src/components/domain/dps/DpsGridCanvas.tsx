@@ -132,15 +132,10 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
       }
       if (!targetCol) return base;
 
-      // flight-dynamics-3d / ship-card / ship-selector son widgets 2-col.
-      // Moverlos a cols 1-col destruye/recrea 3 WebGL contexts por evento de
-      // puntero (~60/s) → OOM → crash del tab. Se bloquea solo el preview;
-      // el resto de widgets siguen moviéndose libremente entre columnas.
-      if (targetCol !== "sidebar" && (
-        draggedId === "flight-dynamics-3d" ||
-        draggedId === "ship-card" ||
-        draggedId === "ship-selector"
-      )) return base;
+      // flight-dynamics-3d contiene 3 contextos WebGL. Si se actualiza draftOrder
+      // 60 veces/seg cruzando columnas, React destruye y recrea esos contextos
+      // en cada frame → OOM → crash del tab. El cruce se confirma en dragEnd.
+      if (draggedId === "flight-dynamics-3d" && sourceCol !== targetCol) return base;
 
       // Sin cambio si ya está en la misma posición
       const sourceItems = base[sourceCol];
@@ -172,20 +167,33 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
 
   // ── Drag end (persistir) ────────────────────────────────────────────────
   const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active } = event;
+    const { active, over } = event;
     const draggedId = active.id as WidgetId;
 
     if (draftOrder) {
-      const targetCol = findColumn(draggedId, draftOrder);
-      if (targetCol) {
-        const targetIdx = draftOrder[targetCol].indexOf(draggedId);
-        moveCard(draggedId, targetCol, targetIdx);
+      if (draggedId === "flight-dynamics-3d" && over) {
+        // El draftOrder no se actualizó cross-column: determinar columna final
+        // directamente desde over.id en lugar de desde draftOrder.
+        const overId = over.id as string;
+        const finalCol: ColumnKey = COLUMN_KEYS.includes(overId as ColumnKey)
+          ? overId as ColumnKey
+          : (findColumn(overId, columnOrder) ?? findColumn(draggedId, draftOrder) ?? "sidebar");
+        const finalOrder = columnOrder[finalCol].filter(id => id !== draggedId);
+        const overIdx = finalOrder.indexOf(overId as WidgetId);
+        const insertIdx = overIdx >= 0 ? overIdx : finalOrder.length;
+        moveCard(draggedId, finalCol, insertIdx);
+      } else {
+        const targetCol = findColumn(draggedId, draftOrder);
+        if (targetCol) {
+          const targetIdx = draftOrder[targetCol].indexOf(draggedId);
+          moveCard(draggedId, targetCol, targetIdx);
+        }
       }
     }
 
     setActiveId(null);
     setDraftOrder(null);
-  }, [draftOrder, moveCard]);
+  }, [draftOrder, columnOrder, moveCard]);
 
   const handleDragCancel = useCallback(() => {
     setActiveId(null);
