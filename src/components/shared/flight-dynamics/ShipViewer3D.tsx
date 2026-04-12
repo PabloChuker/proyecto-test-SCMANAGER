@@ -199,10 +199,10 @@ export function ShipViewer3D({
       // pitch → eje Y (ala→ala), yaw → eje Z (panza→arriba), roll → eje X (cola→nariz)
       const pts =
         rotationAxis === "pitch"
-          ? [new THREE.Vector3(0, -1.6, 0), new THREE.Vector3(0, 1.6, 0)]
+          ? [new THREE.Vector3(-1.6, 0, 0), new THREE.Vector3(1.6, 0, 0)]
           : rotationAxis === "yaw"
-          ? [new THREE.Vector3(0, 0, -1.6), new THREE.Vector3(0, 0, 1.6)]
-          : [new THREE.Vector3(-1.6, 0, 0), new THREE.Vector3(1.6, 0, 0)];
+          ? [new THREE.Vector3(0, -1.6, 0), new THREE.Vector3(0, 1.6, 0)]
+          : [new THREE.Vector3(0, 0, -1.6), new THREE.Vector3(0, 0, 1.6)];
 
       const geo = new THREE.BufferGeometry().setFromPoints(pts);
       const mat = new THREE.LineBasicMaterial({
