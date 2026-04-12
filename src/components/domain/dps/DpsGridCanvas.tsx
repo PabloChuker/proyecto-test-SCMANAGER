@@ -109,7 +109,7 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
 
   // ── Drag start ───────────────────────────────────────────────────────────
   const handleDragStart = useCallback((event: DragStartEvent) => {
-    document.body.setAttribute("data-dnd-active", "1");
+    window.dispatchEvent(new Event("dnd:dragstart"));
     setActiveId(event.active.id as WidgetId);
     setDraftOrder(cloneOrder(columnOrder));
   }, [columnOrder]);
@@ -172,7 +172,7 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
 
   // ── Drag end (persistir) ────────────────────────────────────────────────
   const handleDragEnd = useCallback((event: DragEndEvent) => {
-    document.body.removeAttribute("data-dnd-active");
+    window.dispatchEvent(new Event("dnd:dragend"));
     const { active } = event;
     const draggedId = active.id as WidgetId;
 
@@ -189,7 +189,7 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
   }, [draftOrder, moveCard]);
 
   const handleDragCancel = useCallback(() => {
-    document.body.removeAttribute("data-dnd-active");
+    window.dispatchEvent(new Event("dnd:dragend"));
     setActiveId(null);
     setDraftOrder(null);
   }, []);
