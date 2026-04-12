@@ -11,6 +11,8 @@ import {
   getSessions,
   type WOMineral,
 } from "@/lib/workOrderStore";
+import { useAuth } from "@/contexts/AuthContext";
+import { createClient } from "@/lib/supabase/client";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -205,6 +207,81 @@ export default function WorkOrderCalculator() {
   ]);
   const [newMemberName, setNewMemberName] = useState("");
 
+  // ── Active session crew (from Supabase) ──
+  const { user } = useAuth();
+  const [sessionCrew, setSessionCrew] = useState<
+    { user_id: string; display_name: string; avatar_url: string | null; role: string; share_pct: number }[]
+  >([]);
+  const [activeSessionName, setActiveSessionName] = useState<string | null>(null);
+  const [activeSessionId_db, setActiveSessionId_db] = useState<string | null>(null);
+  const [crewLoaded, setCrewLoaded] = useState(false);
+  const [loadingCrew, setLoadingCrew] = useState(false);
+
+  // Fetch active mining session + members when user is logged in
+  useEffect(() => {
+    if (!user) return;
+    setLoadingCrew(true);
+    const supabase = createClient();
+
+    // Find user's active mining sessions (most recent first)
+    supabase
+      .from("mining_sessions")
+      .select("id, name, status")
+      .eq("status", "active")
+      .order("created_at", { ascending: false })
+      .limit(5)
+      .then(async ({ data: sessions }) => {
+        if (!sessions || sessions.length === 0) {
+          setLoadingCrew(false);
+          return;
+        }
+
+        // Check which sessions the user belongs to (via mining_members)
+        const sessionIds = sessions.map((s: any) => s.id);
+        const { data: memberships } = await supabase
+          .from("mining_members")
+          .select("session_id")
+          .in("session_id", sessionIds)
+          .eq("user_id", user.id);
+
+        if (!memberships || memberships.length === 0) {
+          setLoadingCrew(false);
+          return;
+        }
+
+        // Use the first session the user belongs to
+        const mySessionId = memberships[0].session_id;
+        const mySession = sessions.find((s: any) => s.id === mySessionId);
+
+        // Fetch all members for this session
+        const { data: members } = await supabase
+          .from("mining_members")
+          .select("user_id, display_name, avatar_url, role, share_pct")
+          .eq("session_id", mySessionId);
+
+        if (members && members.length > 0) {
+          setSessionCrew(members);
+          setActiveSessionName(mySession?.name || "Session");
+          setActiveSessionId_db(mySessionId);
+        }
+        setLoadingCrew(false);
+      })
+      .catch(() => setLoadingCrew(false));
+  }, [user]);
+
+  // Load session crew into the Work Order crew list
+  const loadSessionCrew = useCallback(() => {
+    if (sessionCrew.length === 0) return;
+    const mapped: CrewMember[] = sessionCrew.map((m, i) => ({
+      id: `session_${m.user_id || i}`,
+      name: m.display_name || "Unknown",
+      shareType: "equal" as const,
+      share: m.share_pct > 0 ? m.share_pct : 1,
+    }));
+    setCrew(mapped);
+    setCrewLoaded(true);
+  }, [sessionCrew]);
+
   // ── Countdown Timer ──
   const timer = useCountdown();
 
@@ -327,6 +404,7 @@ export default function WorkOrderCalculator() {
 
   const clearCrew = () => {
     setCrew([{ id: "crew1", name: sellerName, shareType: "equal", share: 1 }]);
+    setCrewLoaded(false);
   };
 
   const removeCrewMember = (id: string) => {
@@ -856,13 +934,49 @@ export default function WorkOrderCalculator() {
                 <span className="text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold">
                   Profit Shares:
                 </span>
-                <button
-                  onClick={clearCrew}
-                  className="text-[10px] font-bold text-red-400 hover:text-red-300 flex items-center gap-1"
-                >
-                  <span className="text-sm">⊗</span> CLEAR ALL
-                </button>
+                <div className="flex items-center gap-3">
+                  {crewLoaded && (
+                    <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
+                      <span className="text-sm">✓</span> FROM SESSION
+                    </span>
+                  )}
+                  <button
+                    onClick={clearCrew}
+                    className="text-[10px] font-bold text-red-400 hover:text-red-300 flex items-center gap-1"
+                  >
+                    <span className="text-sm">⊗</span> CLEAR ALL
+                  </button>
+                </div>
               </div>
+
+              {/* ── Session crew banner ── */}
+              {sessionCrew.length > 0 && !crewLoaded && (
+                <button
+                  onClick={loadSessionCrew}
+                  className="w-full mb-3 flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border border-cyan-500/30 bg-cyan-500/5 hover:bg-cyan-500/10 transition-all group"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-cyan-400 text-lg">👥</span>
+                    <div className="text-left">
+                      <div className="text-xs font-bold text-cyan-300">
+                        Load crew from "{activeSessionName}"
+                      </div>
+                      <div className="text-[10px] text-zinc-500">
+                        {sessionCrew.length} member{sessionCrew.length !== 1 ? "s" : ""}: {sessionCrew.map(m => m.display_name).join(", ")}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-cyan-400 text-xs font-bold group-hover:text-cyan-300 tracking-wider uppercase">
+                    Load
+                  </span>
+                </button>
+              )}
+
+              {loadingCrew && (
+                <div className="text-center py-2 text-xs text-zinc-500">
+                  Checking active sessions...
+                </div>
+              )}
 
               {/* Add member input */}
               <div className="flex items-center gap-2 mb-3">
@@ -894,12 +1008,31 @@ export default function WorkOrderCalculator() {
                   <span>Note</span>
                 </div>
 
-                {crewPayouts.map((member) => (
+                {crewPayouts.map((member) => {
+                  // Try to find avatar from session crew
+                  const sessionMember = crewLoaded
+                    ? sessionCrew.find((sc) => sc.display_name === member.name)
+                    : null;
+                  return (
                   <div
                     key={member.id}
                     className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 px-3 py-2 border-b border-zinc-800/30 items-center"
                   >
-                    <span className="text-xs font-bold text-zinc-200">{member.name}</span>
+                    <div className="flex items-center gap-2">
+                      {sessionMember?.avatar_url && (
+                        <img
+                          src={sessionMember.avatar_url}
+                          alt=""
+                          className="w-5 h-5 rounded-full object-cover border border-zinc-700"
+                        />
+                      )}
+                      <span className="text-xs font-bold text-zinc-200">{member.name}</span>
+                      {sessionMember && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold uppercase tracking-wider">
+                          {sessionMember.role}
+                        </span>
+                      )}
+                    </div>
                     <select
                       value={member.shareType}
                       onChange={(e) =>
@@ -936,7 +1069,8 @@ export default function WorkOrderCalculator() {
                       📥
                     </button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
