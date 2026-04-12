@@ -50,6 +50,7 @@ export interface MiningOre {
   quantity: number;
   yieldQty: number;
   value: number;
+  quality?: number;        // 0-1000 (game unit, manually entered)
 }
 
 export interface MiningWorkOrder {
@@ -104,6 +105,9 @@ export interface MiningInventoryItem {
   mineral_name: string;
   quantity: number;
   total_received: number;
+  quality?: number;          // 0-1000 (inherited from work order ore)
+  location?: string;         // station/refinery where material is stored
+  location_system?: string;  // system (Stanton, Pyro, Nyx)
 }
 
 export type MovementReason =

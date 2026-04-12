@@ -183,6 +183,7 @@ export default function WorkOrderCalculator() {
   const [selectedMethod, setSelectedMethod] = useState(typedMethods[0]?.id || "");
   const [selectedOres, setSelectedOres] = useState<Set<string>>(new Set());
   const [oreQuantities, setOreQuantities] = useState<Record<string, number>>({});
+  const [oreQualities, setOreQualities] = useState<Record<string, number>>({});
 
   // ── Selling state ──
   const [sellerName, setSellerName] = useState("You");
@@ -362,6 +363,7 @@ export default function WorkOrderCalculator() {
       if (next.has(oreId)) {
         next.delete(oreId);
         setOreQuantities((q) => { const c = { ...q }; delete c[oreId]; return c; });
+        setOreQualities((q) => { const c = { ...q }; delete c[oreId]; return c; });
       } else {
         next.add(oreId);
       }
@@ -376,12 +378,14 @@ export default function WorkOrderCalculator() {
   const selectNoneOres = () => {
     setSelectedOres(new Set());
     setOreQuantities({});
+    setOreQualities({});
   };
 
   // ── Reset on tab change ──
   useEffect(() => {
     setSelectedOres(new Set());
     setOreQuantities({});
+    setOreQualities({});
     setSellPrice(0);
   }, [mode]);
 
@@ -472,6 +476,7 @@ export default function WorkOrderCalculator() {
         quantity: qty,
         yieldQty,
         value: yieldQty * mineral.basePrice,
+        quality: oreQualities[oreId] || undefined,
       });
     });
 
@@ -606,6 +611,10 @@ export default function WorkOrderCalculator() {
               <div>
                 <div className="flex items-center justify-between text-[10px] tracking-[0.15em] uppercase text-zinc-500 font-bold border-b border-zinc-700/50 pb-1 mb-2">
                   <span className="flex-1">Material</span>
+                  <span className="w-20 text-right">
+                    Quality<br />
+                    <span className="text-zinc-600">(0-1000)</span>
+                  </span>
                   <span className="w-24 text-right">
                     QTY<br />
                     <span className="text-zinc-600">({unitLabel})</span>
@@ -635,6 +644,20 @@ export default function WorkOrderCalculator() {
                         <span className="flex-1 text-xs font-bold text-zinc-200 uppercase tracking-wider">
                           {mineral.name}
                         </span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="1000"
+                          value={oreQualities[mineral.id] || ""}
+                          onChange={(e) =>
+                            setOreQualities((prev) => ({
+                              ...prev,
+                              [mineral.id]: Math.min(1000, Math.max(0, parseInt(e.target.value) || 0)),
+                            }))
+                          }
+                          className="w-20 bg-cyan-500/10 border border-cyan-500/30 rounded px-2 py-1 text-sm text-right text-cyan-200 font-mono focus:outline-none focus:border-cyan-400"
+                          placeholder="—"
+                        />
                         <input
                           type="number"
                           min="0"
