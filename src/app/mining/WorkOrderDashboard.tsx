@@ -231,6 +231,7 @@ export default function WorkOrderDashboard() {
         name: m.display_name,
         totalPayout: 0,
         orderCount: 0,
+        totalMaterialsValue: 0,
         role: m.role,
       }));
     }
@@ -243,13 +244,43 @@ export default function WorkOrderDashboard() {
       const totalOrders = filteredOrders.length;
       const totalYield = filteredOrders.reduce((s, o) => s + (o.totalYield || 0), 0);
       const totalGross = filteredOrders.reduce((s, o) => s + (o.grossValue || 0), 0);
+
+      // Count by status
+      const byStatus = {
+        in_progress: filteredOrders.filter((o) => o.status === "in_progress").length,
+        completed: filteredOrders.filter((o) => o.status === "completed").length,
+        collected: filteredOrders.filter((o) => o.status === "collected").length,
+      };
+
+      // Count by type
+      const byType: Record<string, { count: number; gross: number }> = {};
+      filteredOrders.forEach((o) => {
+        if (!byType[o.type]) byType[o.type] = { count: 0, gross: 0 };
+        byType[o.type].count++;
+        byType[o.type].gross += o.grossValue || 0;
+      });
+
+      // Top ores
+      const oreMap: Record<string, { id: string; name: string; totalValue: number; totalQty: number }> = {};
+      filteredOrders.forEach((o) => {
+        (o.ores || []).forEach((ore) => {
+          if (!oreMap[ore.id]) oreMap[ore.id] = { id: ore.id, name: ore.name, totalValue: 0, totalQty: 0 };
+          oreMap[ore.id].totalValue += ore.value || 0;
+          oreMap[ore.id].totalQty += ore.yieldQty || 0;
+        });
+      });
+      const topOres = Object.values(oreMap).sort((a, b) => b.totalValue - a.totalValue).slice(0, 10);
+
       return {
         totalOrders,
         totalYield,
         totalGross,
         totalExpenses: 0,
         totalNet: totalGross,
-        avgPerOrder: totalOrders > 0 ? totalGross / totalOrders : 0,
+        avgOrderValue: totalOrders > 0 ? totalGross / totalOrders : 0,
+        byStatus,
+        byType,
+        topOres,
       };
     }
     return getStats(activeId || undefined);
