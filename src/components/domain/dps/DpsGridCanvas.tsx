@@ -133,6 +133,14 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
       }
       if (!targetCol) return base;
 
+      // Widgets 2-col: solo se reordenan dentro del sidebar.
+      // Si se mueven a una col de 1-col, Three.js se destruye/recrea docenas
+      // de veces por segundo (un draftOrder por evento de puntero) → OOM crash.
+      if (
+        (draggedId === "flight-dynamics-3d" || draggedId === "ship-card" || draggedId === "ship-selector") &&
+        targetCol !== "sidebar"
+      ) return base;
+
       // Sin cambio si ya está en la misma posición
       const sourceItems = base[sourceCol];
       const sourceIdx   = sourceItems.indexOf(draggedId as WidgetId);
