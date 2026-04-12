@@ -149,10 +149,12 @@ export async function PATCH(request: NextRequest) {
           .single();
 
         if (existing) {
-          await supabase.from("mining_inventory").update({
+          const updates: any = {
             quantity: existing.quantity + ore.yieldQty,
             total_received: existing.total_received + ore.yieldQty,
-          }).eq("id", existing.id);
+          };
+          if (ore.quality) updates.quality = ore.quality;
+          await supabase.from("mining_inventory").update(updates).eq("id", existing.id);
         } else {
           await supabase.from("mining_inventory").insert({
             session_id: data.session_id,
@@ -160,6 +162,7 @@ export async function PATCH(request: NextRequest) {
             mineral_name: ore.name,
             quantity: ore.yieldQty,
             total_received: ore.yieldQty,
+            quality: ore.quality || null,
           });
         }
 

@@ -70,10 +70,13 @@ export default function PartyMiningDashboard() {
     inventory,
     movements,
     members,
+    sessions,
     updateOrderStatus,
     deleteWorkOrder,
     recordInventoryAction,
     clearInventory,
+    fetchSessions,
+    setActiveSession,
   } = useMiningStore();
 
   // ── Clear inventory confirmation ──
@@ -82,6 +85,16 @@ export default function PartyMiningDashboard() {
   // ── Realtime: party members see changes in real time ──
   useMiningRealtime();
   const broadcast = useMiningBroadcast();
+
+  // ── Auto-detect & load Supabase session for logged-in users ──
+  useEffect(() => {
+    if (activeSessionId) return;
+    fetchSessions().then(() => {
+      const allSessions = useMiningStore.getState().sessions;
+      const active = allSessions.find((s) => s.status === "active") || allSessions[0];
+      if (active) setActiveSession(active.id);
+    });
+  }, [activeSessionId, fetchSessions, setActiveSession]);
 
   // ── Sell price modal state ──
   const [sellModalItem, setSellModalItem] = useState<string | null>(null); // mineral_id (abbr)

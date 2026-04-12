@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   getSessions, getOrders, getActiveSessionId, setActiveSessionId,
   createSession, deleteSession, deleteOrder, collectOrder,
@@ -12,6 +12,15 @@ import {
 } from "@/lib/workOrderStore";
 import { useMiningStore } from "@/store/useMiningStore";
 import { useMiningRealtime, useMiningBroadcast } from "@/store/useMiningRealtime";
+import { useAuth } from "@/contexts/AuthContext";
+
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+interface SellLocation {
+  station: string;
+  system: string;
+  price: number;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -73,6 +82,9 @@ export default function WorkOrderDashboard() {
   // ── Distribution modal ──
   const [distOrderId, setDistOrderId] = useState<string | null>(null);
 
+  // ── Auth ──
+  const { user } = useAuth();
+
   // ── Supabase shared data (visible to all party members) ──
   const {
     activeSessionId: sbSessionId,
@@ -80,16 +92,40 @@ export default function WorkOrderDashboard() {
     inventory: sbInventory,
     movements: sbMovements,
     members: sbMembers,
+    sessions: sbSessions,
     updateOrderStatus: sbUpdateStatus,
     deleteWorkOrder: sbDeleteOrder,
     clearInventory: sbClearInventory,
     recordInventoryAction: sbRecordInventoryAction,
+    fetchSessions: sbFetchSessions,
+    setActiveSession: sbSetActiveSession,
   } = useMiningStore();
   useMiningRealtime();
   const broadcast = useMiningBroadcast();
 
+  // ── Auto-detect & load Supabase session for logged-in users ──
+  useEffect(() => {
+    if (!user || sbSessionId) return;
+    // Fetch sessions from Supabase, then auto-select the first active one
+    sbFetchSessions().then(() => {
+      const sessions = useMiningStore.getState().sessions;
+      const active = sessions.find((s) => s.status === "active") || sessions[0];
+      if (active) {
+        sbSetActiveSession(active.id);
+      }
+    });
+  }, [user, sbSessionId, sbFetchSessions, sbSetActiveSession]);
+
   // ── Clear inventory confirmation ──
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+
+  // ── Sell location modal state ──
+  const [sellModalItem, setSellModalItem] = useState<string | null>(null);
+  const [sellModalName, setSellModalName] = useState("");
+  const [sellLocations, setSellLocations] = useState<SellLocation[]>([]);
+  const [loadingSellData, setLoadingSellData] = useState(false);
+  const [bestPrices, setBestPrices] = useState<Record<string, SellLocation>>({});
+  const [bestPricesLoaded, setBestPricesLoaded] = useState(false);
 
   useEffect(() => {
     setSessions(getSessions());
@@ -249,6 +285,38 @@ export default function WorkOrderDashboard() {
     setInvAction(null);
     refresh();
   };
+
+  // Fetch best sell price for each inventory item
+  useEffect(() => {
+    if (tab !== "inventory" || mergedInventory.length === 0 || bestPricesLoaded) return;
+    const mineralIds = Array.from(new Set(mergedInventory.map((i) => i.mineralId)));
+    Promise.all(
+      mineralIds.map((id) => {
+        // Use the mineral abbreviation/id for the commodity lookup
+        return fetch(`/api/mining/commodity-prices?commodity=${id}&dir=buy`)
+          .then((r) => r.json())
+          .then((json) => ({ id, top: json.data?.[0] || null }))
+          .catch(() => ({ id, top: null }));
+      })
+    ).then((results) => {
+      const map: Record<string, SellLocation> = {};
+      for (const r of results) {
+        if (r.top) map[r.id] = r.top;
+      }
+      setBestPrices(map);
+      setBestPricesLoaded(true);
+    });
+  }, [tab, mergedInventory, bestPricesLoaded]);
+
+  const openSellModal = useCallback((mineralId: string, mineralName: string) => {
+    setSellModalItem(mineralId);
+    setSellModalName(mineralName);
+    setLoadingSellData(true);
+    fetch(`/api/mining/commodity-prices?commodity=${mineralId}&dir=buy`)
+      .then((r) => r.json())
+      .then((json) => { setSellLocations(json.data || []); setLoadingSellData(false); })
+      .catch(() => { setSellLocations([]); setLoadingSellData(false); });
+  }, []);
 
   // ═════════════════════════════════════════════════════════════════════════
 
@@ -449,11 +517,12 @@ export default function WorkOrderDashboard() {
             <div className="text-center py-12 text-zinc-600 text-sm">No materials in inventory. Collect completed orders to add materials.</div>
           ) : (
             <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg overflow-hidden">
-              <div className="grid grid-cols-[2fr_auto_1fr_1fr_auto] gap-2 px-4 py-2 bg-zinc-800/40 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40">
+              <div className="grid grid-cols-[2fr_auto_1fr_1fr_auto_auto] gap-2 px-4 py-2 bg-zinc-800/40 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40">
                 <span>Material</span>
                 <span className="text-center">Quality</span>
                 <span className="text-right">Available</span>
                 <span className="text-right">Total Received</span>
+                <span className="text-right">Best Price</span>
                 <span>Actions</span>
               </div>
               {mergedInventory.filter((i) => i.quantity > 0 || i.totalReceived > 0).map((item) => {
@@ -462,16 +531,20 @@ export default function WorkOrderDashboard() {
                 const qColor = q != null
                   ? q >= 800 ? "text-emerald-400" : q >= 500 ? "text-amber-400" : "text-zinc-400"
                   : "text-zinc-600";
+                const bestPrice = bestPrices[item.mineralId];
                 return (
-                <div key={item.mineralId} className="grid grid-cols-[2fr_auto_1fr_1fr_auto] gap-2 px-4 py-3 border-b border-zinc-800/30 items-center">
+                <div key={item.mineralId} className="grid grid-cols-[2fr_auto_1fr_1fr_auto_auto] gap-2 px-4 py-3 border-b border-zinc-800/30 items-center">
                   <span className="text-sm font-bold text-zinc-200 uppercase">{item.mineralName}</span>
                   <span className={`text-xs font-mono font-bold text-center min-w-[50px] ${qColor}`}>{qLabel}</span>
                   <span className={`text-sm font-mono text-right font-bold ${item.quantity > 0 ? "text-emerald-400" : "text-zinc-600"}`}>
                     {item.quantity.toFixed(1)}
                   </span>
                   <span className="text-xs font-mono text-zinc-500 text-right">{item.totalReceived.toFixed(1)}</span>
+                  <span className={`text-xs font-mono text-right ${bestPrice ? "text-amber-400 font-bold" : "text-zinc-600"}`}>
+                    {bestPrice ? `${bestPrice.price.toLocaleString()} aUEC` : "—"}
+                  </span>
                   <div className="flex gap-1">
-                    <button onClick={() => setInvAction({ mineralId: item.mineralId, mineralName: item.mineralName, type: "sell", qty: 0, member: "" })}
+                    <button onClick={() => openSellModal(item.mineralId, item.mineralName)}
                       className="px-2 py-1 bg-amber-500/10 border border-amber-500/30 rounded text-[9px] font-bold text-amber-400 hover:bg-amber-500/20">
                       Sell
                     </button>
@@ -725,6 +798,52 @@ export default function WorkOrderDashboard() {
           </div>
         );
       })()}
+
+      {/* ═══════ SELL LOCATION MODAL ═══════ */}
+      {sellModalItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-zinc-900 border-2 border-amber-500 rounded-xl p-6 w-full max-w-lg max-h-[80vh] overflow-hidden shadow-[0_0_30px_rgba(245,158,11,0.2)] flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-zinc-100">
+                Sell Locations — <span className="text-amber-400">{sellModalName}</span>
+              </h3>
+              <button onClick={() => setSellModalItem(null)} className="text-zinc-500 hover:text-zinc-300 text-xl">✕</button>
+            </div>
+            <p className="text-[11px] text-zinc-500 mb-3">Sorted by highest buy price (best for you to sell). Prices are per SCU.</p>
+            <div className="flex-1 overflow-y-auto space-y-0">
+              <div className="grid grid-cols-[1fr_0.7fr_auto] gap-2 px-3 py-1.5 bg-zinc-800/40 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40 sticky top-0">
+                <span>Station</span><span>System</span><span className="text-right">Price (aUEC/SCU)</span>
+              </div>
+              {loadingSellData ? (
+                <div className="text-center py-8 text-zinc-500 text-sm">Loading prices...</div>
+              ) : sellLocations.length === 0 ? (
+                <div className="text-center py-8 text-zinc-600 text-sm italic">No sell locations found for this commodity.</div>
+              ) : (
+                sellLocations.map((loc, i) => {
+                  const invItem = mergedInventory.find((it) => it.mineralId === sellModalItem);
+                  const totalValue = invItem ? loc.price * invItem.quantity : 0;
+                  return (
+                    <div key={`${loc.station}-${i}`} className={`grid grid-cols-[1fr_0.7fr_auto] gap-2 px-3 py-2.5 border-b border-zinc-800/30 items-center ${i === 0 ? "bg-amber-500/5 border-l-2 border-l-amber-500" : i < 3 ? "bg-emerald-500/5" : ""}`}>
+                      <div>
+                        <span className="text-xs font-bold text-zinc-200">{loc.station}</span>
+                        {i === 0 && <span className="ml-2 text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded font-bold uppercase">Best</span>}
+                      </div>
+                      <span className="text-[11px] text-zinc-400">{loc.system}</span>
+                      <div className="text-right">
+                        <span className={`text-sm font-mono font-bold ${i === 0 ? "text-amber-400" : i < 3 ? "text-emerald-400" : "text-zinc-300"}`}>{loc.price.toLocaleString()}</span>
+                        {totalValue > 0 && <div className="text-[9px] text-zinc-600">Total: {fmtAuec(totalValue)} aUEC</div>}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+            <div className="mt-4 pt-3 border-t border-zinc-700">
+              <button onClick={() => setSellModalItem(null)} className="w-full py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm font-bold hover:bg-zinc-700 transition-colors">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

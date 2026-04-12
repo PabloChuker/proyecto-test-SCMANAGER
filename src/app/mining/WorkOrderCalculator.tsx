@@ -44,6 +44,26 @@ interface RefiningMethod {
   costMultiplier: number;
 }
 
+interface SessionMember {
+  id: string;
+  display_name: string;
+  role: string;
+  avatar_url?: string;
+}
+
+interface SessionOption {
+  id: string;
+  name: string;
+  memberCount: number;
+}
+
+interface CrewMember {
+  id: string;
+  name: string;
+  shareType: "equal" | "fixed";
+  share: number;
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const TAB_CONFIG: { key: TabMode; label: string; icon: string }[] = [
@@ -173,6 +193,20 @@ export default function WorkOrderCalculator() {
   const [oreQuantities, setOreQuantities] = useState<Record<string, number>>({});
   const [oreQualities, setOreQualities] = useState<Record<string, number>>({});
 
+  // ── Crew state ──
+  const [crew, setCrew] = useState<CrewMember[]>([
+    { id: "crew1", name: "You", shareType: "equal", share: 1 },
+  ]);
+  const [newMemberName, setNewMemberName] = useState("");
+
+  // ── Active session crew (from Supabase) ──
+  const [availableSessions, setAvailableSessions] = useState<SessionOption[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState<string>("");
+  const [sessionCrew, setSessionCrew] = useState<SessionMember[]>([]);
+  const [crewLoaded, setCrewLoaded] = useState(false);
+  const [loadingCrew, setLoadingCrew] = useState(false);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+
   // ── Countdown Timer ──
   const timer = useCountdown();
 
@@ -238,6 +272,87 @@ export default function WorkOrderCalculator() {
     setOreQualities({});
   }, [mode]);
 
+  // ── Auto-load available sessions for crew ──
+  useEffect(() => {
+    if (!user) return;
+    setLoadingSessions(true);
+    const supabase = createClient();
+    supabase
+      .from("mining_sessions")
+      .select("id, name, mining_members(count)")
+      .then(({ data }) => {
+        if (data) {
+          setAvailableSessions(
+            data.map((s: any) => ({
+              id: s.id,
+              name: s.name || "Unnamed",
+              memberCount: s.mining_members?.[0]?.count || 0,
+            }))
+          );
+          // Auto-select the active Supabase session if available
+          if (supabaseSessionId) {
+            setSelectedSessionId(supabaseSessionId);
+          }
+        }
+        setLoadingSessions(false);
+      });
+  }, [user, supabaseSessionId]);
+
+  // Auto-load crew when a session is selected
+  const handleSessionSelect = useCallback(async (sessionId: string) => {
+    setSelectedSessionId(sessionId);
+    setCrewLoaded(false);
+    if (!sessionId) { setSessionCrew([]); return; }
+    setLoadingCrew(true);
+    try {
+      const res = await fetch(`/api/mining/members?session_id=${sessionId}`);
+      const json = await res.json();
+      setSessionCrew(json.data || []);
+    } catch { setSessionCrew([]); }
+    setLoadingCrew(false);
+  }, []);
+
+  // Auto-load crew when supabaseSessionId matches
+  useEffect(() => {
+    if (supabaseSessionId && selectedSessionId === supabaseSessionId && sessionCrew.length === 0 && !crewLoaded) {
+      handleSessionSelect(supabaseSessionId);
+    }
+  }, [supabaseSessionId, selectedSessionId, sessionCrew.length, crewLoaded, handleSessionSelect]);
+
+  const loadSessionCrew = useCallback(() => {
+    if (sessionCrew.length === 0) return;
+    const mapped: CrewMember[] = sessionCrew.map((m, i) => ({
+      id: `crew${Date.now()}-${i}`,
+      name: m.display_name,
+      shareType: "equal" as const,
+      share: 1,
+    }));
+    setCrew(mapped);
+    setCrewLoaded(true);
+  }, [sessionCrew]);
+
+  // Auto-load crew when session crew is fetched
+  useEffect(() => {
+    if (sessionCrew.length > 0 && !crewLoaded) {
+      loadSessionCrew();
+    }
+  }, [sessionCrew, crewLoaded, loadSessionCrew]);
+
+  const addCrewMember = () => {
+    const name = newMemberName.trim() || `Crew ${crew.length + 1}`;
+    setCrew([...crew, { id: `crew${Date.now()}`, name, shareType: "equal", share: 1 }]);
+    setNewMemberName("");
+  };
+
+  const removeCrewMember = (id: string) => {
+    if (crew.length > 1) setCrew(crew.filter((m) => m.id !== id));
+  };
+
+  const clearCrew = () => {
+    setCrew([{ id: "crew1", name: "You", shareType: "equal", share: 1 }]);
+    setCrewLoaded(false);
+  };
+
   // ── Yield for ship mining ──
   const getYield = (oreId: string, qty: number) => {
     if (!refinery || !method || qty <= 0) return 0;
@@ -288,7 +403,7 @@ export default function WorkOrderCalculator() {
       totalExpenses: 0,
       motraderFee: 0,
       netProfit: 0,
-      crew: [],
+      crew: crew.map((c) => ({ name: c.name, share: c.share, payout: 0 })),
       sellPrice: 0,
       countdownSeconds: mode === "ship" ? timer.totalInputSeconds : 0,
       countdownEndsAt: null, // store will calculate this
@@ -316,7 +431,11 @@ export default function WorkOrderCalculator() {
         motrader_fee: 0,
         countdown_seconds: mode === "ship" ? timer.totalInputSeconds : 0,
         expenses: [],
-        payouts: [],
+        payouts: crew.map((c) => ({
+          member_name: c.name,
+          share_pct: c.share,
+          amount: 0,
+        })),
       }).then(() => {
         // Broadcast to all party members so they see the order instantly
         broadcast("order_created");
@@ -352,7 +471,7 @@ export default function WorkOrderCalculator() {
       </div>
 
       {/* ── Main Content (two panels) ───────────────────────────────── */}
-      <div className="grid gap-6 grid-cols-1 max-w-2xl mx-auto">
+      <div className={`grid gap-6 ${mode === "share" ? "grid-cols-1 max-w-xl mx-auto" : "grid-cols-1 lg:grid-cols-2"}`}>
         {/* ═══════════════════════════════════════════════════════════ */}
         {/* LEFT PANEL — Materials / Ore Chooser                       */}
         {/* ═══════════════════════════════════════════════════════════ */}
@@ -599,6 +718,136 @@ export default function WorkOrderCalculator() {
             </div>
           </div>
         )}
+
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* RIGHT PANEL — Crew / Party                                  */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-700/40 bg-zinc-900/50">
+            <h3 className="text-sm font-bold tracking-[0.1em] uppercase text-zinc-300">
+              Crew / Party
+            </h3>
+            <span className="text-zinc-600 cursor-help text-lg" title="Crew members for this work order">👥</span>
+          </div>
+
+          <div className="p-4 space-y-4">
+            {/* Session crew selector */}
+            {user && availableSessions.length > 0 && (
+              <div className="border border-cyan-500/20 rounded-lg p-3 bg-cyan-500/5 space-y-2">
+                <div className="text-[10px] tracking-[0.1em] uppercase text-cyan-400 font-bold">
+                  Load crew from mining session:
+                </div>
+                <div className="flex items-center gap-2">
+                  <select
+                    value={selectedSessionId}
+                    onChange={(e) => handleSessionSelect(e.target.value)}
+                    className="flex-1 bg-zinc-800/70 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-cyan-500/50"
+                  >
+                    <option value="">Select a session...</option>
+                    {availableSessions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.memberCount} members)
+                      </option>
+                    ))}
+                  </select>
+                  {sessionCrew.length > 0 && !crewLoaded && (
+                    <button
+                      onClick={loadSessionCrew}
+                      className="px-4 py-2 bg-cyan-500/20 border border-cyan-500/40 rounded text-xs font-bold text-cyan-300 hover:bg-cyan-500/30 transition-colors whitespace-nowrap"
+                    >
+                      Load ({sessionCrew.length})
+                    </button>
+                  )}
+                </div>
+                {loadingCrew && <div className="text-[10px] text-zinc-500">Loading members...</div>}
+                {crewLoaded && (
+                  <div className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                    <span>✓</span> Crew loaded from session
+                  </div>
+                )}
+              </div>
+            )}
+
+            {loadingSessions && (
+              <div className="text-center py-2 text-xs text-zinc-500">Loading sessions...</div>
+            )}
+
+            {/* Add member input */}
+            <div className="flex items-center gap-2">
+              <span className="text-zinc-600 text-lg">👥</span>
+              <input
+                type="text"
+                value={newMemberName}
+                onChange={(e) => setNewMemberName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addCrewMember()}
+                placeholder="Add crew member..."
+                className="flex-1 bg-transparent text-xs text-zinc-200 border-b border-zinc-700 focus:outline-none focus:border-amber-500/50 pb-1"
+              />
+              <button
+                onClick={addCrewMember}
+                className="text-amber-400 hover:text-amber-300 text-xl leading-none"
+                title="Add member"
+              >
+                +
+              </button>
+            </div>
+
+            {/* Crew list */}
+            <div className="border border-amber-500/20 rounded-lg overflow-hidden">
+              <div className="grid grid-cols-[auto_1fr_auto] gap-2 px-3 py-1.5 bg-zinc-800/40 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40">
+                <span>#</span>
+                <span>Member</span>
+                <span></span>
+              </div>
+
+              {crew.map((member, i) => {
+                const sessionMember = crewLoaded
+                  ? sessionCrew.find((sc) => sc.display_name === member.name)
+                  : null;
+                return (
+                  <div
+                    key={member.id}
+                    className="grid grid-cols-[auto_1fr_auto] gap-2 px-3 py-2 border-b border-zinc-800/30 items-center"
+                  >
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${
+                      i === 0 ? "bg-amber-500/20 text-amber-400" : "bg-zinc-800 text-zinc-500"
+                    }`}>
+                      {i + 1}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {sessionMember?.avatar_url && (
+                        <img src={sessionMember.avatar_url} alt="" className="w-5 h-5 rounded-full object-cover border border-zinc-700" />
+                      )}
+                      <span className="text-xs font-bold text-zinc-200">{member.name}</span>
+                      {sessionMember && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold uppercase tracking-wider">
+                          {sessionMember.role}
+                        </span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => removeCrewMember(member.id)}
+                      className="text-zinc-600 hover:text-red-400 text-sm transition-colors"
+                      title="Remove"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              })}
+
+              {/* Clear all button */}
+              <div className="px-3 py-2 bg-zinc-800/20 flex justify-end">
+                <button
+                  onClick={clearCrew}
+                  className="text-[10px] font-bold text-red-400 hover:text-red-300 flex items-center gap-1"
+                >
+                  <span className="text-sm">⊗</span> CLEAR ALL
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── Submit Order Button ──────────────────────────────────── */}
