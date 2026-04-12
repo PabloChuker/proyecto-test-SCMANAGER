@@ -133,7 +133,7 @@ const WIDGET_WIDTH: Record<WidgetId, CardWidth> = {
 };
 
 const WIDGET_LABELS: Record<WidgetId, string> = {
-  weapons: "WEAPONS", missiles: "MISSILES", "strafe-profile": "STRAFE PROFILE", "turning-profile": "TURNING PROFILES",
+  weapons: "WEAPONS", missiles: "MISSILES & BOMBS", "strafe-profile": "STRAFE PROFILE", "turning-profile": "TURNING PROFILES",
   shields: "SHIELDS", powerplants: "POWER PLANTS", coolers: "COOLERS", "maneuver-radar": "G-FORCES",
   quantum: "QT DRIVES", radar: "RADAR", utility: "UTILITY", "combat-summary": "COMBAT",
   "power-grid": "POWER GRID", balance: "BALANCE",
@@ -323,18 +323,22 @@ function savePositions(positions: SavedPos[]) {
 // children renderiza en su tamaño natural. `overflow="visible"` sólo aplica a
 // widgets que abren popups (ship-selector) para que los dropdowns invadan
 // vecinos sin clip.
-function WidgetShell({ id, label, children, overflow = "hidden" }: {
+function WidgetShell({ id, label, icon, badge, children, overflow = "hidden" }: {
   id: WidgetId;
   label: string;
+  icon?: string;
+  badge?: string | number;
   children: React.ReactNode;
   overflow?: "hidden" | "visible";
 }) {
   const outerOverflow = overflow === "visible" ? "overflow-visible" : "overflow-hidden";
   return (
     <div className={`flex flex-col ${outerOverflow} rounded-sm`} data-widget-id={id}>
-      <div className="rgl-drag-handle flex items-center gap-1 px-1.5 py-[2px] bg-zinc-950/60 border border-zinc-800/30 border-b-0 select-none group rounded-t-sm shrink-0 cursor-grab active:cursor-grabbing">
-        <span className="text-[6px] font-mono text-zinc-700 tracking-[0.15em] group-hover:text-zinc-500 transition-colors uppercase">{label}</span>
+      <div className="rgl-drag-handle flex items-center gap-1.5 px-2 py-1.5 bg-zinc-950/60 border border-zinc-800/30 border-b-0 select-none group rounded-t-sm shrink-0 cursor-grab active:cursor-grabbing">
+        {icon && <img src={icon} alt="" className="w-3.5 h-3.5" style={{ opacity: 0.6 }} />}
+        <span className="text-[9px] font-mono font-medium text-zinc-500 tracking-[0.15em] group-hover:text-zinc-400 transition-colors uppercase">{label}</span>
         <span className="flex-1" />
+        {badge != null && <span className="text-[9px] font-mono text-zinc-600">{badge}</span>}
       </div>
       <div className="min-h-0">
         {children}
@@ -349,30 +353,30 @@ function renderWidget(
   ctx: any,
 ): React.ReactNode {
   const { weaponHps, missileHps, useful, store, setPickerHp, si, shipInfo, stats, flightMode, setFlightMode, fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount } = ctx;
-  const W = (children: React.ReactNode) => (
-    <WidgetShell id={wId} label={WIDGET_LABELS[wId]}>{children}</WidgetShell>
+  const W = (children: React.ReactNode, opts?: { icon?: string; badge?: string | number }) => (
+    <WidgetShell id={wId} label={WIDGET_LABELS[wId]} icon={opts?.icon} badge={opts?.badge}>{children}</WidgetShell>
   );
 
   switch (wId) {
     case "weapons":
-      return weaponHps.length > 0 ? W(<HpGroup title="WEAPONS" icon="/icons/weapons.png" hps={weaponHps} store={store} onClickHp={setPickerHp} accent="#eab308" />) : null;
+      return weaponHps.length > 0 ? W(<HpGroup hps={weaponHps} store={store} onClickHp={setPickerHp} />, { icon: "/icons/weapons.png", badge: weaponHps.length }) : null;
     case "missiles":
-      return missileHps.length > 0 ? W(<HpGroup title="MISSILES & BOMBS" icon="/icons/missile.png" hps={missileHps} store={store} onClickHp={setPickerHp} accent="#f97316" />) : null;
+      return missileHps.length > 0 ? W(<HpGroup hps={missileHps} store={store} onClickHp={setPickerHp} />, { icon: "/icons/missile.png", badge: missileHps.length }) : null;
     case "strafe-profile":
       return W(<StrafeProfileTabs shipData={si} />);
     case "turning-profile":
-      return W(<div className="bg-zinc-900/80 border border-zinc-800/60 p-3"><div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-1 text-center">Turning Profiles</div><div className="flex justify-center"><TurningProfileRadar shipData={si} /></div></div>);
+      return W(<div className="bg-zinc-900/80 border border-zinc-800/60 p-3"><div className="flex justify-center"><TurningProfileRadar shipData={si} /></div></div>);
     case "shields": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "SHIELD");
-      return hps.length > 0 ? W(<HpGroup title={CAT_CONFIG.SHIELD.label} icon={CAT_CONFIG.SHIELD.icon} hps={hps} store={store} onClickHp={setPickerHp} accent={CAT_CONFIG.SHIELD.accent} />) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} store={store} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.SHIELD.icon, badge: hps.length }) : null;
     }
     case "powerplants": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "POWER_PLANT");
-      return hps.length > 0 ? W(<HpGroup title={CAT_CONFIG.POWER_PLANT.label} icon={CAT_CONFIG.POWER_PLANT.icon} hps={hps} store={store} onClickHp={setPickerHp} accent={CAT_CONFIG.POWER_PLANT.accent} />) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} store={store} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.POWER_PLANT.icon, badge: hps.length }) : null;
     }
     case "coolers": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "COOLER");
-      return hps.length > 0 ? W(<HpGroup title={CAT_CONFIG.COOLER.label} icon={CAT_CONFIG.COOLER.icon} hps={hps} store={store} onClickHp={setPickerHp} accent={CAT_CONFIG.COOLER.accent} />) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} store={store} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.COOLER.icon, badge: hps.length }) : null;
     }
     case "maneuver-radar":
       return W(<GForceProfileTabs shipData={shipInfo} />);
@@ -390,20 +394,19 @@ function renderWidget(
       );
     case "quantum": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "QUANTUM_DRIVE");
-      return hps.length > 0 ? W(<HpGroup title={CAT_CONFIG.QUANTUM_DRIVE.label} icon={CAT_CONFIG.QUANTUM_DRIVE.icon} hps={hps} store={store} onClickHp={setPickerHp} accent={CAT_CONFIG.QUANTUM_DRIVE.accent} />) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} store={store} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.QUANTUM_DRIVE.icon, badge: hps.length }) : null;
     }
     case "radar": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "RADAR");
-      return hps.length > 0 ? W(<HpGroup title={CAT_CONFIG.RADAR.label} icon={CAT_CONFIG.RADAR.icon} hps={hps} store={store} onClickHp={setPickerHp} accent={CAT_CONFIG.RADAR.accent} />) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} store={store} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.RADAR.icon, badge: hps.length }) : null;
     }
     case "utility": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "UTILITY" || hp.resolvedCategory === "MINING");
-      return hps.length > 0 ? W(<HpGroup title="UTILITY" icon="/icons/tractor_beam.png" hps={hps} store={store} onClickHp={setPickerHp} accent="#94a3b8" />) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} store={store} onClickHp={setPickerHp} />, { icon: "/icons/tractor_beam.png", badge: hps.length }) : null;
     }
     case "combat-summary":
       return W(
         <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-1.5">
-          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase border-b border-zinc-800/40 pb-1">Combat Summary</div>
           <div className="grid grid-cols-2 gap-2">
             <CompactStat label="DPS" value={fmtDps(stats.totalDps)} color={flightMode === "NAV" ? "#52525b" : "#ef4444"} locked={flightMode === "NAV"} />
             <CompactStat label="ALPHA" value={fmtStat(stats.totalAlpha)} color={flightMode === "NAV" ? "#52525b" : "#f97316"} locked={flightMode === "NAV"} />
@@ -759,21 +762,14 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 // Sub-components
 // =============================================================================
 
-function HpGroup({ title, icon, hps, store, onClickHp, accent }: { title: string; icon: string; hps: ResolvedHardpoint[]; store: ReturnType<typeof useLoadoutStore>; onClickHp: (hp: ResolvedHardpoint) => void; accent: string }) {
+function HpGroup({ hps, store, onClickHp }: { hps: ResolvedHardpoint[]; store: ReturnType<typeof useLoadoutStore>; onClickHp: (hp: ResolvedHardpoint) => void }) {
   if (hps.length === 0) return null;
   const { getEffectiveItem, overrides, isComponentOn, toggleComponent } = store;
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60">
-      <div className="flex items-center gap-2 px-2 py-1 border-b border-zinc-800/50 bg-zinc-900/50">
-        <img src={icon} alt="" className="w-4 h-4" style={{ opacity: 0.7 }} />
-        <span className="text-[9px] font-mono font-medium tracking-[0.15em] uppercase text-zinc-400">{title}</span>
-        <span className="text-[9px] font-mono text-zinc-700 ml-auto">{hps.length}</span>
-      </div>
-      <div>
-        {hps.map(hp => (
-          <HardpointSlot key={hp.id} hp={hp} item={getEffectiveItem(hp.id)} isOverridden={overrides.has(hp.id)} isOn={isComponentOn(hp.hardpointName)} onClick={() => onClickHp(hp)} onTogglePower={() => toggleComponent(hp.hardpointName)} childSlots={hp.children} isComponentOn={isComponentOn} toggleComponent={toggleComponent} />
-        ))}
-      </div>
+      {hps.map(hp => (
+        <HardpointSlot key={hp.id} hp={hp} item={getEffectiveItem(hp.id)} isOverridden={overrides.has(hp.id)} isOn={isComponentOn(hp.hardpointName)} onClick={() => onClickHp(hp)} onTogglePower={() => toggleComponent(hp.hardpointName)} childSlots={hp.children} isComponentOn={isComponentOn} toggleComponent={toggleComponent} />
+      ))}
     </div>
   );
 }
