@@ -1,8 +1,9 @@
 export const dynamic = "force-dynamic";
 // =============================================================================
-// SC LABS — /api/trade/filters
-// Returns dropdown data for the trade route calculator filters:
-// vehicles (ships with cargo), terminals, orbits (planets), star systems.
+// SC LABS — /api/trade/filters v2
+// Returns dropdown data for the trade route calculator.
+// Pulls systems, stations, and commodities from commodity_prices.
+// Vehicles still come from the ships table.
 // =============================================================================
 
 import { NextResponse } from "next/server";
@@ -13,7 +14,7 @@ export const revalidate = 600; // 10 min cache
 
 export async function GET() {
   try {
-    // Ships with cargo > 0 (deduplicated by name, take max cargo)
+    // Ships with cargo > 0 (unchanged)
     const vehicles: any[] = await sql.unsafe(
       `SELECT name, MAX(cargo_capacity) as cargo
        FROM ships WHERE cargo_capacity > 0
@@ -22,61 +23,51 @@ export async function GET() {
       [],
     );
 
-    // All terminals grouped by system
-    const terminals: any[] = await sql.unsafe(
-      `SELECT id, nickname, name, planet_name, star_system_name
-       FROM trade_terminals
-       WHERE is_available = 1
-       ORDER BY star_system_name, planet_name, name`,
-      [],
-    );
-
-    // Distinct orbits (planets)
-    const orbits: any[] = await sql.unsafe(
-      `SELECT DISTINCT planet_name, star_system_name
-       FROM trade_terminals
-       WHERE planet_name IS NOT NULL AND planet_name != ''
-       ORDER BY star_system_name, planet_name`,
-      [],
-    );
-
-    // Star systems
+    // Distinct systems from commodity_prices
     const systems: any[] = await sql.unsafe(
-      `SELECT id, name FROM trade_star_systems ORDER BY name`,
+      `SELECT DISTINCT system FROM commodity_prices ORDER BY system`,
       [],
     );
 
-    // Commodities for filter
+    // Distinct stations with their system
+    const stations: any[] = await sql.unsafe(
+      `SELECT DISTINCT station, system
+       FROM commodity_prices
+       ORDER BY system, station`,
+      [],
+    );
+
+    // Distinct commodities — enrich with trade_commodities name when available
     const commodities: any[] = await sql.unsafe(
-      `SELECT id, name, code, kind FROM trade_commodities
-       WHERE is_available = 1
-       ORDER BY name`,
+      `SELECT DISTINCT
+         cp.commodity_abbr as abbr,
+         COALESCE(tc.name, cp.commodity_abbr) as name,
+         COALESCE(tc.kind, '') as kind
+       FROM commodity_prices cp
+       LEFT JOIN trade_commodities tc ON tc.code = cp.commodity_abbr
+       ORDER BY COALESCE(tc.name, cp.commodity_abbr)`,
       [],
     );
 
-    return NextResponse.json({
-      vehicles: vehicles.map((v) => ({
-        name: v.name,
-        cargo: Math.round(Number(v.cargo)),
-      })),
-      terminals: terminals.map((t) => ({
-        id: t.id,
-        label: t.nickname || t.name,
-        planet: t.planet_name || "",
-        system: t.star_system_name || "",
-      })),
-      orbits: orbits.map((o) => ({
-        planet: o.planet_name,
-        system: o.star_system_name,
-      })),
-      systems: systems.map((s) => ({ id: s.id, name: s.name })),
-      commodities: commodities.map((c) => ({
-        id: c.id,
-        name: c.name,
-        code: c.code,
-        kind: c.kind,
-      })),
-    }, { headers: secureHeaders() });
+    return NextResponse.json(
+      {
+        vehicles: vehicles.map((v) => ({
+          name: v.name,
+          cargo: Math.round(Number(v.cargo)),
+        })),
+        systems: systems.map((s) => s.system),
+        stations: stations.map((s) => ({
+          name: s.station,
+          system: s.system,
+        })),
+        commodities: commodities.map((c) => ({
+          abbr: c.abbr,
+          name: c.name,
+          kind: c.kind,
+        })),
+      },
+      { headers: secureHeaders() },
+    );
   } catch (error) {
     console.error("[API /trade/filters] Error:", error);
     return NextResponse.json(

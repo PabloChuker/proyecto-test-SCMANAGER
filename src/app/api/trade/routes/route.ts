@@ -1,7 +1,8 @@
 export const dynamic = "force-dynamic";
 // =============================================================================
-// SC LABS — /api/trade/routes v2
-// Calculates profitable trade routes with advanced filtering.
+// SC LABS — /api/trade/routes v3
+// Calculates profitable trade routes from the commodity_prices table.
+// commodity_prices has: commodity_abbr, station, system, direction, price
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -18,7 +19,7 @@ import {
 export const revalidate = 300;
 
 const SORT_MAP: Record<string, string> = {
-  profit: "profit",
+  profit: "total_profit",
   roi: "roi",
   profit_per_scu: "profit_per_scu",
 };
@@ -26,24 +27,16 @@ const SORT_MAP: Record<string, string> = {
 interface RouteQueryParams {
   cargo_scu: number;
   max_investment: number | null;
-  id_commodity: number | null;
-  system_start: number | null;
-  system_end: number | null;
-  orbit_start: string;
-  orbit_end: string;
-  terminal_start: number | null;
-  terminal_end: number | null;
+  commodity: string;
+  system_start: string;
+  system_end: string;
+  station_start: string;
+  station_end: string;
   min_profit: number;
   page: number;
   limit: number;
   sortBy: string;
   sortOrder: "ASC" | "DESC";
-}
-
-function parseParam(val: string | null): number | null {
-  if (!val) return null;
-  const n = parseInt(val, 10);
-  return isNaN(n) || n <= 0 ? null : n;
 }
 
 async function handleQuery(p: RouteQueryParams) {
@@ -53,60 +46,53 @@ async function handleQuery(p: RouteQueryParams) {
   const minProfit = Math.max(0, p.min_profit || 0);
   const sortBy = validateSortColumn(p.sortBy, SORT_MAP, "profit");
   const sortOrder = validateSortDir(p.sortOrder);
-  const sortCol = SORT_MAP[sortBy] || "profit";
-  const orbitStart = sanitizeString(p.orbit_start, 100);
-  const orbitEnd = sanitizeString(p.orbit_end, 100);
+  const sortCol = SORT_MAP[sortBy] || "total_profit";
 
   // Build parameterized query
   const params: any[] = [cargo]; // $1 = cargo_scu
   let idx = 2;
   const conds = [
-    "bp.price_buy > 0",
-    "sp.price_sell > 0",
-    "bp.status_buy > 0",
-    "sp.status_sell > 0",
-    "bp.id_terminal != sp.id_terminal",
-    "sp.price_sell > bp.price_buy", // only profitable
+    "bp.direction = 'buy'",
+    "sp.direction = 'sell'",
+    "bp.price > 0",
+    "sp.price > 0",
+    "sp.price > bp.price",
+    "bp.station != sp.station",
   ];
 
-  // Optional filters
-  if (p.id_commodity) {
-    conds.push(`tc.id = $${idx}`);
-    params.push(validateInt(p.id_commodity, 0, 0, 999999));
+  const commodity = sanitizeString(p.commodity, 20);
+  const systemStart = sanitizeString(p.system_start, 50);
+  const systemEnd = sanitizeString(p.system_end, 50);
+  const stationStart = sanitizeString(p.station_start, 100);
+  const stationEnd = sanitizeString(p.station_end, 100);
+
+  if (commodity) {
+    conds.push(`bp.commodity_abbr = $${idx}`);
+    params.push(commodity);
     idx++;
   }
-  if (p.system_start) {
-    conds.push(`bt.id_star_system = $${idx}`);
-    params.push(validateInt(p.system_start, 0, 0, 999999));
+  if (systemStart) {
+    conds.push(`bp.system = $${idx}`);
+    params.push(systemStart);
     idx++;
   }
-  if (p.system_end) {
-    conds.push(`st.id_star_system = $${idx}`);
-    params.push(validateInt(p.system_end, 0, 0, 999999));
+  if (systemEnd) {
+    conds.push(`sp.system = $${idx}`);
+    params.push(systemEnd);
     idx++;
   }
-  if (orbitStart) {
-    conds.push(`bt.planet_name = $${idx}`);
-    params.push(orbitStart);
+  if (stationStart) {
+    conds.push(`bp.station = $${idx}`);
+    params.push(stationStart);
     idx++;
   }
-  if (orbitEnd) {
-    conds.push(`st.planet_name = $${idx}`);
-    params.push(orbitEnd);
-    idx++;
-  }
-  if (p.terminal_start) {
-    conds.push(`bp.id_terminal = $${idx}`);
-    params.push(validateInt(p.terminal_start, 0, 0, 999999));
-    idx++;
-  }
-  if (p.terminal_end) {
-    conds.push(`sp.id_terminal = $${idx}`);
-    params.push(validateInt(p.terminal_end, 0, 0, 999999));
+  if (stationEnd) {
+    conds.push(`sp.station = $${idx}`);
+    params.push(stationEnd);
     idx++;
   }
   if (p.max_investment && p.max_investment > 0) {
-    conds.push(`(bp.price_buy * $1) <= $${idx}`);
+    conds.push(`(bp.price * $1) <= $${idx}`);
     params.push(p.max_investment);
     idx++;
   }
@@ -115,31 +101,35 @@ async function handleQuery(p: RouteQueryParams) {
 
   const rows: any[] = await sql.unsafe(
     `SELECT
-      tc.id as cid, tc.name as cname, tc.code as ccode, tc.kind as ckind,
-      bt.id as bt_id, bt.nickname as bt_nick, bt.name as bt_name,
-      bt.star_system_name as bt_sys, bt.planet_name as bt_planet,
-      st.id as st_id, st.nickname as st_nick, st.name as st_name,
-      st.star_system_name as st_sys, st.planet_name as st_planet,
-      bp.price_buy, sp.price_sell,
-      (sp.price_sell - bp.price_buy) as profit_per_scu,
-      (sp.price_sell * $1 - bp.price_buy * $1) as profit,
-      CASE WHEN bp.price_buy > 0
-           THEN ((sp.price_sell - bp.price_buy)::float / bp.price_buy) * 100
+      bp.commodity_abbr,
+      COALESCE(tc.name, bp.commodity_abbr) as commodity_name,
+      COALESCE(tc.kind, '') as commodity_kind,
+      bp.station  as buy_station,
+      bp.system   as buy_system,
+      bp.price    as buy_price,
+      sp.station  as sell_station,
+      sp.system   as sell_system,
+      sp.price    as sell_price,
+      (sp.price - bp.price) as profit_per_scu,
+      (sp.price - bp.price) * $1 as total_profit,
+      CASE WHEN bp.price > 0
+           THEN ((sp.price - bp.price)::float / bp.price) * 100
            ELSE 0 END as roi
-     FROM trade_commodities tc
-     JOIN trade_prices bp ON bp.id_commodity = tc.id
-     JOIN trade_terminals bt ON bt.id = bp.id_terminal
-     JOIN trade_prices sp ON sp.id_commodity = tc.id
-     JOIN trade_terminals st ON st.id = sp.id_terminal
+     FROM commodity_prices bp
+     JOIN commodity_prices sp
+       ON sp.commodity_abbr = bp.commodity_abbr
+       AND sp.direction = 'sell'
+     LEFT JOIN trade_commodities tc
+       ON tc.code = bp.commodity_abbr
      ${where}
      ORDER BY ${sortCol} ${sortOrder}
      LIMIT 5000`,
     params,
   );
 
-  // Apply min profit filter client-side (simpler than another param)
+  // Apply min profit filter
   const filtered = minProfit > 0
-    ? rows.filter((r) => Number(r.profit) >= minProfit)
+    ? rows.filter((r) => Number(r.total_profit) >= minProfit)
     : rows;
 
   const total = filtered.length;
@@ -148,15 +138,25 @@ async function handleQuery(p: RouteQueryParams) {
 
   return {
     routes: slice.map((r) => ({
-      commodity: { id: r.cid, name: r.cname, code: r.ccode, kind: r.ckind },
-      buyTerminal: { id: r.bt_id, name: r.bt_nick || r.bt_name, system: r.bt_sys, planet: r.bt_planet },
-      sellTerminal: { id: r.st_id, name: r.st_nick || r.st_name, system: r.st_sys, planet: r.st_planet },
-      priceBuy: Number(r.price_buy),
-      priceSell: Number(r.price_sell),
+      commodity: {
+        abbr: r.commodity_abbr,
+        name: r.commodity_name,
+        kind: r.commodity_kind,
+      },
+      buyStation: {
+        name: r.buy_station,
+        system: r.buy_system,
+      },
+      sellStation: {
+        name: r.sell_station,
+        system: r.sell_system,
+      },
+      priceBuy: Number(r.buy_price),
+      priceSell: Number(r.sell_price),
       profitPerScu: Number(r.profit_per_scu),
-      totalProfit: Number(r.profit),
+      totalProfit: Number(r.total_profit),
       roi: Number(r.roi),
-      investment: cargo * Number(r.price_buy),
+      investment: cargo * Number(r.buy_price),
     })),
     total,
     page,
@@ -171,14 +171,12 @@ export async function GET(request: NextRequest) {
     const s = new URL(request.url).searchParams;
     const result = await handleQuery({
       cargo_scu: parseInt(s.get("cargo_scu") || "100", 10),
-      max_investment: parseParam(s.get("max_investment")),
-      id_commodity: parseParam(s.get("id_commodity")),
-      system_start: parseParam(s.get("system_start")),
-      system_end: parseParam(s.get("system_end")),
-      orbit_start: s.get("orbit_start") || "",
-      orbit_end: s.get("orbit_end") || "",
-      terminal_start: parseParam(s.get("terminal_start")),
-      terminal_end: parseParam(s.get("terminal_end")),
+      max_investment: s.get("max_investment") ? parseInt(s.get("max_investment")!, 10) : null,
+      commodity: s.get("commodity") || "",
+      system_start: s.get("system_start") || "",
+      system_end: s.get("system_end") || "",
+      station_start: s.get("station_start") || "",
+      station_end: s.get("station_end") || "",
       min_profit: parseFloat(s.get("min_profit") || "0"),
       page: parseInt(s.get("page") || "1", 10),
       limit: parseInt(s.get("limit") || "30", 10),
@@ -188,24 +186,29 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(result, { headers: secureHeaders() });
   } catch (error) {
     console.error("[API /trade/routes GET]", error);
-    return NextResponse.json({ error: "Error al calcular rutas" }, { status: 500, headers: secureHeaders() });
+    return NextResponse.json(
+      { error: "Error al calcular rutas" },
+      { status: 500, headers: secureHeaders() },
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await parsePostBody<Record<string, any>>(request);
-    if (!body) return NextResponse.json({ error: "Invalid body" }, { status: 400, headers: secureHeaders() });
+    if (!body)
+      return NextResponse.json(
+        { error: "Invalid body" },
+        { status: 400, headers: secureHeaders() },
+      );
     const result = await handleQuery({
       cargo_scu: body.cargo_scu || 100,
       max_investment: body.max_investment || null,
-      id_commodity: body.id_commodity || null,
-      system_start: body.system_start || null,
-      system_end: body.system_end || null,
-      orbit_start: body.orbit_start || "",
-      orbit_end: body.orbit_end || "",
-      terminal_start: body.terminal_start || null,
-      terminal_end: body.terminal_end || null,
+      commodity: body.commodity || "",
+      system_start: body.system_start || "",
+      system_end: body.system_end || "",
+      station_start: body.station_start || "",
+      station_end: body.station_end || "",
       min_profit: body.min_profit || 0,
       page: body.page || 1,
       limit: body.limit || 30,
@@ -215,6 +218,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result, { headers: secureHeaders() });
   } catch (error) {
     console.error("[API /trade/routes POST]", error);
-    return NextResponse.json({ error: "Error al calcular rutas" }, { status: 500, headers: secureHeaders() });
+    return NextResponse.json(
+      { error: "Error al calcular rutas" },
+      { status: 500, headers: secureHeaders() },
+    );
   }
 }
