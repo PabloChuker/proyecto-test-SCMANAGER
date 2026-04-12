@@ -30,7 +30,6 @@ import {
 } from "@dnd-kit/core";
 import {
   SortableContext,
-  arrayMove,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 
@@ -66,22 +65,20 @@ function cloneOrder(order: ColumnOrder): ColumnOrder {
 // Dado el centro Y del elemento arrastrado y el contenedor de columna,
 // devuelve el índice de inserción recorriendo los data-widget-id del DOM.
 // La tarjeta del propio dragged (excludeId) se ignora al calcular posiciones.
+// Devuelve el índice de inserción en colItems según la posición Y del pointer.
+// colItems debe ser la lista SIN la tarjeta arrastrada para que las posiciones
+// del DOM sean estables (la tarjeta arrastrada tiene un transform que sigue al pointer).
 function getInsertIndexByY(
   colEl: HTMLElement,
   pointerY: number,
   colItems: WidgetId[],
 ): number {
-  console.log("[dps] getInsertIndexByY", { pointerY, colItems, colElTag: colEl.tagName, colElChildren: colEl.children.length });
   for (let i = 0; i < colItems.length; i++) {
-    const id = colItems[i];
-    const cardEl = colEl.querySelector(`[data-widget-id="${id}"]`);
-    if (!cardEl) { console.log(`  [dps]   ${id}: NOT FOUND in DOM`); continue; }
+    const cardEl = colEl.querySelector(`[data-widget-id="${colItems[i]}"]`);
+    if (!cardEl) continue;
     const rect = cardEl.getBoundingClientRect();
-    const centerY = rect.top + rect.height / 2;
-    console.log(`  [dps]   ${id}: centerY=${centerY.toFixed(0)}, pointerY=${pointerY.toFixed(0)}, insert=${pointerY < centerY}`);
-    if (pointerY < centerY) return i;
+    if (pointerY < rect.top + rect.height / 2) return i;
   }
-  console.log(`  [dps]   -> END (${colItems.length})`);
   return colItems.length;
 }
 
@@ -191,8 +188,6 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
     const activatorY = (event.activatorEvent as PointerEvent).clientY ?? 0;
     const pointerY   = activatorY + event.delta.y;
 
-    console.log("[dps] DragOver", { draggedId, overId, activatorY, deltaY: event.delta.y, pointerY });
-
     const colElMap: Record<ColumnKey, HTMLDivElement | null> = {
       col0:    col0ElRef.current,
       col1:    col1ElRef.current,
@@ -218,40 +213,24 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
       // Widgets de 2 columnas: solo van al sidebar
       if (TWO_COL_IDS.has(draggedId) && targetCol !== "sidebar") return base;
 
-      const sourceIdx = base[sourceCol].indexOf(draggedId as WidgetId);
-      if (sourceIdx === -1) return base;
-
       const next = cloneOrder(base);
 
-      if (sourceCol === targetCol) {
-        // ── Reorden dentro de la misma columna ──────────────────────────────
-        if (COLUMN_KEYS.includes(overId as ColumnKey)) {
-          // Sobre el contenedor de columna, no una tarjeta concreta: sin cambio
-          return base;
-        }
-        const targetIdx = next[targetCol].indexOf(overId as WidgetId);
-        if (targetIdx === -1 || targetIdx === sourceIdx) return base;
-        next[targetCol] = arrayMove(next[targetCol], sourceIdx, targetIdx);
+      // Quitar la tarjeta arrastrada de donde esté ahora
+      next[sourceCol] = next[sourceCol].filter((id) => id !== draggedId);
+
+      // Ítems de la columna destino sin la tarjeta arrastrada (posiciones DOM estables)
+      const targetItems = next[targetCol].filter((id) => id !== (draggedId as WidgetId));
+
+      // Posición de inserción siempre por Y del pointer
+      let insertIdx: number;
+      if (colElMap[targetCol]) {
+        insertIdx = getInsertIndexByY(colElMap[targetCol]!, pointerY, targetItems);
       } else {
-        // ── Movimiento entre columnas ────────────────────────────────────────
-        next[sourceCol] = next[sourceCol].filter((id) => id !== draggedId);
-
-        let insertIdx: number;
-
-        if (!COLUMN_KEYS.includes(overId as ColumnKey)) {
-          // over.id es una tarjeta concreta: insertar justo antes de ella
-          insertIdx = next[targetCol].indexOf(overId as WidgetId);
-          if (insertIdx === -1) insertIdx = next[targetCol].length;
-        } else if (colElMap[targetCol]) {
-          // over.id es el contenedor de columna: calcular posición por Y del pointer
-          insertIdx = getInsertIndexByY(colElMap[targetCol]!, pointerY, next[targetCol]);
-        } else {
-          // Fallback: añadir al final
-          insertIdx = next[targetCol].length;
-        }
-
-        next[targetCol].splice(insertIdx, 0, draggedId as WidgetId);
+        insertIdx = targetItems.length;
       }
+
+      targetItems.splice(insertIdx, 0, draggedId as WidgetId);
+      next[targetCol] = targetItems;
 
       return next;
     });
