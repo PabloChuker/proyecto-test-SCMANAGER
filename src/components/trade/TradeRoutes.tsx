@@ -71,7 +71,7 @@ export default function TradeRoutes() {
   }, []);
 
   const filteredVehicles =
-    filters?.vehicles.filter((v) =>
+    filters?.vehicles?.filter((v) =>
       v.name.toLowerCase().includes(vehicleSearch.toLowerCase()),
     ) || [];
 
@@ -79,24 +79,31 @@ export default function TradeRoutes() {
   useEffect(() => {
     fetch("/api/trade/filters")
       .then((r) => r.json())
-      .then(setFilters)
-      .catch(() => {});
+      .then((data) => {
+        // Only set filters if the response has the expected shape
+        if (data && Array.isArray(data.systems)) {
+          setFilters(data);
+        } else {
+          console.warn("[TradeRoutes] filters response invalid:", data);
+        }
+      })
+      .catch((err) => console.error("[TradeRoutes] filters fetch error:", err));
   }, []);
 
   // When vehicle changes, update cargo
   useEffect(() => {
-    if (!vehicle || !filters) return;
+    if (!vehicle || !filters?.vehicles) return;
     const v = filters.vehicles.find((v) => v.name === vehicle);
     if (v) setCargoScu(v.cargo);
   }, [vehicle, filters]);
 
   // Filtered stations based on selected system
   const stationsStart =
-    filters?.stations.filter(
+    filters?.stations?.filter(
       (s) => !systemStart || s.system === systemStart,
     ) || [];
   const stationsEnd =
-    filters?.stations.filter(
+    filters?.stations?.filter(
       (s) => !systemEnd || s.system === systemEnd,
     ) || [];
 
