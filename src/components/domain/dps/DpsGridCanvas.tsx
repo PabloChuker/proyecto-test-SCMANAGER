@@ -1,14 +1,18 @@
 // =============================================================================
-// AL FILO — DpsGridCanvas v3
+// AL FILO — DpsGridCanvas v4
 //
-// Fix cross-column drag: el item se mueve en tiempo real entre columnas
-// durante el drag (onDragOver), no solo en onDragEnd. Esto permite que
-// cada SortableContext vea el item correcto y calcule la posición de drop.
+// Arquitectura: un único SortableContext plano con todas las tarjetas.
+// Cada tarjeta se portalea a su contenedor de columna (DropColumn).
+// Las tarjetas NUNCA se desmontan al cruzar columnas — solo cambia el
+// portal target — por lo que los contextos WebGL (Three.js) sobreviven.
+//
+// Grid: 5 columnas iguales (repeat(5, UNIT px)).
+// col0..col2 = zona de 1 col. sidebar = zona de 2 cols (gridColumn 4/span 2).
 // =============================================================================
 
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -35,12 +39,10 @@ import { DpsGridCard } from "./DpsGridCard";
 // ── Configuración de columnas ─────────────────────────────────────────────────
 const COLUMN_KEYS: ColumnKey[] = ["col0", "col1", "col2", "sidebar"];
 
-const COLUMNS: { key: ColumnKey; colSpan: 1 | 2 }[] = [
-  { key: "col0",    colSpan: 1 },
-  { key: "col1",    colSpan: 1 },
-  { key: "col2",    colSpan: 1 },
-  { key: "sidebar", colSpan: 2 },
-];
+// Widgets que ocupan siempre 2 columnas: solo van al sidebar.
+// Bloquear su cruce en handleDragOver evita que el portal target cambie
+// durante el drag (y con ello evita recrear los contextos WebGL).
+const TWO_COL_IDS = new Set<string>(["ship-card", "flight-dynamics-3d", "ship-selector"]);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function findColumn(id: string, order: ColumnOrder): ColumnKey | null {
@@ -89,27 +91,57 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
   const unit = getUnit(containerWidth);
   const colPadding = getColumnPadding(unit);
 
-  // ── Draft order: espejo local del columnOrder que se actualiza en tiempo real
-  // mientras el usuario arrastra. Al soltar se persiste via moveCard().
-  // Al cancelar se descarta. Permite que cada SortableContext vea el item
-  // en la columna correcta durante el drag cross-column.
+  // ── Portal targets: refs a los contenedores de columna ──────────────────────
+  // Se usan refs (no state) para evitar re-renders innecesarios.
+  // useLayoutEffect dispara antes del primer paint → no hay flash.
+  const col0ElRef    = useRef<HTMLDivElement | null>(null);
+  const col1ElRef    = useRef<HTMLDivElement | null>(null);
+  const col2ElRef    = useRef<HTMLDivElement | null>(null);
+  const sidebarElRef = useRef<HTMLDivElement | null>(null);
+
+  const [colsReady, setColsReady] = useState(false);
+  useLayoutEffect(() => { setColsReady(true); }, []);
+
+  const getColEl = (col: ColumnKey): HTMLDivElement | null => {
+    if (!colsReady) return null;
+    if (col === "col0")    return col0ElRef.current;
+    if (col === "col1")    return col1ElRef.current;
+    if (col === "col2")    return col2ElRef.current;
+    return sidebarElRef.current;
+  };
+
+  // ── Draft order ──────────────────────────────────────────────────────────────
   const [activeId, setActiveId] = useState<WidgetId | null>(null);
   const [draftOrder, setDraftOrder] = useState<ColumnOrder | null>(null);
 
-  // El orden que los SortableContexts ven durante el drag
   const liveOrder = draftOrder ?? columnOrder;
+
+  // Lista plana de todos los ids: SortableContext los necesita en orden
+  const allItems = [
+    ...liveOrder.col0,
+    ...liveOrder.col1,
+    ...liveOrder.col2,
+    ...liveOrder.sidebar,
+  ];
+
+  // Mapa id → columna (para el portalTarget de cada tarjeta)
+  const itemToCol = new Map<WidgetId, ColumnKey>();
+  for (const key of COLUMN_KEYS) {
+    for (const id of liveOrder[key]) itemToCol.set(id, key);
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
-  // ── Drag start ───────────────────────────────────────────────────────────
+  // ── Drag start ───────────────────────────────────────────────────────────────
   const handleDragStart = useCallback((event: DragStartEvent) => {
+    window.dispatchEvent(new Event("dnd:dragstart"));
     setActiveId(event.active.id as WidgetId);
     setDraftOrder(cloneOrder(columnOrder));
   }, [columnOrder]);
 
-  // ── Drag over (movimiento en tiempo real) ────────────────────────────────
+  // ── Drag over (movimiento en tiempo real) ────────────────────────────────────
   const handleDragOver = useCallback((event: DragOverEvent) => {
     const { active, over } = event;
     if (!over || !active) return;
@@ -132,12 +164,11 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
       }
       if (!targetCol) return base;
 
-      // flight-dynamics-3d contiene 3 contextos WebGL. Si se actualiza draftOrder
-      // 60 veces/seg cruzando columnas, React destruye y recrea esos contextos
-      // en cada frame → OOM → crash del tab. El cruce se confirma en dragEnd.
-      if (draggedId === "flight-dynamics-3d" && sourceCol !== targetCol) return base;
+      // Widgets de 2 columnas solo van al sidebar.
+      // Bloquear el cruce aquí evita que su portal target cambie durante el
+      // drag → los contextos WebGL nunca se destruyen mientras se arrastra.
+      if (TWO_COL_IDS.has(draggedId) && targetCol !== "sidebar") return base;
 
-      // Sin cambio si ya está en la misma posición
       const sourceItems = base[sourceCol];
       const sourceIdx   = sourceItems.indexOf(draggedId as WidgetId);
       if (sourceIdx === -1) return base;
@@ -154,7 +185,6 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
         next[sourceCol] = next[sourceCol].filter((id) => id !== draggedId);
         const overIdx = next[targetCol].indexOf(overId as WidgetId);
         if (overIdx === -1) {
-          // Drop en la columna pero no sobre una card: añadir al final
           next[targetCol].push(draggedId as WidgetId);
         } else {
           next[targetCol].splice(overIdx, 0, draggedId as WidgetId);
@@ -165,23 +195,28 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
     });
   }, [columnOrder]);
 
-  // ── Drag end (persistir) ────────────────────────────────────────────────
+  // ── Drag end (persistir) ─────────────────────────────────────────────────────
   const handleDragEnd = useCallback((event: DragEndEvent) => {
+    window.dispatchEvent(new Event("dnd:dragend"));
     const { active, over } = event;
     const draggedId = active.id as WidgetId;
 
     if (draftOrder) {
-      if (draggedId === "flight-dynamics-3d" && over) {
-        // El draftOrder no se actualizó cross-column: determinar columna final
-        // directamente desde over.id en lugar de desde draftOrder.
+      if (TWO_COL_IDS.has(draggedId) && over) {
+        // Para widgets 2-col, el draftOrder no se actualizó cross-column:
+        // calcular columna final desde over.id
         const overId = over.id as string;
         const finalCol: ColumnKey = COLUMN_KEYS.includes(overId as ColumnKey)
           ? overId as ColumnKey
           : (findColumn(overId, columnOrder) ?? findColumn(draggedId, draftOrder) ?? "sidebar");
-        const finalOrder = columnOrder[finalCol].filter(id => id !== draggedId);
+        // Solo permitir caer en sidebar para widgets 2-col
+        const safeCol: ColumnKey = TWO_COL_IDS.has(draggedId) && finalCol !== "sidebar"
+          ? "sidebar"
+          : finalCol;
+        const finalOrder = columnOrder[safeCol].filter(id => id !== draggedId);
         const overIdx = finalOrder.indexOf(overId as WidgetId);
         const insertIdx = overIdx >= 0 ? overIdx : finalOrder.length;
-        moveCard(draggedId, finalCol, insertIdx);
+        moveCard(draggedId, safeCol, insertIdx);
       } else {
         const targetCol = findColumn(draggedId, draftOrder);
         if (targetCol) {
@@ -196,12 +231,13 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
   }, [draftOrder, columnOrder, moveCard]);
 
   const handleDragCancel = useCallback(() => {
+    window.dispatchEvent(new Event("dnd:dragend"));
     setActiveId(null);
     setDraftOrder(null);
   }, []);
 
-  // ── Render ────────────────────────────────────────────────────────────────
-  const gridCols = `repeat(3, ${unit}px) ${unit * 2}px`;
+  // ── Render ────────────────────────────────────────────────────────────────────
+  const gridCols = `repeat(5, ${unit}px)`;
 
   return (
     <DndContext
@@ -211,25 +247,61 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
+      {/* Contenedores de columna: solo son droppable zones + portal targets.
+          Las tarjetas NO se renderizan aquí via React — se portalean desde
+          el SortableContext de abajo. */}
       <div
         ref={outerRef}
         style={{ display: "grid", gridTemplateColumns: gridCols, alignItems: "start" }}
       >
-        {COLUMNS.map(({ key }) => (
-          <DroppableColumn
-            key={key}
-            columnKey={key}
-            widgetIds={liveOrder[key]}
-            padding={colPadding}
-            renderWidget={renderWidget}
-            activeId={activeId}
-          />
-        ))}
+        <DropColumn
+          columnKey="col0"
+          padding={colPadding}
+          setRef={(n) => { col0ElRef.current = n; }}
+          isEmpty={liveOrder.col0.filter(id => id !== activeId).length === 0}
+        />
+        <DropColumn
+          columnKey="col1"
+          padding={colPadding}
+          setRef={(n) => { col1ElRef.current = n; }}
+          isEmpty={liveOrder.col1.filter(id => id !== activeId).length === 0}
+        />
+        <DropColumn
+          columnKey="col2"
+          padding={colPadding}
+          setRef={(n) => { col2ElRef.current = n; }}
+          isEmpty={liveOrder.col2.filter(id => id !== activeId).length === 0}
+        />
+        <DropColumn
+          columnKey="sidebar"
+          gridColumn="4 / span 2"
+          padding={colPadding}
+          setRef={(n) => { sidebarElRef.current = n; }}
+          isEmpty={liveOrder.sidebar.filter(id => id !== activeId).length === 0}
+        />
       </div>
 
-      {/* Overlay ligero: solo muestra una pastilla con el nombre del widget.
-          NO renderiza el contenido del widget para evitar instanciar Two.js /
-          SVG pesado / Three.js por segunda vez mientras el drag está activo. */}
+      {/* Un único SortableContext para todas las tarjetas.
+          Cada DpsGridCard se portalea a su columna via portalTarget.
+          Las tarjetas nunca se desmontan al cruzar columnas:
+          solo cambia el DOM node donde vive el portal. */}
+      <SortableContext items={allItems} strategy={verticalListSortingStrategy}>
+        {allItems.map((id) => {
+          const col = itemToCol.get(id);
+          return (
+            <DpsGridCard
+              key={id}
+              id={id}
+              isActive={activeId === id}
+              portalTarget={col ? getColEl(col) : null}
+            >
+              {renderWidget(id)}
+            </DpsGridCard>
+          );
+        })}
+      </SortableContext>
+
+      {/* Overlay ligero: solo muestra una pastilla con el nombre del widget. */}
       <DragOverlay dropAnimation={null}>
         {activeId ? (
           <div style={{
@@ -256,43 +328,42 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
   );
 }
 
-// ── DroppableColumn ────────────────────────────────────────────────────────────
-function DroppableColumn({
+// ── DropColumn ─────────────────────────────────────────────────────────────────
+// Zona droppable pura. No contiene tarjetas en el árbol React —
+// las tarjetas llegan via createPortal desde el SortableContext superior.
+// El flexbox sí ve los hijos portaleados porque son DOM children reales.
+function DropColumn({
   columnKey,
-  widgetIds,
+  gridColumn,
   padding,
-  renderWidget,
-  activeId,
+  isEmpty,
+  setRef,
 }: {
   columnKey: ColumnKey;
-  widgetIds: WidgetId[];
+  gridColumn?: string;
   padding: number;
-  renderWidget: (id: WidgetId) => React.ReactNode;
-  activeId: WidgetId | null;
+  isEmpty: boolean;
+  setRef: (node: HTMLDivElement | null) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: columnKey });
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(node) => {
+        setNodeRef(node);
+        setRef(node);
+      }}
       style={{
+        ...(gridColumn ? { gridColumn } : {}),
         paddingInline: padding,
         display: "flex",
         flexDirection: "column",
         gap: CARD_GAP_PX,
         minHeight: 40,
-        outline: isOver && widgetIds.filter(id => id !== activeId).length === 0
+        outline: isOver && isEmpty
           ? "1px dashed rgba(234,179,8,0.25)"
           : "none",
       }}
-    >
-      <SortableContext items={widgetIds} strategy={verticalListSortingStrategy}>
-        {widgetIds.map((id) => (
-          <DpsGridCard key={id} id={id} isActive={activeId === id}>
-            {renderWidget(id)}
-          </DpsGridCard>
-        ))}
-      </SortableContext>
-    </div>
+    />
   );
 }

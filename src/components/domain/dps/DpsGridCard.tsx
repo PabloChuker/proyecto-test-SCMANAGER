@@ -4,23 +4,28 @@
 // El drag solo se activa desde el header .rgl-drag-handle.
 // No se propagan listeners al resto del contenido (evita conflictos con
 // botones, inputs, canvas Three.js, etc.).
+//
+// portalTarget: si se pasa, la tarjeta se renderiza en ese DOM node via
+// createPortal. El componente nunca se desmonta al cambiar de columna —
+// solo cambia su portal target — lo que preserva contextos WebGL.
 // =============================================================================
 
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { SyntheticListenerMap } from "@dnd-kit/core/dist/hooks/utilities";
 import type { WidgetId } from "@/lib/dps-grid/dpsGridTypes";
 
 interface DpsGridCardProps {
   id: WidgetId;
   children: React.ReactNode;
   isActive?: boolean;
+  portalTarget?: HTMLElement | null;
 }
 
-export function DpsGridCard({ id, children, isActive = false }: DpsGridCardProps) {
+export function DpsGridCard({ id, children, isActive = false, portalTarget }: DpsGridCardProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const {
@@ -56,11 +61,10 @@ export function DpsGridCard({ id, children, isActive = false }: DpsGridCardProps
     transition: isDragging ? "none" : transition,
     opacity: isDragging ? 0.35 : 1,
     position: "relative",
-    // Bloquear interacción con el contenido mientras se arrastra
     userSelect: isDragging ? "none" : undefined,
   };
 
-  return (
+  const card = (
     <div
       ref={(node) => {
         setNodeRef(node);
@@ -74,4 +78,12 @@ export function DpsGridCard({ id, children, isActive = false }: DpsGridCardProps
       {children}
     </div>
   );
+
+  // Portalear al contenedor de columna si está disponible.
+  // Cambiar el portalTarget mueve el DOM pero NO desmonta el componente React,
+  // así los contextos WebGL (Three.js) sobreviven al cambio de columna.
+  if (portalTarget) {
+    return createPortal(card, portalTarget);
+  }
+  return card;
 }
