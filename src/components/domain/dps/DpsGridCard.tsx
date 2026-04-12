@@ -57,7 +57,10 @@ export function DpsGridCard({ id, children, isActive = false, portalTarget }: Dp
   );
 
   const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
+    // Sin transform en el elemento arrastrado: queda como placeholder en su posición real.
+    // La noop strategy en SortableContext garantiza que los vecinos tampoco tengan
+    // transforms, dejando getBoundingClientRect() estable para getInsertIndexByY.
+    transform: isDragging ? undefined : CSS.Transform.toString(transform),
     transition: isDragging ? "none" : transition,
     opacity: isDragging ? 0.35 : 1,
     position: "relative",
