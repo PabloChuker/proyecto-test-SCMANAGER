@@ -209,65 +209,82 @@ export default function WorkOrderCalculator() {
 
   // ── Active session crew (from Supabase) ──
   const { user } = useAuth();
-  const [sessionCrew, setSessionCrew] = useState<
-    { user_id: string; display_name: string; avatar_url: string | null; role: string; share_pct: number }[]
-  >([]);
-  const [activeSessionName, setActiveSessionName] = useState<string | null>(null);
-  const [activeSessionId_db, setActiveSessionId_db] = useState<string | null>(null);
+  interface SessionOption {
+    id: string;
+    name: string;
+    status: string;
+    memberCount: number;
+  }
+  interface SessionMember {
+    user_id: string;
+    display_name: string;
+    avatar_url: string | null;
+    role: string;
+    share_pct: number;
+  }
+  const [availableSessions, setAvailableSessions] = useState<SessionOption[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState<string>("");
+  const [sessionCrew, setSessionCrew] = useState<SessionMember[]>([]);
   const [crewLoaded, setCrewLoaded] = useState(false);
   const [loadingCrew, setLoadingCrew] = useState(false);
+  const [loadingSessions, setLoadingSessions] = useState(false);
 
-  // Fetch active mining session + members when user is logged in
+  // Fetch user's active mining sessions on mount
   useEffect(() => {
     if (!user) return;
-    setLoadingCrew(true);
+    setLoadingSessions(true);
     const supabase = createClient();
 
-    // Find user's active mining sessions (most recent first)
     supabase
       .from("mining_sessions")
       .select("id, name, status")
       .eq("status", "active")
       .order("created_at", { ascending: false })
-      .limit(5)
+      .limit(10)
       .then(async ({ data: sessions }) => {
         if (!sessions || sessions.length === 0) {
-          setLoadingCrew(false);
+          setLoadingSessions(false);
           return;
         }
 
-        // Check which sessions the user belongs to (via mining_members)
-        const sessionIds = sessions.map((s: any) => s.id);
-        const { data: memberships } = await supabase
-          .from("mining_members")
-          .select("session_id")
-          .in("session_id", sessionIds)
-          .eq("user_id", user.id);
-
-        if (!memberships || memberships.length === 0) {
-          setLoadingCrew(false);
-          return;
+        // For each session, get member count
+        const sessionOptions: SessionOption[] = [];
+        for (const s of sessions) {
+          const { count } = await supabase
+            .from("mining_members")
+            .select("id", { count: "exact", head: true })
+            .eq("session_id", s.id);
+          sessionOptions.push({
+            id: s.id,
+            name: s.name,
+            status: s.status,
+            memberCount: count || 0,
+          });
         }
-
-        // Use the first session the user belongs to
-        const mySessionId = memberships[0].session_id;
-        const mySession = sessions.find((s: any) => s.id === mySessionId);
-
-        // Fetch all members for this session
-        const { data: members } = await supabase
-          .from("mining_members")
-          .select("user_id, display_name, avatar_url, role, share_pct")
-          .eq("session_id", mySessionId);
-
-        if (members && members.length > 0) {
-          setSessionCrew(members);
-          setActiveSessionName(mySession?.name || "Session");
-          setActiveSessionId_db(mySessionId);
-        }
-        setLoadingCrew(false);
+        setAvailableSessions(sessionOptions);
+        setLoadingSessions(false);
       })
-      .catch(() => setLoadingCrew(false));
+      .catch(() => setLoadingSessions(false));
   }, [user]);
+
+  // When a session is selected in the dropdown, fetch its members
+  const handleSessionSelect = useCallback(async (sessionId: string) => {
+    setSelectedSessionId(sessionId);
+    setCrewLoaded(false);
+    if (!sessionId) {
+      setSessionCrew([]);
+      return;
+    }
+    setLoadingCrew(true);
+    const supabase = createClient();
+    const { data: members } = await supabase
+      .from("mining_members")
+      .select("user_id, display_name, avatar_url, role, share_pct")
+      .eq("session_id", sessionId);
+
+    setSessionCrew(members || []);
+    setLoadingCrew(false);
+  }, []);
 
   // Load session crew into the Work Order crew list
   const loadSessionCrew = useCallback(() => {
@@ -949,32 +966,48 @@ export default function WorkOrderCalculator() {
                 </div>
               </div>
 
-              {/* ── Session crew banner ── */}
-              {sessionCrew.length > 0 && !crewLoaded && (
-                <button
-                  onClick={loadSessionCrew}
-                  className="w-full mb-3 flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border border-cyan-500/30 bg-cyan-500/5 hover:bg-cyan-500/10 transition-all group"
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-cyan-400 text-lg">👥</span>
-                    <div className="text-left">
-                      <div className="text-xs font-bold text-cyan-300">
-                        Load crew from "{activeSessionName}"
-                      </div>
-                      <div className="text-[10px] text-zinc-500">
-                        {sessionCrew.length} member{sessionCrew.length !== 1 ? "s" : ""}: {sessionCrew.map(m => m.display_name).join(", ")}
-                      </div>
-                    </div>
+              {/* ── Session crew selector ── */}
+              {user && availableSessions.length > 0 && (
+                <div className="mb-3 border border-cyan-500/20 rounded-lg p-3 bg-cyan-500/5 space-y-2">
+                  <div className="text-[10px] tracking-[0.1em] uppercase text-cyan-400 font-bold">
+                    Load crew from mining session:
                   </div>
-                  <span className="text-cyan-400 text-xs font-bold group-hover:text-cyan-300 tracking-wider uppercase">
-                    Load
-                  </span>
-                </button>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={selectedSessionId}
+                      onChange={(e) => handleSessionSelect(e.target.value)}
+                      className="flex-1 bg-zinc-800/70 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-cyan-500/50"
+                    >
+                      <option value="">Select a session...</option>
+                      {availableSessions.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.memberCount} members)
+                        </option>
+                      ))}
+                    </select>
+                    {sessionCrew.length > 0 && !crewLoaded && (
+                      <button
+                        onClick={loadSessionCrew}
+                        className="px-4 py-2 bg-cyan-500/20 border border-cyan-500/40 rounded text-xs font-bold text-cyan-300 hover:bg-cyan-500/30 transition-colors whitespace-nowrap"
+                      >
+                        Load ({sessionCrew.length})
+                      </button>
+                    )}
+                  </div>
+                  {loadingCrew && (
+                    <div className="text-[10px] text-zinc-500">Loading members...</div>
+                  )}
+                  {sessionCrew.length > 0 && !crewLoaded && (
+                    <div className="text-[10px] text-zinc-500">
+                      {sessionCrew.map((m) => m.display_name).join(", ")}
+                    </div>
+                  )}
+                </div>
               )}
 
-              {loadingCrew && (
+              {loadingSessions && (
                 <div className="text-center py-2 text-xs text-zinc-500">
-                  Checking active sessions...
+                  Loading sessions...
                 </div>
               )}
 

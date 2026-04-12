@@ -128,3 +128,73 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
+
+// PATCH — Update session status (close/archive)
+export async function PATCH(request: NextRequest) {
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { id, status, name, notes } = await request.json();
+    if (!id) return NextResponse.json({ error: "Missing session id" }, { status: 400 });
+
+    const updates: Record<string, any> = {};
+    if (status) updates.status = status;
+    if (name !== undefined) updates.name = name;
+    if (notes !== undefined) updates.notes = notes;
+
+    const { data, error } = await supabase
+      .from("mining_sessions")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return NextResponse.json({ data });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}
+
+// DELETE — Remove a session and all its data
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+    if (!id) return NextResponse.json({ error: "Missing session id" }, { status: 400 });
+
+    // Delete child records first (cascade manually for safety)
+    await supabase.from("mining_member_ledger").delete().eq("session_id", id);
+    await supabase.from("mining_movements").delete().eq("session_id", id);
+    await supabase.from("mining_inventory").delete().eq("session_id", id);
+    // Delete work order children
+    const { data: orders } = await supabase
+      .from("mining_work_orders")
+      .select("id")
+      .eq("session_id", id);
+    if (orders && orders.length > 0) {
+      const orderIds = orders.map((o: any) => o.id);
+      await supabase.from("mining_crew_payouts").delete().in("work_order_id", orderIds);
+      await supabase.from("mining_expenses").delete().in("work_order_id", orderIds);
+    }
+    await supabase.from("mining_work_orders").delete().eq("session_id", id);
+    await supabase.from("mining_members").delete().eq("session_id", id);
+
+    // Finally delete the session
+    const { error } = await supabase
+      .from("mining_sessions")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+    return NextResponse.json({ success: true });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}

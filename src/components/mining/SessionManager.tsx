@@ -55,7 +55,11 @@ export default function SessionManager() {
     fetchSessions,
     createSession,
     setActiveSession,
+    closeSession,
+    deleteSession,
   } = useMiningStore();
+
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const [newName, setNewName] = useState("");
   const [selectedPartyId, setSelectedPartyId] = useState<string | null>(null);
@@ -241,6 +245,46 @@ export default function SessionManager() {
                         <span className="ml-2 text-cyan-500">· Party linked</span>
                       )}
                     </div>
+                  </div>
+
+                  {/* Session actions */}
+                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    {session.status === "active" && (
+                      <button
+                        onClick={() => closeSession(session.id)}
+                        className="px-2.5 py-1 bg-zinc-800 border border-zinc-700 rounded text-[10px] font-bold text-zinc-400 hover:text-amber-400 hover:border-amber-500/30 transition-colors"
+                        title="Close session"
+                      >
+                        Close
+                      </button>
+                    )}
+                    {confirmDeleteId === session.id ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => {
+                            deleteSession(session.id);
+                            setConfirmDeleteId(null);
+                          }}
+                          className="px-2.5 py-1 bg-red-500/20 border border-red-500/40 rounded text-[10px] font-bold text-red-400 hover:bg-red-500/30 transition-colors"
+                        >
+                          Confirm
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="px-2 py-1 text-[10px] text-zinc-500 hover:text-zinc-300"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteId(session.id)}
+                        className="text-red-500/30 hover:text-red-400 text-sm transition-colors"
+                        title="Delete session"
+                      >
+                        🗑
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

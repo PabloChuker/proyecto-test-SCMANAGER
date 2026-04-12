@@ -41,6 +41,8 @@ interface MiningState {
   fetchSessions: () => Promise<void>;
   createSession: (name: string, partyId?: string | null) => Promise<MiningSession | null>;
   setActiveSession: (id: string | null) => void;
+  closeSession: (id: string) => Promise<void>;
+  deleteSession: (id: string) => Promise<void>;
 
   // ── Member actions ──────────────────────────────────────────────────────
   fetchMembers: (sessionId: string) => Promise<void>;
@@ -146,6 +148,44 @@ export const useMiningStore = create<MiningState>((set, get) => ({
       get().fetchMembers(id);
       get().fetchWorkOrders(id);
       get().fetchInventory(id);
+    }
+  },
+
+  closeSession: async (id) => {
+    set({ isLoading: true, error: null });
+    try {
+      await api<{ data: MiningSession }>("/api/mining/sessions", {
+        method: "PATCH",
+        body: JSON.stringify({ id, status: "completed" }),
+      });
+      set((s) => ({
+        sessions: s.sessions.map((sess) =>
+          sess.id === id ? { ...sess, status: "completed" } : sess
+        ),
+        activeSessionId: s.activeSessionId === id ? null : s.activeSessionId,
+        isLoading: false,
+      }));
+    } catch (e: any) {
+      set({ error: e.message, isLoading: false });
+    }
+  },
+
+  deleteSession: async (id) => {
+    set({ isLoading: true, error: null });
+    try {
+      await api<{ success: boolean }>(`/api/mining/sessions?id=${id}`, {
+        method: "DELETE",
+      });
+      set((s) => ({
+        sessions: s.sessions.filter((sess) => sess.id !== id),
+        activeSessionId: s.activeSessionId === id ? null : s.activeSessionId,
+        members: s.activeSessionId === id ? [] : s.members,
+        workOrders: s.activeSessionId === id ? [] : s.workOrders,
+        inventory: s.activeSessionId === id ? [] : s.inventory,
+        isLoading: false,
+      }));
+    } catch (e: any) {
+      set({ error: e.message, isLoading: false });
     }
   },
 
