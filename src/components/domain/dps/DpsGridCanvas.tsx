@@ -28,7 +28,7 @@ import {
   type DragEndEvent,
   type DragOverEvent,
 } from "@dnd-kit/core";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext } from "@dnd-kit/sortable";
 
 import type { WidgetId, ColumnKey, ColumnOrder } from "@/lib/dps-grid/dpsGridTypes";
 import { CARD_GAP_PX } from "@/lib/dps-grid/dpsGridTypes";
@@ -333,7 +333,8 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
       </div>
 
       {/* Un único SortableContext — tarjetas portaleadas a su columna. */}
-      <SortableContext items={allItems} strategy={verticalListSortingStrategy}>
+      {/* strategy noop: sin transforms en vecinas → posiciones DOM estables → comparación pointerY correcta */}
+      <SortableContext items={allItems} strategy={() => null}>
         {allItems.map((id) => {
           const col = itemToCol.get(id);
           return (
