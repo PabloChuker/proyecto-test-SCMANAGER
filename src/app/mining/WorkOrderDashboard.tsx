@@ -64,6 +64,33 @@ function mvReasonLabel(r: string) {
   return ({ refine_complete: "Refined", sell: "Sold", craft: "Crafting", distribute: "Distributed", manual_add: "Added", manual_remove: "Removed" } as any)[r] || r;
 }
 
+function qualityBadge(q: number | undefined | null) {
+  if (q == null || q <= 0) return null;
+  const color = q >= 800 ? "text-emerald-400 bg-emerald-500/15 border-emerald-500/30"
+    : q >= 500 ? "text-amber-400 bg-amber-500/15 border-amber-500/30"
+    : "text-zinc-400 bg-zinc-700/30 border-zinc-600/30";
+  const label = q >= 900 ? "A+" : q >= 800 ? "A" : q >= 600 ? "B" : q >= 400 ? "C" : "D";
+  return (
+    <span className={`text-[9px] px-1.5 py-0.5 rounded border font-mono font-bold ${color}`}>
+      Q{q} ({label})
+    </span>
+  );
+}
+
+function oreLineWithQuality(ores: { id: string; name: string; yieldQty: number; quality?: number | null }[]) {
+  if (!ores || ores.length === 0) return "—";
+  return (
+    <span className="flex flex-wrap gap-x-3 gap-y-0.5">
+      {ores.map((o) => (
+        <span key={o.id} className="inline-flex items-center gap-1">
+          <span className="uppercase">{o.name}: {Math.round(o.yieldQty)}</span>
+          {qualityBadge(o.quality)}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 // ─── Tabs ────────────────────────────────────────────────────────────────────
 
 type DashTab = "sessions" | "orders" | "inventory" | "crew" | "stats";
@@ -676,7 +703,7 @@ export default function WorkOrderDashboard() {
                             {order.refinery || typeLabel(order.type)}
                             {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">Party</span>}
                           </div>
-                          <div className="text-[11px] text-zinc-500">{order.ores.map((o) => o.id).join(", ") || "—"} · {fmtAuec(order.grossValue)} aUEC</div>
+                          <div className="text-[11px] text-zinc-500">{oreLineWithQuality(order.ores)} · {fmtAuec(order.grossValue)} aUEC</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
@@ -715,7 +742,7 @@ export default function WorkOrderDashboard() {
                             {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">Party</span>}
                           </div>
                           <div className="text-[11px] text-zinc-500">
-                            {order.ores.map((o) => `${o.name}: ${Math.round(o.yieldQty)}`).join(", ") || "—"}
+                            {oreLineWithQuality(order.ores)}
                           </div>
                         </div>
                       </div>
@@ -751,7 +778,7 @@ export default function WorkOrderDashboard() {
                             {order.refinery || typeLabel(order.type)} · {fmtDate(order.createdAt)}
                             {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">Party</span>}
                           </div>
-                          <div className="text-[11px] text-zinc-600">{order.ores.map((o) => o.id).join(", ")}</div>
+                          <div className="text-[11px] text-zinc-600">{oreLineWithQuality(order.ores)}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -814,10 +841,6 @@ export default function WorkOrderDashboard() {
               </div>
               {mergedInventory.filter((i) => i.quantity > 0 || i.totalReceived > 0).map((item) => {
                 const q = (item as any).quality as number | undefined;
-                const qLabel = q != null ? (q / 10).toFixed(1) + "%" : "—";
-                const qColor = q != null
-                  ? q >= 800 ? "text-emerald-400" : q >= 500 ? "text-amber-400" : "text-zinc-400"
-                  : "text-zinc-600";
                 const bestPrice = bestPrices[item.mineralId];
                 const isParty = (item as any)._source === "supabase";
                 return (
@@ -826,7 +849,7 @@ export default function WorkOrderDashboard() {
                       <span className="text-sm font-bold text-zinc-200 uppercase">{item.mineralName}</span>
                       {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">Party</span>}
                     </div>
-                    <span className={`text-xs font-mono font-bold text-center min-w-[50px] ${qColor}`}>{qLabel}</span>
+                    <span className="text-center min-w-[60px]">{qualityBadge(q) || <span className="text-xs text-zinc-600">—</span>}</span>
                     <span className={`text-sm font-mono text-right font-bold ${item.quantity > 0 ? "text-emerald-400" : "text-zinc-600"}`}>
                       {item.quantity.toFixed(1)}
                     </span>
