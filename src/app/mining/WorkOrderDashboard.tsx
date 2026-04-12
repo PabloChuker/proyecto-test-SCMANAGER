@@ -11,7 +11,7 @@ import {
   type InventoryItem, type InventoryMovement,
 } from "@/lib/workOrderStore";
 import { useMiningStore } from "@/store/useMiningStore";
-import { useMiningRealtime } from "@/store/useMiningRealtime";
+import { useMiningRealtime, useMiningBroadcast } from "@/store/useMiningRealtime";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -86,6 +86,7 @@ export default function WorkOrderDashboard() {
     recordInventoryAction: sbRecordInventoryAction,
   } = useMiningStore();
   useMiningRealtime();
+  const broadcast = useMiningBroadcast();
 
   // ── Clear inventory confirmation ──
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -216,21 +217,19 @@ export default function WorkOrderDashboard() {
   const handleDeleteSession = (id: string) => { deleteSession(id); refresh(); };
   const handleSetActive = (id: string) => { setActiveSessionId(id); setActiveId(id); };
   const handleDeleteOrder = (id: string, source?: string) => {
-    if (source === "supabase") { sbDeleteOrder(id); }
+    if (source === "supabase") { sbDeleteOrder(id); broadcast("order_deleted"); }
     else { deleteOrder(id); refresh(); }
   };
   const handleCollect = (id: string, source?: string) => {
-    if (source === "supabase") { sbUpdateStatus(id, "collected"); }
+    if (source === "supabase") { sbUpdateStatus(id, "collected"); broadcast("order_updated"); }
     else { collectOrder(id); refresh(); }
   };
   const handleForceComplete = (id: string, source?: string) => {
-    if (source === "supabase") { sbUpdateStatus(id, "completed"); }
+    if (source === "supabase") { sbUpdateStatus(id, "completed"); broadcast("order_updated"); }
     else { completeOrder(id); refresh(); }
   };
   const handleClearInventory = () => {
-    // Clear local
-    // Clear Supabase if active session
-    if (sbSessionId) sbClearInventory(sbSessionId);
+    if (sbSessionId) { sbClearInventory(sbSessionId); broadcast("inventory_cleared"); }
     setShowClearConfirm(false);
     refresh();
   };

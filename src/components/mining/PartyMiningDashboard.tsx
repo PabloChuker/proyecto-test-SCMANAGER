@@ -9,7 +9,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useMiningStore } from "@/store/useMiningStore";
-import { useMiningRealtime } from "@/store/useMiningRealtime";
+import { useMiningRealtime, useMiningBroadcast } from "@/store/useMiningRealtime";
 import SessionManager from "./SessionManager";
 import CrewPanel from "./CrewPanel";
 
@@ -81,6 +81,7 @@ export default function PartyMiningDashboard() {
 
   // ── Realtime: party members see changes in real time ──
   useMiningRealtime();
+  const broadcast = useMiningBroadcast();
 
   // ── Sell price modal state ──
   const [sellModalItem, setSellModalItem] = useState<string | null>(null); // mineral_id (abbr)
@@ -218,7 +219,7 @@ export default function PartyMiningDashboard() {
                       <div className="flex items-center gap-2">
                         {order.status === "in_progress" && (
                           <button
-                            onClick={() => updateOrderStatus(order.id, "completed")}
+                            onClick={() => { updateOrderStatus(order.id, "completed"); broadcast("order_updated"); }}
                             className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] font-bold text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/30"
                           >
                             Mark Ready
@@ -226,14 +227,14 @@ export default function PartyMiningDashboard() {
                         )}
                         {order.status === "completed" && (
                           <button
-                            onClick={() => updateOrderStatus(order.id, "collected")}
+                            onClick={() => { updateOrderStatus(order.id, "collected"); broadcast("order_updated"); }}
                             className="px-4 py-2 bg-emerald-500 text-zinc-900 rounded font-bold text-xs hover:bg-emerald-400 transition-colors"
                           >
                             Collect
                           </button>
                         )}
                         <button
-                          onClick={() => deleteWorkOrder(order.id)}
+                          onClick={() => { deleteWorkOrder(order.id); broadcast("order_deleted"); }}
                           className="text-red-500/40 hover:text-red-400 text-xs"
                         >
                           🗑
@@ -406,7 +407,7 @@ export default function PartyMiningDashboard() {
                           {members.map((m) => (
                             <button
                               key={m.id}
-                              onClick={() =>
+                              onClick={() => {
                                 recordInventoryAction({
                                   session_id: activeSessionId!,
                                   mineral_id: item.mineral_id,
@@ -415,8 +416,9 @@ export default function PartyMiningDashboard() {
                                   reason: "distribute",
                                   member_id: m.id,
                                   member_name: m.display_name,
-                                })
-                              }
+                                });
+                                broadcast("inventory_changed");
+                              }}
                               className="px-2 py-1 bg-cyan-500/10 border border-cyan-500/30 rounded text-[8px] font-bold text-cyan-400 hover:bg-cyan-500/20 truncate max-w-[60px]"
                               title={`Give ${(item.quantity * (m.share_pct / 100)).toFixed(1)} to ${m.display_name} (${m.share_pct}%)`}
                             >
@@ -483,7 +485,7 @@ export default function PartyMiningDashboard() {
                 Cancel
               </button>
               <button onClick={() => {
-                if (activeSessionId) clearInventory(activeSessionId);
+                if (activeSessionId) { clearInventory(activeSessionId); broadcast("inventory_cleared"); }
                 setShowClearConfirm(false);
               }}
                 className="flex-1 py-2.5 bg-red-500 text-white rounded-lg font-bold text-sm hover:bg-red-400 transition-colors">

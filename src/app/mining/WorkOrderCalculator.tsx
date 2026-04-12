@@ -13,6 +13,8 @@ import {
 } from "@/lib/workOrderStore";
 import { useAuth } from "@/contexts/AuthContext";
 import { createClient } from "@/lib/supabase/client";
+import { useMiningStore } from "@/store/useMiningStore";
+import { useMiningBroadcast } from "@/store/useMiningRealtime";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -174,6 +176,10 @@ export default function WorkOrderCalculator() {
   const typedMinerals = minerals as Mineral[];
   const typedRefineries = refineries as Refinery[];
   const typedMethods = refiningMethods as RefiningMethod[];
+
+  // ── Supabase mining store (for shared party orders) ──
+  const { activeSessionId: supabaseSessionId, createWorkOrder } = useMiningStore();
+  const broadcast = useMiningBroadcast();
 
   // ── Tab state ──
   const [mode, setMode] = useState<TabMode>("ship");
@@ -480,6 +486,7 @@ export default function WorkOrderCalculator() {
       });
     });
 
+    // Save to legacy localStorage store (standalone / offline use)
     addOrder({
       sessionId,
       type: mode,
@@ -498,6 +505,44 @@ export default function WorkOrderCalculator() {
       countdownSeconds: mode === "ship" ? timer.totalInputSeconds : 0,
       countdownEndsAt: null, // store will calculate this
     });
+
+    // ALSO save to Supabase if there's an active mining session (shared with party)
+    if (supabaseSessionId && user) {
+      createWorkOrder({
+        session_id: supabaseSessionId,
+        order_type: mode,
+        refinery_name: mode === "ship" ? refinery?.name || null : null,
+        refining_method: mode === "ship" ? method?.name || null : null,
+        ores: ores.map((o) => ({
+          id: o.id,
+          name: o.name,
+          quantity: o.quantity,
+          yieldQty: o.yieldQty,
+          value: o.value,
+          quality: o.quality,
+        })),
+        total_yield: ores.reduce((s, o) => s + o.yieldQty, 0),
+        gross_value: effectiveSellPrice,
+        sell_price: effectiveSellPrice,
+        net_profit: netProfit,
+        motrader_fee: motraderFee,
+        countdown_seconds: mode === "ship" ? timer.totalInputSeconds : 0,
+        expenses: expenses.map((e) => ({
+          claimant_name: e.claimant,
+          expense_name: e.name,
+          amount: e.amount,
+          expense_type: "general" as const,
+        })),
+        payouts: crewPayouts.map((c) => ({
+          member_name: c.name,
+          share_pct: c.share,
+          amount: c.payout,
+        })),
+      }).then(() => {
+        // Broadcast to all party members so they see the order instantly
+        broadcast("order_created");
+      }).catch((err) => console.error("Supabase work order save failed:", err));
+    }
 
     setSubmitted(true);
     setTimeout(() => setSubmitted(false), 3000);

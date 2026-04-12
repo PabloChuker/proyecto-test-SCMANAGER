@@ -1,0 +1,21 @@
+# Force LF line endings for all text files to avoid CRLF phantom diffs on Windows
+* text=auto eol=lf
+
+# Explicitly mark binary files
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+*.mp4 binary
+*.webm binary
+*.glb binary
+*.gltf binary
+*.docx binary
+*.xlsx binary
+*.pptx binary
