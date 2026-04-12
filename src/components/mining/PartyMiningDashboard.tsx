@@ -9,6 +9,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useMiningStore } from "@/store/useMiningStore";
+import { useMiningRealtime } from "@/store/useMiningRealtime";
 import SessionManager from "./SessionManager";
 import CrewPanel from "./CrewPanel";
 
@@ -74,6 +75,9 @@ export default function PartyMiningDashboard() {
     recordInventoryAction,
   } = useMiningStore();
 
+  // ── Realtime: party members see changes in real time ──
+  useMiningRealtime();
+
   // ── Sell price modal state ──
   const [sellModalItem, setSellModalItem] = useState<string | null>(null); // mineral_id (abbr)
   const [sellModalName, setSellModalName] = useState("");
@@ -135,22 +139,30 @@ export default function PartyMiningDashboard() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      {/* Sub-tabs */}
-      <div className="grid grid-cols-4 gap-0 border border-zinc-700/60 rounded-lg overflow-hidden">
-        {SUB_TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setSubTab(t.key)}
-            className={`py-3 text-center text-[10px] tracking-[0.1em] uppercase font-bold transition-all ${
-              subTab === t.key
-                ? "bg-amber-500 text-zinc-900"
-                : "bg-zinc-900/60 text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-200"
-            }`}
-          >
-            <span className="mr-1">{t.icon}</span>
-            {t.label}
-          </button>
-        ))}
+      {/* Sub-tabs + live indicator */}
+      <div className="flex items-center gap-3">
+        <div className="flex-1 grid grid-cols-4 gap-0 border border-zinc-700/60 rounded-lg overflow-hidden">
+          {SUB_TABS.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setSubTab(t.key)}
+              className={`py-3 text-center text-[10px] tracking-[0.1em] uppercase font-bold transition-all ${
+                subTab === t.key
+                  ? "bg-amber-500 text-zinc-900"
+                  : "bg-zinc-900/60 text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-200"
+              }`}
+            >
+              <span className="mr-1">{t.icon}</span>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {activeSessionId && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30" title="Realtime sync active — all party members see changes live">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-[9px] tracking-[0.15em] uppercase text-emerald-400 font-bold">LIVE</span>
+          </div>
+        )}
       </div>
 
       {/* ═══════ SESSIONS ═══════ */}

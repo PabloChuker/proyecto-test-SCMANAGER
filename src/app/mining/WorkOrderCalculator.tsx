@@ -789,16 +789,6 @@ export default function WorkOrderCalculator() {
           </div>
 
           <div className="p-4 space-y-5">
-            {/* ── Market Price UEX section ── */}
-            {mode !== "share" && (
-              <div className="border border-zinc-700/40 rounded-lg p-3 text-center">
-                <div className="text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold mb-1">
-                  Market Price (UEX):
-                </div>
-                <div className="text-xs text-zinc-500 italic">No stores found</div>
-              </div>
-            )}
-
             {/* ── Seller / Purser ── */}
             <div className="flex items-center justify-between">
               <span className="text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold">
