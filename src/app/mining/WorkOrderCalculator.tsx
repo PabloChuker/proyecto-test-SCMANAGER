@@ -20,25 +20,6 @@ import { useMiningBroadcast } from "@/store/useMiningRealtime";
 
 type TabMode = "ship" | "roc" | "salvage" | "share";
 
-interface Expense {
-  id: string;
-  claimant: string;
-  name: string;
-  amount: number;
-}
-
-interface CrewMember {
-  id: string;
-  name: string;
-  shareType: "equal" | "fixed";
-  share: number;
-}
-
-interface CompositeSellRow {
-  id: string;
-  amount: number;
-}
-
 interface Mineral {
   id: string;
   name: string;
@@ -177,7 +158,8 @@ export default function WorkOrderCalculator() {
   const typedRefineries = refineries as Refinery[];
   const typedMethods = refiningMethods as RefiningMethod[];
 
-  // ── Supabase mining store (for shared party orders) ──
+  // ── Auth & Supabase ──
+  const { user } = useAuth();
   const { activeSessionId: supabaseSessionId, createWorkOrder } = useMiningStore();
   const broadcast = useMiningBroadcast();
 
@@ -190,121 +172,6 @@ export default function WorkOrderCalculator() {
   const [selectedOres, setSelectedOres] = useState<Set<string>>(new Set());
   const [oreQuantities, setOreQuantities] = useState<Record<string, number>>({});
   const [oreQualities, setOreQualities] = useState<Record<string, number>>({});
-
-  // ── Selling state ──
-  const [sellerName, setSellerName] = useState("You");
-  const [sellPrice, setSellPrice] = useState(0);
-  const [shareUnrefined, setShareUnrefined] = useState(false);
-  const [showCompositeModal, setShowCompositeModal] = useState(false);
-  const [compositeRows, setCompositeRows] = useState<CompositeSellRow[]>([
-    { id: "c1", amount: 0 },
-  ]);
-
-  // ── Expenses state ──
-  const [expenses, setExpenses] = useState<Expense[]>([
-    { id: "exp1", claimant: "You", name: "Refinery Fee", amount: 0 },
-  ]);
-
-  // ── moTrader toggle ──
-  const [includeMotrader, setIncludeMotrader] = useState(true);
-
-  // ── Crew / Profit Shares ──
-  const [crew, setCrew] = useState<CrewMember[]>([
-    { id: "crew1", name: "You", shareType: "equal", share: 1 },
-  ]);
-  const [newMemberName, setNewMemberName] = useState("");
-
-  // ── Active session crew (from Supabase) ──
-  const { user } = useAuth();
-  interface SessionOption {
-    id: string;
-    name: string;
-    status: string;
-    memberCount: number;
-  }
-  interface SessionMember {
-    user_id: string;
-    display_name: string;
-    avatar_url: string | null;
-    role: string;
-    share_pct: number;
-  }
-  const [availableSessions, setAvailableSessions] = useState<SessionOption[]>([]);
-  const [selectedSessionId, setSelectedSessionId] = useState<string>("");
-  const [sessionCrew, setSessionCrew] = useState<SessionMember[]>([]);
-  const [crewLoaded, setCrewLoaded] = useState(false);
-  const [loadingCrew, setLoadingCrew] = useState(false);
-  const [loadingSessions, setLoadingSessions] = useState(false);
-
-  // Fetch user's active mining sessions on mount
-  useEffect(() => {
-    if (!user) return;
-    setLoadingSessions(true);
-    const supabase = createClient();
-
-    supabase
-      .from("mining_sessions")
-      .select("id, name, status")
-      .eq("status", "active")
-      .order("created_at", { ascending: false })
-      .limit(10)
-      .then(async ({ data: sessions }) => {
-        if (!sessions || sessions.length === 0) {
-          setLoadingSessions(false);
-          return;
-        }
-
-        // For each session, get member count
-        const sessionOptions: SessionOption[] = [];
-        for (const s of sessions) {
-          const { count } = await supabase
-            .from("mining_members")
-            .select("id", { count: "exact", head: true })
-            .eq("session_id", s.id);
-          sessionOptions.push({
-            id: s.id,
-            name: s.name,
-            status: s.status,
-            memberCount: count || 0,
-          });
-        }
-        setAvailableSessions(sessionOptions);
-        setLoadingSessions(false);
-      })
-      .catch(() => setLoadingSessions(false));
-  }, [user]);
-
-  // When a session is selected in the dropdown, fetch its members
-  const handleSessionSelect = useCallback(async (sessionId: string) => {
-    setSelectedSessionId(sessionId);
-    setCrewLoaded(false);
-    if (!sessionId) {
-      setSessionCrew([]);
-      return;
-    }
-    setLoadingCrew(true);
-    const supabase = createClient();
-    const { data: members } = await supabase
-      .from("mining_members")
-      .select("user_id, display_name, avatar_url, role, share_pct")
-      .eq("session_id", sessionId);
-
-    setSessionCrew(members || []);
-    setLoadingCrew(false);
-  }, []);
-
-  // Load session crew into the Work Order crew list
-  const loadSessionCrew = useCallback(() => {
-    if (sessionCrew.length === 0) return;
-    const mapped: CrewMember[] = sessionCrew.map((m, i) => ({
-      id: `session_${m.user_id || i}`,
-      name: m.display_name || "Unknown",
-      shareType: "equal" as const,
-      share: m.share_pct > 0 ? m.share_pct : 1,
-    }));
-    setCrew(mapped);
-    setCrewLoaded(true);
-  }, [sessionCrew]);
 
   // ── Countdown Timer ──
   const timer = useCountdown();
@@ -339,29 +206,6 @@ export default function WorkOrderCalculator() {
     return Math.round(total);
   }, [mode, selectedOres, oreQuantities, refinery, method, typedMinerals]);
 
-  // ── Auto-set sell price from refined value when available ──
-  const effectiveSellPrice = mode === "ship" && sellPrice === 0 && refinedValue > 0
-    ? refinedValue
-    : sellPrice;
-
-  // ── Calculate total expenses ──
-  const totalExpenses = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
-
-  // ── moTrader fee ──
-  const motraderFee = includeMotrader
-    ? Math.round(effectiveSellPrice * MOTRADER_FEE_PERCENT / 100)
-    : 0;
-
-  // ── Net profit ──
-  const netProfit = effectiveSellPrice - totalExpenses - motraderFee;
-
-  // ── Crew payouts ──
-  const totalShares = crew.reduce((sum, m) => sum + m.share, 0);
-  const crewPayouts = crew.map((m) => ({
-    ...m,
-    payout: totalShares > 0 ? Math.round((netProfit * m.share) / totalShares) : 0,
-  }));
-
   // ── Ore toggle ──
   const toggleOre = useCallback((oreId: string) => {
     setSelectedOres((prev) => {
@@ -392,63 +236,7 @@ export default function WorkOrderCalculator() {
     setSelectedOres(new Set());
     setOreQuantities({});
     setOreQualities({});
-    setSellPrice(0);
   }, [mode]);
-
-  // ── Expense helpers ──
-  const addExpense = () => {
-    setExpenses([...expenses, {
-      id: `exp${Date.now()}`,
-      claimant: sellerName,
-      name: "",
-      amount: 0,
-    }]);
-  };
-
-  const clearExpenses = () => {
-    setExpenses([]);
-  };
-
-  const updateExpense = (id: string, field: keyof Expense, value: any) => {
-    setExpenses(expenses.map((e) => e.id === id ? { ...e, [field]: value } : e));
-  };
-
-  const removeExpense = (id: string) => {
-    setExpenses(expenses.filter((e) => e.id !== id));
-  };
-
-  // ── Crew helpers ──
-  const addCrewMember = () => {
-    const name = newMemberName.trim() || `Crew ${crew.length + 1}`;
-    setCrew([...crew, {
-      id: `crew${Date.now()}`,
-      name,
-      shareType: "equal",
-      share: 1,
-    }]);
-    setNewMemberName("");
-  };
-
-  const clearCrew = () => {
-    setCrew([{ id: "crew1", name: sellerName, shareType: "equal", share: 1 }]);
-    setCrewLoaded(false);
-  };
-
-  const removeCrewMember = (id: string) => {
-    if (crew.length > 1) setCrew(crew.filter((m) => m.id !== id));
-  };
-
-  // ── Composite sell price modal helpers ──
-  const compositeTotal = compositeRows.reduce((sum, r) => sum + (r.amount || 0), 0);
-
-  const addCompositeRow = () => {
-    setCompositeRows([...compositeRows, { id: `cr${Date.now()}`, amount: 0 }]);
-  };
-
-  const acceptComposite = () => {
-    setSellPrice(compositeTotal);
-    setShowCompositeModal(false);
-  };
 
   // ── Yield for ship mining ──
   const getYield = (oreId: string, qty: number) => {
@@ -495,13 +283,13 @@ export default function WorkOrderCalculator() {
       method: mode === "ship" ? method?.name : undefined,
       ores,
       totalYield: ores.reduce((s, o) => s + o.yieldQty, 0),
-      grossValue: effectiveSellPrice,
-      expenses: expenses.map((e) => ({ claimant: e.claimant, name: e.name, amount: e.amount })),
-      totalExpenses,
-      motraderFee,
-      netProfit,
-      crew: crewPayouts.map((c) => ({ name: c.name, share: c.share, payout: c.payout })),
-      sellPrice: effectiveSellPrice,
+      grossValue: 0,
+      expenses: [],
+      totalExpenses: 0,
+      motraderFee: 0,
+      netProfit: 0,
+      crew: [],
+      sellPrice: 0,
       countdownSeconds: mode === "ship" ? timer.totalInputSeconds : 0,
       countdownEndsAt: null, // store will calculate this
     });
@@ -522,22 +310,13 @@ export default function WorkOrderCalculator() {
           quality: o.quality,
         })),
         total_yield: ores.reduce((s, o) => s + o.yieldQty, 0),
-        gross_value: effectiveSellPrice,
-        sell_price: effectiveSellPrice,
-        net_profit: netProfit,
-        motrader_fee: motraderFee,
+        gross_value: 0,
+        sell_price: 0,
+        net_profit: 0,
+        motrader_fee: 0,
         countdown_seconds: mode === "ship" ? timer.totalInputSeconds : 0,
-        expenses: expenses.map((e) => ({
-          claimant_name: e.claimant,
-          expense_name: e.name,
-          amount: e.amount,
-          expense_type: "general" as const,
-        })),
-        payouts: crewPayouts.map((c) => ({
-          member_name: c.name,
-          share_pct: c.share,
-          amount: c.payout,
-        })),
+        expenses: [],
+        payouts: [],
       }).then(() => {
         // Broadcast to all party members so they see the order instantly
         broadcast("order_created");
@@ -573,7 +352,7 @@ export default function WorkOrderCalculator() {
       </div>
 
       {/* ── Main Content (two panels) ───────────────────────────────── */}
-      <div className={`grid gap-6 ${mode === "share" ? "grid-cols-1 max-w-xl mx-auto" : "grid-cols-1 lg:grid-cols-2"}`}>
+      <div className="grid gap-6 grid-cols-1 max-w-2xl mx-auto">
         {/* ═══════════════════════════════════════════════════════════ */}
         {/* LEFT PANEL — Materials / Ore Chooser                       */}
         {/* ═══════════════════════════════════════════════════════════ */}
@@ -820,352 +599,6 @@ export default function WorkOrderCalculator() {
             </div>
           </div>
         )}
-
-        {/* ═══════════════════════════════════════════════════════════ */}
-        {/* RIGHT PANEL — Selling & Profit Sharing                     */}
-        {/* ═══════════════════════════════════════════════════════════ */}
-        <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg overflow-hidden">
-          {/* Panel header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-700/40 bg-zinc-900/50">
-            <h3 className="text-sm font-bold tracking-[0.1em] uppercase text-zinc-300">
-              Selling & Profit Sharing
-            </h3>
-            <span className="text-zinc-600 cursor-help text-lg" title="Set sell price and split profits">❓</span>
-          </div>
-
-          <div className="p-4 space-y-5">
-            {/* ── Seller / Purser ── */}
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold">
-                Seller / Purser:
-              </span>
-              <input
-                type="text"
-                value={sellerName}
-                onChange={(e) => setSellerName(e.target.value)}
-                className="bg-transparent text-right text-lg font-bold text-zinc-100 focus:outline-none border-b border-transparent focus:border-amber-500/50 w-40"
-              />
-            </div>
-
-            {/* ── Final Sell Price / Share Amount ── */}
-            <div>
-              <div className="text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold mb-2">
-                {mode === "share" ? "Share Amount (Gross Profit):" : "Final Sell Price (Gross Profit):"}
-              </div>
-              {mode === "share" && (
-                <p className="text-[11px] text-zinc-500 mb-2">
-                  Type in the aUEC amount you want to share
-                </p>
-              )}
-              <div className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-700 rounded-lg p-2">
-                <button
-                  className="w-8 h-8 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 flex items-center justify-center hover:bg-amber-500/30 transition-colors text-sm"
-                  onClick={() => setSellPrice(0)}
-                  title="Reset price"
-                >
-                  ↺
-                </button>
-                <input
-                  type="number"
-                  min="0"
-                  value={sellPrice || ""}
-                  onChange={(e) => setSellPrice(parseFloat(e.target.value) || 0)}
-                  className="flex-1 bg-transparent text-right text-lg font-mono font-bold text-zinc-100 focus:outline-none"
-                  placeholder="0"
-                />
-                <span className="text-xs text-zinc-500 font-bold">aUEC</span>
-                {mode !== "share" && (
-                  <button
-                    className="w-8 h-8 rounded bg-zinc-700/50 border border-zinc-600 text-zinc-400 flex items-center justify-center hover:bg-zinc-600/50 transition-colors text-[11px]"
-                    onClick={() => setShowCompositeModal(true)}
-                    title="Composite Sell Price"
-                  >
-                    📦
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* ── Share Unrefined Value toggle (ship only) ── */}
-            {mode === "ship" && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShareUnrefined(!shareUnrefined)}
-                  className={`w-10 h-5 rounded-full transition-all relative
-                    ${shareUnrefined ? "bg-amber-500" : "bg-zinc-700"}`}
-                >
-                  <span
-                    className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all
-                      ${shareUnrefined ? "left-5" : "left-0.5"}`}
-                  />
-                </button>
-                <span className="text-[11px] text-zinc-400">Share Unrefined Value</span>
-              </div>
-            )}
-
-            {/* ── Expenses ── */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold">
-                  Expenses:
-                </span>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={addExpense}
-                    className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1"
-                  >
-                    <span className="text-sm">⊕</span> ADD EXPENSE
-                  </button>
-                  <button
-                    onClick={clearExpenses}
-                    className="text-[10px] font-bold text-red-400 hover:text-red-300 flex items-center gap-1"
-                  >
-                    <span className="text-sm">⊗</span> CLEAR ALL
-                  </button>
-                </div>
-              </div>
-
-              <div className="border border-amber-500/20 rounded-lg overflow-hidden">
-                {/* Expenses table header */}
-                <div className="grid grid-cols-[1fr_1fr_auto_auto] gap-2 px-3 py-1.5 bg-zinc-800/40 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40">
-                  <span>Claimant</span>
-                  <span>Expense Name</span>
-                  <span className="text-right">Amount</span>
-                  <span></span>
-                </div>
-
-                {expenses.length === 0 && (
-                  <div className="px-3 py-3 text-center text-xs text-zinc-600 italic">
-                    No Expenses
-                  </div>
-                )}
-
-                {expenses.map((exp) => (
-                  <div
-                    key={exp.id}
-                    className="grid grid-cols-[1fr_1fr_auto_auto] gap-2 px-3 py-1.5 border-b border-zinc-800/30 items-center"
-                  >
-                    <input
-                      type="text"
-                      value={exp.claimant}
-                      onChange={(e) => updateExpense(exp.id, "claimant", e.target.value)}
-                      className="bg-transparent text-xs text-zinc-200 focus:outline-none border-b border-transparent focus:border-amber-500/50"
-                    />
-                    <input
-                      type="text"
-                      value={exp.name}
-                      onChange={(e) => updateExpense(exp.id, "name", e.target.value)}
-                      placeholder="Expense name"
-                      className="bg-transparent text-xs text-zinc-200 focus:outline-none border-b border-transparent focus:border-amber-500/50"
-                    />
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="number"
-                        min="0"
-                        value={exp.amount || ""}
-                        onChange={(e) => updateExpense(exp.id, "amount", parseFloat(e.target.value) || 0)}
-                        className="w-20 bg-transparent text-xs text-right font-mono text-zinc-200 focus:outline-none border-b border-transparent focus:border-amber-500/50"
-                        placeholder="0"
-                      />
-                      <span className="text-[10px] text-zinc-600">aUEC</span>
-                    </div>
-                    <button
-                      onClick={() => removeExpense(exp.id)}
-                      className="text-red-500 hover:text-red-400 text-sm"
-                    >
-                      ⊗
-                    </button>
-                  </div>
-                ))}
-
-                {/* Total expenses row */}
-                <div className="px-3 py-2 bg-zinc-800/20 flex justify-between items-center text-xs">
-                  <span className="text-zinc-400 font-bold">Total Expenses:</span>
-                  <span className="font-mono font-bold text-zinc-200">
-                    {formatAuec(totalExpenses)} <span className="text-zinc-600 text-[10px]">aUEC</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* ── moTrader Transfer Fee ── */}
-            <div className="flex items-center justify-end gap-2">
-              <button
-                onClick={() => setIncludeMotrader(!includeMotrader)}
-                className={`w-10 h-5 rounded-full transition-all relative
-                  ${includeMotrader ? "bg-amber-500" : "bg-zinc-700"}`}
-              >
-                <span
-                  className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all
-                    ${includeMotrader ? "left-5" : "left-0.5"}`}
-                />
-              </button>
-              <span className="text-[11px] text-zinc-400">Include moTrader Transfer Fee</span>
-            </div>
-
-            {/* ── Profit Shares ── */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold">
-                  Profit Shares:
-                </span>
-                <div className="flex items-center gap-3">
-                  {crewLoaded && (
-                    <span className="text-[10px] font-bold text-emerald-400 flex items-center gap-1">
-                      <span className="text-sm">✓</span> FROM SESSION
-                    </span>
-                  )}
-                  <button
-                    onClick={clearCrew}
-                    className="text-[10px] font-bold text-red-400 hover:text-red-300 flex items-center gap-1"
-                  >
-                    <span className="text-sm">⊗</span> CLEAR ALL
-                  </button>
-                </div>
-              </div>
-
-              {/* ── Session crew selector ── */}
-              {user && availableSessions.length > 0 && (
-                <div className="mb-3 border border-cyan-500/20 rounded-lg p-3 bg-cyan-500/5 space-y-2">
-                  <div className="text-[10px] tracking-[0.1em] uppercase text-cyan-400 font-bold">
-                    Load crew from mining session:
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={selectedSessionId}
-                      onChange={(e) => handleSessionSelect(e.target.value)}
-                      className="flex-1 bg-zinc-800/70 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-cyan-500/50"
-                    >
-                      <option value="">Select a session...</option>
-                      {availableSessions.map((s) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.memberCount} members)
-                        </option>
-                      ))}
-                    </select>
-                    {sessionCrew.length > 0 && !crewLoaded && (
-                      <button
-                        onClick={loadSessionCrew}
-                        className="px-4 py-2 bg-cyan-500/20 border border-cyan-500/40 rounded text-xs font-bold text-cyan-300 hover:bg-cyan-500/30 transition-colors whitespace-nowrap"
-                      >
-                        Load ({sessionCrew.length})
-                      </button>
-                    )}
-                  </div>
-                  {loadingCrew && (
-                    <div className="text-[10px] text-zinc-500">Loading members...</div>
-                  )}
-                  {sessionCrew.length > 0 && !crewLoaded && (
-                    <div className="text-[10px] text-zinc-500">
-                      {sessionCrew.map((m) => m.display_name).join(", ")}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {loadingSessions && (
-                <div className="text-center py-2 text-xs text-zinc-500">
-                  Loading sessions...
-                </div>
-              )}
-
-              {/* Add member input */}
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-zinc-600 text-lg">👥</span>
-                <input
-                  type="text"
-                  value={newMemberName}
-                  onChange={(e) => setNewMemberName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addCrewMember()}
-                  placeholder="Type a session user or friend nam..."
-                  className="flex-1 bg-transparent text-xs text-zinc-200 border-b border-zinc-700 focus:outline-none focus:border-amber-500/50 pb-1"
-                />
-                <button
-                  onClick={addCrewMember}
-                  className="text-amber-400 hover:text-amber-300 text-xl leading-none"
-                  title="Add member"
-                >
-                  +
-                </button>
-              </div>
-
-              {/* Crew table */}
-              <div className="border border-amber-500/20 rounded-lg overflow-hidden">
-                <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 px-3 py-1.5 bg-zinc-800/40 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40">
-                  <span>Username</span>
-                  <span>Share</span>
-                  <span></span>
-                  <span className="text-right">aUEC</span>
-                  <span>Note</span>
-                </div>
-
-                {crewPayouts.map((member) => {
-                  // Try to find avatar from session crew
-                  const sessionMember = crewLoaded
-                    ? sessionCrew.find((sc) => sc.display_name === member.name)
-                    : null;
-                  return (
-                  <div
-                    key={member.id}
-                    className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 px-3 py-2 border-b border-zinc-800/30 items-center"
-                  >
-                    <div className="flex items-center gap-2">
-                      {sessionMember?.avatar_url && (
-                        <img
-                          src={sessionMember.avatar_url}
-                          alt=""
-                          className="w-5 h-5 rounded-full object-cover border border-zinc-700"
-                        />
-                      )}
-                      <span className="text-xs font-bold text-zinc-200">{member.name}</span>
-                      {sessionMember && (
-                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-400 font-bold uppercase tracking-wider">
-                          {sessionMember.role}
-                        </span>
-                      )}
-                    </div>
-                    <select
-                      value={member.shareType}
-                      onChange={(e) =>
-                        setCrew(crew.map((c) => c.id === member.id
-                          ? { ...c, shareType: e.target.value as "equal" | "fixed" }
-                          : c
-                        ))
-                      }
-                      className="bg-zinc-800/50 border border-zinc-700 rounded text-[10px] text-zinc-300 px-1.5 py-0.5 focus:outline-none"
-                    >
-                      <option value="equal">⚖</option>
-                      <option value="fixed">💰</option>
-                    </select>
-                    <input
-                      type="number"
-                      min="0"
-                      value={member.share}
-                      onChange={(e) =>
-                        setCrew(crew.map((c) => c.id === member.id
-                          ? { ...c, share: parseFloat(e.target.value) || 0 }
-                          : c
-                        ))
-                      }
-                      className="w-12 bg-transparent text-xs text-center font-mono text-zinc-200 border-b border-zinc-700 focus:outline-none focus:border-amber-500/50"
-                    />
-                    <span className={`text-xs font-mono font-bold text-right min-w-[60px] ${member.payout > 0 ? "text-amber-400" : "text-zinc-500"}`}>
-                      {formatAuec(member.payout)}
-                    </span>
-                    <button
-                      onClick={() => removeCrewMember(member.id)}
-                      className="text-zinc-600 hover:text-zinc-400 text-sm"
-                      title="Remove"
-                    >
-                      📥
-                    </button>
-                  </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* ── Submit Order Button ──────────────────────────────────── */}
@@ -1193,80 +626,6 @@ export default function WorkOrderCalculator() {
           Work orders inside Sessions can be captured automatically from the game or by uploading screenshots using OCR.
         </p>
       </div>
-
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {/* Composite Sell Price Modal                                      */}
-      {/* ═══════════════════════════════════════════════════════════════ */}
-      {showCompositeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-zinc-900 border-2 border-amber-500 rounded-xl p-6 w-full max-w-md shadow-[0_0_30px_rgba(245,158,11,0.2)]">
-            <h3 className="text-xl font-bold text-zinc-100 mb-4">Composite Sell Price</h3>
-
-            <div className="flex justify-end mb-3">
-              <button
-                onClick={addCompositeRow}
-                className="text-[11px] font-bold text-amber-400 hover:text-amber-300"
-              >
-                + ADD ROW
-              </button>
-            </div>
-
-            <div className="space-y-2 mb-4">
-              {compositeRows.map((row, i) => (
-                <div key={row.id} className="flex items-center gap-2">
-                  <span className="w-6 h-6 rounded bg-zinc-800 text-center text-xs leading-6 text-zinc-500">{i + 1}</span>
-                  <input
-                    type="number"
-                    min="0"
-                    value={row.amount || ""}
-                    onChange={(e) =>
-                      setCompositeRows(compositeRows.map((r) =>
-                        r.id === row.id ? { ...r, amount: parseFloat(e.target.value) || 0 } : r
-                      ))
-                    }
-                    className="flex-1 bg-zinc-800/50 border border-zinc-700 rounded px-3 py-2 text-sm font-mono text-right text-zinc-100 focus:outline-none focus:border-amber-500"
-                    placeholder="0"
-                  />
-                  <span className="text-xs text-zinc-500">aUEC</span>
-                  <button
-                    onClick={() => setCompositeRows(compositeRows.filter((r) => r.id !== row.id))}
-                    className="text-red-500 hover:text-red-400"
-                  >
-                    ⊗
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-between py-3 border-t border-zinc-700">
-              <span className="text-sm text-zinc-300 font-bold">Final Total:</span>
-              <span className="text-xl font-mono font-bold text-amber-400">
-                {formatAuec(compositeTotal)} <span className="text-sm text-zinc-500">aUEC</span>
-              </span>
-            </div>
-
-            <p className="text-[11px] text-zinc-600 mb-4">
-              Use <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-400">Tab</kbd> to add a new row.
-              Use <kbd className="px-1.5 py-0.5 bg-zinc-800 rounded text-zinc-400">Enter</kbd> to accept and return.
-            </p>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowCompositeModal(false)}
-                className="flex-1 py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm font-bold hover:bg-zinc-700 transition-colors flex items-center justify-center gap-2"
-              >
-                <span className="text-red-400">⊗</span> CANCEL
-              </button>
-              <button
-                onClick={acceptComposite}
-                className="flex-1 py-2.5 rounded-lg bg-amber-500 text-zinc-900 text-sm font-bold hover:bg-amber-400 transition-colors flex items-center justify-center gap-2"
-              >
-                <span>✓</span> ACCEPT
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

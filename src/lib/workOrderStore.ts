@@ -481,6 +481,14 @@ export function getStats(sessionId?: string): WOStats {
   };
 }
 
+// ─── Clear inventory only ────────────────────────────────────────────────────
+
+export function clearInventoryData() {
+  if (typeof window === "undefined") return;
+  writeJSON(KEY_INVENTORY, []);
+  writeJSON(KEY_MOVEMENTS, []);
+}
+
 // ─── Clear all data ──────────────────────────────────────────────────────────
 
 export function clearAllData() {

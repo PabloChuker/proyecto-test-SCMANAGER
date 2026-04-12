@@ -5,7 +5,7 @@ import {
   getSessions, getOrders, getActiveSessionId, setActiveSessionId,
   createSession, deleteSession, deleteOrder, collectOrder,
   completeOrder, tickOrders, getCrewSharesSummary, getStats,
-  getInventory, getMovements, sellFromInventory, useForCrafting,
+  getInventory, getMovements, sellFromInventory, useForCrafting, clearInventoryData,
   distributeToMember, manualAdd, calculateDistribution,
   type WOSession, type WorkOrder, type OrderStatus,
   type InventoryItem, type InventoryMovement,
@@ -180,11 +180,12 @@ export default function WorkOrderDashboard() {
   const mergedInventory = useMemo(() => {
     if (!sbInventory.length) return inventory;
     // Map Supabase items to local shape
-    const sbConverted: InventoryItem[] = sbInventory.map((i) => ({
+    const sbConverted = sbInventory.map((i) => ({
       mineralId: i.mineral_id,
       mineralName: i.mineral_name,
       quantity: i.quantity,
       totalReceived: i.total_received,
+      quality: i.quality,
       _source: "supabase" as const,
     }));
     // Merge: Supabase takes priority, then add local-only items
@@ -229,7 +230,12 @@ export default function WorkOrderDashboard() {
     else { completeOrder(id); refresh(); }
   };
   const handleClearInventory = () => {
+    // Clear Supabase inventory (shared / party)
     if (sbSessionId) { sbClearInventory(sbSessionId); broadcast("inventory_cleared"); }
+    // Clear localStorage inventory (solo / offline)
+    clearInventoryData();
+    setInventory([]);
+    setMovements([]);
     setShowClearConfirm(false);
     refresh();
   };
@@ -443,15 +449,23 @@ export default function WorkOrderDashboard() {
             <div className="text-center py-12 text-zinc-600 text-sm">No materials in inventory. Collect completed orders to add materials.</div>
           ) : (
             <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg overflow-hidden">
-              <div className="grid grid-cols-[2fr_1fr_1fr_auto] gap-2 px-4 py-2 bg-zinc-800/40 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40">
+              <div className="grid grid-cols-[2fr_auto_1fr_1fr_auto] gap-2 px-4 py-2 bg-zinc-800/40 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40">
                 <span>Material</span>
+                <span className="text-center">Quality</span>
                 <span className="text-right">Available</span>
                 <span className="text-right">Total Received</span>
                 <span>Actions</span>
               </div>
-              {mergedInventory.filter((i) => i.quantity > 0 || i.totalReceived > 0).map((item) => (
-                <div key={item.mineralId} className="grid grid-cols-[2fr_1fr_1fr_auto] gap-2 px-4 py-3 border-b border-zinc-800/30 items-center">
+              {mergedInventory.filter((i) => i.quantity > 0 || i.totalReceived > 0).map((item) => {
+                const q = (item as any).quality as number | undefined;
+                const qLabel = q != null ? (q / 10).toFixed(1) + "%" : "—";
+                const qColor = q != null
+                  ? q >= 800 ? "text-emerald-400" : q >= 500 ? "text-amber-400" : "text-zinc-400"
+                  : "text-zinc-600";
+                return (
+                <div key={item.mineralId} className="grid grid-cols-[2fr_auto_1fr_1fr_auto] gap-2 px-4 py-3 border-b border-zinc-800/30 items-center">
                   <span className="text-sm font-bold text-zinc-200 uppercase">{item.mineralName}</span>
+                  <span className={`text-xs font-mono font-bold text-center min-w-[50px] ${qColor}`}>{qLabel}</span>
                   <span className={`text-sm font-mono text-right font-bold ${item.quantity > 0 ? "text-emerald-400" : "text-zinc-600"}`}>
                     {item.quantity.toFixed(1)}
                   </span>
@@ -467,7 +481,8 @@ export default function WorkOrderDashboard() {
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
