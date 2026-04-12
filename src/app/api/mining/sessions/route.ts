@@ -52,22 +52,40 @@ export async function POST(request: NextRequest) {
     // 2. If party_id provided, auto-load party members as mining members
     let members: any[] = [];
     if (party_id) {
-      // Fetch party members with profiles
-      const { data: partyMembers } = await supabase
+      // Fetch party members (simple join table: party_id, user_id, role)
+      const { data: partyMembers, error: pmError } = await supabase
         .from("party_members")
-        .select("user_id, role, profiles:user_id(display_name, avatar_url)")
+        .select("user_id, role")
         .eq("party_id", party_id);
 
+      if (pmError) console.error("Error fetching party_members:", pmError);
+
       if (partyMembers && partyMembers.length > 0) {
-        const memberInserts = partyMembers.map((pm: any) => ({
-          session_id: session.id,
-          user_id: pm.user_id,
-          display_name: pm.profiles?.display_name || "Unknown",
-          avatar_url: pm.profiles?.avatar_url || null,
-          role: pm.role === "leader" ? "pilot" : "miner",  // default mapping
-          share_pct: 0,  // will be auto-balanced by frontend
-          is_from_party: true,
-        }));
+        // Fetch profiles for all party member user_ids
+        const userIds = partyMembers.map((pm: any) => pm.user_id);
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, display_name, avatar_url")
+          .in("id", userIds);
+
+        // Build a lookup map: user_id -> profile
+        const profileMap = new Map<string, any>();
+        if (profiles) {
+          for (const p of profiles) profileMap.set(p.id, p);
+        }
+
+        const memberInserts = partyMembers.map((pm: any) => {
+          const prof = profileMap.get(pm.user_id);
+          return {
+            session_id: session.id,
+            user_id: pm.user_id,
+            display_name: prof?.display_name || "Unknown",
+            avatar_url: prof?.avatar_url || null,
+            role: pm.role === "leader" ? "pilot" : "miner",  // default mapping
+            share_pct: 0,  // will be auto-balanced by frontend
+            is_from_party: true,
+          };
+        });
 
         const { data: insertedMembers, error: membersError } = await supabase
           .from("mining_members")

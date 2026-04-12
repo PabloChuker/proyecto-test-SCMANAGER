@@ -73,14 +73,28 @@ export default function SessionManager() {
     if (!user || !showCreate) return;
     setLoadingParties(true);
     const supabase = createClient();
+
+    // Find parties the user belongs to via party_members
     supabase
-      .from("parties")
-      .select("id, name, status")
-      .or(`leader_id.eq.${user.id},party_members.user_id.eq.${user.id}`)
-      .eq("status", "active")
-      .then(({ data }) => {
-        setParties(data || []);
-        setLoadingParties(false);
+      .from("party_members")
+      .select("party_id")
+      .eq("user_id", user.id)
+      .then(({ data: memberships }) => {
+        if (!memberships || memberships.length === 0) {
+          setParties([]);
+          setLoadingParties(false);
+          return;
+        }
+        const partyIds = memberships.map((m) => m.party_id);
+        supabase
+          .from("parties")
+          .select("id, name, status")
+          .in("id", partyIds)
+          .eq("status", "active")
+          .then(({ data }) => {
+            setParties(data || []);
+            setLoadingParties(false);
+          });
       });
   }, [user, showCreate]);
 
