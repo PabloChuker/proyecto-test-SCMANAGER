@@ -238,6 +238,10 @@ export function ShipViewer3D({
 
     const loop = () => {
       rafId = requestAnimationFrame(loop);
+
+      // Pausar rendering durante drag (evita presión GPU que crashea el tab)
+      if (document.body.hasAttribute("data-dnd-active")) return;
+
       const now = performance.now();
       const dt  = Math.min((now - lastMs) / 1000, 0.1); // cap a 100 ms
       lastMs = now;
