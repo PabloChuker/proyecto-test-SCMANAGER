@@ -59,20 +59,18 @@ function cloneOrder(order: ColumnOrder): ColumnOrder {
   };
 }
 
-// ── Columna → colSpan lookup ──────────────────────────────────────────────────
-const COL_SPAN: Record<ColumnKey, 1 | 2> = {
-  col0: 1, col1: 1, col2: 1, sidebar: 2,
-};
+// Widgets que ocupan 2 columnas — no pueden entrar en columnas de 1-col
+// (el resize del canvas Three.js en pleno RAF crashea el tab)
+const TWO_COL_WIDGETS = new Set<WidgetId>(["ship-selector", "ship-card", "flight-dynamics-3d"]);
 
 // ── Props ──────────────────────────────────────────────────────────────────────
 interface DpsGridCanvasProps {
   layout: UseDpsGridLayoutResult;
   renderWidget: (id: WidgetId) => React.ReactNode;
-  widgetColSpan: Record<WidgetId, 1 | 2>;
 }
 
 // ── Componente ─────────────────────────────────────────────────────────────────
-export function DpsGridCanvas({ layout, renderWidget, widgetColSpan }: DpsGridCanvasProps) {
+export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
   const outerRef = useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = useState(1400);
 
@@ -141,7 +139,8 @@ export function DpsGridCanvas({ layout, renderWidget, widgetColSpan }: DpsGridCa
 
       // Bloquear: widget 2-col no puede entrar en columna 1-col (causaría resize
       // del canvas Three.js en pleno RAF → crash del tab)
-      if ((widgetColSpan[draggedId as WidgetId] ?? 1) > COL_SPAN[targetCol]) return base;
+      const ONE_COL_TARGETS = new Set<ColumnKey>(["col0", "col1", "col2"]);
+      if (TWO_COL_WIDGETS.has(draggedId as WidgetId) && ONE_COL_TARGETS.has(targetCol)) return base;
 
       // Sin cambio si ya está en la misma posición
       const sourceItems = base[sourceCol];
@@ -169,7 +168,7 @@ export function DpsGridCanvas({ layout, renderWidget, widgetColSpan }: DpsGridCa
 
       return next;
     });
-  }, [columnOrder, widgetColSpan]);
+  }, [columnOrder]);
 
   // ── Drag end (persistir) ────────────────────────────────────────────────
   const handleDragEnd = useCallback((event: DragEndEvent) => {
