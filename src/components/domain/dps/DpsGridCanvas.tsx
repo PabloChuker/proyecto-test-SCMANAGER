@@ -20,6 +20,9 @@ import {
   useSensor,
   useSensors,
   useDroppable,
+  closestCenter,
+  pointerWithin,
+  type CollisionDetection,
   type DragStartEvent,
   type DragEndEvent,
   type DragOverEvent,
@@ -115,6 +118,44 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
   const [draftOrder, setDraftOrder] = useState<ColumnOrder | null>(null);
 
   const liveOrder = draftOrder ?? columnOrder;
+
+  // ── Collision detection personalizada ────────────────────────────────────────
+  // Con un único SortableContext plano, rectIntersection (el default) detecta
+  // primero el contenedor de columna (más grande) en lugar de la tarjeta
+  // específica que hay debajo. Esta función prioriza tarjetas sobre columnas:
+  //   1. Si el puntero está dentro de una tarjeta → esa tarjeta
+  //   2. Si el puntero está en una columna → tarjeta más cercana de esa columna
+  //   3. Fallback → closestCenter global
+  const collisionDetection = useCallback<CollisionDetection>((args) => {
+    const cardContainers = args.droppableContainers.filter(
+      ({ id }) => !COLUMN_KEYS.includes(String(id) as ColumnKey),
+    );
+    const colContainers = args.droppableContainers.filter(
+      ({ id }) => COLUMN_KEYS.includes(String(id) as ColumnKey),
+    );
+
+    // 1. Puntero dentro de una tarjeta específica
+    const withinCard = pointerWithin({ ...args, droppableContainers: cardContainers });
+    if (withinCard.length > 0) return withinCard;
+
+    // 2. Puntero dentro de un contenedor de columna → buscar la tarjeta más cercana
+    const withinCol = pointerWithin({ ...args, droppableContainers: colContainers });
+    if (withinCol.length > 0) {
+      const colId = String(withinCol[0].id) as ColumnKey;
+      const colItemIds = liveOrder[colId];
+      const colCardContainers = args.droppableContainers.filter(
+        ({ id }) => colItemIds.includes(String(id) as WidgetId),
+      );
+      if (colCardContainers.length > 0) {
+        return closestCenter({ ...args, droppableContainers: colCardContainers });
+      }
+      // Columna vacía: usar la columna como target
+      return withinCol;
+    }
+
+    // 3. Fallback
+    return closestCenter(args);
+  }, [liveOrder]);
 
   // Lista plana de todos los ids: SortableContext los necesita en orden
   const allItems = [
@@ -242,6 +283,7 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
   return (
     <DndContext
       sensors={sensors}
+      collisionDetection={collisionDetection}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
