@@ -714,6 +714,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
         <DpsGridCanvas
           layout={gridLayout}
           renderWidget={(id) => renderWidget(id, ctx)}
+          widgetColSpan={WIDGET_WIDTH}
         />
       </div>
 
