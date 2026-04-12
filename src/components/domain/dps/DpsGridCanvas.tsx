@@ -1,16 +1,14 @@
 // =============================================================================
-// AL FILO — DpsGridCanvas v2
+// AL FILO — DpsGridCanvas v3
 //
-// Layout: CSS grid de 5 columnas (3 × 1-col + 1 × 2-col sidebar).
-// Anchos: UNIT-based (se recalculan con ResizeObserver).
-// Alturas: content-sized (auto). Sin heightBlocks fijos.
-// Gap vertical: CARD_GAP_PX (fijo, pequeño).
-// Drag: dnd-kit sortable, dentro y entre columnas.
+// Fix cross-column drag: el item se mueve en tiempo real entre columnas
+// durante el drag (onDragOver), no solo en onDragEnd. Esto permite que
+// cada SortableContext vea el item correcto y calcule la posición de drop.
 // =============================================================================
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -24,22 +22,42 @@ import {
 } from "@dnd-kit/core";
 import {
   SortableContext,
+  arrayMove,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 
-import type { WidgetId, ColumnKey } from "@/lib/dps-grid/dpsGridTypes";
+import type { WidgetId, ColumnKey, ColumnOrder } from "@/lib/dps-grid/dpsGridTypes";
 import { CARD_GAP_PX } from "@/lib/dps-grid/dpsGridTypes";
 import type { UseDpsGridLayoutResult } from "@/lib/dps-grid/useDpsGridLayout";
 import { getUnit, getColumnPadding } from "@/lib/dps-grid/dpsGridGeometry";
 import { DpsGridCard } from "./DpsGridCard";
 
 // ── Configuración de columnas ─────────────────────────────────────────────────
+const COLUMN_KEYS: ColumnKey[] = ["col0", "col1", "col2", "sidebar"];
+
 const COLUMNS: { key: ColumnKey; colSpan: 1 | 2 }[] = [
   { key: "col0",    colSpan: 1 },
   { key: "col1",    colSpan: 1 },
   { key: "col2",    colSpan: 1 },
   { key: "sidebar", colSpan: 2 },
 ];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function findColumn(id: string, order: ColumnOrder): ColumnKey | null {
+  for (const key of COLUMN_KEYS) {
+    if (order[key].includes(id as WidgetId)) return key;
+  }
+  return null;
+}
+
+function cloneOrder(order: ColumnOrder): ColumnOrder {
+  return {
+    col0:    [...order.col0],
+    col1:    [...order.col1],
+    col2:    [...order.col2],
+    sidebar: [...order.sidebar],
+  };
+}
 
 // ── Props ──────────────────────────────────────────────────────────────────────
 interface DpsGridCanvasProps {
@@ -71,74 +89,100 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
   const unit = getUnit(containerWidth);
   const colPadding = getColumnPadding(unit);
 
-  // ── Drag state ────────────────────────────────────────────────────────────
+  // ── Draft order: espejo local del columnOrder que se actualiza en tiempo real
+  // mientras el usuario arrastra. Al soltar se persiste via moveCard().
+  // Al cancelar se descarta. Permite que cada SortableContext vea el item
+  // en la columna correcta durante el drag cross-column.
   const [activeId, setActiveId] = useState<WidgetId | null>(null);
-  // Columna sobre la que está el puntero (para drop en columna vacía)
-  const [overColumn, setOverColumn] = useState<ColumnKey | null>(null);
+  const [draftOrder, setDraftOrder] = useState<ColumnOrder | null>(null);
+
+  // El orden que los SortableContexts ven durante el drag
+  const liveOrder = draftOrder ?? columnOrder;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
-  function handleDragStart(event: DragStartEvent) {
+  // ── Drag start ───────────────────────────────────────────────────────────
+  const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveId(event.active.id as WidgetId);
-  }
+    setDraftOrder(cloneOrder(columnOrder));
+  }, [columnOrder]);
 
-  function handleDragOver(event: DragOverEvent) {
-    const overId = event.over?.id;
-    if (!overId) { setOverColumn(null); return; }
-    // Si el over es un ColumnKey, lo guardamos
-    if (COLUMNS.some((c) => c.key === overId)) {
-      setOverColumn(overId as ColumnKey);
-    } else {
-      setOverColumn(null);
-    }
-  }
-
-  function handleDragEnd(event: DragEndEvent) {
+  // ── Drag over (movimiento en tiempo real) ────────────────────────────────
+  const handleDragOver = useCallback((event: DragOverEvent) => {
     const { active, over } = event;
-    setActiveId(null);
-    setOverColumn(null);
     if (!over || !active) return;
 
-    const draggedId = active.id as WidgetId;
-    const overId = over.id as string;
+    const draggedId = active.id as string;
+    const overId    = over.id as string;
 
-    // Determinar columna destino y índice
-    let targetColumn: ColumnKey | null = null;
-    let targetIndex = 0;
+    setDraftOrder((prev) => {
+      const base = prev ?? cloneOrder(columnOrder);
 
-    if (COLUMNS.some((c) => c.key === overId)) {
-      // Drop en el área de una columna vacía o al final
-      targetColumn = overId as ColumnKey;
-      targetIndex = columnOrder[targetColumn].length;
-    } else {
-      // Drop sobre otra tarjeta
-      for (const { key } of COLUMNS) {
-        const idx = columnOrder[key].indexOf(overId as WidgetId);
-        if (idx !== -1) {
-          targetColumn = key;
-          targetIndex = idx;
-          break;
+      const sourceCol = findColumn(draggedId, base);
+      if (!sourceCol) return base;
+
+      // Determinar columna destino
+      let targetCol: ColumnKey | null = null;
+      if (COLUMN_KEYS.includes(overId as ColumnKey)) {
+        targetCol = overId as ColumnKey;
+      } else {
+        targetCol = findColumn(overId, base);
+      }
+      if (!targetCol) return base;
+
+      // Sin cambio si ya está en la misma posición
+      const sourceItems = base[sourceCol];
+      const sourceIdx   = sourceItems.indexOf(draggedId as WidgetId);
+      if (sourceIdx === -1) return base;
+
+      const next = cloneOrder(base);
+
+      if (sourceCol === targetCol) {
+        // Reorden dentro de la misma columna
+        const targetIdx = next[targetCol].indexOf(overId as WidgetId);
+        if (targetIdx === -1 || targetIdx === sourceIdx) return base;
+        next[targetCol] = arrayMove(next[targetCol], sourceIdx, targetIdx);
+      } else {
+        // Mover entre columnas
+        next[sourceCol] = next[sourceCol].filter((id) => id !== draggedId);
+        const overIdx = next[targetCol].indexOf(overId as WidgetId);
+        if (overIdx === -1) {
+          // Drop en la columna pero no sobre una card: añadir al final
+          next[targetCol].push(draggedId as WidgetId);
+        } else {
+          next[targetCol].splice(overIdx, 0, draggedId as WidgetId);
         }
+      }
+
+      return next;
+    });
+  }, [columnOrder]);
+
+  // ── Drag end (persistir) ────────────────────────────────────────────────
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active } = event;
+    const draggedId = active.id as WidgetId;
+
+    if (draftOrder) {
+      const targetCol = findColumn(draggedId, draftOrder);
+      if (targetCol) {
+        const targetIdx = draftOrder[targetCol].indexOf(draggedId);
+        moveCard(draggedId, targetCol, targetIdx);
       }
     }
 
-    if (!targetColumn) return;
+    setActiveId(null);
+    setDraftOrder(null);
+  }, [draftOrder, moveCard]);
 
-    // Ajustar índice: si el item se mueve dentro de la misma columna hacia abajo,
-    // la posición de destino ya considera el hueco dejado al sacar el item.
-    const sourceColumn = findColumn(draggedId, columnOrder);
-    if (sourceColumn === targetColumn) {
-      const sourceIndex = columnOrder[sourceColumn].indexOf(draggedId);
-      if (sourceIndex === targetIndex) return; // sin cambio
-    }
-
-    moveCard(draggedId, targetColumn, targetIndex);
-  }
+  const handleDragCancel = useCallback(() => {
+    setActiveId(null);
+    setDraftOrder(null);
+  }, []);
 
   // ── Render ────────────────────────────────────────────────────────────────
-  // gridTemplateColumns: 3 cols de 1*UNIT + sidebar de 2*UNIT
   const gridCols = `repeat(3, ${unit}px) ${unit * 2}px`;
 
   return (
@@ -147,7 +191,7 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
-      onDragCancel={() => { setActiveId(null); setOverColumn(null); }}
+      onDragCancel={handleDragCancel}
     >
       <div
         ref={outerRef}
@@ -157,16 +201,14 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
           <DroppableColumn
             key={key}
             columnKey={key}
-            widgetIds={columnOrder[key]}
+            widgetIds={liveOrder[key]}
             padding={colPadding}
-            isOver={overColumn === key}
             renderWidget={renderWidget}
             activeId={activeId}
           />
         ))}
       </div>
 
-      {/* DragOverlay: muestra el widget mientras se arrastra */}
       <DragOverlay dropAnimation={null}>
         {activeId ? (
           <div style={{ opacity: 0.85, pointerEvents: "none" }}>
@@ -183,18 +225,16 @@ function DroppableColumn({
   columnKey,
   widgetIds,
   padding,
-  isOver,
   renderWidget,
   activeId,
 }: {
   columnKey: ColumnKey;
   widgetIds: WidgetId[];
   padding: number;
-  isOver: boolean;
   renderWidget: (id: WidgetId) => React.ReactNode;
   activeId: WidgetId | null;
 }) {
-  const { setNodeRef } = useDroppable({ id: columnKey });
+  const { setNodeRef, isOver } = useDroppable({ id: columnKey });
 
   return (
     <div
@@ -204,11 +244,10 @@ function DroppableColumn({
         display: "flex",
         flexDirection: "column",
         gap: CARD_GAP_PX,
-        // Indicador sutil cuando el drag está sobre esta columna vacía
-        outline: isOver && widgetIds.length === 0
-          ? "1px dashed rgba(234,179,8,0.3)"
-          : "none",
         minHeight: 40,
+        outline: isOver && widgetIds.filter(id => id !== activeId).length === 0
+          ? "1px dashed rgba(234,179,8,0.25)"
+          : "none",
       }}
     >
       <SortableContext items={widgetIds} strategy={verticalListSortingStrategy}>
@@ -220,15 +259,4 @@ function DroppableColumn({
       </SortableContext>
     </div>
   );
-}
-
-// ── Helper ────────────────────────────────────────────────────────────────────
-function findColumn(
-  id: WidgetId,
-  order: UseDpsGridLayoutResult["columnOrder"],
-): ColumnKey | null {
-  for (const key of ["col0", "col1", "col2", "sidebar"] as ColumnKey[]) {
-    if (order[key].includes(id)) return key;
-  }
-  return null;
 }
