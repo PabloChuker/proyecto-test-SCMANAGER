@@ -323,6 +323,8 @@ function savePositions(positions: SavedPos[]) {
 // children renderiza en su tamaño natural. `overflow="visible"` sólo aplica a
 // widgets que abren popups (ship-selector) para que los dropdowns invadan
 // vecinos sin clip.
+const collapsedSet = new Set<WidgetId>();
+
 function WidgetShell({ id, label, icon, badge, children, overflow = "hidden" }: {
   id: WidgetId;
   label: string;
@@ -331,18 +333,36 @@ function WidgetShell({ id, label, icon, badge, children, overflow = "hidden" }: 
   children: React.ReactNode;
   overflow?: "hidden" | "visible";
 }) {
+  const [collapsed, setCollapsed] = useState(() => collapsedSet.has(id));
+  const toggle = useCallback(() => {
+    setCollapsed(prev => {
+      const next = !prev;
+      if (next) collapsedSet.add(id); else collapsedSet.delete(id);
+      return next;
+    });
+  }, [id]);
   const outerOverflow = overflow === "visible" ? "overflow-visible" : "overflow-hidden";
   return (
     <div className={`flex flex-col ${outerOverflow} rounded-sm`} data-widget-id={id}>
-      <div className="rgl-drag-handle flex items-center gap-1.5 px-2 py-1.5 bg-zinc-950/60 border border-zinc-800/30 border-b-0 select-none group rounded-t-sm shrink-0 cursor-grab active:cursor-grabbing">
-        {icon && <img src={icon} alt="" className="w-3.5 h-3.5" style={{ opacity: 0.6 }} />}
-        <span className="text-[9px] font-mono font-medium text-zinc-500 tracking-[0.15em] group-hover:text-zinc-400 transition-colors uppercase">{label}</span>
+      <div className="rgl-drag-handle flex items-center gap-2 px-2.5 py-2 bg-zinc-950/60 border border-zinc-800/30 border-b-0 select-none group rounded-t-sm shrink-0 cursor-grab active:cursor-grabbing">
+        {icon && <img src={icon} alt="" className="w-4 h-4 brightness-125" />}
+        <span className="text-[11px] font-mono font-bold text-zinc-300 tracking-[0.12em] group-hover:text-zinc-100 transition-colors uppercase">{label}</span>
         <span className="flex-1" />
-        {badge != null && <span className="text-[9px] font-mono text-zinc-600">{badge}</span>}
+        {badge != null && <span className="text-[10px] font-mono font-semibold text-zinc-500">{badge}</span>}
+        <button
+          onClick={(e) => { e.stopPropagation(); toggle(); }}
+          className="ml-1 w-5 h-5 flex items-center justify-center rounded hover:bg-zinc-700/40 transition-colors cursor-pointer"
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" className={"text-zinc-400 transition-transform duration-200 " + (collapsed ? "-rotate-90" : "")}>
+            <path d="M2 3.5 L5 6.5 L8 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
       </div>
-      <div className="min-h-0">
-        {children}
-      </div>
+      {!collapsed && (
+        <div className="min-h-0">
+          {children}
+        </div>
+      )}
     </div>
   );
 }
