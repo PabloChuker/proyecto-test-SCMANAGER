@@ -350,8 +350,9 @@ function WidgetShell({ id, label, icon, badge, children, overflow = "hidden" }: 
         <span className="flex-1" />
         {badge != null && <span className="text-[10px] font-mono font-semibold text-zinc-500">{badge}</span>}
         <button
+          onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => { e.stopPropagation(); toggle(); }}
-          className="ml-1 w-5 h-5 flex items-center justify-center rounded hover:bg-zinc-700/40 transition-colors cursor-pointer"
+          className="rgl-no-drag ml-1 w-5 h-5 flex items-center justify-center rounded hover:bg-zinc-700/40 transition-colors cursor-pointer"
         >
           <svg width="10" height="10" viewBox="0 0 10 10" className={"text-zinc-400 transition-transform duration-200 " + (collapsed ? "-rotate-90" : "")}>
             <path d="M2 3.5 L5 6.5 L8 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />

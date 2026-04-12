@@ -166,6 +166,7 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
       cols={5}
       rowHeight={ROW_H}
       draggableHandle=".rgl-drag-handle"
+      draggableCancel=".rgl-no-drag"
       onLayoutChange={handleLayoutChange}
       onDragStart={handleDragStart}
       onDragStop={handleDragStop}
