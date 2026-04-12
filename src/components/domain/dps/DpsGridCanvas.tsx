@@ -68,16 +68,20 @@ function cloneOrder(order: ColumnOrder): ColumnOrder {
 // La tarjeta del propio dragged (excludeId) se ignora al calcular posiciones.
 function getInsertIndexByY(
   colEl: HTMLElement,
-  dragCenterY: number,
+  pointerY: number,
   colItems: WidgetId[],
 ): number {
+  console.log("[dps] getInsertIndexByY", { pointerY, colItems, colElTag: colEl.tagName, colElChildren: colEl.children.length });
   for (let i = 0; i < colItems.length; i++) {
     const id = colItems[i];
     const cardEl = colEl.querySelector(`[data-widget-id="${id}"]`);
-    if (!cardEl) continue;
+    if (!cardEl) { console.log(`  [dps]   ${id}: NOT FOUND in DOM`); continue; }
     const rect = cardEl.getBoundingClientRect();
-    if (dragCenterY < rect.top + rect.height / 2) return i;
+    const centerY = rect.top + rect.height / 2;
+    console.log(`  [dps]   ${id}: centerY=${centerY.toFixed(0)}, pointerY=${pointerY.toFixed(0)}, insert=${pointerY < centerY}`);
+    if (pointerY < centerY) return i;
   }
+  console.log(`  [dps]   -> END (${colItems.length})`);
   return colItems.length;
 }
 
@@ -186,6 +190,8 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
     // dnd-kit llama a setPointerCapture() al iniciar el drag.
     const activatorY = (event.activatorEvent as PointerEvent).clientY ?? 0;
     const pointerY   = activatorY + event.delta.y;
+
+    console.log("[dps] DragOver", { draggedId, overId, activatorY, deltaY: event.delta.y, pointerY });
 
     const colElMap: Record<ColumnKey, HTMLDivElement | null> = {
       col0:    col0ElRef.current,
