@@ -139,6 +139,9 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
   // ── Draft order ──────────────────────────────────────────────────────────────
   const [activeId, setActiveId] = useState<WidgetId | null>(null);
   const [draftOrder, setDraftOrder] = useState<ColumnOrder | null>(null);
+  // Ref espejo de draftOrder: siempre actualizado síncronamente en los handlers
+  // para que handleDragOver lea el estado más reciente sin depender del cierre.
+  const draftOrderRef = useRef<ColumnOrder | null>(null);
 
   const liveOrder = draftOrder ?? columnOrder;
 
@@ -163,14 +166,16 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
   // ── Drag start ───────────────────────────────────────────────────────────────
   const handleDragStart = useCallback((event: DragStartEvent) => {
     window.dispatchEvent(new Event("dnd:dragstart"));
+    const initial = cloneOrder(columnOrder);
+    draftOrderRef.current = initial;
     setActiveId(event.active.id as WidgetId);
-    setDraftOrder(cloneOrder(columnOrder));
+    setDraftOrder(initial);
   }, [columnOrder]);
 
   // ── Drag over (movimiento en tiempo real) ────────────────────────────────────
-  // Cuando over.id es un contenedor de columna (dnd-kit no resuelve la tarjeta
-  // concreta en layouts multi-columna con portales), calculamos la posición de
-  // inserción leyendo directamente las posiciones Y del DOM.
+  // Todo el cálculo ocurre síncronamente en el handler (no dentro del updater de
+  // setState) para que las lecturas del DOM sean fiables y el ref esté siempre
+  // al día sin depender de cierres sobre state.
   const handleDragOver = useCallback((event: DragOverEvent) => {
     const { active, over } = event;
     if (!over || !active) return;
@@ -178,70 +183,62 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
     const draggedId = active.id as string;
     const overId    = over.id as string;
 
-    // Posición Y actual del pointer: activatorEvent.clientY (pointerdown original)
-    // + event.delta.y (desplazamiento acumulado). Es la forma fiable de obtener
-    // el Y actual durante drag: window/document NO reciben pointermove porque
-    // dnd-kit llama a setPointerCapture() al iniciar el drag.
+    // Posición Y actual del pointer (activatorEvent = pointerdown original;
+    // delta.y = desplazamiento desde ese punto).
     const activatorY = (event.activatorEvent as PointerEvent).clientY ?? 0;
     const pointerY   = activatorY + event.delta.y;
 
-    const colElMap: Record<ColumnKey, HTMLDivElement | null> = {
-      col0:    col0ElRef.current,
-      col1:    col1ElRef.current,
-      col2:    col2ElRef.current,
-      sidebar: sidebarElRef.current,
-    };
+    // Leer desde el ref para evitar valores rancios del cierre
+    const base = draftOrderRef.current ?? cloneOrder(columnOrder);
 
-    setDraftOrder((prev) => {
-      const base = prev ?? cloneOrder(columnOrder);
+    const sourceCol = findColumn(draggedId, base);
+    if (!sourceCol) return;
 
-      const sourceCol = findColumn(draggedId, base);
-      if (!sourceCol) return base;
+    // Determinar columna destino
+    let targetCol: ColumnKey | null = null;
+    if (COLUMN_KEYS.includes(overId as ColumnKey)) {
+      targetCol = overId as ColumnKey;
+    } else {
+      targetCol = findColumn(overId, base);
+    }
+    if (!targetCol) return;
 
-      // Determinar columna destino
-      let targetCol: ColumnKey | null = null;
-      if (COLUMN_KEYS.includes(overId as ColumnKey)) {
-        targetCol = overId as ColumnKey;
+    // Widgets de 2 columnas: solo van al sidebar
+    if (TWO_COL_IDS.has(draggedId) && targetCol !== "sidebar") return;
+
+    const next = cloneOrder(base);
+    next[sourceCol] = next[sourceCol].filter((id) => id !== draggedId);
+    const targetItems = next[targetCol].filter((id) => id !== (draggedId as WidgetId));
+
+    let insertIdx: number;
+    const colEl = getColElImmediate(targetCol);
+
+    if (!COLUMN_KEYS.includes(overId as ColumnKey)) {
+      // over.id es una tarjeta concreta: comparar pointerY con su centro visual.
+      // Funciona con o sin transforms de sortable porque comparamos en espacio visual.
+      const overIdxInTarget = targetItems.indexOf(overId as WidgetId);
+      const overEl = colEl?.querySelector<HTMLElement>(`[data-widget-id="${overId}"]`);
+      if (overEl && overIdxInTarget >= 0) {
+        const rect = overEl.getBoundingClientRect();
+        insertIdx = pointerY < rect.top + rect.height / 2
+          ? overIdxInTarget       // encima del centro → antes
+          : overIdxInTarget + 1;  // debajo del centro → después
       } else {
-        targetCol = findColumn(overId, base);
+        insertIdx = overIdxInTarget >= 0 ? overIdxInTarget : targetItems.length;
       }
-      if (!targetCol) return base;
+    } else if (colEl) {
+      // over.id es el contenedor de columna (ej. columna vacía)
+      insertIdx = getInsertIndexByY(colEl, pointerY, targetItems);
+    } else {
+      insertIdx = targetItems.length;
+    }
 
-      // Widgets de 2 columnas: solo van al sidebar
-      if (TWO_COL_IDS.has(draggedId) && targetCol !== "sidebar") return base;
+    targetItems.splice(insertIdx, 0, draggedId as WidgetId);
+    next[targetCol] = targetItems;
 
-      const next = cloneOrder(base);
-      next[sourceCol] = next[sourceCol].filter((id) => id !== draggedId);
-      const targetItems = next[targetCol].filter((id) => id !== (draggedId as WidgetId));
-
-      let insertIdx: number;
-
-      if (!COLUMN_KEYS.includes(overId as ColumnKey)) {
-        // over.id es una tarjeta concreta: decidir antes/después comparando
-        // pointerY con el centro visual de esa tarjeta. Así funciona con o sin
-        // transforms de sortable, porque comparamos en espacio visual.
-        const overIdxInTarget = targetItems.indexOf(overId as WidgetId);
-        const overEl = colElMap[targetCol]?.querySelector(`[data-widget-id="${overId}"]`);
-        if (overEl) {
-          const rect = overEl.getBoundingClientRect();
-          insertIdx = pointerY < rect.top + rect.height / 2
-            ? Math.max(0, overIdxInTarget)          // encima del centro → antes
-            : Math.max(0, overIdxInTarget) + 1;     // debajo del centro → después
-        } else {
-          insertIdx = overIdxInTarget >= 0 ? overIdxInTarget : targetItems.length;
-        }
-      } else if (colElMap[targetCol]) {
-        // over.id es el contenedor de columna (columna vacía): usar Y del DOM
-        insertIdx = getInsertIndexByY(colElMap[targetCol]!, pointerY, targetItems);
-      } else {
-        insertIdx = targetItems.length;
-      }
-
-      targetItems.splice(insertIdx, 0, draggedId as WidgetId);
-      next[targetCol] = targetItems;
-
-      return next;
-    });
+    // Actualizar ref síncronamente antes de que React procese el setState
+    draftOrderRef.current = next;
+    setDraftOrder(next);
   }, [columnOrder]);
 
   // ── Drag end (persistir) ─────────────────────────────────────────────────────
@@ -249,23 +246,20 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
     window.dispatchEvent(new Event("dnd:dragend"));
     const { active, over } = event;
     const draggedId = active.id as WidgetId;
-
     const activatorY = (event.activatorEvent as PointerEvent).clientY ?? 0;
     const pointerY   = activatorY + event.delta.y;
 
-    if (draftOrder) {
+    // Usar ref en lugar de draftOrder state (siempre tiene el valor más reciente)
+    const finalDraft = draftOrderRef.current;
+    if (finalDraft) {
       if (TWO_COL_IDS.has(draggedId) && over) {
-        // Para widgets 2-col, draftOrder no se actualizó cross-column:
-        // calcular columna y posición final ahora
-        const overId = over.id as string;
+        const overId  = over.id as string;
         const finalCol: ColumnKey = COLUMN_KEYS.includes(overId as ColumnKey)
           ? overId as ColumnKey
-          : (findColumn(overId, columnOrder) ?? findColumn(draggedId, draftOrder) ?? "sidebar");
+          : (findColumn(overId, columnOrder) ?? findColumn(draggedId, finalDraft) ?? "sidebar");
         const safeCol: ColumnKey = finalCol !== "sidebar" ? "sidebar" : finalCol;
-
         const existingItems = columnOrder[safeCol].filter(id => id !== draggedId);
         let insertIdx: number;
-
         if (!COLUMN_KEYS.includes(overId as ColumnKey)) {
           const overIdx = existingItems.indexOf(overId as WidgetId);
           insertIdx = overIdx >= 0 ? overIdx : existingItems.length;
@@ -274,23 +268,23 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
         } else {
           insertIdx = existingItems.length;
         }
-
         moveCard(draggedId, safeCol, insertIdx);
       } else {
-        const targetCol = findColumn(draggedId, draftOrder);
+        const targetCol = findColumn(draggedId, finalDraft);
         if (targetCol) {
-          const targetIdx = draftOrder[targetCol].indexOf(draggedId);
-          moveCard(draggedId, targetCol, targetIdx);
+          moveCard(draggedId, targetCol, finalDraft[targetCol].indexOf(draggedId));
         }
       }
     }
 
+    draftOrderRef.current = null;
     setActiveId(null);
     setDraftOrder(null);
-  }, [draftOrder, columnOrder, moveCard]);
+  }, [columnOrder, moveCard]);
 
   const handleDragCancel = useCallback(() => {
     window.dispatchEvent(new Event("dnd:dragend"));
+    draftOrderRef.current = null;
     setActiveId(null);
     setDraftOrder(null);
   }, []);
