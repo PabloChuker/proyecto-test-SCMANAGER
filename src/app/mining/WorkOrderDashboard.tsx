@@ -201,24 +201,23 @@ export default function WorkOrderDashboard() {
       _source: "supabase" as const,
     }));
 
-    // If logged in with a Supabase session, ONLY show Supabase data
-    if (sbSessionId) return sbConverted;
+    // If logged in: ONLY Supabase data. NEVER touch localStorage.
+    if (user) return sbConverted;
 
-    // Solo / offline: show only localStorage data
+    // Not logged in: show only localStorage data
     return orders.map((o) => ({ ...o, _source: "local" as const }));
-  }, [orders, sbWorkOrders, sbSessionId]);
+  }, [user, orders, sbWorkOrders]);
 
   const filteredOrders = useMemo(() => {
-    // In Supabase mode, filter by sbSessionId only
-    if (sbSessionId) {
-      return mergedOrders.filter((o) => o.sessionId === sbSessionId);
+    if (user) {
+      // Logged in: filter by Supabase session only
+      if (sbSessionId) return mergedOrders.filter((o) => o.sessionId === sbSessionId);
+      return []; // Session not yet loaded — show nothing (not localStorage!)
     }
-    // In solo mode, filter by local activeId
-    if (activeId) {
-      return mergedOrders.filter((o) => o.sessionId === activeId);
-    }
+    // Solo: filter by local activeId
+    if (activeId) return mergedOrders.filter((o) => o.sessionId === activeId);
     return mergedOrders;
-  }, [mergedOrders, activeId, sbSessionId]);
+  }, [user, mergedOrders, activeId, sbSessionId]);
 
   // Orders by status
   const inProgress = filteredOrders.filter((o) => o.status === "in_progress");
@@ -226,8 +225,8 @@ export default function WorkOrderDashboard() {
   const collected = filteredOrders.filter((o) => o.status === "collected");
 
   const crewShares = useMemo(() => {
-    if (sbSessionId) {
-      // Party mode: derive crew shares from Supabase members
+    if (user) {
+      // Logged in: derive crew shares from Supabase members only
       return sbMembers.map((m) => ({
         name: m.display_name,
         totalPayout: 0,
@@ -236,11 +235,11 @@ export default function WorkOrderDashboard() {
       }));
     }
     return getCrewSharesSummary(activeId || undefined);
-  }, [activeId, rk, sbSessionId, sbMembers]);
+  }, [user, activeId, rk, sbMembers]);
 
   const stats = useMemo(() => {
-    if (sbSessionId) {
-      // Party mode: compute stats from Supabase orders
+    if (user) {
+      // Logged in: compute stats from Supabase orders only
       const totalOrders = filteredOrders.length;
       const totalYield = filteredOrders.reduce((s, o) => s + (o.totalYield || 0), 0);
       const totalGross = filteredOrders.reduce((s, o) => s + (o.grossValue || 0), 0);
@@ -254,7 +253,7 @@ export default function WorkOrderDashboard() {
       };
     }
     return getStats(activeId || undefined);
-  }, [activeId, rk, sbSessionId, filteredOrders]);
+  }, [user, activeId, rk, filteredOrders]);
 
   // Remaining countdown for an order
   const getRemainingSeconds = (order: WorkOrder): number => {
@@ -264,7 +263,7 @@ export default function WorkOrderDashboard() {
 
   // Inventory: Supabase-only when logged in, localStorage-only when solo
   const mergedInventory = useMemo(() => {
-    if (sbSessionId) {
+    if (user) {
       return sbInventory.map((i) => ({
         mineralId: i.mineral_id,
         mineralName: i.mineral_name,
@@ -275,11 +274,11 @@ export default function WorkOrderDashboard() {
       }));
     }
     return inventory;
-  }, [inventory, sbInventory, sbSessionId]);
+  }, [user, inventory, sbInventory]);
 
   // Movements: Supabase-only when logged in, localStorage-only when solo
   const mergedMovements = useMemo(() => {
-    if (sbSessionId) {
+    if (user) {
       return sbMovements.map((mv) => ({
         id: mv.id,
         mineralId: mv.mineral_id,
@@ -293,27 +292,36 @@ export default function WorkOrderDashboard() {
       );
     }
     return movements;
-  }, [movements, sbMovements, sbSessionId]);
+  }, [user, movements, sbMovements]);
 
   // ── Handlers ──
+  // When logged in (user exists) → ALL actions go through Supabase. ZERO localStorage.
+  // When not logged in → fallback to localStorage (solo mode).
+
   const handleCreateSession = () => {
+    if (user) return; // Sessions are managed in Supabase via party system
     createSession(newSessionName || undefined);
     setNewSessionName("");
     refresh();
   };
 
   const handleDeleteSession = (id: string) => {
+    if (user) return; // Sessions are managed in Supabase
     deleteSession(id);
     refresh();
   };
 
   const handleSetActive = (id: string) => {
+    if (user) {
+      sbSetActiveSession(id);
+      return;
+    }
     setActiveSessionId(id);
     setActiveId(id);
   };
 
-  const handleDeleteOrder = (id: string, source?: string) => {
-    if (source === "supabase") {
+  const handleDeleteOrder = (id: string) => {
+    if (user) {
       sbDeleteOrder(id);
       broadcast("order_deleted");
     } else {
@@ -322,8 +330,8 @@ export default function WorkOrderDashboard() {
     }
   };
 
-  const handleCollect = (id: string, source?: string) => {
-    if (source === "supabase") {
+  const handleCollect = (id: string) => {
+    if (user) {
       sbUpdateStatus(id, "collected");
       broadcast("order_updated");
     } else {
@@ -332,8 +340,8 @@ export default function WorkOrderDashboard() {
     }
   };
 
-  const handleForceComplete = (id: string, source?: string) => {
-    if (source === "supabase") {
+  const handleForceComplete = (id: string) => {
+    if (user) {
       sbUpdateStatus(id, "completed");
       broadcast("order_updated");
     } else {
@@ -343,12 +351,10 @@ export default function WorkOrderDashboard() {
   };
 
   const handleClearInventory = () => {
-    if (sbSessionId) {
-      // Party mode: clear only Supabase
+    if (user && sbSessionId) {
       sbClearInventory(sbSessionId);
       broadcast("inventory_cleared");
-    } else {
-      // Solo mode: clear only localStorage
+    } else if (!user) {
       clearInventoryData();
       setInventory([]);
       setMovements([]);
@@ -358,15 +364,15 @@ export default function WorkOrderDashboard() {
   };
 
   const handleResetAll = async () => {
-    if (sbSessionId) {
-      // Party mode: clear only Supabase data
+    if (user && sbSessionId) {
+      // Logged in: clear ONLY Supabase data — zero localStorage
       for (const order of sbWorkOrders) {
         await sbDeleteOrder(order.id);
       }
       await sbClearInventory(sbSessionId);
       broadcast("full_sync");
-    } else {
-      // Solo mode: clear only localStorage
+    } else if (!user) {
+      // Not logged in: clear only localStorage
       clearAllData();
       setSessions([]);
       setOrders([]);
@@ -383,8 +389,8 @@ export default function WorkOrderDashboard() {
     if (!invAction || invAction.qty <= 0) return;
     const { mineralId, mineralName, qty, type, member } = invAction;
 
-    if (sbSessionId) {
-      // Party mode: use Supabase
+    if (user && sbSessionId) {
+      // Logged in: ONLY Supabase
       sbRecordInventoryAction({
         session_id: sbSessionId,
         mineral_id: mineralId,
@@ -394,8 +400,8 @@ export default function WorkOrderDashboard() {
         member_name: member || undefined,
       });
       broadcast("inventory_changed");
-    } else {
-      // Solo mode: use localStorage
+    } else if (!user) {
+      // Not logged in: localStorage
       if (type === "sell") sellFromInventory(mineralId, mineralName, qty);
       else if (type === "craft") useForCrafting(mineralId, mineralName, qty);
       else if (type === "distribute") distributeToMember(mineralId, mineralName, qty, member);
@@ -495,13 +501,19 @@ export default function WorkOrderDashboard() {
         </button>
       </div>
 
-      {/* Active session bar */}
-      {activeId && (
+      {/* Active session bar — Supabase shows session name, solo shows with "Show All" */}
+      {(sbSessionId || activeId) && (
         <div className="flex items-center justify-between bg-zinc-900/60 border border-amber-500/20 rounded-lg px-4 py-2">
           <div className="text-xs text-zinc-400">
-            Session: <span className="text-amber-400 font-bold">{sessions.find((s) => s.id === activeId)?.name || "—"}</span>
+            Session: <span className="text-amber-400 font-bold">
+              {sbSessionId
+                ? sbSessions.find((s) => s.id === sbSessionId)?.name || "Party Session"
+                : sessions.find((s) => s.id === activeId)?.name || "—"}
+            </span>
           </div>
-          <button onClick={() => { setActiveSessionId(null); setActiveId(null); }} className="text-[10px] text-zinc-600 hover:text-zinc-400">Show All</button>
+          {!user && activeId && (
+            <button onClick={() => { setActiveSessionId(null); setActiveId(null); }} className="text-[10px] text-zinc-600 hover:text-zinc-400">Show All</button>
+          )}
         </div>
       )}
 
@@ -642,7 +654,7 @@ export default function WorkOrderDashboard() {
                           <div className="text-[9px] text-zinc-600">remaining</div>
                         </div>
                         <button
-                          onClick={() => handleForceComplete(order.id, (order as any)._source)}
+                          onClick={() => handleForceComplete(order.id)}
                           className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] font-bold text-zinc-400 hover:text-zinc-200 hover:border-zinc-500"
                         >
                           Skip →
@@ -679,7 +691,7 @@ export default function WorkOrderDashboard() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-mono font-bold text-amber-400">{fmtAuec(order.grossValue)} aUEC</span>
                         <button
-                          onClick={() => handleCollect(order.id, (order as any)._source)}
+                          onClick={() => handleCollect(order.id)}
                           className="px-4 py-2 bg-emerald-500 text-zinc-900 rounded font-bold text-xs hover:bg-emerald-400 transition-colors shadow-[0_0_10px_rgba(16,185,129,0.3)]"
                         >
                           📥 Collect
@@ -720,7 +732,7 @@ export default function WorkOrderDashboard() {
                           👥 Distribute
                         </button>
                         <button
-                          onClick={() => handleDeleteOrder(order.id, (order as any)._source)}
+                          onClick={() => handleDeleteOrder(order.id)}
                           className="opacity-0 group-hover:opacity-100 text-red-500/50 hover:text-red-400 text-xs transition-opacity"
                         >
                           🗑
@@ -1056,8 +1068,33 @@ export default function WorkOrderDashboard() {
 
       {/* ═══════ DISTRIBUTION MODAL ═══════ */}
       {distOrderId && (() => {
-        const dist = calculateDistribution(distOrderId);
-        const order = orders.find((o) => o.id === distOrderId);
+        // In Supabase mode: compute distribution from the Supabase order + members
+        // In solo mode: use localStorage calculateDistribution
+        let dist: { memberName: string; share: number; minerals: { mineralId: string; mineralName: string; qty: number; value: number }[] }[] = [];
+        if (user) {
+          // Logged in: compute from Supabase data only
+          const order = filteredOrders.find((o) => o.id === distOrderId);
+          if (order && sbMembers.length > 0) {
+            const totalShares = sbMembers.reduce((s, m) => s + (parseFloat(m.role) || 1), 0);
+            dist = sbMembers.map((m) => {
+              const memberShare = parseFloat(m.role) || 1;
+              const sharePct = memberShare / totalShares;
+              return {
+                memberName: m.display_name,
+                share: memberShare,
+                minerals: order.ores.map((ore) => ({
+                  mineralId: ore.id,
+                  mineralName: ore.name,
+                  qty: ore.yieldQty * sharePct,
+                  value: ore.value * sharePct,
+                })),
+              };
+            });
+          }
+        } else {
+          // Not logged in: use localStorage
+          dist = calculateDistribution(distOrderId);
+        }
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className="bg-zinc-900 border-2 border-amber-500 rounded-xl p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto">
@@ -1075,7 +1112,21 @@ export default function WorkOrderDashboard() {
                           <span className="font-mono text-amber-400">{fmtAuec(m.value)} aUEC</span>
                           <button
                             onClick={() => {
-                              distributeToMember(m.mineralId, m.mineralName, m.qty, member.memberName);
+                              if (user) {
+                                if (sbSessionId) {
+                                  sbRecordInventoryAction({
+                                    session_id: sbSessionId,
+                                    mineral_id: m.mineralId,
+                                    mineral_name: m.mineralName,
+                                    quantity: -m.qty,
+                                    reason: "distribute",
+                                    member_name: member.memberName,
+                                  });
+                                  broadcast("inventory_changed");
+                                }
+                              } else {
+                                distributeToMember(m.mineralId, m.mineralName, m.qty, member.memberName);
+                              }
                               refresh();
                             }}
                             className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 rounded text-[9px] font-bold text-emerald-400 hover:bg-emerald-500/20"
