@@ -699,7 +699,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
       ? EMPTY_STATS
       : computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, s.instancePower, s.shipInfo, s.shipPowerGen, s.flightControllerPower);
   },
-  getEffectiveItem: (hpId) => { const { hardpoints, overrides } = get(); if (overrides.has(hpId)) return overrides.get(hpId) ?? null; return hardpoints.find(h => h.id === hpId)?.defaultItem ?? null; },
+  getEffectiveItem: (hpId) => { const { hardpoints, overrides } = get(); if (overrides.has(hpId)) return overrides.get(hpId) ?? null; const top = hardpoints.find(h => h.id === hpId); if (top) return top.defaultItem ?? null; for (const h of hardpoints) { const ch = h.children.find(c => c.id === hpId); if (ch) return ch.equippedItem ?? null; } return null; },
   isComponentOn: (hpName) => get().componentStates[hpName] !== false,
   hasChanges: () => get().overrides.size > 0,
   getWeaponHardpoints: () => get().hardpoints.filter(hp => WEAPON_CATS.has(hp.resolvedCategory)),

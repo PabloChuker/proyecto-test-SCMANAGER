@@ -18,7 +18,7 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLoadoutStore } from "@/store/useLoadoutStore";
-import type { ResolvedHardpoint, EquippedItem } from "@/store/useLoadoutStore";
+import type { ResolvedHardpoint, ResolvedChild, EquippedItem } from "@/store/useLoadoutStore";
 import { useAuth } from "@/contexts/AuthContext";
 import { createClient } from "@/lib/supabase/client";
 import { HardpointSlot, isUsefulSlot } from "./HardpointSlot";
@@ -464,7 +464,7 @@ function renderWidget(
     case "ship-card":
       return W(
         <div className="bg-zinc-900/80 border border-zinc-800/60">
-          <div className="relative bg-zinc-800/20 border-b border-zinc-800/50 overflow-hidden" style={{ height: 120 }}>
+          <div className="relative bg-zinc-800/20 border-b border-zinc-800/50 overflow-hidden" style={{ height: 192 }}>
             <img src={getShipImageUrl(shipInfo.name, shipInfo.manufacturer)} alt={shipInfo.name} className="w-full h-full object-cover" draggable="false" onError={(e) => { const img = e.currentTarget; img.style.display = "none"; const fb = img.nextElementSibling as HTMLElement; if (fb) fb.style.display = "flex"; }} />
             <div className="absolute inset-0 items-center justify-center" style={{ display: "none" }}><span className="text-[10px] font-mono text-zinc-700 uppercase tracking-widest">Ship Preview</span></div>
           </div>
@@ -786,10 +786,25 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 function HpGroup({ hps, store, onClickHp }: { hps: ResolvedHardpoint[]; store: ReturnType<typeof useLoadoutStore>; onClickHp: (hp: ResolvedHardpoint) => void }) {
   if (hps.length === 0) return null;
   const { getEffectiveItem, overrides, isComponentOn, toggleComponent } = store;
+  // Convert a ResolvedChild into a synthetic ResolvedHardpoint so the picker can open for it
+  const handleClickChild = useCallback((child: ResolvedChild) => {
+    const synthetic: ResolvedHardpoint = {
+      id: child.id,
+      hardpointName: child.hardpointName,
+      originalCategory: child.category,
+      resolvedCategory: child.category || "WEAPON",
+      minSize: child.minSize,
+      maxSize: child.maxSize,
+      isFixed: child.isFixed,
+      defaultItem: child.equippedItem,
+      children: [],
+    };
+    onClickHp(synthetic);
+  }, [onClickHp]);
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60">
       {hps.map(hp => (
-        <HardpointSlot key={hp.id} hp={hp} item={getEffectiveItem(hp.id)} isOverridden={overrides.has(hp.id)} isOn={isComponentOn(hp.hardpointName)} onClick={() => onClickHp(hp)} onTogglePower={() => toggleComponent(hp.hardpointName)} childSlots={hp.children} isComponentOn={isComponentOn} toggleComponent={toggleComponent} />
+        <HardpointSlot key={hp.id} hp={hp} item={getEffectiveItem(hp.id)} isOverridden={overrides.has(hp.id)} isOn={isComponentOn(hp.hardpointName)} onClick={() => onClickHp(hp)} onTogglePower={() => toggleComponent(hp.hardpointName)} childSlots={hp.children} isComponentOn={isComponentOn} toggleComponent={toggleComponent} onClickChild={handleClickChild} />
       ))}
     </div>
   );

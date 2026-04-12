@@ -19,9 +19,10 @@ interface HardpointSlotProps {
   childSlots?: ResolvedChild[];
   isComponentOn?: (name: string) => boolean;
   toggleComponent?: (name: string) => void;
+  onClickChild?: (child: ResolvedChild) => void;
 }
 
-export function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onTogglePower, childSlots, isComponentOn, toggleComponent }: HardpointSlotProps) {
+export function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onTogglePower, childSlots, isComponentOn, toggleComponent, onClickChild }: HardpointSlotProps) {
   const catColor = CAT_COLORS[hp.resolvedCategory] || "#52525b";
   const stat = item && isOn ? getKeyStat(hp.resolvedCategory, item.componentStats) : null;
   const displaySize = hp.maxSize > 0 ? hp.maxSize : (item?.size ?? 0);
@@ -37,7 +38,7 @@ export function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onToggleP
         const chStat = ch.equippedItem && chOn ? getKeyStat(ch.category || "WEAPON", ch.equippedItem.componentStats) : null;
         const chSize = ch.maxSize > 0 ? ch.maxSize : (ch.equippedItem?.size ?? 0);
         return (
-          <Row key={ch.id} catColor={chColor} size={chSize} item={ch.equippedItem} stat={chStat} isOn={chOn} isOverridden={false} onClick={() => {}} onTogglePower={() => toggleComponent?.(ch.hardpointName)} hasChildren={false} depth={1} />
+          <Row key={ch.id} catColor={chColor} size={chSize} item={ch.equippedItem} stat={chStat} isOn={chOn} isOverridden={false} onClick={() => onClickChild?.(ch)} onTogglePower={() => toggleComponent?.(ch.hardpointName)} hasChildren={false} depth={1} />
         );
       })}
     </>
