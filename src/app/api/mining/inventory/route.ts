@@ -1,8 +1,9 @@
 // =============================================================================
 // SC LABS — /api/mining/inventory
 //
-// GET  — Get inventory + recent movements for a session
-// POST — Record an inventory action (sell, craft, distribute, manual, transfer_out)
+// GET    — Get inventory + recent movements for a session
+// POST   — Record an inventory action (sell, craft, distribute, manual, transfer_out)
+// DELETE — Clear all inventory + movements for a session
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -107,6 +108,34 @@ export async function POST(request: NextRequest) {
 
     if (movError) throw movError;
     return NextResponse.json({ data: movement }, { status: 201 });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+    const sessionId = request.nextUrl.searchParams.get("session_id");
+    if (!sessionId) return NextResponse.json({ error: "session_id required" }, { status: 400 });
+
+    // Delete movements first (FK or logical dependency), then inventory
+    const { error: movErr } = await supabase
+      .from("mining_movements")
+      .delete()
+      .eq("session_id", sessionId);
+    if (movErr) throw movErr;
+
+    const { error: invErr } = await supabase
+      .from("mining_inventory")
+      .delete()
+      .eq("session_id", sessionId);
+    if (invErr) throw invErr;
+
+    return NextResponse.json({ success: true });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

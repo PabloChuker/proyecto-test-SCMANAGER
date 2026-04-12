@@ -73,7 +73,11 @@ export default function PartyMiningDashboard() {
     updateOrderStatus,
     deleteWorkOrder,
     recordInventoryAction,
+    clearInventory,
   } = useMiningStore();
+
+  // ── Clear inventory confirmation ──
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   // ── Realtime: party members see changes in real time ──
   useMiningRealtime();
@@ -247,9 +251,19 @@ export default function PartyMiningDashboard() {
       {/* ═══════ INVENTORY ═══════ */}
       {subTab === "inventory" && (
         <div className="space-y-4">
-          <h2 className="text-lg font-bold text-zinc-200 tracking-wide font-mono">
-            Inventory
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-zinc-200 tracking-wide font-mono">
+              Inventory
+            </h2>
+            {activeSessionId && inventory.length > 0 && (
+              <button
+                onClick={() => setShowClearConfirm(true)}
+                className="px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded text-[10px] font-bold text-red-400 hover:bg-red-500/20 hover:border-red-500/50 transition-colors"
+              >
+                🗑 Clear Inventory
+              </button>
+            )}
+          </div>
 
           {!activeSessionId ? (
             <div className="text-center py-12 text-zinc-600 text-sm">
@@ -452,6 +466,31 @@ export default function PartyMiningDashboard() {
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* ═══════ CLEAR INVENTORY CONFIRM ═══════ */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-zinc-900 border-2 border-red-500 rounded-xl p-6 w-full max-w-sm shadow-[0_0_30px_rgba(239,68,68,0.2)]">
+            <h3 className="text-lg font-bold text-zinc-100 mb-2">Clear Inventory?</h3>
+            <p className="text-sm text-zinc-400 mb-4">
+              This will permanently delete all inventory items and movement history for the current session. This action cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowClearConfirm(false)}
+                className="flex-1 py-2.5 bg-zinc-800 text-zinc-300 rounded-lg font-bold text-sm hover:bg-zinc-700 transition-colors">
+                Cancel
+              </button>
+              <button onClick={() => {
+                if (activeSessionId) clearInventory(activeSessionId);
+                setShowClearConfirm(false);
+              }}
+                className="flex-1 py-2.5 bg-red-500 text-white rounded-lg font-bold text-sm hover:bg-red-400 transition-colors">
+                Clear All
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

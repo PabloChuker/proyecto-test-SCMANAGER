@@ -10,6 +10,8 @@ import {
   type WOSession, type WorkOrder, type OrderStatus,
   type InventoryItem, type InventoryMovement,
 } from "@/lib/workOrderStore";
+import { useMiningStore } from "@/store/useMiningStore";
+import { useMiningRealtime } from "@/store/useMiningRealtime";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -71,6 +73,23 @@ export default function WorkOrderDashboard() {
   // ── Distribution modal ──
   const [distOrderId, setDistOrderId] = useState<string | null>(null);
 
+  // ── Supabase shared data (visible to all party members) ──
+  const {
+    activeSessionId: sbSessionId,
+    workOrders: sbWorkOrders,
+    inventory: sbInventory,
+    movements: sbMovements,
+    members: sbMembers,
+    updateOrderStatus: sbUpdateStatus,
+    deleteWorkOrder: sbDeleteOrder,
+    clearInventory: sbClearInventory,
+    recordInventoryAction: sbRecordInventoryAction,
+  } = useMiningStore();
+  useMiningRealtime();
+
+  // ── Clear inventory confirmation ──
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+
   useEffect(() => {
     setSessions(getSessions());
     setOrders(getOrders());
@@ -91,10 +110,56 @@ export default function WorkOrderDashboard() {
 
   const refresh = () => setRk((k) => k + 1);
 
+  // Merge local orders with Supabase orders (dedup by checking if same refinery+time)
+  const mergedOrders = useMemo(() => {
+    // Convert Supabase orders to the local WorkOrder shape for display
+    const sbConverted: WorkOrder[] = sbWorkOrders.map((o) => ({
+      id: o.id,
+      sessionId: o.session_id,
+      type: o.order_type as any,
+      status: o.status as OrderStatus,
+      refinery: o.refinery_name || undefined,
+      method: o.refining_method || undefined,
+      ores: (o.ores || []).map((ore: any) => ({
+        id: ore.id,
+        name: ore.name,
+        quantity: ore.quantity || 0,
+        yieldQty: ore.yieldQty || 0,
+        value: ore.value || 0,
+        quality: ore.quality,
+      })),
+      totalYield: o.total_yield,
+      grossValue: o.gross_value,
+      expenses: [],
+      totalExpenses: 0,
+      motraderFee: o.motrader_fee,
+      netProfit: o.net_profit,
+      crew: [],
+      sellPrice: o.sell_price,
+      countdownSeconds: o.countdown_seconds,
+      countdownEndsAt: o.countdown_ends_at || null,
+      createdAt: o.created_at,
+      _source: "supabase" as const,
+    }));
+
+    // Mark local orders
+    const localMarked = orders.map((o) => ({ ...o, _source: "local" as const }));
+
+    // Combine: Supabase orders first, then local-only orders
+    // Deduplicate: if a local order was saved ~same time as a Supabase one, skip the local one
+    const sbIds = new Set(sbConverted.map((o) => o.id));
+    const localOnly = localMarked.filter((o) => !sbIds.has(o.id));
+
+    return [...sbConverted, ...localOnly];
+  }, [orders, sbWorkOrders]);
+
   const filteredOrders = useMemo(() => {
-    if (!activeId) return orders;
-    return orders.filter((o) => o.sessionId === activeId);
-  }, [orders, activeId]);
+    if (!activeId && !sbSessionId) return mergedOrders;
+    return mergedOrders.filter((o) =>
+      (activeId && o.sessionId === activeId) ||
+      (sbSessionId && o.sessionId === sbSessionId)
+    );
+  }, [mergedOrders, activeId, sbSessionId]);
 
   // Orders by status
   const inProgress = filteredOrders.filter((o) => o.status === "in_progress");
@@ -110,13 +175,65 @@ export default function WorkOrderDashboard() {
     return Math.max(0, Math.floor((new Date(order.countdownEndsAt).getTime() - now) / 1000));
   };
 
+  // Merge local inventory with Supabase inventory
+  const mergedInventory = useMemo(() => {
+    if (!sbInventory.length) return inventory;
+    // Map Supabase items to local shape
+    const sbConverted: InventoryItem[] = sbInventory.map((i) => ({
+      mineralId: i.mineral_id,
+      mineralName: i.mineral_name,
+      quantity: i.quantity,
+      totalReceived: i.total_received,
+      _source: "supabase" as const,
+    }));
+    // Merge: Supabase takes priority, then add local-only items
+    const sbIds = new Set(sbConverted.map((i) => i.mineralId));
+    const localOnly = inventory.filter((i) => !sbIds.has(i.mineralId));
+    return [...sbConverted, ...localOnly];
+  }, [inventory, sbInventory]);
+
+  // Merge movements
+  const mergedMovements = useMemo(() => {
+    if (!sbMovements.length) return movements;
+    const sbConverted = sbMovements.map((mv) => ({
+      id: mv.id,
+      mineralId: mv.mineral_id,
+      mineralName: mv.mineral_name,
+      delta: mv.delta,
+      reason: mv.reason,
+      crewMember: mv.member_name || undefined,
+      createdAt: mv.created_at,
+    }));
+    const sbIds = new Set(sbConverted.map((m) => m.id));
+    const localOnly = movements.filter((m) => !sbIds.has(m.id));
+    return [...sbConverted, ...localOnly].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [movements, sbMovements]);
+
   // ── Handlers ──
   const handleCreateSession = () => { createSession(newSessionName || undefined); setNewSessionName(""); refresh(); };
   const handleDeleteSession = (id: string) => { deleteSession(id); refresh(); };
   const handleSetActive = (id: string) => { setActiveSessionId(id); setActiveId(id); };
-  const handleDeleteOrder = (id: string) => { deleteOrder(id); refresh(); };
-  const handleCollect = (id: string) => { collectOrder(id); refresh(); };
-  const handleForceComplete = (id: string) => { completeOrder(id); refresh(); };
+  const handleDeleteOrder = (id: string, source?: string) => {
+    if (source === "supabase") { sbDeleteOrder(id); }
+    else { deleteOrder(id); refresh(); }
+  };
+  const handleCollect = (id: string, source?: string) => {
+    if (source === "supabase") { sbUpdateStatus(id, "collected"); }
+    else { collectOrder(id); refresh(); }
+  };
+  const handleForceComplete = (id: string, source?: string) => {
+    if (source === "supabase") { sbUpdateStatus(id, "completed"); }
+    else { completeOrder(id); refresh(); }
+  };
+  const handleClearInventory = () => {
+    // Clear local
+    // Clear Supabase if active session
+    if (sbSessionId) sbClearInventory(sbSessionId);
+    setShowClearConfirm(false);
+    refresh();
+  };
 
   const handleInvAction = () => {
     if (!invAction || invAction.qty <= 0) return;
@@ -229,7 +346,7 @@ export default function WorkOrderDashboard() {
                           <div className="font-mono text-lg font-bold text-amber-400">{fmtCountdown(rem)}</div>
                           <div className="text-[9px] text-zinc-600">remaining</div>
                         </div>
-                        <button onClick={() => handleForceComplete(order.id)}
+                        <button onClick={() => handleForceComplete(order.id, (order as any)._source)}
                           className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] font-bold text-zinc-400 hover:text-zinc-200 hover:border-zinc-500">
                           Skip →
                         </button>
@@ -259,7 +376,7 @@ export default function WorkOrderDashboard() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-mono font-bold text-amber-400">{fmtAuec(order.grossValue)} aUEC</span>
-                      <button onClick={() => handleCollect(order.id)}
+                      <button onClick={() => handleCollect(order.id, (order as any)._source)}
                         className="px-4 py-2 bg-emerald-500 text-zinc-900 rounded font-bold text-xs hover:bg-emerald-400 transition-colors shadow-[0_0_10px_rgba(16,185,129,0.3)]">
                         📥 Collect
                       </button>
@@ -290,7 +407,7 @@ export default function WorkOrderDashboard() {
                         className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[10px] font-bold text-zinc-500 hover:text-amber-400 hover:border-amber-500/30 transition-colors">
                         👥 Distribute
                       </button>
-                      <button onClick={() => handleDeleteOrder(order.id)}
+                      <button onClick={() => handleDeleteOrder(order.id, (order as any)._source)}
                         className="opacity-0 group-hover:opacity-100 text-red-500/50 hover:text-red-400 text-xs transition-opacity">🗑</button>
                     </div>
                   </div>
@@ -308,10 +425,22 @@ export default function WorkOrderDashboard() {
       {/* ═══════ INVENTORY ═══════ */}
       {tab === "inventory" && (
         <div className="space-y-6">
-          <div className="text-lg font-bold text-zinc-300 tracking-wide font-mono">Material Inventory</div>
-          <p className="text-[11px] text-zinc-500 -mt-4">Global consolidated stock from all collected orders.</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-lg font-bold text-zinc-300 tracking-wide font-mono">Material Inventory</div>
+              <p className="text-[11px] text-zinc-500">Global consolidated stock from all collected orders.</p>
+            </div>
+            {mergedInventory.length > 0 && (
+              <button
+                onClick={() => setShowClearConfirm(true)}
+                className="px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded text-[10px] font-bold text-red-400 hover:bg-red-500/20 hover:border-red-500/50 transition-colors"
+              >
+                🗑 Clear Inventory
+              </button>
+            )}
+          </div>
 
-          {inventory.length === 0 ? (
+          {mergedInventory.length === 0 ? (
             <div className="text-center py-12 text-zinc-600 text-sm">No materials in inventory. Collect completed orders to add materials.</div>
           ) : (
             <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg overflow-hidden">
@@ -321,7 +450,7 @@ export default function WorkOrderDashboard() {
                 <span className="text-right">Total Received</span>
                 <span>Actions</span>
               </div>
-              {inventory.filter((i) => i.quantity > 0 || i.totalReceived > 0).map((item) => (
+              {mergedInventory.filter((i) => i.quantity > 0 || i.totalReceived > 0).map((item) => (
                 <div key={item.mineralId} className="grid grid-cols-[2fr_1fr_1fr_auto] gap-2 px-4 py-3 border-b border-zinc-800/30 items-center">
                   <span className="text-sm font-bold text-zinc-200 uppercase">{item.mineralName}</span>
                   <span className={`text-sm font-mono text-right font-bold ${item.quantity > 0 ? "text-emerald-400" : "text-zinc-600"}`}>
@@ -344,11 +473,11 @@ export default function WorkOrderDashboard() {
           )}
 
           {/* Recent movements */}
-          {movements.length > 0 && (
+          {mergedMovements.length > 0 && (
             <div>
               <div className="text-xs tracking-[0.1em] uppercase text-zinc-500 font-bold mb-2">Recent Movements</div>
               <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
-                {movements.slice(0, 30).map((mv) => (
+                {mergedMovements.slice(0, 30).map((mv) => (
                   <div key={mv.id} className="flex items-center justify-between px-4 py-2 border-b border-zinc-800/30 text-xs">
                     <div className="flex items-center gap-2">
                       <span className={`font-mono font-bold ${mv.delta > 0 ? "text-emerald-400" : "text-red-400"}`}>
@@ -371,11 +500,38 @@ export default function WorkOrderDashboard() {
       {tab === "crew" && (
         <div className="space-y-4">
           <div className="text-lg font-bold text-zinc-300 tracking-wide font-mono">Crew Share Summary</div>
-          {crewShares.length === 0 ? (
+
+          {/* Supabase members (party session) */}
+          {sbMembers.length > 0 && (
+            <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg overflow-hidden mb-4">
+              <div className="px-4 py-2 bg-zinc-800/40 text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold border-b border-zinc-700/40">
+                Party Members
+              </div>
+              <div className="grid grid-cols-[2fr_1fr_1fr] gap-2 px-4 py-2 bg-zinc-800/20 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40">
+                <span>Member</span><span className="text-right">Role</span><span className="text-right">Share %</span>
+              </div>
+              {sbMembers.map((m, i) => (
+                <div key={m.id} className="grid grid-cols-[2fr_1fr_1fr] gap-2 px-4 py-3 border-b border-zinc-800/30 items-center">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${i === 0 ? "bg-amber-500/20 text-amber-400" : "bg-zinc-800 text-zinc-500"}`}>{i + 1}</span>
+                    <span className="text-sm font-bold text-zinc-200">👤 {m.display_name}</span>
+                  </div>
+                  <span className="text-xs text-zinc-400 text-right capitalize">{m.role}</span>
+                  <span className="text-sm font-mono font-bold text-amber-400 text-right">{m.share_pct}%</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Local crew shares summary */}
+          {crewShares.length === 0 && sbMembers.length === 0 ? (
             <div className="text-center py-12 text-zinc-600 text-sm">No crew data yet.</div>
-          ) : (
+          ) : crewShares.length > 0 && (
             <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg overflow-hidden">
-              <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-2 px-4 py-2 bg-zinc-800/40 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40">
+              <div className="px-4 py-2 bg-zinc-800/40 text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold border-b border-zinc-700/40">
+                Payout History
+              </div>
+              <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-2 px-4 py-2 bg-zinc-800/20 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40">
                 <span>Member</span><span className="text-right">Orders</span><span className="text-right">aUEC Payout</span><span className="text-right">Materials Value</span><span className="text-right">Avg/Order</span>
               </div>
               {crewShares.map((m, i) => (
@@ -492,6 +648,28 @@ export default function WorkOrderDashboard() {
             <div className="flex gap-2">
               <button onClick={() => setInvAction(null)} className="flex-1 py-2 bg-zinc-800 text-zinc-300 rounded font-bold text-sm">Cancel</button>
               <button onClick={handleInvAction} className="flex-1 py-2 bg-amber-500 text-zinc-900 rounded font-bold text-sm hover:bg-amber-400">Confirm</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════ CLEAR INVENTORY CONFIRM ═══════ */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-zinc-900 border-2 border-red-500 rounded-xl p-6 w-full max-w-sm shadow-[0_0_30px_rgba(239,68,68,0.2)]">
+            <h3 className="text-lg font-bold text-zinc-100 mb-2">Clear Inventory?</h3>
+            <p className="text-sm text-zinc-400 mb-4">
+              This will permanently delete all inventory items and movement history for the current session. This action cannot be undone.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowClearConfirm(false)}
+                className="flex-1 py-2.5 bg-zinc-800 text-zinc-300 rounded-lg font-bold text-sm hover:bg-zinc-700 transition-colors">
+                Cancel
+              </button>
+              <button onClick={handleClearInventory}
+                className="flex-1 py-2.5 bg-red-500 text-white rounded-lg font-bold text-sm hover:bg-red-400 transition-colors">
+                Clear All
+              </button>
             </div>
           </div>
         </div>

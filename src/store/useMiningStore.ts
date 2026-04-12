@@ -75,6 +75,7 @@ interface MiningState {
     work_order_id?: string;
     destination_ref?: string;
   }) => Promise<void>;
+  clearInventory: (sessionId: string) => Promise<void>;
 
   // ── Ledger actions ──────────────────────────────────────────────────────
   fetchLedger: (all?: boolean) => Promise<void>;
@@ -383,6 +384,18 @@ export const useMiningStore = create<MiningState>((set, get) => ({
       if (sessionId) get().fetchInventory(sessionId);
     } catch (e: any) {
       set({ error: e.message });
+    }
+  },
+
+  clearInventory: async (sessionId) => {
+    set({ isLoading: true, error: null });
+    try {
+      await api<{ success: boolean }>(`/api/mining/inventory?session_id=${sessionId}`, {
+        method: "DELETE",
+      });
+      set({ inventory: [], movements: [], isLoading: false });
+    } catch (e: any) {
+      set({ error: e.message, isLoading: false });
     }
   },
 
