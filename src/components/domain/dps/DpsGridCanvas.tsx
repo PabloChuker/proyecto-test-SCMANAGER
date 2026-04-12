@@ -1,414 +1,162 @@
 // =============================================================================
-// AL FILO — DpsGridCanvas v4
+// AL FILO — DpsGridCanvas v5 (react-grid-layout)
 //
-// Arquitectura: un único SortableContext plano con todas las tarjetas.
-// Cada tarjeta se portalea a su contenedor de columna (DropColumn).
-// Las tarjetas NUNCA se desmontan al cruzar columnas — solo cambia el
-// portal target — por lo que los contextos WebGL (Three.js) sobreviven.
+// Reemplaza dnd-kit por react-grid-layout. RGL posiciona los widgets con
+// position: absolute + CSS transforms — los componentes NUNCA se desmontan
+// al mover, por lo que los contextos WebGL (Three.js) sobreviven.
 //
-// Grid: 5 columnas iguales (repeat(5, UNIT px)).
-// col0..col2 = zona de 1 col. sidebar = zona de 2 cols (gridColumn 4/span 2).
-//
-// Posición de drop: cuando over.id es el contenedor de columna (dnd-kit no
-// detecta la tarjeta concreta), se calcula la posición de inserción leyendo
-// directamente las posiciones Y del DOM via data-widget-id.
+// Grid: 5 columnas. col0-col2 = w:1, sidebar = w:2 (x:3).
+// Alturas en unidades de ROW_H (30 px). Redimensionable y arrastrable
+// desde .rgl-drag-handle (el header de WidgetShell).
 // =============================================================================
 
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, useCallback } from "react";
-import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  useDroppable,
-  type DragStartEvent,
-  type DragEndEvent,
-  type DragOverEvent,
-} from "@dnd-kit/core";
-import { SortableContext } from "@dnd-kit/sortable";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import GridLayout, { WidthProvider } from "react-grid-layout";
+import type { Layout } from "react-grid-layout";
 
 import type { WidgetId, ColumnKey, ColumnOrder } from "@/lib/dps-grid/dpsGridTypes";
-import { CARD_GAP_PX } from "@/lib/dps-grid/dpsGridTypes";
 import type { UseDpsGridLayoutResult } from "@/lib/dps-grid/useDpsGridLayout";
-import { getUnit, getColumnPadding } from "@/lib/dps-grid/dpsGridGeometry";
-import { DpsGridCard } from "./DpsGridCard";
 
-// ── Configuración de columnas ─────────────────────────────────────────────────
+// ── Constantes ────────────────────────────────────────────────────────────────
+
+const AutoGrid = WidthProvider(GridLayout);
+
 const COLUMN_KEYS: ColumnKey[] = ["col0", "col1", "col2", "sidebar"];
-
-// Widgets de 2 columnas: solo van al sidebar.
+const COL_X: Record<ColumnKey, number> = { col0: 0, col1: 1, col2: 2, sidebar: 3 };
 const TWO_COL_IDS = new Set<string>(["ship-card", "flight-dynamics-3d", "ship-selector"]);
 
+const RGL_KEY = "al-filo-rgl-v1";
+const ROW_H = 30;
+
+/** Alturas por defecto (en filas de ROW_H px). */
+const DEFAULT_H: Record<string, number> = {
+  "ship-card":          16, // 480 px
+  "flight-dynamics-3d": 16,
+  "ship-selector":       4, // 120 px
+  "strafe-profile":     10, // 300 px
+  "turning-profile":    10,
+  "power-grid":          8, // 240 px
+  "combat-summary":      8,
+  "maneuver-radar":      8,
+  "dps-detail":          8,
+  "balance":             6, // 180 px
+};
+const H_FALLBACK = 8;
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function findColumn(id: string, order: ColumnOrder): ColumnKey | null {
-  for (const key of COLUMN_KEYS) {
-    if (order[key].includes(id as WidgetId)) return key;
+
+/** Convierte un ColumnOrder (legacy) a un array de Layout items para RGL. */
+function toRgl(order: ColumnOrder): Layout[] {
+  const out: Layout[] = [];
+  for (const col of COLUMN_KEYS) {
+    let y = 0;
+    for (const id of order[col]) {
+      const isTwoCol = TWO_COL_IDS.has(id);
+      const w = isTwoCol ? 2 : 1;
+      const h = DEFAULT_H[id] ?? H_FALLBACK;
+      out.push({
+        i: id, x: COL_X[col], y, w, h,
+        minW: w, maxW: w,               // bloquear ancho
+      });
+      y += h;
+    }
   }
-  return null;
+  return out;
 }
 
-function cloneOrder(order: ColumnOrder): ColumnOrder {
-  return {
-    col0:    [...order.col0],
-    col1:    [...order.col1],
-    col2:    [...order.col2],
-    sidebar: [...order.sidebar],
-  };
+function loadSaved(): Layout[] | null {
+  try {
+    const raw = localStorage.getItem(RGL_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
 }
 
-// Dado el centro Y del elemento arrastrado y el contenedor de columna,
-// devuelve el índice de inserción recorriendo los data-widget-id del DOM.
-// La tarjeta del propio dragged (excludeId) se ignora al calcular posiciones.
-// Devuelve el índice de inserción en colItems según la posición Y del pointer.
-// colItems debe ser la lista SIN la tarjeta arrastrada para que las posiciones
-// del DOM sean estables (la tarjeta arrastrada tiene un transform que sigue al pointer).
-function getInsertIndexByY(
-  colEl: HTMLElement,
-  pointerY: number,
-  colItems: WidgetId[],
-): number {
-  for (let i = 0; i < colItems.length; i++) {
-    const cardEl = colEl.querySelector(`[data-widget-id="${colItems[i]}"]`);
-    if (!cardEl) continue;
-    const rect = cardEl.getBoundingClientRect();
-    if (pointerY < rect.top + rect.height / 2) return i;
+function persist(layout: Layout[]) {
+  try { localStorage.setItem(RGL_KEY, JSON.stringify(layout)); }
+  catch { /* ignore */ }
+}
+
+/**
+ * Fusiona un layout guardado con las posiciones por defecto:
+ * - mantiene posiciones guardadas de widgets que siguen visibles,
+ * - añade posiciones por defecto para widgets nuevos.
+ */
+function merge(saved: Layout[], defaults: Layout[], visible: Set<WidgetId>): Layout[] {
+  const kept = saved.filter(l => visible.has(l.i as WidgetId));
+  const keptIds = new Set(kept.map(l => l.i));
+  for (const d of defaults) {
+    if (!keptIds.has(d.i)) kept.push(d);
   }
-  return colItems.length;
+  return kept;
 }
 
-// ── Props ──────────────────────────────────────────────────────────────────────
+// ── Componente ────────────────────────────────────────────────────────────────
+
 interface DpsGridCanvasProps {
   layout: UseDpsGridLayoutResult;
   renderWidget: (id: WidgetId) => React.ReactNode;
 }
 
-// ── Componente ─────────────────────────────────────────────────────────────────
 export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
-  const outerRef = useRef<HTMLDivElement>(null);
-  const [containerWidth, setContainerWidth] = useState(1400);
+  const { columnOrder } = layout;
 
-  const { columnOrder, moveCard } = layout;
+  // Lista plana de widgets visibles
+  const visibleIds = useMemo(() => {
+    const ids: WidgetId[] = [];
+    for (const col of COLUMN_KEYS) ids.push(...columnOrder[col]);
+    return ids;
+  }, [columnOrder]);
 
-  // ResizeObserver para mantener UNIT actualizado
+  const visibleSet = useMemo(() => new Set(visibleIds), [visibleIds]);
+
+  // SSR guard: CSSTransforms solo después de montar
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  // Layout RGL
+  const [gridLayout, setGridLayout] = useState<Layout[]>(() => {
+    const saved = loadSaved();
+    const defaults = toRgl(columnOrder);
+    return saved ? merge(saved, defaults, visibleSet) : defaults;
+  });
+
+  // Re-sync cuando cambian los widgets visibles (cambio de nave)
+  const prevVisible = useRef(visibleIds);
   useEffect(() => {
-    const el = outerRef.current;
-    if (!el) return;
-    const update = () => {
-      const w = el.clientWidth;
-      if (w > 0) setContainerWidth(w);
-    };
-    update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
+    if (prevVisible.current === visibleIds) return;
+    prevVisible.current = visibleIds;
+    setGridLayout(prev => {
+      const defaults = toRgl(columnOrder);
+      return merge(prev, defaults, visibleSet);
+    });
+  }, [visibleIds, visibleSet, columnOrder]);
+
+  // Persistir en cada cambio de layout
+  const onLayoutChange = useCallback((cur: Layout[]) => {
+    setGridLayout(cur);
+    persist(cur);
   }, []);
-
-  const unit = getUnit(containerWidth);
-  const colPadding = getColumnPadding(unit);
-
-  // ── Portal targets: refs a los contenedores de columna ──────────────────────
-  const col0ElRef    = useRef<HTMLDivElement | null>(null);
-  const col1ElRef    = useRef<HTMLDivElement | null>(null);
-  const col2ElRef    = useRef<HTMLDivElement | null>(null);
-  const sidebarElRef = useRef<HTMLDivElement | null>(null);
-
-  // Trigger re-render antes del primer paint para que los portales se resuelvan
-  const [colsReady, setColsReady] = useState(false);
-  useLayoutEffect(() => { setColsReady(true); }, []);
-
-  const getColEl = (col: ColumnKey): HTMLDivElement | null => {
-    if (!colsReady) return null;
-    if (col === "col0")    return col0ElRef.current;
-    if (col === "col1")    return col1ElRef.current;
-    if (col === "col2")    return col2ElRef.current;
-    return sidebarElRef.current;
-  };
-
-  // Lee los refs sin pasar por state (para usar dentro de handlers)
-  const getColElImmediate = (col: ColumnKey): HTMLDivElement | null => {
-    if (col === "col0")    return col0ElRef.current;
-    if (col === "col1")    return col1ElRef.current;
-    if (col === "col2")    return col2ElRef.current;
-    return sidebarElRef.current;
-  };
-
-
-  // ── Draft order ──────────────────────────────────────────────────────────────
-  const [activeId, setActiveId] = useState<WidgetId | null>(null);
-  const [draftOrder, setDraftOrder] = useState<ColumnOrder | null>(null);
-  // Ref espejo de draftOrder: siempre actualizado síncronamente en los handlers
-  // para que handleDragOver lea el estado más reciente sin depender del cierre.
-  const draftOrderRef = useRef<ColumnOrder | null>(null);
-
-  const liveOrder = draftOrder ?? columnOrder;
-
-  // Lista plana de todos los ids para el SortableContext
-  const allItems = [
-    ...liveOrder.col0,
-    ...liveOrder.col1,
-    ...liveOrder.col2,
-    ...liveOrder.sidebar,
-  ];
-
-  // Mapa id → columna (para el portalTarget de cada tarjeta)
-  const itemToCol = new Map<WidgetId, ColumnKey>();
-  for (const key of COLUMN_KEYS) {
-    for (const id of liveOrder[key]) itemToCol.set(id, key);
-  }
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
-  );
-
-  // ── Drag start ───────────────────────────────────────────────────────────────
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    window.dispatchEvent(new Event("dnd:dragstart"));
-    const initial = cloneOrder(columnOrder);
-    draftOrderRef.current = initial;
-    setActiveId(event.active.id as WidgetId);
-    setDraftOrder(initial);
-  }, [columnOrder]);
-
-  // ── Drag over (movimiento en tiempo real) ────────────────────────────────────
-  // Todo el cálculo ocurre síncronamente en el handler (no dentro del updater de
-  // setState) para que las lecturas del DOM sean fiables y el ref esté siempre
-  // al día sin depender de cierres sobre state.
-  const handleDragOver = useCallback((event: DragOverEvent) => {
-    const { active, over } = event;
-    if (!over || !active) return;
-
-    const draggedId = active.id as string;
-    const overId    = over.id as string;
-
-    // Posición Y actual del pointer (activatorEvent = pointerdown original;
-    // delta.y = desplazamiento desde ese punto).
-    const activatorY = (event.activatorEvent as PointerEvent).clientY ?? 0;
-    const pointerY   = activatorY + event.delta.y;
-
-    // Leer desde el ref para evitar valores rancios del cierre
-    const base = draftOrderRef.current ?? cloneOrder(columnOrder);
-
-    const sourceCol = findColumn(draggedId, base);
-    if (!sourceCol) return;
-
-    // Determinar columna destino
-    let targetCol: ColumnKey | null = null;
-    if (COLUMN_KEYS.includes(overId as ColumnKey)) {
-      targetCol = overId as ColumnKey;
-    } else {
-      targetCol = findColumn(overId, base);
-    }
-    if (!targetCol) return;
-
-    // Widgets de 2 columnas: solo van al sidebar
-    if (TWO_COL_IDS.has(draggedId) && targetCol !== "sidebar") return;
-
-    const next = cloneOrder(base);
-    next[sourceCol] = next[sourceCol].filter((id) => id !== draggedId);
-    const targetItems = next[targetCol].filter((id) => id !== (draggedId as WidgetId));
-
-    let insertIdx: number;
-    const colEl = getColElImmediate(targetCol);
-
-    if (!COLUMN_KEYS.includes(overId as ColumnKey)) {
-      // over.id es una tarjeta concreta: comparar pointerY con su centro visual.
-      // Funciona con o sin transforms de sortable porque comparamos en espacio visual.
-      const overIdxInTarget = targetItems.indexOf(overId as WidgetId);
-      const overEl = colEl?.querySelector<HTMLElement>(`[data-widget-id="${overId}"]`);
-      if (overEl && overIdxInTarget >= 0) {
-        const rect = overEl.getBoundingClientRect();
-        insertIdx = pointerY < rect.top + rect.height / 2
-          ? overIdxInTarget       // encima del centro → antes
-          : overIdxInTarget + 1;  // debajo del centro → después
-      } else {
-        insertIdx = overIdxInTarget >= 0 ? overIdxInTarget : targetItems.length;
-      }
-    } else if (colEl) {
-      // over.id es el contenedor de columna (ej. columna vacía)
-      insertIdx = getInsertIndexByY(colEl, pointerY, targetItems);
-    } else {
-      insertIdx = targetItems.length;
-    }
-
-    targetItems.splice(insertIdx, 0, draggedId as WidgetId);
-    next[targetCol] = targetItems;
-
-    // Actualizar ref síncronamente antes de que React procese el setState
-    draftOrderRef.current = next;
-    setDraftOrder(next);
-  }, [columnOrder]);
-
-  // ── Drag end (persistir) ─────────────────────────────────────────────────────
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    window.dispatchEvent(new Event("dnd:dragend"));
-    const { active, over } = event;
-    const draggedId = active.id as WidgetId;
-    const activatorY = (event.activatorEvent as PointerEvent).clientY ?? 0;
-    const pointerY   = activatorY + event.delta.y;
-
-    // Usar ref en lugar de draftOrder state (siempre tiene el valor más reciente)
-    const finalDraft = draftOrderRef.current;
-    if (finalDraft) {
-      if (TWO_COL_IDS.has(draggedId) && over) {
-        const overId  = over.id as string;
-        const finalCol: ColumnKey = COLUMN_KEYS.includes(overId as ColumnKey)
-          ? overId as ColumnKey
-          : (findColumn(overId, columnOrder) ?? findColumn(draggedId, finalDraft) ?? "sidebar");
-        const safeCol: ColumnKey = finalCol !== "sidebar" ? "sidebar" : finalCol;
-        const existingItems = columnOrder[safeCol].filter(id => id !== draggedId);
-        let insertIdx: number;
-        if (!COLUMN_KEYS.includes(overId as ColumnKey)) {
-          const overIdx = existingItems.indexOf(overId as WidgetId);
-          insertIdx = overIdx >= 0 ? overIdx : existingItems.length;
-        } else if (getColElImmediate(safeCol)) {
-          insertIdx = getInsertIndexByY(getColElImmediate(safeCol)!, pointerY, existingItems);
-        } else {
-          insertIdx = existingItems.length;
-        }
-        moveCard(draggedId, safeCol, insertIdx);
-      } else {
-        const targetCol = findColumn(draggedId, finalDraft);
-        if (targetCol) {
-          moveCard(draggedId, targetCol, finalDraft[targetCol].indexOf(draggedId));
-        }
-      }
-    }
-
-    draftOrderRef.current = null;
-    setActiveId(null);
-    setDraftOrder(null);
-  }, [columnOrder, moveCard]);
-
-  const handleDragCancel = useCallback(() => {
-    window.dispatchEvent(new Event("dnd:dragend"));
-    draftOrderRef.current = null;
-    setActiveId(null);
-    setDraftOrder(null);
-  }, []);
-
-  // ── Render ────────────────────────────────────────────────────────────────────
-  const gridCols = `repeat(5, ${unit}px)`;
 
   return (
-    <DndContext
-      sensors={sensors}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragEnd={handleDragEnd}
-      onDragCancel={handleDragCancel}
+    <AutoGrid
+      layout={gridLayout}
+      cols={5}
+      rowHeight={ROW_H}
+      draggableHandle=".rgl-drag-handle"
+      onLayoutChange={onLayoutChange}
+      compactType="vertical"
+      containerPadding={[0, 0]}
+      margin={[4, 4]}
+      useCSSTransforms={mounted}
+      isResizable
     >
-      {/* Contenedores de columna: droppable zones + portal targets. */}
-      <div
-        ref={outerRef}
-        style={{ display: "grid", gridTemplateColumns: gridCols, alignItems: "start" }}
-      >
-        <DropColumn
-          columnKey="col0"
-          padding={colPadding}
-          setRef={(n) => { col0ElRef.current = n; }}
-          isEmpty={liveOrder.col0.filter(id => id !== activeId).length === 0}
-        />
-        <DropColumn
-          columnKey="col1"
-          padding={colPadding}
-          setRef={(n) => { col1ElRef.current = n; }}
-          isEmpty={liveOrder.col1.filter(id => id !== activeId).length === 0}
-        />
-        <DropColumn
-          columnKey="col2"
-          padding={colPadding}
-          setRef={(n) => { col2ElRef.current = n; }}
-          isEmpty={liveOrder.col2.filter(id => id !== activeId).length === 0}
-        />
-        <DropColumn
-          columnKey="sidebar"
-          gridColumn="4 / span 2"
-          padding={colPadding}
-          setRef={(n) => { sidebarElRef.current = n; }}
-          isEmpty={liveOrder.sidebar.filter(id => id !== activeId).length === 0}
-        />
-      </div>
-
-      {/* Un único SortableContext — tarjetas portaleadas a su columna. */}
-      {/* strategy noop: sin transforms en vecinas → posiciones DOM estables → comparación pointerY correcta */}
-      <SortableContext items={allItems} strategy={() => null}>
-        {allItems.map((id) => {
-          const col = itemToCol.get(id);
-          return (
-            <DpsGridCard
-              key={id}
-              id={id}
-              isActive={activeId === id}
-              portalTarget={col ? getColEl(col) : null}
-            >
-              {renderWidget(id)}
-            </DpsGridCard>
-          );
-        })}
-      </SortableContext>
-
-      <DragOverlay dropAnimation={null}>
-        {activeId ? (
-          <div style={{
-            background: "rgba(24,24,27,0.92)",
-            border: "1px solid rgba(234,179,8,0.45)",
-            borderRadius: "2px",
-            padding: "4px 10px",
-            pointerEvents: "none",
-            whiteSpace: "nowrap",
-          }}>
-            <span style={{
-              fontSize: "9px",
-              fontFamily: "monospace",
-              color: "#a1a1aa",
-              letterSpacing: "0.15em",
-              textTransform: "uppercase",
-            }}>
-              {activeId.replace(/-/g, " ")}
-            </span>
-          </div>
-        ) : null}
-      </DragOverlay>
-    </DndContext>
-  );
-}
-
-// ── DropColumn ─────────────────────────────────────────────────────────────────
-function DropColumn({
-  columnKey,
-  gridColumn,
-  padding,
-  isEmpty,
-  setRef,
-}: {
-  columnKey: ColumnKey;
-  gridColumn?: string;
-  padding: number;
-  isEmpty: boolean;
-  setRef: (node: HTMLDivElement | null) => void;
-}) {
-  const { setNodeRef, isOver } = useDroppable({ id: columnKey });
-
-  return (
-    <div
-      ref={(node) => {
-        setNodeRef(node);
-        setRef(node);
-      }}
-      style={{
-        ...(gridColumn ? { gridColumn } : {}),
-        paddingInline: padding,
-        display: "flex",
-        flexDirection: "column",
-        gap: CARD_GAP_PX,
-        minHeight: 40,
-        outline: isOver && isEmpty
-          ? "1px dashed rgba(234,179,8,0.25)"
-          : "none",
-      }}
-    />
+      {visibleIds.map(id => (
+        <div key={id} style={{ overflow: "hidden" }}>
+          {renderWidget(id)}
+        </div>
+      ))}
+    </AutoGrid>
   );
 }
