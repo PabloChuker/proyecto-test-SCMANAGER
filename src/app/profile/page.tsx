@@ -889,7 +889,7 @@ export default function ProfilePage() {
                       Veteran
                     </span>
                     <span className="inline-flex items-center text-xs font-medium px-3 py-1 rounded-full border border-zinc-700/50 text-zinc-500 font-mono">
-                      #{profile?.User_Number ?? "—"}
+                      #{profile?.user_number ?? "—"}
                     </span>
                   </div>
                 </div>
