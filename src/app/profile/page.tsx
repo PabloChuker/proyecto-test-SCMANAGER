@@ -931,15 +931,15 @@ export default function ProfilePage() {
                 }}
               >
                 {/* Profile data section */}
-                <div className={`px-7 py-5 border-b border-zinc-800/30 transition-opacity duration-200 ${editMode ? "" : "opacity-40 pointer-events-none"}`}>
+                <div className="px-7 py-5 border-b border-zinc-800/30">
                   {!editMode && (
-                    <div className="flex items-center gap-2 font-mono text-[11px] text-zinc-600 mb-3.5">
+                    <div className="flex items-center gap-2 font-mono text-[11px] text-zinc-500 mb-3.5">
                       <Lock size={11} />
                       BLOQUEADO — PULSA "EDITAR PERFIL" PARA MODIFICAR
                     </div>
                   )}
 
-                  <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-zinc-600 mb-3.5">
+                  <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-zinc-500 mb-3.5">
                     Datos del perfil
                   </div>
 
