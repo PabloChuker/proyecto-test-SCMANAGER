@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import Header from "@/app/assets/header/Header";
 import ShipSpecSheet from "@/components/ships/ShipSpecSheet";
+import { PageVideoBackground } from "@/components/shared/PageVideoBackground";
 function ShipDetailContent() {
   const params = useParams();
   const id = params.id as string;
@@ -35,27 +36,26 @@ function ShipDetailContent() {
   }, []);
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100">
-      <div className="fixed inset-0 -z-10">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(6,182,212,0.05),transparent_50%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,rgba(139,92,246,0.03),transparent_60%)]" />
-      </div>
+    <main className="relative min-h-screen text-zinc-100">
+      <PageVideoBackground src="/videos/comparador.mp4" />
 
-      <Header subtitle="Ship Database" />
+      <div className="relative z-10">
+        <Header subtitle="Ship Database" />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
-        {/* Navigation */}
-        <div className="flex items-center gap-4 py-4 border-b border-zinc-800/50 mb-6">
-          <Link
-            href="/ships"
-            className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-cyan-400 transition-colors"
-          >
-            ← Naves
-          </Link>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
+          {/* Navigation */}
+          <div className="flex items-center gap-4 py-4 border-b border-zinc-800/50 mb-6">
+            <Link
+              href="/ships"
+              className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-cyan-400 transition-colors"
+            >
+              ← Naves
+            </Link>
+          </div>
+
+          {/* Ship Spec Sheet */}
+          <ShipSpecSheet shipId={id} onShipLoaded={handleShipLoaded} />
         </div>
-
-        {/* Ship Spec Sheet */}
-        <ShipSpecSheet shipId={id} onShipLoaded={handleShipLoaded} />
       </div>
     </main>
   );
@@ -64,9 +64,12 @@ function ShipDetailContent() {
 export default function ShipDetailPage() {
   return (
     <Suspense fallback={
-      <main className="min-h-screen bg-zinc-950 flex items-center justify-center">
-        <div className="text-xs font-mono text-zinc-600 animate-pulse uppercase tracking-widest">
-          Loading Ship Data...
+      <main className="relative min-h-screen text-zinc-100">
+        <PageVideoBackground src="/videos/comparador.mp4" />
+        <div className="relative z-10 min-h-screen flex items-center justify-center">
+          <div className="text-xs font-mono text-zinc-600 animate-pulse uppercase tracking-widest">
+            Loading Ship Data...
+          </div>
         </div>
       </main>
     }>
