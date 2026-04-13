@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { NAV_MODULES } from "./navigation";
+import { NAV_SECTIONS } from "./navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import NotificationBell from "@/components/notifications/NotificationBell";
 
@@ -16,33 +16,37 @@ export default function Header({ subtitle }: HeaderProps) {
   const pathname = usePathname();
   const { user, profile, loading, signInWithDiscord, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [activeSection, setActiveSection] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const navRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
       }
+      if (navRef.current && !navRef.current.contains(e.target as Node)) {
+        setActiveSection(null);
+      }
     }
-    if (menuOpen) document.addEventListener("mousedown", handleClick);
+    document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
-  }, [menuOpen]);
+  }, []);
 
-  const isActive = (mod: (typeof NAV_MODULES)[number]) => {
-    if (pathname === mod.href) return true;
-    if (pathname.startsWith(mod.href + "/")) return true;
-    if (mod.matchPaths?.some((p) => pathname.startsWith(p))) return true;
-    return false;
+  const isSectionActive = (section: (typeof NAV_SECTIONS)[number]) => {
+    if (section.items) {
+      return section.items.some(
+        (item) => pathname === item.href || pathname.startsWith(item.href + "/")
+      );
+    }
+    return pathname === section.href || pathname.startsWith((section.href ?? "") + "/");
   };
-
-  const activeModule = NAV_MODULES.find((m) => isActive(m));
-  const displaySubtitle = subtitle || activeModule?.label || "";
 
   return (
     <header className="sticky top-0 z-40 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl">
-      <div className="px-4 sm:px-6 flex items-center justify-between h-12">
-        {/* ── Left: Logo + Subtitle ── */}
+      <div className="relative px-4 sm:px-6 flex items-center justify-between h-12">
+
+        {/* ── Left: Logo + optional subtitle ── */}
         <div className="flex items-center gap-3">
           <Link
             href="/"
@@ -60,36 +64,89 @@ export default function Header({ subtitle }: HeaderProps) {
             </span>
           </Link>
 
-          {displaySubtitle && (
+          {subtitle && (
             <>
               <div className="h-4 w-px bg-zinc-800" />
               <span className="text-xs tracking-[0.12em] uppercase text-amber-500 font-medium">
-                {displaySubtitle}
+                {subtitle}
               </span>
             </>
           )}
         </div>
 
-        {/* ── Center: Navigation ── */}
-        <nav className="hidden sm:flex items-center gap-5 text-[10px] tracking-[0.12em] uppercase text-zinc-600">
-          {NAV_MODULES.map((mod) => {
-            const active = isActive(mod);
-            return active ? (
-              <span
-                key={mod.key}
-                className="text-amber-500 border-b border-amber-500/30 pb-0.5"
-              >
-                {mod.label}
-              </span>
-            ) : (
-              <Link
-                key={mod.key}
-                href={mod.href}
-                className="relative hover:text-zinc-300 transition-colors duration-200 group"
-              >
-                {mod.label}
-                <span className="absolute -bottom-0.5 left-0 right-0 h-px bg-amber-500/0 group-hover:bg-amber-500/40 transition-all duration-300" />
-              </Link>
+        {/* ── Center: Section nav — absolutely centered so it never shifts ── */}
+        <nav
+          ref={navRef}
+          className="hidden sm:flex absolute left-1/2 -translate-x-1/2 items-center gap-1"
+        >
+          {NAV_SECTIONS.map((section) => {
+            const isOpen = activeSection === section.key;
+            const isActive = isSectionActive(section);
+
+            if (!section.items) {
+              // Direct link (Hangar)
+              return (
+                <Link
+                  key={section.key}
+                  href={section.href!}
+                  className={`px-3 py-1.5 text-[10px] tracking-[0.15em] uppercase transition-colors duration-200 ${
+                    isActive ? "text-amber-500" : "text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  {section.label}
+                </Link>
+              );
+            }
+
+            return (
+              <div key={section.key} className="relative">
+                <button
+                  onClick={() => setActiveSection(isOpen ? null : section.key)}
+                  className={`flex items-center gap-1 px-3 py-1.5 text-[10px] tracking-[0.15em] uppercase transition-colors duration-200 ${
+                    isActive || isOpen ? "text-amber-500" : "text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  {section.label}
+                  <svg
+                    width="8"
+                    height="8"
+                    viewBox="0 0 10 10"
+                    fill="none"
+                    className={`transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+                  >
+                    <path
+                      d="M2 4l3 3 3-3"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+
+                {isOpen && (
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 min-w-[148px] rounded-lg border border-zinc-800/70 bg-zinc-900/95 backdrop-blur-xl shadow-xl shadow-black/30 py-1 z-50">
+                    {section.items.map((item) => {
+                      const itemActive =
+                        pathname === item.href || pathname.startsWith(item.href + "/");
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => setActiveSection(null)}
+                          className={`flex items-center px-3 py-2 text-[11px] tracking-wider transition-colors ${
+                            itemActive
+                              ? "text-amber-500 bg-amber-500/10"
+                              : "text-zinc-300 hover:bg-zinc-800/60 hover:text-zinc-100"
+                          }`}
+                        >
+                          {item.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>
@@ -119,12 +176,24 @@ export default function Header({ subtitle }: HeaderProps) {
                 <span className="text-[10px] text-zinc-400 tracking-wider hidden md:inline">
                   {profile?.display_name ?? user.user_metadata?.full_name ?? "Perfil"}
                 </span>
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="none" className={`text-zinc-500 transition-transform duration-200 ${menuOpen ? "rotate-180" : ""}`}>
-                  <path d="M2 4l3 3 3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  className={`text-zinc-500 transition-transform duration-200 ${menuOpen ? "rotate-180" : ""}`}
+                >
+                  <path
+                    d="M2 4l3 3 3-3"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                 </svg>
               </button>
 
-              {/* Dropdown */}
+              {/* User dropdown */}
               {menuOpen && (
                 <div className="absolute right-0 top-full mt-1.5 w-44 rounded-lg border border-zinc-800/70 bg-zinc-900/95 backdrop-blur-xl shadow-xl shadow-black/30 py-1 z-50">
                   <Link
@@ -182,8 +251,10 @@ export default function Header({ subtitle }: HeaderProps) {
                     className="flex items-center gap-2.5 px-3 py-2 text-xs text-zinc-300 hover:bg-zinc-800/60 hover:text-zinc-100 transition-colors"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M20 7h-3a2 2 0 0 1-2-2V2" /><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
-                      <path d="M12 18v-6" /><path d="M9 15h6" />
+                      <path d="M20 7h-3a2 2 0 0 1-2-2V2" />
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" />
+                      <path d="M12 18v-6" />
+                      <path d="M9 15h6" />
                     </svg>
                     Mi Cuenta
                   </Link>
