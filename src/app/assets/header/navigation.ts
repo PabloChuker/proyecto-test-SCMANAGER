@@ -11,9 +11,62 @@ export interface NavModule {
   matchPaths?: string[];
 }
 
+export interface NavSectionItem {
+  label: string;
+  href: string;
+}
+
+export interface NavSection {
+  key: string;
+  label: string;
+  /** Direct link (no dropdown). Required when items is undefined. */
+  href?: string;
+  /** Dropdown items. When present, renders a dropdown instead of a direct link. */
+  items?: NavSectionItem[];
+}
+
 /**
- * Main navigation modules displayed in the header.
- * Order here = order in the nav bar.
+ * Main navigation sections displayed in the header center.
+ * Sections with `items` render as dropdowns; sections with only `href` are direct links.
+ */
+export const NAV_SECTIONS: NavSection[] = [
+  {
+    key: "ships",
+    label: "Ships",
+    items: [
+      { label: "DPS Calculator", href: "/dps" },
+      { label: "Ships",          href: "/ships" },
+      { label: "Comparator",     href: "/compare" },
+    ],
+  },
+  {
+    key: "industry",
+    label: "Industry",
+    items: [
+      { label: "Mining",   href: "/mining" },
+      { label: "Crafting", href: "/crafting" },
+      { label: "Trading",  href: "/trade" },
+    ],
+  },
+  {
+    key: "social",
+    label: "Social",
+    items: [
+      { label: "Friends",    href: "/friends" },
+      { label: "Party",      href: "/party" },
+      { label: "Org",        href: "/org" },
+      { label: "Activities", href: "/activities" },
+    ],
+  },
+  {
+    key: "hangar",
+    label: "Hangar",
+    href: "/hangar",
+  },
+];
+
+/**
+ * Legacy flat module list — kept for sidebar usage in individual pages.
  */
 export const NAV_MODULES: NavModule[] = [
   { key: "dps",        label: "DPS Calculator",  href: "/dps" },
