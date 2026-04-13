@@ -1,6 +1,10 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  useTradeWorkOrderStore,
+  type TradeRoutePrefill,
+} from "@/store/useTradeWorkOrderStore";
 
 /* ── Types ── */
 interface RouteItem {
@@ -58,6 +62,35 @@ export default function TradeRoutes() {
   const [vehicleSearch, setVehicleSearch] = useState("");
   const [vehicleOpen, setVehicleOpen] = useState(false);
   const vehicleRef = useRef<HTMLDivElement>(null);
+
+  // Send-to-WO modal state
+  const [woModalRoute, setWoModalRoute] = useState<RouteItem | null>(null);
+  const requestOpenFromRoute = useTradeWorkOrderStore(
+    (s) => s.requestOpenFromRoute,
+  );
+
+  const routeToPrefill = useCallback(
+    (r: RouteItem): TradeRoutePrefill => ({
+      commodity_code: r.commodity.abbr,
+      commodity_name: r.commodity.name,
+      buy_station: r.buyStation.name,
+      buy_system: r.buyStation.system,
+      sell_station: r.sellStation.name,
+      sell_system: r.sellStation.system,
+      buy_price_per_scu: r.priceBuy,
+      sell_price_per_scu: r.priceSell,
+      scu_bought: cargoScu,
+    }),
+    [cargoScu],
+  );
+
+  const openInFullEditor = useCallback(
+    (r: RouteItem) => {
+      requestOpenFromRoute(routeToPrefill(r));
+      setWoModalRoute(null);
+    },
+    [requestOpenFromRoute, routeToPrefill],
+  );
 
   // Close vehicle dropdown on outside click
   useEffect(() => {
@@ -535,6 +568,9 @@ export default function TradeRoutes() {
                   <th className="px-3 py-2.5 text-right font-mono font-medium">
                     Inversión
                   </th>
+                  <th className="px-3 py-2.5 text-center font-mono font-medium">
+                    WO
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -590,6 +626,15 @@ export default function TradeRoutes() {
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-zinc-400">
                       {fmtN(r.investment)}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      <button
+                        onClick={() => setWoModalRoute(r)}
+                        className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-sm transition-colors"
+                        title="Enviar a Work Order"
+                      >
+                        → WO
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -651,6 +696,83 @@ export default function TradeRoutes() {
             </div>
           </div>
         )
+      )}
+
+      {/* ── Send-to-WO Modal ── */}
+      {woModalRoute && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+          onClick={() => setWoModalRoute(null)}
+        >
+          <div
+            className="w-full max-w-lg bg-zinc-950/95 border border-amber-500/40 rounded-sm p-6 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <div className="text-[10px] font-mono uppercase tracking-widest text-amber-400">
+                  Enviar a Work Order
+                </div>
+                <div className="mt-1 text-lg font-mono text-zinc-100">
+                  {woModalRoute.commodity.name}
+                </div>
+                <div className="text-xs text-zinc-500 font-mono">
+                  {woModalRoute.buyStation.name} → {woModalRoute.sellStation.name}
+                </div>
+              </div>
+              <button
+                onClick={() => setWoModalRoute(null)}
+                className="text-zinc-500 hover:text-zinc-200 text-xl leading-none"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mb-6">
+              <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-sm p-3">
+                <div className="text-[9px] font-mono uppercase text-zinc-500">
+                  SCU
+                </div>
+                <div className="text-sm font-mono text-zinc-200">
+                  {fmtN(cargoScu)}
+                </div>
+              </div>
+              <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-sm p-3">
+                <div className="text-[9px] font-mono uppercase text-zinc-500">
+                  Inversión
+                </div>
+                <div className="text-sm font-mono text-cyan-400">
+                  {fmtN(woModalRoute.investment)}
+                </div>
+              </div>
+              <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-sm p-3">
+                <div className="text-[9px] font-mono uppercase text-zinc-500">
+                  Profit est.
+                </div>
+                <div
+                  className={`text-sm font-mono font-semibold ${pColor(woModalRoute.totalProfit)}`}
+                >
+                  {fmtN(woModalRoute.totalProfit)}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => openInFullEditor(woModalRoute)}
+                className="w-full px-4 py-2.5 text-xs font-mono uppercase tracking-widest bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 rounded-sm transition-colors"
+              >
+                Abrir en editor completo
+              </button>
+              <button
+                onClick={() => setWoModalRoute(null)}
+                className="w-full px-4 py-2 text-xs font-mono uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

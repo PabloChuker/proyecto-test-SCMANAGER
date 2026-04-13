@@ -1,22 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Header from "@/app/assets/header/Header";
 import TradeRoutes from "@/components/trade/TradeRoutes";
 import CommodityBrowser from "@/components/trade/CommodityBrowser";
 import TerminalDirectory from "@/components/trade/TerminalDirectory";
+import TradeWorkOrders from "@/components/trade/TradeWorkOrders";
 import { PageVideoBackground } from "@/components/shared/PageVideoBackground";
+import { useTradeWorkOrderStore } from "@/store/useTradeWorkOrderStore";
 
-type Tab = "routes" | "commodities" | "terminals";
+type Tab = "routes" | "commodities" | "terminals" | "workorders";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "routes", label: "Trade Routes" },
   { id: "commodities", label: "Commodities" },
   { id: "terminals", label: "Terminals" },
+  { id: "workorders", label: "Work Orders" },
 ];
 
 export default function TradePage() {
   const [activeTab, setActiveTab] = useState<Tab>("routes");
+  const requestTabSwitch = useTradeWorkOrderStore((s) => s.requestTabSwitch);
+
+  // When TradeRoutes fires "Send to WO", switch to the Work Orders tab
+  useEffect(() => {
+    if (requestTabSwitch > 0) {
+      setActiveTab("workorders");
+    }
+  }, [requestTabSwitch]);
 
   return (
     <main className="relative min-h-screen text-zinc-100">
@@ -53,6 +64,7 @@ export default function TradePage() {
             {activeTab === "routes" && <TradeRoutes />}
             {activeTab === "commodities" && <CommodityBrowser />}
             {activeTab === "terminals" && <TerminalDirectory />}
+            {activeTab === "workorders" && <TradeWorkOrders />}
           </div>
         </div>
       </div>
