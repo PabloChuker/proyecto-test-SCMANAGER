@@ -8,7 +8,7 @@ import { SIDEBAR_ITEMS } from "@/app/assets/header/navigation";
 import LoadoutBuilder from "@/components/ships/LoadoutBuilder";
 import { PageVideoBackground } from "@/components/shared/PageVideoBackground";
 
-export default function DpsPage() {
+export default function LoadoutPage() {
   return (
     <main className="relative min-h-screen text-zinc-100 flex flex-col">
       <PageVideoBackground />
@@ -19,7 +19,7 @@ export default function DpsPage() {
         <div className="flex flex-1 min-h-0">
           <aside className="w-12 sm:w-14 flex-shrink-0 bg-zinc-950/90 border-r border-zinc-800/50 flex flex-col items-center py-3 gap-1 sticky top-12 h-[calc(100vh-3rem)] overflow-y-auto">
             {SIDEBAR_ITEMS.map((item) => {
-              const isActive = item.key === "dps";
+              const isActive = item.key === "loadout";
               return (
                 <Link
                   key={item.key}
@@ -52,7 +52,7 @@ export default function DpsPage() {
                   <div className="flex items-center justify-center py-20">
                     <div className="w-4 h-4 border-2 border-zinc-800 border-t-amber-500 rounded-full animate-spin mr-3" />
                     <span className="text-xs text-zinc-600 font-mono uppercase tracking-widest">
-                      Loading calculator...
+                      Loading loadout...
                     </span>
                   </div>
                 }

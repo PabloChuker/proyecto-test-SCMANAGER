@@ -9,7 +9,7 @@
 //
 // Panels: weapons, missiles, shields, power-plants, coolers, quantum, radar,
 //   utility, combat-summary, power-grid, signatures, balance, ship-selector,
-//   ship-card, dps-detail, strafe-profile, turning-profile, maneuver-radar,
+//   ship-card, loadout-detail, strafe-profile, turning-profile, maneuver-radar,
 //   flight-dynamics-3d.
 // =============================================================================
 
@@ -28,8 +28,8 @@ import { ShipSelector } from "./ShipSelector";
 import { fmtStat, fmtDps } from "./loadout-utils";
 import { ShipFlightDynamicsSingle } from "@/components/shared/flight-dynamics";
 import { shipGlbUrl } from "@/lib/shipGlb";
-import { useDpsGridLayout } from "@/lib/dps-grid/useDpsGridLayout";
-import { DpsGridCanvas } from "@/components/domain/dps/DpsGridCanvas";
+import { useDpsGridLayout } from "@/lib/loadout-grid/useLoadoutGridLayout";
+import { DpsGridCanvas } from "@/components/domain/loadout/LoadoutGridCanvas";
 
 const WEAPON_GROUPS = new Set(["WEAPON", "TURRET"]);
 const MISSILE_GROUPS = new Set(["MISSILE_RACK"]);
@@ -85,7 +85,7 @@ type WidgetId =
   | "shields" | "powerplants" | "coolers" | "maneuver-radar"
   | "quantum" | "radar" | "utility" | "combat-summary"
   | "power-grid"
-  | "ship-selector" | "ship-card" | "dps-detail"
+  | "ship-selector" | "ship-card" | "loadout-detail"
   | "flight-dynamics-3d";
 
 // ─── Geometric grid: UNIT-based positioning (v7) ────────────────────────────
@@ -118,7 +118,7 @@ const MAX_UNIT_PX         = 390;        // clamp superior del UNIT (+50% desde 2
 // Ancho de card en columnas: 1 o 2. (Max permitido por la spec = 2.)
 // v9: search (ship-selector), ship-card y flight-dynamics-3d vuelven a 2-col
 // porque son widgets "hero" que necesitan ancho para respirar. El resto se
-// queda en 1-col. dps-detail sigue 1-col para dejarlo compacto junto a las
+// queda en 1-col. loadout-detail sigue 1-col para dejarlo compacto junto a las
 // stats derivadas.
 type CardWidth = 1 | 2;
 const WIDGET_WIDTH: Record<WidgetId, CardWidth> = {
@@ -128,7 +128,7 @@ const WIDGET_WIDTH: Record<WidgetId, CardWidth> = {
   "power-grid": 1,
   "ship-selector": 2,           // search → 2-col
   "ship-card": 2,               // ship card → 2-col
-  "dps-detail": 1,              // stays 1-col
+  "loadout-detail": 1,              // stays 1-col
   "flight-dynamics-3d": 2,      // 3D viewer → 2-col
 };
 
@@ -137,7 +137,7 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   shields: "SHIELDS", powerplants: "POWER PLANTS", coolers: "COOLERS", "maneuver-radar": "G-FORCES",
   quantum: "QT DRIVES", radar: "RADAR", utility: "UTILITY", "combat-summary": "COMBAT",
   "power-grid": "POWER GRID",
-  "ship-selector": "SEARCH", "ship-card": "SHIP CARD", "dps-detail": "DPS DETAIL",
+  "ship-selector": "SEARCH", "ship-card": "SHIP CARD", "loadout-detail": "LOADOUT DETAIL",
   "flight-dynamics-3d": "FLIGHT DYNAMICS 3D",
 };
 
@@ -146,7 +146,7 @@ const ALL_WIDGET_IDS: WidgetId[] = [
   "shields", "powerplants", "coolers", "maneuver-radar",
   "quantum", "radar", "utility", "combat-summary",
   "power-grid",
-  "ship-selector", "ship-card", "dps-detail",
+  "ship-selector", "ship-card", "loadout-detail",
   "flight-dynamics-3d",
 ];
 
@@ -224,7 +224,7 @@ function getWidgetBlocks(
     case "maneuver-radar":     return 4;
     case "ship-selector":      return 2;
     case "ship-card":          return 5;
-    case "dps-detail":         return 4;
+    case "loadout-detail":         return 4;
     case "flight-dynamics-3d": return 5;
   }
 }
@@ -240,7 +240,7 @@ const COLUMN_PLAN_1COL: WidgetId[][] = [
   // Col 1 — DEFENSE & POWER
   ["shields", "powerplants", "coolers", "turning-profile"],
   // Col 2 — NAV & SENSORS + flight stats
-  ["quantum", "radar", "utility", "power-grid", "maneuver-radar", "dps-detail"],
+  ["quantum", "radar", "utility", "power-grid", "maneuver-radar", "loadout-detail"],
 ];
 
 // Sidebar 2-col (cols 3-4). Widgets hero de ship info apilados vertical.
@@ -486,7 +486,7 @@ function renderWidget(
           </div>
         </div>
       );
-    case "dps-detail":
+    case "loadout-detail":
       return W(
         <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-2.5">
           <div className="flex gap-1.5">

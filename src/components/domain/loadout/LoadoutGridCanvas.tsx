@@ -13,8 +13,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import GridLayout, { WidthProvider } from "react-grid-layout";
 import type { Layout } from "react-grid-layout";
 
-import type { WidgetId, ColumnKey, ColumnOrder } from "@/lib/dps-grid/dpsGridTypes";
-import type { UseDpsGridLayoutResult } from "@/lib/dps-grid/useDpsGridLayout";
+import type { WidgetId, ColumnKey, ColumnOrder } from "@/lib/loadout-grid/loadoutGridTypes";
+import type { UseDpsGridLayoutResult } from "@/lib/loadout-grid/useLoadoutGridLayout";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 

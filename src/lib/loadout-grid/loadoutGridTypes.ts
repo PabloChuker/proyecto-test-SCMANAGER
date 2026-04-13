@@ -12,7 +12,7 @@ export type WidgetId =
   | "shields" | "powerplants" | "coolers" | "maneuver-radar"
   | "quantum" | "radar" | "utility" | "combat-summary"
   | "power-grid"
-  | "ship-selector" | "ship-card" | "dps-detail"
+  | "ship-selector" | "ship-card" | "loadout-detail"
   | "flight-dynamics-3d";
 
 // ── Ancho de tarjeta en columnas (1 ó 2) ─────────────────────────────────────
@@ -44,4 +44,4 @@ export const MAX_UNIT_PX         = 390;
 // Gap vertical entre tarjetas dentro de la misma columna (px fijo)
 export const CARD_GAP_PX         = 4;
 
-export const LAYOUT_STORAGE_KEY  = "al-filo-layout-v13";
+export const LAYOUT_STORAGE_KEY  = "al-filo-loadout-layout-v14";

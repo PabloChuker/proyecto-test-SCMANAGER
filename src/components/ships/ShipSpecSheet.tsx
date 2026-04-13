@@ -291,10 +291,10 @@ export default function ShipSpecSheet({ shipId, onShipLoaded }: ShipSpecSheetPro
                 );
               })()}
               <Link
-                href={`/dps?ship=${ship.reference}`}
+                href={`/loadout?ship=${ship.reference}`}
                 className="flex items-center gap-2 px-4 py-2 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs hover:bg-cyan-500/20 transition-colors backdrop-blur-sm"
               >
-                ⚙ Abrir en DPS Calculator
+                ⚙ Abrir en Loadout Manager
               </Link>
             </div>
           </div>

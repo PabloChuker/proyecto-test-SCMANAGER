@@ -222,13 +222,13 @@ function ComponentsPageInner() {
       <div className="flex flex-1 min-h-0">
         {/* ═══ Sidebar ═══ */}
         <aside className="w-12 sm:w-14 flex-shrink-0 bg-zinc-950/90 border-r border-zinc-800/50 flex flex-col items-center py-3 gap-1 z-20 sticky top-12 h-[calc(100vh-3rem)] overflow-y-auto">
-          {/* DPS Calculator link */}
+          {/* Loadout Manager link */}
           <Link
-            href="/dps"
-            title="DPS Calculator"
+            href="/loadout"
+            title="Loadout Manager"
             className="w-9 h-9 sm:w-10 sm:h-10 rounded flex items-center justify-center transition-all duration-150 hover:bg-zinc-800/40 mb-1"
           >
-            <Image src="/icons/DPS_calculator.png" alt="DPS Calculator" width={22} height={22} className="opacity-50 hover:opacity-80 transition-opacity" />
+            <Image src="/icons/DPS_calculator.png" alt="Loadout Manager" width={22} height={22} className="opacity-50 hover:opacity-80 transition-opacity" />
           </Link>
           <div className="w-6 h-px bg-zinc-800 mb-1" />
 

@@ -9,9 +9,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import type { WidgetId, ColumnKey, ColumnOrder, CardWidth } from "./dpsGridTypes";
-import { LAYOUT_STORAGE_KEY } from "./dpsGridTypes";
-import { getUnit } from "./dpsGridGeometry";
+import type { WidgetId, ColumnKey, ColumnOrder, CardWidth } from "./loadoutGridTypes";
+import { LAYOUT_STORAGE_KEY } from "./loadoutGridTypes";
+import { getUnit } from "./loadoutGridGeometry";
 
 // ── Tipos de plan de columnas ─────────────────────────────────────────────────
 export type ColumnPlan1Col = WidgetId[][];  // [col0, col1, col2]

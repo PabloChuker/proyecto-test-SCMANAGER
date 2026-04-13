@@ -6,10 +6,10 @@ import { useRouter } from "next/navigation";
 
 const PANELS = [
   {
-    id: "dps",
-    label: "DPS Calculator & Stats",
+    id: "loadout",
+    label: "Loadout Manager & Stats",
     video: "/videos/dps.mp4",
-    href: "/dps",
+    href: "/loadout",
   },
   {
     id: "compare",

@@ -5,14 +5,14 @@
 // Las alturas las determina el contenido (content-sized).
 // =============================================================================
 
-import type { CardWidth } from "./dpsGridTypes";
+import type { CardWidth } from "./loadoutGridTypes";
 import {
   GRID_COLUMNS,
   ANCHOR_OFFSET_RATIO,
   MARGIN_RATIO,
   MIN_UNIT_PX,
   MAX_UNIT_PX,
-} from "./dpsGridTypes";
+} from "./loadoutGridTypes";
 
 // ── UNIT ──────────────────────────────────────────────────────────────────────
 /** Calcula el ancho de 1 columna en px, clampeado entre MIN y MAX. */

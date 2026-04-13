@@ -110,10 +110,10 @@ export function ShipSelector() {
     setOpen(false);
     setSearch("");
     setSelectedMfr(null);
-    // Stay on current page (e.g. /dps) — only navigate away if on /ships/
+    // Stay on current page (e.g. /loadout) — only navigate away if on /ships/
     const path = window.location.pathname;
-    if (path.startsWith("/dps")) {
-      // Stay on DPS calculator, just update query param
+    if (path.startsWith("/loadout")) {
+      // Stay on Loadout Manager, just update query param
       const url = new URL(window.location.href);
       url.searchParams.set("ship", ship.reference);
       url.searchParams.delete("build");

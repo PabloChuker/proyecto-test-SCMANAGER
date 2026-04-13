@@ -122,13 +122,13 @@ export default function LoadoutsTab() {
   return (
     <div className="space-y-5">
       <div className="px-2.5 py-1.5 rounded bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-400/80">
-        🔧 Guarda loadouts desde el <Link href="/ships" className="underline hover:text-amber-300">DPS Calculator</Link> con el boton &quot;Guardar Loadout&quot;
+        🔧 Guarda loadouts desde el <Link href="/ships" className="underline hover:text-amber-300">Loadout Manager</Link> con el boton &quot;Guardar Loadout&quot;
       </div>
 
       {loadouts.length === 0 ? (
         <div className="text-center text-zinc-600 py-8">
           <div className="text-3xl mb-2">🔧</div>
-          No tenes loadouts guardados. Arma uno en el DPS Calculator y guardalo.
+          No tenes loadouts guardados. Arma uno en el Loadout Manager y guardalo.
         </div>
       ) : (
         <div className="space-y-2">

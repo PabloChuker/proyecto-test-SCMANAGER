@@ -170,8 +170,8 @@ export function ShipContextMenu({ target, onClose }: ShipContextMenuProps) {
     onClose();
   };
 
-  const handleOpenInDps = () => {
-    router.push(`/dps?ship=${target.reference}`);
+  const handleOpenInLoadout = () => {
+    router.push(`/loadout?ship=${target.reference}`);
     onClose();
   };
 
@@ -221,7 +221,7 @@ export function ShipContextMenu({ target, onClose }: ShipContextMenuProps) {
           />
           <div className="h-px bg-zinc-800/60 my-1" />
           <MenuItem icon="🛸" label="Ver detalles" onClick={handleOpenDetail} color="cyan" />
-          <MenuItem icon="⚙" label="Abrir en DPS Calc" onClick={handleOpenInDps} color="cyan" />
+          <MenuItem icon="⚙" label="Abrir en Loadout Manager" onClick={handleOpenInLoadout} color="cyan" />
         </div>
       </div>
 

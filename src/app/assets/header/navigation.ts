@@ -69,7 +69,7 @@ export const NAV_SECTIONS: NavSection[] = [
  * Legacy flat module list — kept for sidebar usage in individual pages.
  */
 export const NAV_MODULES: NavModule[] = [
-  { key: "dps",        label: "DPS Calculator",  href: "/dps" },
+  { key: "loadout",    label: "Loadout Manager", href: "/loadout" },
   { key: "ships",      label: "Ships",           href: "/ships",      matchPaths: ["/ships/"] },
   { key: "compare",    label: "Comparator",      href: "/compare" },
   { key: "components", label: "Components",       href: "/components" },
@@ -92,7 +92,7 @@ export interface SidebarItem {
 }
 
 export const SIDEBAR_ITEMS: SidebarItem[] = [
-  { key: "dps",            href: "/dps",                        label: "DPS Calculator",   icon: "/icons/DPS_calculator.png" },
+  { key: "loadout",        href: "/loadout",                    label: "Loadout Manager",  icon: "/icons/DPS_calculator.png" },
   { key: "ships",          href: "/components?tab=ships",       label: "Ships",            icon: "/icons/Ships.png" },
   { key: "weapons",        href: "/components?tab=weapons",     label: "Weapons",          icon: "/icons/weapons.png" },
   { key: "missiles",       href: "/components?tab=missiles",    label: "Missiles",         icon: "/icons/missile.png" },

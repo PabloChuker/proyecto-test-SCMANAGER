@@ -6,7 +6,7 @@
 // sin posicionamiento libre, por lo que no hay solapamientos posibles).
 // =============================================================================
 
-import type { WidgetId } from "./dpsGridTypes";
+import type { WidgetId } from "./loadoutGridTypes";
 
 // ── Rect discreto ────────────────────────────────────────────────────────────
 interface DiscreteRect {

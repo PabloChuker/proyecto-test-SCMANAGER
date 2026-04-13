@@ -16,7 +16,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { WidgetId } from "@/lib/dps-grid/dpsGridTypes";
+import type { WidgetId } from "@/lib/loadout-grid/loadoutGridTypes";
 
 interface DpsGridCardProps {
   id: WidgetId;
