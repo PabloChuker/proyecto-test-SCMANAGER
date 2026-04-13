@@ -125,10 +125,10 @@ function Row({ children }: { children: React.ReactNode }) {
 
 function SPHead({ title, sub, onClose }: { title: string; sub: string; onClose: () => void }) {
   return (
-    <div className="bg-zinc-900 px-7 py-5 border-b border-zinc-800/40 flex items-center justify-between flex-shrink-0">
+    <div className="bg-zinc-900/50 px-7 py-6 border-b border-zinc-800/30 flex items-center justify-between flex-shrink-0 backdrop-blur-sm min-h-[118px]">
       <div>
-        <div className="font-bold text-[22px] text-zinc-100 tracking-wide">{title}</div>
-        <div className="text-[11px] text-zinc-600 mt-0.5 font-mono tracking-widest">{sub}</div>
+        <div className="font-bold text-[26px] text-zinc-100 tracking-wide leading-tight">{title}</div>
+        <div className="text-[11px] text-zinc-500 mt-1.5 font-mono tracking-widest uppercase">{sub}</div>
       </div>
       <button
         onClick={onClose}
