@@ -888,11 +888,9 @@ export default function ProfilePage() {
                     <span className="inline-flex items-center text-xs font-medium px-3 py-1 rounded-full border border-zinc-700/50 text-zinc-400">
                       Veteran
                     </span>
-                    {profile?.User_Number != null && (
-                      <span className="inline-flex items-center text-xs font-medium px-3 py-1 rounded-full border border-zinc-700/50 text-zinc-500 font-mono">
-                        #{profile.User_Number}
-                      </span>
-                    )}
+                    <span className="inline-flex items-center text-xs font-medium px-3 py-1 rounded-full border border-zinc-700/50 text-zinc-500 font-mono">
+                      #{profile?.User_Number ?? "—"}
+                    </span>
                   </div>
                 </div>
 
