@@ -846,7 +846,7 @@ export default function ProfilePage() {
                 style={{
                   ...panelStyle(leftPanel === id),
                   borderRadius:   "16px 0 0 16px",
-                  background:     "rgba(12,14,10,0.72)",
+                  background:     "rgba(12,14,10,0.40)",
                   backdropFilter: "blur(16px)",
                   border:         "1px solid rgba(180,170,120,0.15)",
                   borderRight:    "none",
@@ -869,7 +869,7 @@ export default function ProfilePage() {
               width:          "min(880px, 100%)",
               height:         "82vh",
               flexShrink:     0,
-              background:     "rgba(12,14,10,0.72)",
+              background:     "rgba(12,14,10,0.40)",
               backdropFilter: "blur(16px)",
               border:         "1px solid rgba(180,170,120,0.15)",
               overflow:       "hidden",
@@ -1150,7 +1150,7 @@ export default function ProfilePage() {
                 style={{
                   ...panelStyle(rightPanel === id),
                   borderRadius:   "0 16px 16px 0",
-                  background:     "rgba(12,14,10,0.72)",
+                  background:     "rgba(12,14,10,0.40)",
                   backdropFilter: "blur(16px)",
                   border:         "1px solid rgba(180,170,120,0.15)",
                   borderLeft:     "none",
