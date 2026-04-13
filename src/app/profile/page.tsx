@@ -684,6 +684,7 @@ export default function ProfilePage() {
   // Panel state
   const [leftPanel,  setLeftPanel]  = useState<LeftPanelId | null>(null);
   const [rightPanel, setRightPanel] = useState<RightPanelId | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   // Edit state
   const [editMode,     setEditMode]     = useState(false);
@@ -715,6 +716,13 @@ export default function ProfilePage() {
       .single()
       .then(({ data }) => setOrgName(data?.name ?? null));
   }, [profile?.org_id]);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 1600);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
 
   function cancelEdit() {
     setDisplayName(profile?.display_name ?? "");
@@ -818,6 +826,7 @@ export default function ProfilePage() {
         <div className="flex-1 relative flex items-center justify-center overflow-y-hidden">
 
           {/* ── LEFT PANELS — anchored to center's left edge ── */}
+          {!isMobile && (
           <div style={{
             position:  "absolute",
             right:     "calc(50% + 440px)",
@@ -832,12 +841,13 @@ export default function ProfilePage() {
                 key={id}
                 style={{
                   ...panelStyle(leftPanel === id),
-                  borderRadius: "16px 0 0 16px",
-                  background:   "#10120e",
-                  border:       "1px solid rgba(180,170,120,0.15)",
-                  borderRight:  "none",
-                  display:      "flex",
-                  flexDirection:"column",
+                  borderRadius:   "16px 0 0 16px",
+                  background:     "rgba(12,14,10,0.72)",
+                  backdropFilter: "blur(16px)",
+                  border:         "1px solid rgba(180,170,120,0.15)",
+                  borderRight:    "none",
+                  display:        "flex",
+                  flexDirection:  "column",
                 }}
               >
                 <div className="h-[3px] bg-gradient-to-l from-amber-600 to-transparent flex-shrink-0" />
@@ -847,20 +857,22 @@ export default function ProfilePage() {
               </div>
             ))}
           </div>
+          )}
 
           {/* ── CENTER — always centered ── */}
           <div
             style={{
-              width:        "880px",
-              height:       "82vh",
-              flexShrink:   0,
-              background:   "#10120e",
-              border:       "1px solid rgba(180,170,120,0.15)",
-              overflow:     "hidden",
-              display:      "flex",
-              flexDirection:"column",
-              transition:   "border-radius 0.4s cubic-bezier(0.4,0,0.2,1)",
-              zIndex:       10,
+              width:          "min(880px, 100%)",
+              height:         "82vh",
+              flexShrink:     0,
+              background:     "rgba(12,14,10,0.72)",
+              backdropFilter: "blur(16px)",
+              border:         "1px solid rgba(180,170,120,0.15)",
+              overflow:       "hidden",
+              display:        "flex",
+              flexDirection:  "column",
+              transition:     "border-radius 0.4s cubic-bezier(0.4,0,0.2,1)",
+              zIndex:         10,
             }}
             className={centerRadius}
           >
@@ -868,7 +880,7 @@ export default function ProfilePage() {
               <div className="h-[3px] bg-gradient-to-r from-amber-600 to-lime-600 flex-shrink-0" />
 
               {/* Hero */}
-              <div className="bg-zinc-900 px-7 py-6 border-b border-zinc-800/30 flex items-start gap-5 flex-shrink-0">
+              <div className="bg-zinc-900/50 px-7 py-6 border-b border-zinc-800/30 flex items-start gap-5 flex-shrink-0 backdrop-blur-sm">
                 {/* Avatar */}
                 <div className="relative flex-shrink-0">
                   <div className="w-[78px] h-[78px] rounded-full border-2 border-amber-600 bg-zinc-800 flex items-center justify-center font-bold text-[26px] text-amber-500 overflow-hidden">
@@ -930,6 +942,28 @@ export default function ProfilePage() {
                   scrollbarColor: "rgba(245,158,11,0.3) transparent",
                 }}
               >
+                {isMobile && (leftPanel || rightPanel) ? (
+                  <>
+                    <div className="flex items-center gap-3 px-5 py-4 border-b border-zinc-800/40 flex-shrink-0 bg-zinc-900/30">
+                      <button
+                        onClick={() => { setLeftPanel(null); setRightPanel(null); }}
+                        className="flex items-center gap-2 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
+                      >
+                        <ChevronDown size={16} className="-rotate-90" />
+                        Volver al perfil
+                      </button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(245,158,11,0.3) transparent" }}>
+                      {leftPanel === "loadouts" && <LoadoutsPanel onClose={() => setLeftPanel(null)} />}
+                      {leftPanel === "org"      && <OrgPanel orgName={orgName} onClose={() => setLeftPanel(null)} />}
+                      {leftPanel === "work"     && <WorkPanel onClose={() => setLeftPanel(null)} />}
+                      {rightPanel === "wishlist" && <WishlistPanel onClose={() => setRightPanel(null)} />}
+                      {rightPanel === "amigos"   && <AmigosPanel   onClose={() => setRightPanel(null)} />}
+                      {rightPanel === "party"    && <PartyPanel    onClose={() => setRightPanel(null)} />}
+                    </div>
+                  </>
+                ) : (
+                <>
                 {/* Profile data section */}
                 <div className="px-7 py-5 border-b border-zinc-800/30">
                   {!editMode && (
@@ -1090,10 +1124,13 @@ export default function ProfilePage() {
                     Cerrar sesión
                   </button>
                 </div>
+                </>
+                )}
               </div>
             </div>
 
           {/* ── RIGHT PANELS — anchored to center's right edge ── */}
+          {!isMobile && (
           <div style={{
             position:  "absolute",
             left:      "calc(50% + 440px)",
@@ -1108,12 +1145,13 @@ export default function ProfilePage() {
                 key={id}
                 style={{
                   ...panelStyle(rightPanel === id),
-                  borderRadius: "0 16px 16px 0",
-                  background:   "#10120e",
-                  border:       "1px solid rgba(180,170,120,0.15)",
-                  borderLeft:   "none",
-                  display:      "flex",
-                  flexDirection:"column",
+                  borderRadius:   "0 16px 16px 0",
+                  background:     "rgba(12,14,10,0.72)",
+                  backdropFilter: "blur(16px)",
+                  border:         "1px solid rgba(180,170,120,0.15)",
+                  borderLeft:     "none",
+                  display:        "flex",
+                  flexDirection:  "column",
                 }}
               >
                 <div className="h-[3px] bg-gradient-to-r from-amber-600 to-transparent flex-shrink-0" />
@@ -1123,6 +1161,7 @@ export default function ProfilePage() {
               </div>
             ))}
           </div>
+          )}
 
         </div>
       </div>
