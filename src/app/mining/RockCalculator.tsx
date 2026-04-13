@@ -90,7 +90,7 @@ export default function RockCalculator() {
     new Set(rock.slots.filter((_, i) => i !== currentIdx && _.mineralId).map((s) => s.mineralId));
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="space-y-6 max-w-4xl mx-auto">
       {/* ── Rock Cards ── */}
       <div className="space-y-3">
         {rocks.map((rock, idx) => {

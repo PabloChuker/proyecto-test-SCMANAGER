@@ -245,7 +245,7 @@ export default function MiningLoadoutCalculator() {
   const stats = calculateStats();
 
   return (
-    <div className="space-y-6 max-w-7xl">
+    <div className="space-y-6 max-w-7xl mx-auto">
       {/* Ship Selection + Info */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-4">
