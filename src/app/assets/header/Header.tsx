@@ -12,6 +12,46 @@ interface HeaderProps {
   subtitle?: string;
 }
 
+/** Themed backgrounds per section — evoke the SC Labs visual language */
+const SECTION_THEMES: Record<string, { bg: string; border: string }> = {
+  ships: {
+    bg: [
+      "radial-gradient(ellipse 55% 50% at 15% 30%, rgba(45,75,28,0.95) 0%, transparent 60%)",
+      "radial-gradient(ellipse 45% 65% at 72% 65%, rgba(55,68,32,0.85) 0%, transparent 58%)",
+      "radial-gradient(ellipse 60% 40% at 48% 12%, rgba(30,52,18,0.9) 0%, transparent 55%)",
+      "radial-gradient(ellipse 35% 50% at 85% 22%, rgba(65,82,38,0.7) 0%, transparent 50%)",
+      "#151e10",
+    ].join(", "),
+    border: "rgba(65,105,40,0.4)",
+  },
+  industry: {
+    bg: [
+      "repeating-linear-gradient(47deg, transparent 0px, transparent 4px, rgba(0,0,0,0.12) 4px, rgba(0,0,0,0.12) 5px)",
+      "radial-gradient(ellipse 65% 55% at 28% 62%, rgba(180,72,8,0.55) 0%, transparent 62%)",
+      "radial-gradient(ellipse 48% 68% at 74% 28%, rgba(140,50,0,0.45) 0%, transparent 58%)",
+      "#200e00",
+    ].join(", "),
+    border: "rgba(190,90,10,0.45)",
+  },
+  social: {
+    bg: [
+      "radial-gradient(ellipse 75% 55% at 50% 50%, rgba(38,58,165,0.65) 0%, transparent 68%)",
+      "radial-gradient(ellipse 45% 38% at 18% 28%, rgba(55,75,200,0.38) 0%, transparent 58%)",
+      "radial-gradient(ellipse 40% 45% at 82% 72%, rgba(30,50,150,0.35) 0%, transparent 55%)",
+      "#080d28",
+    ].join(", "),
+    border: "rgba(58,100,210,0.35)",
+  },
+  hangar: {
+    bg: [
+      "repeating-linear-gradient(90deg, transparent 0px, transparent 13px, rgba(70,130,190,0.055) 13px, rgba(70,130,190,0.055) 14px)",
+      "repeating-linear-gradient(0deg,  transparent 0px, transparent 13px, rgba(70,130,190,0.055) 13px, rgba(70,130,190,0.055) 14px)",
+      "linear-gradient(155deg, #07111e 0%, #0c1e30 55%, #071018 100%)",
+    ].join(", "),
+    border: "rgba(55,115,175,0.28)",
+  },
+};
+
 export default function Header({ subtitle }: HeaderProps) {
   const pathname = usePathname();
   const { user, profile, loading, signInWithDiscord, signOut } = useAuth();
@@ -44,7 +84,11 @@ export default function Header({ subtitle }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-40 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl">
-      <div className="relative px-4 sm:px-6 flex items-center justify-between h-12">
+      {/*
+        grid-cols-[1fr_auto_1fr] guarantees the center column is always
+        pixel-perfect centered regardless of left/right content width.
+      */}
+      <div className="grid grid-cols-[1fr_auto_1fr] px-4 sm:px-6 h-[72px] items-center">
 
         {/* ── Left: Logo + optional subtitle ── */}
         <div className="flex items-center gap-3">
@@ -55,8 +99,8 @@ export default function Header({ subtitle }: HeaderProps) {
             <Image
               src="/sclabs-logo.png"
               alt="SC LABS"
-              width={29}
-              height={29}
+              width={34}
+              height={34}
               className="rounded-sm"
             />
             <span className="text-xs tracking-[0.15em] uppercase text-zinc-500 hover:text-zinc-300 transition-colors">
@@ -74,14 +118,19 @@ export default function Header({ subtitle }: HeaderProps) {
           )}
         </div>
 
-        {/* ── Center: Section nav — absolutely centered so it never shifts ── */}
+        {/* ── Center: Section nav — grid column keeps it truly centered ── */}
         <nav
           ref={navRef}
-          className="hidden sm:flex absolute left-1/2 -translate-x-1/2 items-center gap-1"
+          className="hidden sm:flex items-center gap-2"
         >
           {NAV_SECTIONS.map((section) => {
             const isOpen = activeSection === section.key;
             const isActive = isSectionActive(section);
+            const theme = SECTION_THEMES[section.key];
+
+            const sharedStyle: React.CSSProperties = theme
+              ? { background: theme.bg, border: `1px solid ${theme.border}` }
+              : {};
 
             if (!section.items) {
               // Direct link (Hangar)
@@ -89,8 +138,9 @@ export default function Header({ subtitle }: HeaderProps) {
                 <Link
                   key={section.key}
                   href={section.href!}
-                  className={`px-3 py-1.5 text-[10px] tracking-[0.15em] uppercase transition-colors duration-200 ${
-                    isActive ? "text-amber-500" : "text-zinc-500 hover:text-zinc-300"
+                  style={sharedStyle}
+                  className={`px-3 py-2 rounded-md text-[10px] tracking-[0.15em] uppercase transition-colors duration-200 ${
+                    isActive ? "text-amber-400" : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
                   {section.label}
@@ -102,8 +152,9 @@ export default function Header({ subtitle }: HeaderProps) {
               <div key={section.key} className="relative">
                 <button
                   onClick={() => setActiveSection(isOpen ? null : section.key)}
-                  className={`flex items-center gap-1 px-3 py-1.5 text-[10px] tracking-[0.15em] uppercase transition-colors duration-200 ${
-                    isActive || isOpen ? "text-amber-500" : "text-zinc-500 hover:text-zinc-300"
+                  style={sharedStyle}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-md text-[10px] tracking-[0.15em] uppercase transition-colors duration-200 ${
+                    isActive || isOpen ? "text-amber-400" : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
                   {section.label}
@@ -125,7 +176,7 @@ export default function Header({ subtitle }: HeaderProps) {
                 </button>
 
                 {isOpen && (
-                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 min-w-[148px] rounded-lg border border-zinc-800/70 bg-zinc-900/95 backdrop-blur-xl shadow-xl shadow-black/30 py-1 z-50">
+                  <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 min-w-[148px] rounded-lg border border-zinc-800/70 bg-zinc-900/95 backdrop-blur-xl shadow-xl shadow-black/30 py-1 z-50">
                     {section.items.map((item) => {
                       const itemActive =
                         pathname === item.href || pathname.startsWith(item.href + "/");
@@ -152,7 +203,7 @@ export default function Header({ subtitle }: HeaderProps) {
         </nav>
 
         {/* ── Right: Auth ── */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 justify-end">
           {loading ? (
             <div className="w-6 h-6 rounded-full bg-zinc-800 animate-pulse" />
           ) : user ? (
