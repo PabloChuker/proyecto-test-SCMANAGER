@@ -14,7 +14,7 @@ export default function DpsPage() {
       <PageVideoBackground />
 
       <div className="relative z-10 flex flex-col flex-1">
-        <Header />
+        <Header subtitle="DPS Calculator" />
 
         <div className="flex flex-1 min-h-0">
           <aside className="w-12 sm:w-14 flex-shrink-0 bg-zinc-950/90 border-r border-zinc-800/50 flex flex-col items-center py-3 gap-1 sticky top-12 h-[calc(100vh-3rem)] overflow-y-auto">
