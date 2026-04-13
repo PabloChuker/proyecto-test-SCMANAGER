@@ -12,6 +12,7 @@ import Header from "@/app/assets/header/Header";
 import { SIDEBAR_ITEMS } from "@/app/assets/header/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { createClient } from "@/lib/supabase/client";
+import { PageVideoBackground } from "@/components/shared/PageVideoBackground";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 type LeftPanelId  = "loadouts" | "org" | "work";
@@ -753,8 +754,9 @@ export default function ProfilePage() {
 
   if (loading || !user) {
     return (
-      <main className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
-        <div className="text-zinc-500 font-mono text-sm animate-pulse">CARGANDO PERFIL...</div>
+      <main className="relative min-h-screen text-zinc-100 flex items-center justify-center">
+        <PageVideoBackground src="/videos/comparador.mp4" />
+        <div className="relative z-10 text-zinc-500 font-mono text-sm animate-pulse">CARGANDO PERFIL...</div>
       </main>
     );
   }
@@ -791,9 +793,11 @@ export default function ProfilePage() {
   };
 
   return (
-    <main className="h-screen overflow-hidden bg-zinc-950 text-zinc-100 flex flex-col">
-      {/* Dot grid background */}
-      <div className="fixed inset-0 pointer-events-none z-0" style={dotBg} />
+    <main className="relative h-screen overflow-hidden text-zinc-100 flex flex-col">
+      <PageVideoBackground src="/videos/comparador.mp4" />
+
+      {/* Dot grid background (above the video, below content) */}
+      <div className="fixed inset-0 pointer-events-none z-[1]" style={dotBg} />
 
       <Header subtitle="Perfil" />
 
