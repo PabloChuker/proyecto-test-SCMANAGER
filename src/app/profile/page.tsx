@@ -688,10 +688,8 @@ export default function ProfilePage() {
   // Edit state
   const [editMode,     setEditMode]     = useState(false);
   const [saving,       setSaving]       = useState(false);
-  const [firstName,    setFirstName]    = useState("");
-  const [lastName,     setLastName]     = useState("");
-  const [age,          setAge]          = useState<number | "">("");
   const [displayName,  setDisplayName]  = useState("");
+  const [country,      setCountry]      = useState("");
   const [orgName,      setOrgName]      = useState<string | null>(null);
 
   // Auth redirect
@@ -702,10 +700,8 @@ export default function ProfilePage() {
   // Init profile data
   useEffect(() => {
     if (profile) {
-      setFirstName(profile.first_name ?? "");
-      setLastName(profile.last_name ?? "");
-      setAge(profile.age ?? "");
       setDisplayName(profile.display_name ?? "");
+      setCountry(profile.country ?? "");
     }
   }, [profile]);
 
@@ -721,10 +717,8 @@ export default function ProfilePage() {
   }, [profile?.org_id]);
 
   function cancelEdit() {
-    setFirstName(profile?.first_name ?? "");
-    setLastName(profile?.last_name ?? "");
-    setAge(profile?.age ?? "");
     setDisplayName(profile?.display_name ?? "");
+    setCountry(profile?.country ?? "");
     setEditMode(false);
   }
 
@@ -740,10 +734,8 @@ export default function ProfilePage() {
     if (!user) return;
     setSaving(true);
     await supabase.from("profiles").update({
-      first_name:   firstName || null,
-      last_name:    lastName  || null,
-      age:          age === "" ? null : Number(age),
       display_name: displayName || null,
+      country:      country || null,
       updated_at:   new Date().toISOString(),
     }).eq("id", user.id);
     await refreshProfile();
@@ -956,16 +948,7 @@ export default function ProfilePage() {
                       <div className="grid grid-cols-2 gap-x-10 gap-y-0">
                         <div>
                           <div className="flex justify-between items-center py-2.5 border-b border-zinc-800/30">
-                            <span className="text-sm text-zinc-500">Nombre</span>
-                            <input
-                              value={firstName}
-                              onChange={(e) => setFirstName(e.target.value)}
-                              placeholder="Nombre"
-                              className="w-[155px] bg-zinc-800 border border-zinc-600/70 rounded-md px-3 py-1.5 text-[13px] text-zinc-100 placeholder-zinc-600 focus:border-amber-500 focus:outline-none"
-                            />
-                          </div>
-                          <div className="flex justify-between items-center py-2.5 border-b border-zinc-800/30">
-                            <span className="text-sm text-zinc-500">Display name</span>
+                            <span className="text-sm text-zinc-400">Display name</span>
                             <input
                               value={displayName}
                               onChange={(e) => setDisplayName(e.target.value)}
@@ -973,33 +956,23 @@ export default function ProfilePage() {
                             />
                           </div>
                           <div className="flex justify-between items-center py-2.5">
-                            <span className="text-sm text-zinc-500">Organización</span>
-                            <span className="text-sm font-medium text-slate-300">{orgName ?? "—"}</span>
+                            <span className="text-sm text-zinc-400">Organización</span>
+                            <span className="text-sm font-medium text-zinc-200">{orgName ?? "—"}</span>
                           </div>
                         </div>
                         <div>
                           <div className="flex justify-between items-center py-2.5 border-b border-zinc-800/30">
-                            <span className="text-sm text-zinc-500">Apellido</span>
-                            <input
-                              value={lastName}
-                              onChange={(e) => setLastName(e.target.value)}
-                              placeholder="Apellido"
-                              className="w-[155px] bg-zinc-800 border border-zinc-600/70 rounded-md px-3 py-1.5 text-[13px] text-zinc-100 placeholder-zinc-600 focus:border-amber-500 focus:outline-none"
-                            />
-                          </div>
-                          <div className="flex justify-between items-center py-2.5 border-b border-zinc-800/30">
-                            <span className="text-sm text-zinc-500">Edad</span>
-                            <input
-                              type="number"
-                              value={age}
-                              onChange={(e) => setAge(e.target.value === "" ? "" : parseInt(e.target.value))}
-                              placeholder="Edad"
-                              className="w-[100px] bg-zinc-800 border border-zinc-600/70 rounded-md px-3 py-1.5 text-[13px] text-zinc-100 placeholder-zinc-600 focus:border-amber-500 focus:outline-none"
-                            />
+                            <span className="text-sm text-zinc-400">RSI Handle</span>
+                            <span className="text-sm text-yellow-500 cursor-pointer">{profile?.username ?? "—"} ↗</span>
                           </div>
                           <div className="flex justify-between items-center py-2.5">
-                            <span className="text-sm text-zinc-500">RSI Handle</span>
-                            <span className="text-sm text-yellow-500 cursor-pointer">sr_frost ↗</span>
+                            <span className="text-sm text-zinc-400">Country</span>
+                            <input
+                              value={country}
+                              onChange={(e) => setCountry(e.target.value)}
+                              placeholder="País"
+                              className="w-[155px] bg-zinc-800 border border-zinc-600/70 rounded-md px-3 py-1.5 text-[13px] text-zinc-100 placeholder-zinc-600 focus:border-amber-500 focus:outline-none"
+                            />
                           </div>
                         </div>
                       </div>
@@ -1023,30 +996,22 @@ export default function ProfilePage() {
                     <div className="grid grid-cols-2 gap-x-10">
                       <div>
                         <div className="flex justify-between items-center py-2.5 border-b border-zinc-800/30">
-                          <span className="text-sm text-zinc-500">Nombre</span>
-                          <span className={`text-sm font-medium ${firstName ? "text-zinc-100" : "text-zinc-600"}`}>{firstName || "—"}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-2.5 border-b border-zinc-800/30">
-                          <span className="text-sm text-zinc-500">Display name</span>
+                          <span className="text-sm text-zinc-400">Display name</span>
                           <span className="text-sm font-medium text-zinc-100">{heroName}</span>
                         </div>
                         <div className="flex justify-between items-center py-2.5">
-                          <span className="text-sm text-zinc-500">Organización</span>
-                          <span className="text-sm font-medium text-slate-300">{orgName ?? "—"}</span>
+                          <span className="text-sm text-zinc-400">Organización</span>
+                          <span className="text-sm font-medium text-zinc-200">{orgName ?? "—"}</span>
                         </div>
                       </div>
                       <div>
                         <div className="flex justify-between items-center py-2.5 border-b border-zinc-800/30">
-                          <span className="text-sm text-zinc-500">Apellido</span>
-                          <span className={`text-sm font-medium ${lastName ? "text-zinc-100" : "text-zinc-600"}`}>{lastName || "—"}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-2.5 border-b border-zinc-800/30">
-                          <span className="text-sm text-zinc-500">Edad</span>
-                          <span className={`text-sm font-medium ${age !== "" ? "text-zinc-100" : "text-zinc-600"}`}>{age !== "" ? age : "—"}</span>
+                          <span className="text-sm text-zinc-400">RSI Handle</span>
+                          <span className="text-sm text-yellow-500 cursor-pointer">{profile?.username ?? "—"} ↗</span>
                         </div>
                         <div className="flex justify-between items-center py-2.5">
-                          <span className="text-sm text-zinc-500">RSI Handle</span>
-                          <span className="text-sm text-yellow-500 cursor-pointer">sr_frost ↗</span>
+                          <span className="text-sm text-zinc-400">Country</span>
+                          <span className={`text-sm font-medium ${country ? "text-zinc-100" : "text-zinc-600"}`}>{country || "—"}</span>
                         </div>
                       </div>
                     </div>

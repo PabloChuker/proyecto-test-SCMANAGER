@@ -24,6 +24,7 @@ export interface Profile {
   org_id: string | null;
   is_online: boolean;
   user_number: number | null;
+  country: string | null;
 }
 
 interface AuthState {
