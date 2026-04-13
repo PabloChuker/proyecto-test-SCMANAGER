@@ -125,7 +125,7 @@ function Row({ children }: { children: React.ReactNode }) {
 
 function SPHead({ title, sub, onClose }: { title: string; sub: string; onClose: () => void }) {
   return (
-    <div className="bg-zinc-900/50 px-7 py-6 border-b border-zinc-800/30 flex items-center justify-between flex-shrink-0 backdrop-blur-sm min-h-[118px]">
+    <div className="bg-zinc-900/50 px-7 py-6 border-b border-zinc-800/30 flex items-center justify-between flex-shrink-0 backdrop-blur-sm h-[130px]">
       <div>
         <div className="font-bold text-[26px] text-zinc-100 tracking-wide leading-tight">{title}</div>
         <div className="text-[11px] text-zinc-500 mt-1.5 font-mono tracking-widest uppercase">{sub}</div>
@@ -884,7 +884,7 @@ export default function ProfilePage() {
               <div className="h-[3px] bg-gradient-to-r from-amber-600 to-lime-600 flex-shrink-0" />
 
               {/* Hero */}
-              <div className="bg-zinc-900/50 px-7 py-6 border-b border-zinc-800/30 flex items-start gap-5 flex-shrink-0 backdrop-blur-sm">
+              <div className="bg-zinc-900/50 px-7 border-b border-zinc-800/30 flex items-center gap-5 flex-shrink-0 backdrop-blur-sm h-[130px]">
                 {/* Avatar */}
                 <div className="relative flex-shrink-0">
                   <div className="w-[78px] h-[78px] rounded-full border-2 border-amber-600 bg-zinc-800 flex items-center justify-center font-bold text-[26px] text-amber-500 overflow-hidden">
