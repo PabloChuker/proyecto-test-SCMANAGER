@@ -882,12 +882,7 @@ export default function ProfilePage() {
                       <Shield size={10} />
                       {orgName}
                     </span>
-                    <span className="inline-flex items-center text-xs font-medium px-3 py-1 rounded-full border border-zinc-700/50 text-zinc-400">
-                      Bounty Hunter
-                    </span>
-                    <span className="inline-flex items-center text-xs font-medium px-3 py-1 rounded-full border border-zinc-700/50 text-zinc-400">
-                      Veteran
-                    </span>
+
                     <span className="inline-flex items-center text-xs font-medium px-3 py-1 rounded-full border border-zinc-700/50 text-zinc-500 font-mono">
                       #{profile?.user_number ?? "—"}
                     </span>
