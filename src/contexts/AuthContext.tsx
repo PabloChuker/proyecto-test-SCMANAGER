@@ -23,6 +23,7 @@ export interface Profile {
   discord_username: string | null;
   org_id: string | null;
   is_online: boolean;
+  User_Number: number | null;
 }
 
 interface AuthState {
