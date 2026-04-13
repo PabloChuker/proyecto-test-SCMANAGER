@@ -227,7 +227,7 @@ export function HangarDashboard() {
 
   // Tab config
   const TABS: { id: TabType; label: string; count: number }[] = [
-    { id: "My Fleet", label: "My Fleet", count: fleetShips.length + fleetCCUs.length },
+    { id: "My Fleet", label: "Hangar", count: fleetShips.length + fleetCCUs.length },
     { id: "Buyback", label: "Buyback", count: buybackShips.length + buybackCCUs.length },
     { id: "Wishlist", label: "Wishlist", count: wishlist.length },
     { id: "CCU Chains", label: "CCU Chains", count: chains.length },
