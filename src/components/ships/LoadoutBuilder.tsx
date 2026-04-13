@@ -84,7 +84,7 @@ type WidgetId =
   | "weapons" | "missiles" | "strafe-profile" | "turning-profile"
   | "shields" | "powerplants" | "coolers" | "maneuver-radar"
   | "quantum" | "radar" | "utility" | "combat-summary"
-  | "power-grid" | "balance"
+  | "power-grid"
   | "ship-selector" | "ship-card" | "dps-detail"
   | "flight-dynamics-3d";
 
@@ -125,7 +125,7 @@ const WIDGET_WIDTH: Record<WidgetId, CardWidth> = {
   weapons: 1, missiles: 1, "strafe-profile": 1, "turning-profile": 1,
   shields: 1, powerplants: 1, coolers: 1, "maneuver-radar": 1,
   quantum: 1, radar: 1, utility: 1, "combat-summary": 1,
-  "power-grid": 1, balance: 1,
+  "power-grid": 1,
   "ship-selector": 2,           // search → 2-col
   "ship-card": 2,               // ship card → 2-col
   "dps-detail": 1,              // stays 1-col
@@ -136,7 +136,7 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   weapons: "WEAPONS", missiles: "MISSILES & BOMBS", "strafe-profile": "STRAFE PROFILE", "turning-profile": "TURNING PROFILE",
   shields: "SHIELDS", powerplants: "POWER PLANTS", coolers: "COOLERS", "maneuver-radar": "G-FORCES",
   quantum: "QT DRIVES", radar: "RADAR", utility: "UTILITY", "combat-summary": "COMBAT",
-  "power-grid": "POWER GRID", balance: "BALANCE",
+  "power-grid": "POWER GRID",
   "ship-selector": "SEARCH", "ship-card": "SHIP CARD", "dps-detail": "DPS DETAIL",
   "flight-dynamics-3d": "FLIGHT DYNAMICS 3D",
 };
@@ -145,7 +145,7 @@ const ALL_WIDGET_IDS: WidgetId[] = [
   "weapons", "missiles", "strafe-profile", "turning-profile",
   "shields", "powerplants", "coolers", "maneuver-radar",
   "quantum", "radar", "utility", "combat-summary",
-  "power-grid", "balance",
+  "power-grid",
   "ship-selector", "ship-card", "dps-detail",
   "flight-dynamics-3d",
 ];
@@ -219,7 +219,6 @@ function getWidgetBlocks(
     case "utility":            return hpBlocks(counts.utility);
     case "combat-summary":     return 3;
     case "power-grid":         return 4;
-    case "balance":            return 2;
     case "strafe-profile":     return 4;
     case "turning-profile":    return 4;
     case "maneuver-radar":     return 4;
@@ -241,7 +240,7 @@ const COLUMN_PLAN_1COL: WidgetId[][] = [
   // Col 1 — DEFENSE & POWER
   ["shields", "powerplants", "coolers", "turning-profile"],
   // Col 2 — NAV & SENSORS + flight stats
-  ["quantum", "radar", "utility", "power-grid", "maneuver-radar", "balance", "dps-detail"],
+  ["quantum", "radar", "utility", "power-grid", "maneuver-radar", "dps-detail"],
 ];
 
 // Sidebar 2-col (cols 3-4). Widgets hero de ship info apilados vertical.
@@ -448,13 +447,6 @@ function renderWidget(
       );
     case "power-grid":
       return W(<PowerManagementPanel stats={stats} flightMode={flightMode} onModeChange={setFlightMode} />);
-    case "balance":
-      return W(
-        <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-2">
-          <BalanceRow label="POWER" value={stats.powerBalance} output={stats.powerOutput} draw={stats.powerDraw} posColor="#22c55e" negColor="#ef4444" />
-          <BalanceRow label="THERMAL" value={stats.thermalBalance} output={stats.coolingRate} draw={stats.thermalOutput} posColor="#06b6d4" negColor="#ef4444" />
-        </div>
-      );
     case "ship-selector":
       return (
         <WidgetShell id={wId} label={WIDGET_LABELS[wId]} overflow="visible">
@@ -820,30 +812,6 @@ function CompactStat({ label, value, color, locked }: { label: string; value: st
       {locked && <div className="absolute inset-0 bg-zinc-950/50 z-10 flex items-center justify-center"><span className="text-[7px] font-mono text-zinc-600 tracking-wider uppercase">NAV</span></div>}
       <div className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</div>
       <div className="text-sm font-mono font-bold tabular-nums" style={{ color }}>{value}</div>
-    </div>
-  );
-}
-
-function BalanceRow({ label, value, output, draw, posColor, negColor }: { label: string; value: number; output: number; draw: number; posColor: string; negColor: string }) {
-  const pos = value >= 0;
-  const color = pos ? posColor : negColor;
-  const mx = Math.max(output, draw, 1);
-  const pct = Math.min(50, (Math.abs(value) / mx) * 50);
-  const bs = pos ? { left: "50%", width: pct + "%", backgroundColor: color } : { left: (50 - pct) + "%", width: pct + "%", backgroundColor: color };
-  return (
-    <div className="space-y-0.5">
-      <div className="flex items-baseline justify-between">
-        <span className="text-[8px] font-mono text-zinc-600 tracking-wider uppercase">{label}</span>
-        <span className="text-[10px] font-mono" style={{ color }}>{pos ? "+" : ""}{fmtStat(value)}</span>
-      </div>
-      <div className="relative h-1 w-full bg-zinc-800/60 rounded-full overflow-hidden">
-        <div className="absolute left-1/2 top-0 w-px h-full bg-zinc-600/30 z-10" />
-        <div className="absolute top-0 h-full rounded-full transition-all duration-500" style={bs} />
-      </div>
-      <div className="flex justify-between text-[7px] font-mono text-zinc-700">
-        <span>{fmtStat(output)} out</span>
-        <span>{fmtStat(draw)} draw</span>
-      </div>
     </div>
   );
 }
