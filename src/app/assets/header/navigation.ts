@@ -34,7 +34,7 @@ export const NAV_SECTIONS: NavSection[] = [
     key: "ships",
     label: "Ships",
     items: [
-      { label: "DPS Calculator", href: "/dps" },
+      { label: "Loadout Manager", href: "/loadout" },
       { label: "Ships",          href: "/ships" },
       { label: "Comparator",     href: "/compare" },
     ],
