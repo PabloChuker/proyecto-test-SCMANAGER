@@ -692,7 +692,7 @@ export default function ProfilePage() {
   const [lastName,     setLastName]     = useState("");
   const [age,          setAge]          = useState<number | "">("");
   const [displayName,  setDisplayName]  = useState("");
-  const [orgName,      setOrgName]      = useState("SC Labs");
+  const [orgName,      setOrgName]      = useState<string | null>(null);
 
   // Auth redirect
   useEffect(() => {
@@ -708,6 +708,25 @@ export default function ProfilePage() {
       setDisplayName(profile.display_name ?? "");
     }
   }, [profile]);
+
+  // Fetch org name from organizations table
+  useEffect(() => {
+    if (!profile?.org_id) { setOrgName(null); return; }
+    supabase
+      .from("organizations")
+      .select("name")
+      .eq("id", profile.org_id)
+      .single()
+      .then(({ data }) => setOrgName(data?.name ?? null));
+  }, [profile?.org_id]);
+
+  function cancelEdit() {
+    setFirstName(profile?.first_name ?? "");
+    setLastName(profile?.last_name ?? "");
+    setAge(profile?.age ?? "");
+    setDisplayName(profile?.display_name ?? "");
+    setEditMode(false);
+  }
 
   function openLeft(id: LeftPanelId) {
     setLeftPanel((prev) => (prev === id ? null : id));
@@ -955,12 +974,7 @@ export default function ProfilePage() {
                           </div>
                           <div className="flex justify-between items-center py-2.5">
                             <span className="text-sm text-zinc-500">Organización</span>
-                            <input
-                              value={orgName}
-                              onChange={(e) => setOrgName(e.target.value)}
-                              placeholder="Nombre org"
-                              className="w-[155px] bg-zinc-800 border border-zinc-600/70 rounded-md px-3 py-1.5 text-[13px] text-zinc-100 placeholder-zinc-600 focus:border-amber-500 focus:outline-none"
-                            />
+                            <span className="text-sm font-medium text-slate-300">{orgName ?? "—"}</span>
                           </div>
                         </div>
                         <div>
@@ -991,7 +1005,7 @@ export default function ProfilePage() {
                       </div>
                       <div className="flex justify-end gap-2.5 mt-4">
                         <button
-                          onClick={() => setEditMode(false)}
+                          onClick={cancelEdit}
                           className="h-9 px-4 rounded-lg border border-zinc-600/50 bg-transparent text-zinc-400 text-sm cursor-pointer transition-all hover:bg-zinc-800"
                         >
                           Cancelar
@@ -1018,7 +1032,7 @@ export default function ProfilePage() {
                         </div>
                         <div className="flex justify-between items-center py-2.5">
                           <span className="text-sm text-zinc-500">Organización</span>
-                          <span className="text-sm font-medium text-slate-300">{orgName}</span>
+                          <span className="text-sm font-medium text-slate-300">{orgName ?? "—"}</span>
                         </div>
                       </div>
                       <div>
