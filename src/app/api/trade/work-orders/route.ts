@@ -113,6 +113,7 @@ export async function POST(request: NextRequest) {
         work_order_id: order.id,
         user_id: p.user_id || null,
         display_name: p.display_name || "Unnamed",
+        avatar_url: p.avatar_url || null,
         role: p.role || "crew",
         role_pct: p.role_pct || 0,
         contribution_uec: p.contribution_uec || 0,

@@ -26,6 +26,7 @@ export interface TradeWOParticipant {
   work_order_id: string;
   user_id: string | null;
   display_name: string;
+  avatar_url: string | null;
   role: string;
   role_pct: number;
   contribution_uec: number;

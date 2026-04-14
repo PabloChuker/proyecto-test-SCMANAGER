@@ -59,6 +59,7 @@ interface LocalParticipant {
   localKey: string;     // stable react key
   user_id: string | null;
   display_name: string;
+  avatar_url: string | null;
   role: string;
   role_pct: number;
   contribution_uec: number;
@@ -284,6 +285,7 @@ export default function TradeWorkOrderCalculator() {
         localKey: p.id,
         user_id: p.user_id,
         display_name: p.display_name,
+        avatar_url: p.avatar_url || null,
         role: p.role,
         role_pct: Number(p.role_pct) || 0,
         contribution_uec: Number(p.contribution_uec) || 0,
@@ -340,6 +342,7 @@ export default function TradeWorkOrderCalculator() {
         localKey: uid(),
         user_id: null,
         display_name: "",
+        avatar_url: null,
         role: "crew",
         role_pct: 0,
         contribution_uec: 0,
@@ -412,11 +415,14 @@ export default function TradeWorkOrderCalculator() {
       const ids = members.map((m) => m.user_id);
       const { data: profiles, error: pErr } = await supabase
         .from("profiles")
-        .select("id, display_name, username")
+        .select("id, display_name, username, avatar_url")
         .in("id", ids);
       if (pErr) throw pErr;
 
-      const profileMap = new Map<string, { display_name?: string; username?: string }>();
+      const profileMap = new Map<
+        string,
+        { display_name?: string; username?: string; avatar_url?: string | null }
+      >();
       (profiles ?? []).forEach((pf: any) => profileMap.set(pf.id, pf));
 
       setPartyId(pid);
@@ -434,6 +440,7 @@ export default function TradeWorkOrderCalculator() {
             localKey: uid(),
             user_id: m.user_id,
             display_name: name,
+            avatar_url: pf.avatar_url || null,
             role: m.role === "leader" ? "pilot" : "crew",
             role_pct: 0,
             contribution_uec: 0,
@@ -517,6 +524,7 @@ export default function TradeWorkOrderCalculator() {
               participants: participants.map((p) => ({
                 user_id: p.user_id,
                 display_name: p.display_name,
+                avatar_url: p.avatar_url,
                 role: p.role,
                 role_pct: p.role_pct,
                 contribution_uec: p.contribution_uec,
@@ -571,6 +579,7 @@ export default function TradeWorkOrderCalculator() {
               body: JSON.stringify({
                 user_id: p.user_id,
                 display_name: p.display_name,
+                avatar_url: p.avatar_url,
                 role: p.role,
                 role_pct: p.role_pct,
                 contribution_uec: p.contribution_uec,
@@ -585,6 +594,7 @@ export default function TradeWorkOrderCalculator() {
               body: JSON.stringify({
                 id: p.id,
                 display_name: p.display_name,
+                avatar_url: p.avatar_url,
                 role: p.role,
                 role_pct: p.role_pct,
                 contribution_uec: p.contribution_uec,
@@ -977,7 +987,22 @@ export default function TradeWorkOrderCalculator() {
 
             {participants.map((p) => (
               <div key={p.localKey} className="grid grid-cols-12 gap-2 items-center">
-                <div className="col-span-3">
+                <div className="col-span-3 flex items-center gap-2">
+                  {p.avatar_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={p.avatar_url}
+                      alt=""
+                      className="w-7 h-7 rounded-full shrink-0 border border-zinc-700/60 object-cover bg-zinc-900"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <div className="w-7 h-7 rounded-full shrink-0 border border-zinc-700/60 bg-zinc-800/80 flex items-center justify-center text-[10px] font-mono text-zinc-500">
+                      {(p.display_name || "?").charAt(0).toUpperCase()}
+                    </div>
+                  )}
                   <input value={p.display_name} onChange={(e) => updateParticipant(p.localKey, { display_name: e.target.value })} className={inputClass} placeholder="Nombre" />
                 </div>
                 <div className="col-span-2">

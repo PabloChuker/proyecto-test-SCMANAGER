@@ -44,6 +44,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
         work_order_id: id,
         user_id: body.user_id || null,
         display_name: body.display_name || "Unnamed",
+        avatar_url: body.avatar_url || null,
         role: body.role || "crew",
         role_pct: body.role_pct || 0,
         contribution_uec: body.contribution_uec || 0,
@@ -70,7 +71,7 @@ export async function PATCH(request: NextRequest) {
     if (!id) return NextResponse.json({ error: "participant id required" }, { status: 400 });
 
     const allowed = [
-      "display_name", "role", "role_pct",
+      "display_name", "avatar_url", "role", "role_pct",
       "contribution_uec", "contribution_note",
       "payout_uec", "paid", "paid_at",
     ];
