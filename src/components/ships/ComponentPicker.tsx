@@ -56,6 +56,8 @@ interface ComponentPickerProps {
 type SortKey = "name" | "size" | "grade" | "stat" | "price" | "manufacturer";
 type SortDir = "asc" | "desc";
 
+type SubFilter = "all" | "weapons" | "gimbals";
+
 export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, onClose }: ComponentPickerProps) {
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<CatalogItem[]>([]);
@@ -64,9 +66,11 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
   const [sortKey, setSortKey] = useState<SortKey>("stat");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [contextMenu, setContextMenu] = useState<ComponentContextMenuTarget | null>(null);
+  const [subFilter, setSubFilter] = useState<SubFilter>("all");
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const catColor = CAT_COLORS[hardpoint.resolvedCategory] || "#71717a";
+  const isTurretSlot = hardpoint.resolvedCategory === "TURRET";
 
   useEffect(() => { inputRef.current?.focus(); }, []);
   useEffect(() => { const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, [onClose]);
@@ -132,6 +136,14 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
 
   const toggleSort = useCallback((key: SortKey) => { if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc"); else { setSortKey(key); setSortDir(key === "price" ? "asc" : "desc"); } }, [sortKey]);
 
+  // Filter for turret slots: separate weapons from gimbals
+  const filtered = useMemo(() => {
+    if (!isTurretSlot || subFilter === "all") return sorted;
+    const gimbalRe = /gimbal|varipuck|turret|mount_gimbal/i;
+    if (subFilter === "gimbals") return sorted.filter(i => gimbalRe.test(i.name) || gimbalRe.test(i.reference || ""));
+    return sorted.filter(i => !gimbalRe.test(i.name) && !gimbalRe.test(i.reference || ""));
+  }, [sorted, subFilter, isTurretSlot]);
+
   const handleItemSelect = useCallback((item: CatalogItem) => {
     const stats = getItemStats(item);
     // Attach powerNetwork from the JSON lookup so the power grid picks it up
@@ -160,7 +172,19 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
             <input ref={inputRef} type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or manufacturer..." className="flex-1 px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-cyan-500/30 transition-colors" />
             <button onClick={onClear} className="text-[10px] text-zinc-600 hover:text-red-400 transition-colors tracking-wide uppercase px-2 py-2 border border-zinc-800/40 rounded-sm hover:border-red-400/30">Clear slot</button>
           </div>
-          <div className="text-[10px] text-zinc-700 font-mono mt-1">{total} compatible</div>
+          <div className="flex items-center justify-between mt-1">
+            <span className="text-[10px] text-zinc-700 font-mono">{filtered.length} compatible</span>
+            {isTurretSlot && (
+              <div className="flex gap-0.5 bg-zinc-800/60 rounded p-0.5">
+                {(["all", "weapons", "gimbals"] as SubFilter[]).map(f => (
+                  <button key={f} onClick={() => setSubFilter(f)}
+                    className={`px-2 py-0.5 text-[8px] font-mono rounded transition-colors uppercase ${subFilter === f ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>
+                    {f}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-1 px-4 py-1.5 border-b border-zinc-800/40 bg-zinc-900/30 text-[9px] tracking-widest uppercase text-zinc-600 flex-shrink-0">
@@ -175,9 +199,9 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
         <div className="flex-1 overflow-y-auto min-h-0">
           {loading && results.length === 0 ? (
             <div className="flex items-center justify-center py-12 text-zinc-600 text-sm"><div className="w-4 h-4 border-2 border-zinc-700 border-t-cyan-500 rounded-full animate-spin mr-2" />Loading...</div>
-          ) : sorted.length === 0 ? (
+          ) : filtered.length === 0 ? (
             <div className="text-center py-12 text-zinc-600 text-sm">No compatible components found.</div>
-          ) : sorted.map(item => {
+          ) : filtered.map(item => {
             const isCurrent = item.id === currentItemId;
             const sv = getKeyStat(hardpoint.resolvedCategory, getItemStats(item));
             const price = getBestPrice(item);
