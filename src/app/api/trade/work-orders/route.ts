@@ -128,7 +128,7 @@ export async function POST(request: NextRequest) {
     if (Array.isArray(expenses) && expenses.length) {
       const rows = expenses.map((e: any) => ({
         work_order_id: order.id,
-        payer_id: e.payer_id || null,
+        payer_id: e.payer_id ?? null,
         payer_name: e.payer_name || "Unknown",
         description: e.description || "",
         amount: e.amount || 0,

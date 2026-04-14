@@ -73,6 +73,14 @@ interface LocalParticipant {
 interface LocalExpense {
   id: string;
   localKey: string;
+  /**
+   * Reference to the participant that actually paid out-of-pocket for this
+   * expense. Stored as the participant's `user_id` when they have one, else
+   * we fall back to matching on `payer_name` for ad-hoc (no-account) rows.
+   * The Complete + Split modal uses this to refund the payer before the
+   * remaining profit gets distributed.
+   */
+  payer_id: string | null;
   payer_name: string;
   description: string;
   amount: number;
@@ -309,6 +317,7 @@ export default function TradeWorkOrderCalculator() {
       (data.trade_wo_expenses || []).map((e: TradeWOExpense) => ({
         id: e.id,
         localKey: e.id,
+        payer_id: e.payer_id,
         payer_name: e.payer_name,
         description: e.description,
         amount: Number(e.amount) || 0,
@@ -332,15 +341,42 @@ export default function TradeWorkOrderCalculator() {
     return { total_buy, total_sell, total_expenses, net_profit, total_contrib, pct_sum };
   }, [scuBought, scuSold, buyPrice, sellPrice, expenses, participants]);
 
-  // Preview per-participant payout
+  // Per-participant refund for expenses they personally paid out-of-pocket.
+  // We match on payer_id (preferred, when the payer is a logged-in participant)
+  // and fall back to payer_name so ad-hoc rows still line up.
+  const expenseRefunds = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const p of participants) out[p.localKey] = 0;
+    for (const e of expenses) {
+      const amt = e.amount || 0;
+      if (amt <= 0) continue;
+      let match: LocalParticipant | undefined;
+      if (e.payer_id) {
+        match = participants.find((p) => p.user_id && p.user_id === e.payer_id);
+      }
+      if (!match && e.payer_name) {
+        match = participants.find(
+          (p) => (p.display_name || "").trim().toLowerCase() === e.payer_name.trim().toLowerCase(),
+        );
+      }
+      if (match) out[match.localKey] = (out[match.localKey] || 0) + amt;
+    }
+    return out;
+  }, [participants, expenses]);
+
+  // Preview per-participant payout:
+  //   payout = inversión (contribution_uec)
+  //          + reembolso de gastos personales (expenseRefunds)
+  //          + profit share (role_pct % of net_profit)
   const payouts = useMemo(() => {
     const out: Record<string, number> = {};
     for (const p of participants) {
       const share = (totals.net_profit * (p.role_pct || 0)) / 100;
-      out[p.localKey] = (p.contribution_uec || 0) + share;
+      const refund = expenseRefunds[p.localKey] || 0;
+      out[p.localKey] = (p.contribution_uec || 0) + refund + share;
     }
     return out;
-  }, [participants, totals.net_profit]);
+  }, [participants, totals.net_profit, expenseRefunds]);
 
   // ── Mutations on locals ──
   function addParticipant() {
@@ -394,7 +430,13 @@ export default function TradeWorkOrderCalculator() {
    * Complete + Split modal. Each row returns:
    *   - role_pct_preview : % of NET profit assigned (0-100)
    *   - profit_share    : net_profit * role_pct_preview / 100
-   *   - payout          : contribution_uec + profit_share
+   *   - expense_refund  : out-of-pocket expenses this person paid (matched by
+   *                       payer_id, falling back to payer_name)
+   *   - payout          : contribution_uec + expense_refund + profit_share
+   *
+   * The key insight: inversión (contribution_uec) and expense refunds are
+   * RETURNS OF CAPITAL, not profit. They come off the top before we apply the
+   * split strategy to the remaining net_profit.
    *
    * Strategies:
    *   role_pct   → use whatever % the user already set; if sum is 0, show
@@ -432,7 +474,10 @@ export default function TradeWorkOrderCalculator() {
         }
       }
       const profit_share = Math.round((net * pct) / 100);
-      const payout = Math.round((p.contribution_uec || 0) + profit_share);
+      const expense_refund = Math.round(expenseRefunds[p.localKey] || 0);
+      const payout = Math.round(
+        (p.contribution_uec || 0) + expense_refund + profit_share,
+      );
       return {
         localKey: p.localKey,
         id: p.id,
@@ -442,6 +487,7 @@ export default function TradeWorkOrderCalculator() {
         role: p.role,
         role_pct_preview: pct,
         profit_share,
+        expense_refund,
         payout,
       };
     });
@@ -456,7 +502,9 @@ export default function TradeWorkOrderCalculator() {
         // recompute last row's shares
         const last = rows[rows.length - 1];
         last.profit_share = Math.round((net * last.role_pct_preview) / 100);
-        last.payout = Math.round((last.contribution_uec || 0) + last.profit_share);
+        last.payout = Math.round(
+          (last.contribution_uec || 0) + last.expense_refund + last.profit_share,
+        );
       }
     }
     return rows;
@@ -578,6 +626,7 @@ export default function TradeWorkOrderCalculator() {
       {
         id: uid(),
         localKey: uid(),
+        payer_id: null,
         payer_name: "",
         description: "",
         amount: 0,
@@ -642,6 +691,7 @@ export default function TradeWorkOrderCalculator() {
                 payout_uec: p.payout_uec,
               })),
               expenses: expenses.map((e) => ({
+                payer_id: e.payer_id,
                 payer_name: e.payer_name,
                 description: e.description,
                 amount: e.amount,
@@ -725,6 +775,7 @@ export default function TradeWorkOrderCalculator() {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
+                payer_id: e.payer_id,
                 payer_name: e.payer_name,
                 description: e.description,
                 amount: e.amount,
@@ -1034,32 +1085,89 @@ export default function TradeWorkOrderCalculator() {
           <div className="text-[11px] text-zinc-600">Sin gastos todavía.</div>
         ) : (
           <div className="space-y-2">
-            {expenses.map((e) => (
-              <div
-                key={e.localKey}
-                className="grid grid-cols-12 gap-2 items-end"
-              >
-                <div className="col-span-3">
-                  <input value={e.payer_name} onChange={(ev) => updateExpense(e.localKey, { payer_name: ev.target.value })} className={inputClass} placeholder="Pagado por" />
+            {expenses.map((e) => {
+              // Does the current payer reference a known participant?
+              const matchedParticipant = participants.find((p) => {
+                if (e.payer_id && p.user_id && e.payer_id === p.user_id) return true;
+                if (!e.payer_id && e.payer_name && p.display_name === e.payer_name) return true;
+                return false;
+              });
+              // Selector value: participant localKey if matched, "__other__" when
+              // free-text is active, "" when unset.
+              const selectorValue = matchedParticipant
+                ? matchedParticipant.localKey
+                : e.payer_name
+                  ? "__other__"
+                  : "";
+              return (
+                <div
+                  key={e.localKey}
+                  className="grid grid-cols-12 gap-2 items-end"
+                >
+                  <div className="col-span-3">
+                    <select
+                      value={selectorValue}
+                      onChange={(ev) => {
+                        const v = ev.target.value;
+                        if (v === "") {
+                          updateExpense(e.localKey, { payer_id: null, payer_name: "" });
+                        } else if (v === "__other__") {
+                          // Switch to free-text mode; keep any existing name, else blank
+                          updateExpense(e.localKey, {
+                            payer_id: null,
+                            payer_name: e.payer_name && !matchedParticipant ? e.payer_name : "",
+                          });
+                        } else {
+                          const picked = participants.find((p) => p.localKey === v);
+                          if (picked) {
+                            updateExpense(e.localKey, {
+                              payer_id: picked.user_id,
+                              payer_name: picked.display_name || "Unnamed",
+                            });
+                          }
+                        }
+                      }}
+                      className={inputClass}
+                      title="Pagado por"
+                    >
+                      <option value="">— Pagado por —</option>
+                      {participants.map((p) => (
+                        <option key={p.localKey} value={p.localKey}>
+                          {p.display_name || "Unnamed"}
+                        </option>
+                      ))}
+                      <option value="__other__">Otro (escribir)…</option>
+                    </select>
+                    {selectorValue === "__other__" && (
+                      <input
+                        value={e.payer_name}
+                        onChange={(ev) =>
+                          updateExpense(e.localKey, { payer_id: null, payer_name: ev.target.value })
+                        }
+                        className={`${inputClass} mt-1`}
+                        placeholder="Nombre libre"
+                      />
+                    )}
+                  </div>
+                  <div className="col-span-4">
+                    <input value={e.description} onChange={(ev) => updateExpense(e.localKey, { description: ev.target.value })} className={inputClass} placeholder="Descripción" />
+                  </div>
+                  <div className="col-span-2">
+                    <input type="number" min={0} value={e.amount || ""} onChange={(ev) => updateExpense(e.localKey, { amount: parseFloat(ev.target.value) || 0 })} className={inputClass} placeholder="aUEC" />
+                  </div>
+                  <div className="col-span-2">
+                    <select value={e.expense_type} onChange={(ev) => updateExpense(e.localKey, { expense_type: ev.target.value })} className={inputClass}>
+                      {EXPENSE_TYPES.map((t) => (<option key={t.id} value={t.id}>{t.label}</option>))}
+                    </select>
+                  </div>
+                  <div className="col-span-1 text-right">
+                    <button onClick={() => removeExpense(e.localKey)} className="text-red-400/70 hover:text-red-300 text-[10px] uppercase">
+                      ✕
+                    </button>
+                  </div>
                 </div>
-                <div className="col-span-4">
-                  <input value={e.description} onChange={(ev) => updateExpense(e.localKey, { description: ev.target.value })} className={inputClass} placeholder="Descripción" />
-                </div>
-                <div className="col-span-2">
-                  <input type="number" min={0} value={e.amount || ""} onChange={(ev) => updateExpense(e.localKey, { amount: parseFloat(ev.target.value) || 0 })} className={inputClass} placeholder="aUEC" />
-                </div>
-                <div className="col-span-2">
-                  <select value={e.expense_type} onChange={(ev) => updateExpense(e.localKey, { expense_type: ev.target.value })} className={inputClass}>
-                    {EXPENSE_TYPES.map((t) => (<option key={t.id} value={t.id}>{t.label}</option>))}
-                  </select>
-                </div>
-                <div className="col-span-1 text-right">
-                  <button onClick={() => removeExpense(e.localKey)} className="text-red-400/70 hover:text-red-300 text-[10px] uppercase">
-                    ✕
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -1111,12 +1219,45 @@ export default function TradeWorkOrderCalculator() {
           </div>
         ) : (
           <div className="space-y-2">
+            {/* Inversión vs total_buy validation bar */}
+            {(() => {
+              const buy = totals.total_buy;
+              const contrib = totals.total_contrib;
+              if (buy <= 0 && contrib <= 0) return null;
+              const diff = Math.round((contrib - buy) * 100) / 100;
+              const ok = Math.abs(diff) < 0.5;
+              const under = diff < 0;
+              return (
+                <div
+                  className={`flex items-center justify-between text-[10px] font-mono rounded-sm border px-3 py-1.5 ${
+                    ok
+                      ? "bg-emerald-500/5 border-emerald-500/30 text-emerald-300"
+                      : under
+                        ? "bg-amber-500/5 border-amber-500/30 text-amber-300"
+                        : "bg-red-500/5 border-red-500/30 text-red-300"
+                  }`}
+                  title="La suma de las inversiones debería igualar el total de compra."
+                >
+                  <span>
+                    Inversión cubierta: {fmt(contrib)} / {fmt(buy)} aUEC
+                  </span>
+                  <span>
+                    {ok
+                      ? "✓ cuadra"
+                      : under
+                        ? `falta ${fmt(Math.abs(diff))} aUEC`
+                        : `excede ${fmt(diff)} aUEC`}
+                  </span>
+                </div>
+              );
+            })()}
+
             <div className="grid grid-cols-12 gap-2 text-[9px] uppercase tracking-widest text-zinc-600 px-1">
               <div className="col-span-3">Nombre</div>
               <div className="col-span-2">Rol</div>
               <div className="col-span-1 text-right">%</div>
-              <div className="col-span-2 text-right">Aporte (aUEC)</div>
-              <div className="col-span-3">Nota aporte</div>
+              <div className="col-span-2 text-right">Inversión (aUEC)</div>
+              <div className="col-span-3">Nota inversión</div>
               <div className="col-span-1 text-right">Payout</div>
             </div>
 
@@ -1198,6 +1339,7 @@ export default function TradeWorkOrderCalculator() {
         const rows = computeSplitPreview(splitStrategy);
         const payoutTotal = rows.reduce((s, r) => s + r.payout, 0);
         const profitShareTotal = rows.reduce((s, r) => s + r.profit_share, 0);
+        const refundTotal = rows.reduce((s, r) => s + r.expense_refund, 0);
         const pctSum = rows.reduce((s, r) => s + r.role_pct_preview, 0);
         const unassignedPct = splitStrategy === "role_pct" && Math.abs(pctSum) < 0.001;
 
@@ -1285,11 +1427,12 @@ export default function TradeWorkOrderCalculator() {
               {/* Per-participant breakdown */}
               <div className="p-4">
                 <div className="grid grid-cols-12 gap-2 text-[9px] uppercase tracking-widest text-zinc-500 mb-2 px-1">
-                  <div className="col-span-4">Participante</div>
-                  <div className="col-span-2 text-right">Aporte</div>
+                  <div className="col-span-3">Participante</div>
+                  <div className="col-span-2 text-right">Inversión</div>
+                  <div className="col-span-2 text-right">Reembolso gastos</div>
                   <div className="col-span-1 text-right">%</div>
                   <div className="col-span-2 text-right">Profit share</div>
-                  <div className="col-span-3 text-right">Transferir (payout)</div>
+                  <div className="col-span-2 text-right">Transferir</div>
                 </div>
                 <div className="space-y-1.5">
                   {rows.map((r) => (
@@ -1297,7 +1440,7 @@ export default function TradeWorkOrderCalculator() {
                       key={r.localKey}
                       className="grid grid-cols-12 gap-2 items-center px-2 py-2 bg-zinc-900/40 border border-zinc-800/50 rounded-sm text-xs"
                     >
-                      <div className="col-span-4 flex items-center gap-2 min-w-0">
+                      <div className="col-span-3 flex items-center gap-2 min-w-0">
                         {r.avatar_url ? (
                           <img
                             src={r.avatar_url}
@@ -1322,6 +1465,13 @@ export default function TradeWorkOrderCalculator() {
                       <div className="col-span-2 text-right font-mono text-zinc-300">
                         {fmt(r.contribution_uec)}
                       </div>
+                      <div
+                        className={`col-span-2 text-right font-mono ${
+                          r.expense_refund > 0 ? "text-cyan-300" : "text-zinc-600"
+                        }`}
+                      >
+                        {r.expense_refund > 0 ? `+${fmt(r.expense_refund)}` : "—"}
+                      </div>
                       <div className="col-span-1 text-right font-mono text-zinc-400">
                         {r.role_pct_preview.toFixed(1)}
                       </div>
@@ -1333,8 +1483,8 @@ export default function TradeWorkOrderCalculator() {
                         {r.profit_share >= 0 ? "+" : ""}
                         {fmt(r.profit_share)}
                       </div>
-                      <div className="col-span-3 text-right font-mono font-bold text-emerald-300">
-                        {fmt(r.payout)} aUEC
+                      <div className="col-span-2 text-right font-mono font-bold text-emerald-300">
+                        {fmt(r.payout)}
                       </div>
                     </div>
                   ))}
@@ -1342,11 +1492,14 @@ export default function TradeWorkOrderCalculator() {
 
                 {/* Totals row */}
                 <div className="grid grid-cols-12 gap-2 items-center px-2 py-2 mt-2 border-t border-zinc-800/60 text-xs">
-                  <div className="col-span-4 text-[10px] uppercase tracking-widest text-zinc-500">
+                  <div className="col-span-3 text-[10px] uppercase tracking-widest text-zinc-500">
                     Totales
                   </div>
                   <div className="col-span-2 text-right font-mono text-zinc-400">
                     {fmt(totals.total_contrib)}
+                  </div>
+                  <div className="col-span-2 text-right font-mono text-cyan-400">
+                    {fmt(refundTotal)}
                   </div>
                   <div className="col-span-1 text-right font-mono text-zinc-500">
                     {pctSum.toFixed(1)}
@@ -1354,9 +1507,15 @@ export default function TradeWorkOrderCalculator() {
                   <div className="col-span-2 text-right font-mono text-emerald-400">
                     {fmt(profitShareTotal)}
                   </div>
-                  <div className="col-span-3 text-right font-mono font-bold text-emerald-300">
+                  <div className="col-span-2 text-right font-mono font-bold text-emerald-300">
                     {fmt(payoutTotal)}
                   </div>
+                </div>
+
+                {/* Helper legend */}
+                <div className="mt-3 text-[10px] text-zinc-500 leading-relaxed">
+                  <span className="text-zinc-400">Transferir</span> = inversión + reembolso de gastos personales + profit share.
+                  Los inversores recuperan su capital primero; lo que sobra del profit neto se reparte según la estrategia elegida.
                 </div>
               </div>
 

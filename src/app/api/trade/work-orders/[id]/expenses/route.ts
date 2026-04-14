@@ -70,7 +70,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
       .from("trade_wo_expenses")
       .insert({
         work_order_id: id,
-        payer_id: body.payer_id || null,
+        payer_id: body.payer_id ?? null,
         payer_name: body.payer_name || "Unknown",
         description: body.description || "",
         amount: body.amount || 0,
