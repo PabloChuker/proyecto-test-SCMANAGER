@@ -63,8 +63,8 @@ function ComponentIcon({ cat, color }: { cat: PowerCategory; color: string }) {
     <img
       src={src}
       alt={cat}
-      width={14}
-      height={14}
+      width={20}
+      height={20}
       style={{ display: "block", opacity: color === "#3f3f46" ? 0.35 : 1 }}
     />
   );
