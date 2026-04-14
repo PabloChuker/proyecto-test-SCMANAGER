@@ -95,7 +95,7 @@ export default function TradeDashboard() {
       const res = await fetch("/api/trade/work-orders");
       if (!res.ok) {
         if (res.status === 401) {
-          setError("Necesitás estar logueado para ver el dashboard.");
+          setError("You need to be logged in to view the dashboard.");
           setOrders([]);
           return;
         }
@@ -104,7 +104,7 @@ export default function TradeDashboard() {
       const json = await res.json();
       setOrders(json.data || []);
     } catch (e: any) {
-      setError(e.message || "No se pudo cargar el dashboard.");
+      setError(e.message || "Could not load the dashboard.");
     } finally {
       setLoading(false);
     }
@@ -475,13 +475,13 @@ export default function TradeDashboard() {
       {/* ── Profit over time chart ── */}
       <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-sm p-4">
         <div className="flex items-center justify-between mb-3">
-          <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">Profit en el tiempo</div>
+          <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">Profit over time</div>
           <div className="flex rounded-sm overflow-hidden border border-zinc-800/60">
             {(
               [
-                { id: "day", label: "Día" },
-                { id: "week", label: "Semana" },
-                { id: "month", label: "Mes" },
+                { id: "day", label: "Day" },
+                { id: "week", label: "Week" },
+                { id: "month", label: "Month" },
               ] as { id: Bucket; label: string }[]
             ).map((b) => (
               <button
@@ -511,7 +511,7 @@ export default function TradeDashboard() {
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
               className="bg-zinc-950/60 border border-zinc-800/60 text-[11px] text-zinc-200 rounded-sm px-2 py-1 focus:outline-none focus:border-amber-500/40"
             >
-              <option value="">Todos los estados</option>
+              <option value="">All statuses</option>
               <option value="draft">Draft</option>
               <option value="in_progress">In progress</option>
               <option value="completed">Completed</option>
@@ -522,7 +522,7 @@ export default function TradeDashboard() {
               onChange={(e) => setPartyFilter(e.target.value)}
               className="bg-zinc-950/60 border border-zinc-800/60 text-[11px] text-zinc-200 rounded-sm px-2 py-1 focus:outline-none focus:border-amber-500/40"
             >
-              <option value="">Todas las party</option>
+              <option value="">All parties</option>
               <option value="solo">Solo (sin party)</option>
               {partyOptions.map((pid) => (
                 <option key={pid} value={pid}>
@@ -563,15 +563,15 @@ export default function TradeDashboard() {
         {filtered.length === 0 ? (
           <div className="text-[11px] text-zinc-600">
             {scoped.length === 0
-              ? "Todavía no hay work orders en este alcance."
-              : "Ningún resultado con estos filtros."}
+              ? "No work orders in this scope yet."
+              : "No results with these filters."}
           </div>
         ) : (
           <div className="space-y-1">
             <div className="grid grid-cols-12 gap-2 text-[9px] uppercase tracking-widest text-zinc-600 px-2">
-              <div className="col-span-4">Título</div>
+              <div className="col-span-4">Title</div>
               <div className="col-span-2">Commodity</div>
-              <div className="col-span-2">Fecha</div>
+              <div className="col-span-2">Date</div>
               <div className="col-span-1">Status</div>
               <div className="col-span-1 text-right">SCU</div>
               <div className="col-span-2 text-right">Net</div>

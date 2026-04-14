@@ -28,7 +28,7 @@ export interface CardTheme {
 export const CARD_THEMES: CardTheme[] = [
   {
     key: "black",
-    label: "Negro clásico",
+    label: "Classic Black",
     bg: "#000000",
     bgPanel: "#0a0a0a",
     text: "#f4f4f5",
@@ -39,7 +39,7 @@ export const CARD_THEMES: CardTheme[] = [
   },
   {
     key: "light",
-    label: "Claro",
+    label: "Light",
     bg: "#fafafa",
     bgPanel: "#ffffff",
     text: "#18181b",
@@ -72,7 +72,7 @@ export const CARD_THEMES: CardTheme[] = [
   },
   {
     key: "purple",
-    label: "Púrpura",
+    label: "Purple",
     bg: "#140524",
     bgPanel: "#1f0a33",
     text: "#ede9fe",
@@ -83,7 +83,7 @@ export const CARD_THEMES: CardTheme[] = [
   },
   {
     key: "cyan",
-    label: "Cian",
+    label: "Cyan",
     bg: "#00141a",
     bgPanel: "#001f26",
     text: "#cffafe",
@@ -94,7 +94,7 @@ export const CARD_THEMES: CardTheme[] = [
   },
   {
     key: "green",
-    label: "Verde",
+    label: "Green",
     bg: "#03170a",
     bgPanel: "#052111",
     text: "#d1fae5",
@@ -105,7 +105,7 @@ export const CARD_THEMES: CardTheme[] = [
   },
   {
     key: "red",
-    label: "Rojo",
+    label: "Red",
     bg: "#1a0303",
     bgPanel: "#260606",
     text: "#fee2e2",
@@ -116,7 +116,7 @@ export const CARD_THEMES: CardTheme[] = [
   },
   {
     key: "navy",
-    label: "Azul Marino",
+    label: "Navy Blue",
     bg: "#020617",
     bgPanel: "#0f172a",
     text: "#e0e7ff",
@@ -127,7 +127,7 @@ export const CARD_THEMES: CardTheme[] = [
   },
   {
     key: "steel",
-    label: "Acero",
+    label: "Steel",
     bg: "#18181b",
     bgPanel: "#27272a",
     text: "#fafafa",
@@ -138,7 +138,7 @@ export const CARD_THEMES: CardTheme[] = [
   },
   {
     key: "gold",
-    label: "Oro",
+    label: "Gold",
     bg: "#1a1505",
     bgPanel: "#2a2208",
     text: "#fef3c7",

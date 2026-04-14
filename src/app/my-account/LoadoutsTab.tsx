@@ -128,7 +128,7 @@ export default function LoadoutsTab() {
       {loadouts.length === 0 ? (
         <div className="text-center text-zinc-600 py-8">
           <div className="text-3xl mb-2">🔧</div>
-          No tenes loadouts guardados. Arma uno en el Loadout Manager y guardalo.
+          You have no saved loadouts. Build one in the Loadout Manager and save it.
         </div>
       ) : (
         <div className="space-y-2">
@@ -196,7 +196,7 @@ export default function LoadoutsTab() {
                             <button
                               onClick={() => addToWishlist(item)}
                               className="text-[9px] text-zinc-500 hover:text-amber-400 transition-colors px-1"
-                              title="Agregar a wishlist"
+                              title="Add to wishlist"
                             >
                               + WL
                             </button>

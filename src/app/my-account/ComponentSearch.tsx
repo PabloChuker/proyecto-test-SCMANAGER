@@ -27,7 +27,7 @@ const CATEGORIES = [
   { value: "MISSILE", label: "🚀 Misiles" },
 ];
 
-export default function ComponentSearch({ onSelect, disabled, buttonLabel = "+ Agregar", placeholder = "Buscar componente..." }: Props) {
+export default function ComponentSearch({ onSelect, disabled, buttonLabel = "+ Add", placeholder = "Search component..." }: Props) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [results, setResults] = useState<ComponentResult[]>([]);
@@ -87,7 +87,7 @@ export default function ComponentSearch({ onSelect, disabled, buttonLabel = "+ A
           disabled={searching}
           className="px-3 py-1.5 bg-amber-600/80 hover:bg-amber-600 text-zinc-950 text-sm rounded transition-colors"
         >
-          {searching ? "..." : "Buscar"}
+          {searching ? "..." : "Search"}
         </button>
       </div>
 

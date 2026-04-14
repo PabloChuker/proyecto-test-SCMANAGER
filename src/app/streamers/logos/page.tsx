@@ -111,7 +111,7 @@ export default function StreamerLogosPage() {
           </h1>
           <p className="text-xs text-zinc-500 mt-2 max-w-2xl leading-relaxed">
             Descargá los logos de SC Labs para usar en tus videos, overlays y material
-            promocional. Todos los assets están en PNG con transparencia.
+            promocional. All assets are PNG with transparency.
           </p>
         </div>
 
@@ -162,13 +162,13 @@ export default function StreamerLogosPage() {
 
         <div className="mt-10 border border-zinc-800/40 bg-zinc-900/30 rounded p-4">
           <div className="text-[10px] tracking-widest uppercase font-mono text-amber-500 mb-2">
-            Uso permitido
+            Usage rights
           </div>
           <p className="text-[11px] text-zinc-500 leading-relaxed">
-            Podés usar los logos libremente en tus streams y videos sobre Star Citizen
-            mientras menciones SC Labs como fuente. No modificarlos en cuanto a colores
-            principales y proporciones. Si necesitás versiones vectoriales (SVG / AI)
-            pedilas en el Discord de SC Labs.
+            You can use the logos freely in your Star Citizen streams and videos
+            as long as you credit SC Labs as the source. Do not modify their
+            main colors or proportions. If you need vector versions (SVG / AI),
+            request them on the SC Labs Discord.
           </p>
         </div>
       </div>

@@ -97,7 +97,7 @@ export function CargoPage() {
             <div className="p-3 border-b border-zinc-800/50">
               <input
                 type="text"
-                placeholder="Buscar nave…"
+                placeholder="Search ship…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full bg-zinc-900/80 border border-zinc-700/50 rounded px-3 py-1.5 text-xs text-zinc-300 placeholder-zinc-600 outline-none focus:border-amber-500/40 focus:ring-1 focus:ring-amber-500/20 transition-colors"

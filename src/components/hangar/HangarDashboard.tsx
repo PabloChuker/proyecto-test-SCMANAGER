@@ -476,7 +476,7 @@ export function HangarDashboard() {
               <div className="flex flex-col sm:flex-row gap-3">
                 <input
                   type="text"
-                  placeholder="Buscar en wishlist..."
+                  placeholder="Search in wishlist..."
                   value={wishlistSearch}
                   onChange={(e) => setWishlistSearch(e.target.value)}
                   className="flex-1 px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-fuchsia-500/50 transition-all duration-300"
@@ -490,7 +490,7 @@ export function HangarDashboard() {
 
           {wishlist.length > 0 && filteredWishlist.length === 0 && (
             <div className="text-center py-12">
-              <p className="text-sm text-zinc-500">Ningún item coincide con los filtros.</p>
+              <p className="text-sm text-zinc-500">No items match the filters.</p>
             </div>
           )}
         </div>

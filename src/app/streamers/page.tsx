@@ -66,9 +66,9 @@ const TOOLS: ToolCard[] = [
   },
   {
     href: "/streamers/referral",
-    title: "Programa de Referral",
+    title: "Referral Program",
     description:
-      "Enterate cómo funciona el sistema de referral: cada visita que llega por tu link queda registrada para darte visibilidad y futuros beneficios dentro de SC Labs.",
+      "Learn how the referral system works: every visit from your link is tracked to give you visibility and future benefits within SC Labs.",
     accent: "#22c55e",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>

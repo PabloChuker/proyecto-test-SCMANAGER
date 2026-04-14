@@ -546,7 +546,7 @@ export default function TradeWorkOrderCalculator() {
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Tenés que estar logueado");
+      if (!user) throw new Error("You must be logged in");
 
       const { data: memberships, error: mErr } = await supabase
         .from("party_members")
@@ -555,7 +555,7 @@ export default function TradeWorkOrderCalculator() {
         .limit(1);
       if (mErr) throw mErr;
       if (!memberships || memberships.length === 0) {
-        setPartyMsg("No estás en ninguna party. Creá una en /party primero.");
+        setPartyMsg("You're not in any party. Create one in /party first.");
         return;
       }
       const pid = memberships[0].party_id;
@@ -566,7 +566,7 @@ export default function TradeWorkOrderCalculator() {
         .eq("party_id", pid);
       if (memErr) throw memErr;
       if (!members || members.length === 0) {
-        setPartyMsg("La party está vacía.");
+        setPartyMsg("The party is empty.");
         return;
       }
 
@@ -831,7 +831,7 @@ export default function TradeWorkOrderCalculator() {
       backToList();
       return;
     }
-    if (!confirm("¿Eliminar este Work Order? No se puede deshacer.")) return;
+    if (!confirm("Delete this Work Order? This cannot be undone.")) return;
     setSaving(true);
     try {
       const r = await fetch(`/api/trade/work-orders/${serverId}`, {
@@ -909,7 +909,7 @@ export default function TradeWorkOrderCalculator() {
               disabled={saving}
               className="px-3 py-1.5 text-[10px] uppercase tracking-widest bg-red-950/30 hover:bg-red-900/40 border border-red-800/40 rounded-sm text-red-400 transition-colors"
             >
-              Eliminar
+              Delete
             </button>
           )}
           <button
@@ -917,7 +917,7 @@ export default function TradeWorkOrderCalculator() {
             disabled={saving}
             className="px-3 py-1.5 text-[10px] uppercase tracking-widest bg-zinc-800/60 hover:bg-zinc-700/60 border border-zinc-700/60 rounded-sm text-zinc-300 transition-colors"
           >
-            {saving ? "Guardando…" : "Guardar"}
+            {saving ? "Saving…" : "Save"}
           </button>
           {status !== "in_progress" && status !== "completed" && (
             <button
@@ -945,7 +945,7 @@ export default function TradeWorkOrderCalculator() {
                 setShowSplitModal(true);
               }}
               disabled={saving || participants.length === 0}
-              title={participants.length === 0 ? "Agregá al menos un participante" : ""}
+              title={participants.length === 0 ? "Add at least one participant" : ""}
               className="px-3 py-1.5 text-[10px] uppercase tracking-widest bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-sm text-emerald-300 transition-colors disabled:opacity-40"
             >
               Complete + Split
@@ -963,7 +963,7 @@ export default function TradeWorkOrderCalculator() {
       {/* ── Route / Commodity ── */}
       <div className={sectionCard}>
         <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500 mb-3">
-          Ruta y mercancía
+          Route and cargo
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
@@ -1056,11 +1056,11 @@ export default function TradeWorkOrderCalculator() {
 
         {/* Totals strip */}
         <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-          <MiniStat label="Inversión" value={`${fmt(totals.total_buy)} aUEC`} color="text-zinc-200" />
-          <MiniStat label="Venta" value={`${fmt(totals.total_sell)} aUEC`} color="text-cyan-300" />
-          <MiniStat label="Gastos" value={`${fmt(totals.total_expenses)} aUEC`} color="text-amber-300" />
+          <MiniStat label="Investment" value={`${fmt(totals.total_buy)} aUEC`} color="text-zinc-200" />
+          <MiniStat label="Sale" value={`${fmt(totals.total_sell)} aUEC`} color="text-cyan-300" />
+          <MiniStat label="Expenses" value={`${fmt(totals.total_expenses)} aUEC`} color="text-amber-300" />
           <MiniStat
-            label="Profit neto"
+            label="Net profit"
             value={`${fmt(totals.net_profit)} aUEC`}
             color={totals.net_profit >= 0 ? "text-emerald-400" : "text-red-400"}
           />
@@ -1071,18 +1071,18 @@ export default function TradeWorkOrderCalculator() {
       <div className={sectionCard}>
         <div className="flex items-center justify-between mb-3">
           <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">
-            Gastos generales
+            General expenses
           </div>
           <button
             onClick={addExpense}
             className="text-[10px] uppercase tracking-widest px-2.5 py-1 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 rounded-sm text-amber-300"
           >
-            + Gasto
+            + Expense
           </button>
         </div>
 
         {expenses.length === 0 ? (
-          <div className="text-[11px] text-zinc-600">Sin gastos todavía.</div>
+          <div className="text-[11px] text-zinc-600">No expenses yet.</div>
         ) : (
           <div className="space-y-2">
             {expenses.map((e) => {
@@ -1150,7 +1150,7 @@ export default function TradeWorkOrderCalculator() {
                     )}
                   </div>
                   <div className="col-span-4">
-                    <input value={e.description} onChange={(ev) => updateExpense(e.localKey, { description: ev.target.value })} className={inputClass} placeholder="Descripción" />
+                    <input value={e.description} onChange={(ev) => updateExpense(e.localKey, { description: ev.target.value })} className={inputClass} placeholder="Description" />
                   </div>
                   <div className="col-span-2">
                     <input type="number" min={0} value={e.amount || ""} onChange={(ev) => updateExpense(e.localKey, { amount: parseFloat(ev.target.value) || 0 })} className={inputClass} placeholder="aUEC" />
@@ -1187,10 +1187,10 @@ export default function TradeWorkOrderCalculator() {
             <button
               onClick={loadFromParty}
               disabled={loadingParty}
-              title="Agregar todos los miembros de tu party actual"
+              title="Add all members from your current party"
               className="text-[10px] uppercase tracking-widest px-2.5 py-1 bg-cyan-500/15 hover:bg-cyan-500/25 disabled:opacity-50 border border-cyan-500/30 rounded-sm text-cyan-300"
             >
-              {loadingParty ? "Cargando…" : "⇪ Cargar Party"}
+              {loadingParty ? "Loading…" : "⇪ Load Party"}
             </button>
             <button
               onClick={equalizePct}
@@ -1202,7 +1202,7 @@ export default function TradeWorkOrderCalculator() {
               onClick={addParticipant}
               className="text-[10px] uppercase tracking-widest px-2.5 py-1 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 rounded-sm text-amber-300"
             >
-              + Miembro
+              + Member
             </button>
           </div>
         </div>
@@ -1215,7 +1215,7 @@ export default function TradeWorkOrderCalculator() {
 
         {participants.length === 0 ? (
           <div className="text-[11px] text-zinc-600">
-            Corrida solo (vos sos el único participante) — agregá miembros si es una operación de party.
+            Solo run (you are the only participant) — add members if this is a party operation.
           </div>
         ) : (
           <div className="space-y-2">
@@ -1236,10 +1236,10 @@ export default function TradeWorkOrderCalculator() {
                         ? "bg-amber-500/5 border-amber-500/30 text-amber-300"
                         : "bg-red-500/5 border-red-500/30 text-red-300"
                   }`}
-                  title="La suma de las inversiones debería igualar el total de compra."
+                  title="The sum of investments should equal the total purchase."
                 >
                   <span>
-                    Inversión cubierta: {fmt(contrib)} / {fmt(buy)} aUEC
+                    Investment covered: {fmt(contrib)} / {fmt(buy)} aUEC
                   </span>
                   <span>
                     {ok
@@ -1253,11 +1253,11 @@ export default function TradeWorkOrderCalculator() {
             })()}
 
             <div className="grid grid-cols-12 gap-2 text-[9px] uppercase tracking-widest text-zinc-600 px-1">
-              <div className="col-span-3">Nombre</div>
-              <div className="col-span-2">Rol</div>
+              <div className="col-span-3">Name</div>
+              <div className="col-span-2">Role</div>
               <div className="col-span-1 text-right">%</div>
-              <div className="col-span-2 text-right">Inversión (aUEC)</div>
-              <div className="col-span-3">Nota inversión</div>
+              <div className="col-span-2 text-right">Investment (aUEC)</div>
+              <div className="col-span-3">Investment note</div>
               <div className="col-span-1 text-right">Payout</div>
             </div>
 
@@ -1373,17 +1373,17 @@ export default function TradeWorkOrderCalculator() {
               {/* Summary */}
               <div className="grid grid-cols-3 gap-3 p-4 border-b border-zinc-800/60">
                 <MiniStat
-                  label="Inversión total"
+                  label="Total investment"
                   value={`${fmt(totals.total_buy)} aUEC`}
                   color="text-zinc-200"
                 />
                 <MiniStat
-                  label="Gastos"
+                  label="Expenses"
                   value={`${fmt(totals.total_expenses)} aUEC`}
                   color="text-amber-300"
                 />
                 <MiniStat
-                  label="Profit neto"
+                  label="Net profit"
                   value={`${fmt(totals.net_profit)} aUEC`}
                   color={totals.net_profit >= 0 ? "text-emerald-400" : "text-red-400"}
                 />
@@ -1418,8 +1418,8 @@ export default function TradeWorkOrderCalculator() {
                 </div>
                 {unassignedPct && (
                   <div className="mt-3 p-2 bg-amber-950/30 border border-amber-800/40 rounded-sm text-[11px] text-amber-300">
-                    ⚠ Todos los % están en 0. Cambiá a "Partes iguales" o "Por aporte",
-                    o cerrá el modal y apretá <span className="font-mono">Equalize</span> primero.
+                    ⚠ All percentages are at 0. Switch to "Equal shares" or "By contribution",
+                    or close the modal and click <span className="font-mono">Equalize</span> first.
                   </div>
                 )}
               </div>
@@ -1427,12 +1427,12 @@ export default function TradeWorkOrderCalculator() {
               {/* Per-participant breakdown */}
               <div className="p-4">
                 <div className="grid grid-cols-12 gap-2 text-[9px] uppercase tracking-widest text-zinc-500 mb-2 px-1">
-                  <div className="col-span-3">Participante</div>
-                  <div className="col-span-2 text-right">Inversión</div>
-                  <div className="col-span-2 text-right">Reembolso gastos</div>
+                  <div className="col-span-3">Participant</div>
+                  <div className="col-span-2 text-right">Investment</div>
+                  <div className="col-span-2 text-right">Expense refund</div>
                   <div className="col-span-1 text-right">%</div>
                   <div className="col-span-2 text-right">Profit share</div>
-                  <div className="col-span-2 text-right">Transferir</div>
+                  <div className="col-span-2 text-right">Transfer</div>
                 </div>
                 <div className="space-y-1.5">
                   {rows.map((r) => (
@@ -1514,15 +1514,15 @@ export default function TradeWorkOrderCalculator() {
 
                 {/* Helper legend */}
                 <div className="mt-3 text-[10px] text-zinc-500 leading-relaxed">
-                  <span className="text-zinc-400">Transferir</span> = inversión + reembolso de gastos personales + profit share.
-                  Los inversores recuperan su capital primero; lo que sobra del profit neto se reparte según la estrategia elegida.
+                  <span className="text-zinc-400">Transfer</span> = investment + personal expense refund + profit share.
+                  Investors recover their capital first; what remains of net profit is distributed according to the chosen strategy.
                 </div>
               </div>
 
               {/* Actions */}
               <div className="flex items-center justify-between gap-3 p-4 border-t border-zinc-800/60">
                 <div className="text-[11px] text-zinc-500">
-                  Al confirmar, guardamos el snapshot del reparto y marcamos la orden como <span className="text-emerald-400">completed</span>.
+                  Upon confirmation, we save a snapshot of the distribution and mark the order as <span className="text-emerald-400">completed</span>.
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1530,14 +1530,14 @@ export default function TradeWorkOrderCalculator() {
                     disabled={saving}
                     className="px-3 py-1.5 text-[10px] uppercase tracking-widest bg-zinc-800/60 hover:bg-zinc-700/60 border border-zinc-700/60 rounded-sm text-zinc-300"
                   >
-                    Cancelar
+                    Cancel
                   </button>
                   <button
                     onClick={applySplitAndComplete}
                     disabled={saving || (unassignedPct)}
                     className="px-4 py-1.5 text-[10px] uppercase tracking-widest bg-emerald-500/25 hover:bg-emerald-500/35 border border-emerald-500/50 rounded-sm text-emerald-200 disabled:opacity-40"
                   >
-                    {saving ? "Guardando…" : "Aplicar y Completar"}
+                    {saving ? "Saving…" : "Apply and Complete"}
                   </button>
                 </div>
               </div>

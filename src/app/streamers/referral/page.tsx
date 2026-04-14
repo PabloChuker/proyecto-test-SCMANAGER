@@ -119,35 +119,36 @@ export default function StreamersReferralPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="border border-zinc-800/40 bg-zinc-900/30 rounded p-4">
             <div className="text-[10px] tracking-widest uppercase font-mono text-amber-500 mb-2">
-              Cómo funciona
+              How it works
             </div>
             <ul className="text-[11px] text-zinc-400 space-y-1.5 leading-relaxed">
-              <li>➊ Compartí tu link en tu stream, descripción de YouTube o bio.</li>
-              <li>➋ Cuando alguien lo abre, SC Labs guarda el código en su dispositivo.</li>
-              <li>➌ Registramos la visita en nuestra base de datos (tabla <code>referral_visits</code>).</li>
-              <li>➍ Si el usuario crea cuenta, te la atribuimos a vos.</li>
+              <li>➊ Share your link on your stream, YouTube description, or bio.</li>
+              <li>➋ When someone opens it, SC Labs stores the code on their device.</li>
+              <li>➌ We record the visit in our database (<code>referral_visits</code> table).</li>
+              <li>➍ If the user creates an account, we attribute it to you.</li>
             </ul>
           </div>
           <div className="border border-zinc-800/40 bg-zinc-900/30 rounded p-4">
             <div className="text-[10px] tracking-widest uppercase font-mono text-amber-500 mb-2">
-              Privacidad
+              Privacy
             </div>
             <p className="text-[11px] text-zinc-400 leading-relaxed">
-              Solo guardamos el código del referrer, la fecha, la URL visitada y el
-              user-agent. No trackeamos a los usuarios de forma identificable ni
-              compartimos los datos con terceros. Los datos son para uso interno del
-              equipo de SC Labs.
+              We only store the referrer code, date, visited URL, and user-agent.
+              We don&apos;t track users in any identifiable way nor share the data
+              with third parties. The data is for internal use by the SC Labs team
+              only.
             </p>
           </div>
         </div>
 
         <div className="mt-8 border border-amber-500/20 bg-amber-500/5 rounded p-4">
           <div className="text-[10px] tracking-widest uppercase font-mono text-amber-400 mb-1">
-            ¿Todavía no tenés código?
+            Don&apos;t have a code yet?
           </div>
           <p className="text-[11px] text-zinc-300 leading-relaxed">
-            Escribinos por Discord para que te asignemos uno. Es gratis y solo tenés que
-            ser un streamer / creador activo de contenido de Star Citizen.
+            Message us on Discord and we&apos;ll assign you one. It&apos;s free
+            — you just need to be an active Star Citizen streamer / content
+            creator.
           </p>
         </div>
       </div>

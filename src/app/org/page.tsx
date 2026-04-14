@@ -266,10 +266,10 @@ export default function OrgPage() {
               {!profile?.org_id && (
                 <>
                   <button onClick={() => setTab("create")} className={`px-4 py-2 text-sm tracking-wider uppercase transition-all ${tab === "create" ? "text-amber-400 border-b-2 border-amber-500" : "text-zinc-500 hover:text-zinc-400 border-b-2 border-transparent"}`}>
-                    + Crear
+                    + Create
                   </button>
                   <button onClick={() => setTab("search")} className={`px-4 py-2 text-sm tracking-wider uppercase transition-all ${tab === "search" ? "text-amber-400 border-b-2 border-amber-500" : "text-zinc-500 hover:text-zinc-400 border-b-2 border-transparent"}`}>
-                    🔍 Buscar
+                    🔍 Search
                   </button>
                 </>
               )}
@@ -307,7 +307,7 @@ export default function OrgPage() {
                     {/* Members */}
                     <div className="space-y-2">
                       <h3 className="text-xs text-zinc-500 uppercase tracking-wider">
-                        Miembros ({members.length})
+                        Members ({members.length})
                       </h3>
                       {members.map((m) => (
                         <div key={m.user_id} className="flex items-center gap-3 p-2 rounded border border-zinc-800/40 bg-zinc-900/30">
@@ -335,17 +335,17 @@ export default function OrgPage() {
                     {/* Invite */}
                     {isOwner && (
                       <div className="p-3 rounded border border-zinc-800/50 bg-zinc-900/30 space-y-2">
-                        <h3 className="text-xs text-zinc-500 uppercase tracking-wider">Invitar Miembros</h3>
+                        <h3 className="text-xs text-zinc-500 uppercase tracking-wider">Invite Members</h3>
                         <div className="flex gap-2">
                           <input
                             type="text"
                             value={inviteSearch}
                             onChange={(e) => setInviteSearch(e.target.value)}
                             onKeyDown={(e) => e.key === "Enter" && searchFriendsToInvite()}
-                            placeholder="Buscar usuario..."
+                            placeholder="Search user..."
                             className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
                           />
-                          <button onClick={searchFriendsToInvite} className="px-3 py-1.5 bg-amber-600/80 hover:bg-amber-600 text-zinc-950 text-sm rounded">Buscar</button>
+                          <button onClick={searchFriendsToInvite} className="px-3 py-1.5 bg-amber-600/80 hover:bg-amber-600 text-zinc-950 text-sm rounded">Search</button>
                         </div>
                         {inviteResults.map((p) => (
                           <div key={p.id} className="flex items-center gap-2 p-1.5">
@@ -361,7 +361,7 @@ export default function OrgPage() {
                                   : "bg-emerald-600/80 hover:bg-emerald-600 active:scale-95 text-zinc-950"
                               }`}
                             >
-                              {invitedIds.has(p.id) ? "Enviado ✓" : invitingIds.has(p.id) ? "Enviando..." : "+ Invitar"}
+                              {invitedIds.has(p.id) ? "Sent ✓" : invitingIds.has(p.id) ? "Sending..." : "+ Invite"}
                             </button>
                           </div>
                         ))}
@@ -391,7 +391,7 @@ export default function OrgPage() {
                   <textarea value={orgDesc} onChange={(e) => setOrgDesc(e.target.value)} rows={3} className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 focus:border-amber-500 focus:outline-none resize-none" />
                 </div>
                 <button onClick={createOrg} disabled={!orgName.trim() || creating} className="w-full py-2 bg-amber-600/80 hover:bg-amber-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-950 font-medium rounded transition-colors">
-                  {creating ? "Creando..." : "Crear Organizacion"}
+                  {creating ? "Creating..." : "Create Organization"}
                 </button>
               </div>
             )}
@@ -400,8 +400,8 @@ export default function OrgPage() {
             {tab === "search" && (
               <div className="space-y-4">
                 <div className="flex gap-2">
-                  <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && searchOrgs()} placeholder="Buscar organizacion..." className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none" />
-                  <button onClick={searchOrgs} className="px-4 py-2 bg-amber-600/80 hover:bg-amber-600 text-zinc-950 text-sm font-medium rounded">Buscar</button>
+                  <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => e.key === "Enter" && searchOrgs()} placeholder="Search organization..." className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none" />
+                  <button onClick={searchOrgs} className="px-4 py-2 bg-amber-600/80 hover:bg-amber-600 text-zinc-950 text-sm font-medium rounded">Search</button>
                 </div>
                 {searchResults.map((o) => (
                   <div key={o.id} className="flex items-center gap-3 p-3 rounded border border-zinc-800/50 bg-zinc-900/40">
@@ -410,7 +410,7 @@ export default function OrgPage() {
                       <div className="text-sm text-zinc-200">{o.name} {o.tag && <span className="text-xs text-amber-400">[{o.tag}]</span>}</div>
                       {o.description && <div className="text-xs text-zinc-500">{o.description}</div>}
                     </div>
-                    <button onClick={() => joinOrg(o.id)} className="px-3 py-1 text-xs bg-emerald-600/80 text-zinc-950 rounded">Unirse</button>
+                    <button onClick={() => joinOrg(o.id)} className="px-3 py-1 text-xs bg-emerald-600/80 text-zinc-950 rounded">Join</button>
                   </div>
                 ))}
               </div>

@@ -198,17 +198,17 @@ export default function StreamerCardsPage() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar: hull b, cutlass, carrack…"
+                placeholder="Search: hull b, cutlass, carrack…"
                 className="w-full px-3 py-2 bg-zinc-900/80 border border-zinc-800 rounded text-xs text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-amber-500/40"
               />
               <div className="mt-2 max-h-64 overflow-y-auto">
                 {searchLoading ? (
                   <div className="text-[10px] text-zinc-600 py-2 text-center">
-                    Buscando…
+                    Searching…
                   </div>
                 ) : searchResults.length === 0 ? (
                   <div className="text-[10px] text-zinc-700 py-2 text-center">
-                    Sin resultados
+                    No results
                   </div>
                 ) : (
                   <ul className="divide-y divide-zinc-800/40">

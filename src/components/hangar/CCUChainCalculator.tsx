@@ -608,7 +608,7 @@ export function CCUChainCalculator() {
                 ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
                 : "text-zinc-500 hover:text-zinc-400"
             }`}
-            title="Minimizar uso de créditos, priorizar efectivo"
+            title="Minimize credit use, prioritize cash"
           >
             $ Efectivo
           </button>
@@ -619,7 +619,7 @@ export function CCUChainCalculator() {
                 ? "bg-zinc-600/30 text-zinc-300 border border-zinc-500/30"
                 : "text-zinc-500 hover:text-zinc-400"
             }`}
-            title="Balance entre efectivo y créditos"
+            title="Balance between cash and credits"
           >
             Balance
           </button>

@@ -52,15 +52,15 @@ export function WishlistGrid({ items }: WishlistGridProps) {
   if (items.length === 0) {
     return (
       <div className="text-center py-16 px-8">
-        <p className="text-lg text-zinc-400 font-medium mb-2">Tu wishlist está vacía</p>
+        <p className="text-lg text-zinc-400 font-medium mb-2">Your wishlist is empty</p>
         <p className="text-sm text-zinc-500 mb-4 max-w-lg mx-auto">
-          Agregá naves desde la página de detalle (botón &quot;Agregar a Wishlist&quot;) o haciendo click derecho en cualquier nave de la lista.
+          Add ships from the details page (button &quot;Add to Wishlist&quot;) or by right-clicking any ship in the list.
         </p>
         <Link
           href="/ships"
           className="inline-block px-6 py-2.5 bg-fuchsia-500/20 border border-fuchsia-500/50 rounded-sm text-fuchsia-400 text-sm font-medium hover:bg-fuchsia-500/30 transition-all duration-300"
         >
-          Explorar Naves →
+          Explore Ships →
         </Link>
       </div>
     );
@@ -157,11 +157,11 @@ export function WishlistGrid({ items }: WishlistGridProps) {
                   onClick={() => setEditingId(isEditing ? null : item.id)}
                   className="flex-1 px-2 py-1 text-[10px] bg-zinc-800/60 hover:bg-zinc-700/60 border border-zinc-700/60 rounded-sm text-zinc-300 transition-colors"
                 >
-                  {isEditing ? "Listo" : "Editar"}
+                  {isEditing ? "Done" : "Edit"}
                 </button>
                 <button
                   onClick={() => moveWishlistToFleet(item.id)}
-                  title="Mover a My Fleet"
+                  title="Move to My Fleet"
                   className="flex-1 px-2 py-1 text-[10px] bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/40 rounded-sm text-cyan-400 transition-colors"
                 >
                   → Fleet
@@ -184,7 +184,7 @@ export function WishlistGrid({ items }: WishlistGridProps) {
                 ) : (
                   <button
                     onClick={() => setConfirmDelete(item.id)}
-                    title="Eliminar de la wishlist"
+                    title="Remove from wishlist"
                     className="px-2 py-1 text-[10px] bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 rounded-sm text-red-400/80 hover:text-red-400 transition-colors"
                   >
                     ✕

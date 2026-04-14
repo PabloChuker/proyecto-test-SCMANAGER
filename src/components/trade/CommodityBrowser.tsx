@@ -127,11 +127,11 @@ export default function CommodityBrowser() {
       <div className="flex flex-wrap gap-3 items-end">
         <div className="flex-1 min-w-[200px]">
           <label className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1.5">
-            Buscar
+            Search
           </label>
           <input
             type="text"
-            placeholder="Nombre o código..."
+            placeholder="Name or code..."
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);

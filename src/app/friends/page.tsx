@@ -240,9 +240,9 @@ export default function FriendsPage() {
             {/* Tabs */}
             <div className="flex gap-2 border-b border-zinc-800/60 pb-2">
               {[
-                { key: "friends" as const, label: "Amigos", count: friends.length },
-                { key: "pending" as const, label: "Pendientes", count: pending.length },
-                { key: "search" as const, label: "Buscar", count: 0 },
+                { key: "friends" as const, label: "Friends", count: friends.length },
+                { key: "pending" as const, label: "Pending", count: pending.length },
+                { key: "search" as const, label: "Search", count: 0 },
               ].map((t) => (
                 <button
                   key={t.key}
@@ -296,8 +296,8 @@ export default function FriendsPage() {
                 {friends.length === 0 && (
                   <div className="text-center text-zinc-500 py-8">
                     <div className="text-3xl mb-2">👥</div>
-                    No tenes amigos todavia. Busca jugadores en la pestaña
-                    &quot;Buscar&quot;.
+                    You have no friends yet. Search for players in the
+                    &quot;Search&quot;.
                   </div>
                 )}
               </div>
@@ -308,7 +308,7 @@ export default function FriendsPage() {
               <div className="space-y-2">
                 {pending.length === 0 ? (
                   <div className="text-center text-zinc-500 py-8">
-                    No hay solicitudes pendientes.
+                    No pending requests.
                   </div>
                 ) : (
                   pending.map((f) => (
@@ -349,7 +349,7 @@ export default function FriendsPage() {
                         onClick={() => removeFriend(f.friendship.id)}
                         className="px-3 py-1 text-xs bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded transition-colors"
                       >
-                        {f.direction === "received" ? "Rechazar" : "Cancelar"}
+                        {f.direction === "received" ? "Decline" : "Cancel"}
                       </button>
                     </div>
                   ))
@@ -366,7 +366,7 @@ export default function FriendsPage() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && searchUsers()}
-                    placeholder="Buscar por nombre o usuario de Discord..."
+                    placeholder="Search by name or Discord username..."
                     className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
                   />
                   <button
@@ -374,7 +374,7 @@ export default function FriendsPage() {
                     disabled={searching}
                     className="px-4 py-2 bg-amber-600/80 hover:bg-amber-600 text-zinc-950 text-sm font-medium rounded transition-colors"
                   >
-                    {searching ? "..." : "Buscar"}
+                    {searching ? "..." : "Search"}
                   </button>
                 </div>
 
@@ -415,7 +415,7 @@ export default function FriendsPage() {
                           Ya son amigos
                         </span>
                       ) : alreadyPending || sentIds.has(p.id) ? (
-                        <span className="text-xs text-amber-400/80 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">Enviado ✓</span>
+                        <span className="text-xs text-amber-400/80 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">Sent ✓</span>
                       ) : (
                         <button
                           onClick={() => sendRequest(p.id)}
@@ -426,7 +426,7 @@ export default function FriendsPage() {
                               : "bg-amber-600/80 hover:bg-amber-600 active:scale-95 text-zinc-950"
                           }`}
                         >
-                          {sendingIds.has(p.id) ? "Enviando..." : "+ Agregar"}
+                          {sendingIds.has(p.id) ? "Sending..." : "+ Add"}
                         </button>
                       )}
                     </div>
@@ -479,7 +479,7 @@ function FriendCard({
       <button
         onClick={onRemove}
         className="text-zinc-600 hover:text-red-400 text-xs"
-        title="Eliminar amigo"
+        title="Remove friend"
       >
         ✕
       </button>

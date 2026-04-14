@@ -32,7 +32,7 @@ export default function MyAccountPage() {
   }
 
   const tabs: { key: Tab; label: string; icon: string }[] = [
-    { key: "inventory", label: "Inventario", icon: "📦" },
+    { key: "inventory", label: "Inventory", icon: "📦" },
     { key: "wishlist", label: "Wishlist", icon: "⭐" },
     { key: "loadouts", label: "Loadouts", icon: "🔧" },
   ];

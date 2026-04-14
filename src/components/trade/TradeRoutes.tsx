@@ -244,7 +244,7 @@ export default function TradeRoutes() {
           onClick={() => setShowFilters(!showFilters)}
           className="text-[10px] uppercase tracking-widest text-zinc-400 hover:text-cyan-400 transition-colors flex items-center gap-1.5"
         >
-          <span>{showFilters ? "▼" : "▶"}</span> Filtros Avanzados
+          <span>{showFilters ? "▼" : "▶"}</span> Advanced Filters
         </button>
         <div className="text-[10px] font-mono text-zinc-600">
           {data ? `${data.total} rutas · ${data.cargoScu} SCU` : ""}
@@ -265,7 +265,7 @@ export default function TradeRoutes() {
               <div className="relative">
                 <input
                   type="text"
-                  placeholder={vehicle || "— Buscar nave —"}
+                  placeholder={vehicle || "— Search ship —"}
                   value={
                     vehicleOpen
                       ? vehicleSearch
@@ -362,7 +362,7 @@ export default function TradeRoutes() {
               <input
                 type="number"
                 min={0}
-                placeholder="Sin límite"
+                placeholder="No limit"
                 value={maxInvestment}
                 onChange={(e) => {
                   setMaxInvestment(e.target.value);
@@ -507,7 +507,7 @@ export default function TradeRoutes() {
               onClick={resetAll}
               className="px-3 py-1.5 bg-zinc-800/40 hover:bg-zinc-700/40 border border-zinc-700/60 rounded-sm text-[9px] uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors"
             >
-              Reset Filtros
+              Reset Filters
             </button>
           </div>
         </div>
@@ -768,7 +768,7 @@ export default function TradeRoutes() {
                 onClick={() => setWoModalRoute(null)}
                 className="w-full px-4 py-2 text-xs font-mono uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors"
               >
-                Cancelar
+                Cancel
               </button>
             </div>
           </div>

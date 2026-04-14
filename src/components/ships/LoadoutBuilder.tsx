@@ -752,10 +752,10 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
                 disabled={saving || !saveName.trim()}
                 className="flex-1 py-1.5 bg-emerald-600/80 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-950 text-sm font-medium rounded transition-colors"
               >
-                {saving ? "Guardando..." : "Guardar"}
+                {saving ? "Saving..." : "Save"}
               </button>
               <button onClick={() => setSaveModal(false)} className="px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-sm rounded transition-colors">
-                Cancelar
+                Cancel
               </button>
             </div>
           </div>

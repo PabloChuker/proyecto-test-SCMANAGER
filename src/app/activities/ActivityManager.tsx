@@ -257,11 +257,11 @@ function computeSettlement(
     return { moneyAmount, totalExpenses, profit, shareEach, entries, transactions: [], warning };
   }
   if (numCollectors === 0) {
-    warning = "Nadie marcó que cobró el dinero — no se pueden calcular transferencias.";
+    warning = "No one marked that they collected the money — transfers cannot be calculated.";
     return { moneyAmount, totalExpenses, profit, shareEach, entries, transactions: [], warning };
   }
   if (totalExpenses > moneyAmount) {
-    warning = "Los gastos superan el dinero obtenido — no hay profit para repartir (solo reintegros).";
+    warning = "Expenses exceed the money collected — no profit to distribute (refunds only).";
   }
 
   // Greedy match of debtors -> creditors (copy of balances so we can mutate)
@@ -1203,23 +1203,23 @@ export default function ActivityManager() {
       {showCancelConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-6 max-w-sm w-full mx-4 space-y-4 shadow-2xl">
-            <h3 className="text-lg text-zinc-200 font-medium">Cancelar actividad?</h3>
+            <h3 className="text-lg text-zinc-200 font-medium">Cancel activity?</h3>
             <p className="text-sm text-zinc-400">
-              Se perdera todo el progreso actual: loot cargado, configuracion de participantes y resultados.
-              {connectedUsers.length > 1 && " Todos los usuarios conectados veran la sesion cerrada."}
+              All current progress will be lost: loaded loot, participant configuration and results.
+              {connectedUsers.length > 1 && " All connected users will see the session as closed."}
             </p>
             <div className="flex gap-3 pt-2">
               <button
                 onClick={() => setShowCancelConfirm(false)}
                 className="flex-1 py-2 bg-zinc-700 hover:bg-zinc-600 text-zinc-200 text-sm font-medium rounded transition-colors"
               >
-                Volver
+                Back
               </button>
               <button
                 onClick={cancelSession}
                 className="flex-1 py-2 bg-red-600/80 hover:bg-red-600 text-white text-sm font-medium rounded transition-colors active:scale-[0.98]"
               >
-                Si, cancelar
+                Yes, cancel
               </button>
             </div>
           </div>
@@ -1251,7 +1251,7 @@ export default function ActivityManager() {
             {/* Auto-save indicator */}
             {autoSaveStatus && (
               <span className={`text-[10px] ${autoSaveStatus === "saving" ? "text-amber-400/60" : "text-emerald-400/60"}`}>
-                {autoSaveStatus === "saving" ? "Guardando..." : "Guardado ✓"}
+                {autoSaveStatus === "saving" ? "Saving..." : "Saved ✓"}
               </span>
             )}
             <div className={`text-[10px] px-2 py-0.5 rounded-full border ${roleBg}`}>
@@ -1264,7 +1264,7 @@ export default function ActivityManager() {
       {/* ── Viewer banner ── */}
       {partyId && !canManage && (
         <div className="px-3 py-2 rounded-lg border border-sky-500/20 bg-sky-500/5 text-sm text-sky-400/80 text-center">
-          👁 Modo espectador — solo el host y co-hosts pueden gestionar la actividad
+          👁 Spectator mode — only the host and co-hosts can manage the activity
         </div>
       )}
 
@@ -1288,7 +1288,7 @@ export default function ActivityManager() {
             onClick={() => setShowCancelConfirm(true)}
             className="ml-auto px-3 py-1.5 text-xs text-red-400/70 hover:text-red-400 border border-red-500/20 hover:border-red-500/40 rounded transition-all hover:bg-red-500/5"
           >
-            ✕ Cancelar Actividad
+            ✕ Cancel Activity
           </button>
         )}
       </div>
@@ -1297,7 +1297,7 @@ export default function ActivityManager() {
       {tab === "history" && !viewingSession && (
         <div className="space-y-3">
           {history.length === 0 ? (
-            <p className="text-zinc-500 text-sm text-center py-8">No hay actividades guardadas.</p>
+            <p className="text-zinc-500 text-sm text-center py-8">No saved activities.</p>
           ) : (
             history.map((s) => (
               <div key={s.id} className="flex items-center justify-between p-3 rounded border border-zinc-800/50 bg-zinc-900/40 hover:bg-zinc-900/60 transition-colors">
@@ -1480,7 +1480,7 @@ export default function ActivityManager() {
 
                 {partyMembers.length > 0 && participants.some((p) => p.isFromParty) && (
                   <div className="px-2.5 py-1.5 rounded bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-400/80">
-                    🎮 Miembros de <span className="font-medium">{partyName ?? "tu party"}</span> cargados automaticamente
+                    🎮 Members of <span className="font-medium">{partyName ?? "your party"}</span> loaded automatically
                   </div>
                 )}
 
@@ -1491,7 +1491,7 @@ export default function ActivityManager() {
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && addParticipant()}
-                      placeholder="Agregar jugador manual..."
+                      placeholder="Add player manually..."
                       className="flex-1 bg-zinc-900 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
                     />
                     <button onClick={addParticipant} className="px-3 py-1.5 bg-amber-600/80 hover:bg-amber-600 active:scale-95 text-zinc-950 text-sm rounded transition-all">+</button>
@@ -1551,7 +1551,7 @@ export default function ActivityManager() {
                           <div className="flex items-center gap-2 pl-6 text-[10px]">
                             <label
                               className="flex items-center gap-1 text-zinc-500 cursor-pointer"
-                              title="Marca si este participante cobró/vendió el botín (tiene el dinero en su cuenta)"
+                              title="Check if this participant collected/sold the loot (has the money in their account)"
                             >
                               <input
                                 type="checkbox"
@@ -1559,14 +1559,14 @@ export default function ActivityManager() {
                                 onChange={() => toggleCollected(p.id)}
                                 className="accent-emerald-500 w-3 h-3"
                               />
-                              <span className={p.collected ? "text-emerald-400" : ""}>💰 Cobró</span>
+                              <span className={p.collected ? "text-emerald-400" : ""}>💰 Collected</span>
                             </label>
                             <div className="flex items-center gap-1 flex-1">
                               <span
                                 className="text-zinc-500"
-                                title="Dinero que este participante invirtió/gastó (será reintegrado antes de repartir el profit)"
+                                title="Money this participant invested/spent (will be reimbursed before distributing profit)"
                               >
-                                Gasto:
+                                Expense:
                               </span>
                               <input
                                 type="number"
@@ -1597,28 +1597,28 @@ export default function ActivityManager() {
 
               {/* Raffle Mode */}
               <div className="space-y-2">
-                <h2 className="text-xs text-zinc-500 uppercase tracking-wider">Modo de Reparto del Botín</h2>
+                <h2 className="text-xs text-zinc-500 uppercase tracking-wider">Loot distribution mode</h2>
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     onClick={() => canManage && setRaffleMode("lottery")}
                     className={`p-2.5 rounded border text-left transition-all ${!canManage ? "opacity-50 cursor-not-allowed" : ""} ${raffleMode === "lottery" ? "border-amber-500 bg-amber-500/10 text-amber-300" : "border-zinc-700 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600"}`}
                   >
-                    <div className="text-sm font-medium">🎰 Loteria</div>
-                    <div className="text-[10px] mt-0.5 opacity-70">Sortear con wishlist</div>
+                    <div className="text-sm font-medium">🎰 Lottery</div>
+                    <div className="text-[10px] mt-0.5 opacity-70">Draw from wishlist</div>
                   </button>
                   <button
                     onClick={() => canManage && setRaffleMode("split")}
                     className={`p-2.5 rounded border text-left transition-all ${!canManage ? "opacity-50 cursor-not-allowed" : ""} ${raffleMode === "split" ? "border-amber-500 bg-amber-500/10 text-amber-300" : "border-zinc-700 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600"}`}
                   >
-                    <div className="text-sm font-medium">⚖ Repartir</div>
-                    <div className="text-[10px] mt-0.5 opacity-70">Dividir en partes iguales</div>
+                    <div className="text-sm font-medium">⚖ Split</div>
+                    <div className="text-[10px] mt-0.5 opacity-70">Divide equally</div>
                   </button>
                   <button
                     onClick={() => canManage && setRaffleMode("draft")}
                     className={`p-2.5 rounded border text-left transition-all ${!canManage ? "opacity-50 cursor-not-allowed" : ""} ${raffleMode === "draft" ? "border-amber-500 bg-amber-500/10 text-amber-300" : "border-zinc-700 bg-zinc-900/40 text-zinc-400 hover:border-zinc-600"}`}
                   >
                     <div className="text-sm font-medium">📋 Draft</div>
-                    <div className="text-[10px] mt-0.5 opacity-70">Orden y elegir turno</div>
+                    <div className="text-[10px] mt-0.5 opacity-70">Order and pick turn</div>
                   </button>
                 </div>
               </div>
@@ -1660,7 +1660,7 @@ export default function ActivityManager() {
                     </div>
                     {moneyAmount > 0 && (
                       <div className="text-[10px] text-zinc-500 leading-tight">
-                        Se reparte en partes iguales tras reintegrar gastos. Marca quién <span className="text-amber-400">cobró</span> y quién <span className="text-amber-400">invirtió</span> en la sección de participantes. Impuesto de transferencia: <span className="text-amber-400">0.5%</span> (coef {TAX_COEF}).
+                        Distributed equally after reimbursing expenses. Mark who <span className="text-amber-400">collected</span> and who <span className="text-amber-400">invested</span> in the participants section. Transfer tax: <span className="text-amber-400">0.5%</span> (coef {TAX_COEF}).
                       </div>
                     )}
                   </div>
@@ -1672,12 +1672,12 @@ export default function ActivityManager() {
               </div>
 
               <div className="space-y-2">
-                <h2 className="text-xs text-zinc-500 uppercase tracking-wider">Cargar Botin</h2>
+                <h2 className="text-xs text-zinc-500 uppercase tracking-wider">Load Loot</h2>
                 {canManage ? (
                   <div className="p-3 rounded border border-zinc-800/50 bg-zinc-900/30 space-y-2.5">
                     <div className="grid grid-cols-3 gap-2">
                       <div>
-                        <label className="text-[10px] text-zinc-500 block mb-0.5">Categoria</label>
+                        <label className="text-[10px] text-zinc-500 block mb-0.5">Category</label>
                         <select
                           value={selectedCategory}
                           onChange={(e) => { setSelectedCategory(e.target.value); setSelectedItem(""); }}
@@ -1693,7 +1693,7 @@ export default function ActivityManager() {
                         <label className="text-[10px] text-zinc-500 block mb-0.5">Item</label>
                         <input
                           type="text" value={lootSearch} onChange={(e) => setLootSearch(e.target.value)}
-                          placeholder="Buscar..."
+                          placeholder="Search..."
                           className="w-full bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
                         />
                       </div>
@@ -1743,12 +1743,12 @@ export default function ActivityManager() {
                       disabled={!selectedItem && !customItemName && !lootSearch}
                       className="w-full py-1.5 bg-emerald-600/80 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-950 text-xs font-medium rounded transition-colors active:scale-[0.98]"
                     >
-                      + Agregar al Botin
+                      + Add to Loot
                     </button>
                   </div>
                 ) : (
                   <div className="p-3 rounded border border-zinc-800/30 bg-zinc-900/20 text-xs text-zinc-500 text-center">
-                    Solo el host y co-hosts pueden cargar botin
+                    Only the host and co-hosts can load loot
                   </div>
                 )}
               </div>
@@ -1895,10 +1895,10 @@ export default function ActivityManager() {
                   <span className="text-zinc-600">→</span>
                   <span className="text-emerald-300 font-medium flex-1 truncate">{t.toName}</span>
                   <span className="text-amber-300 tabular-nums whitespace-nowrap">
-                    envía {fmt(t.grossAmount)}
+                    sends {fmt(t.grossAmount)}
                   </span>
                   <span className="text-zinc-500 text-[10px] whitespace-nowrap">
-                    (recibe {fmt(t.netAmount)})
+                    (receives {fmt(t.netAmount)})
                   </span>
                 </div>
               ))}
@@ -1908,7 +1908,7 @@ export default function ActivityManager() {
 
         {s.transactions.length === 0 && !s.warning && s.moneyAmount > 0 && (
           <div className="text-[11px] text-zinc-500 italic text-center py-1">
-            No hacen falta transferencias — el dinero ya está bien distribuido.
+            No transfers needed — money is already well distributed.
           </div>
         )}
       </div>

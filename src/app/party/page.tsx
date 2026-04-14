@@ -277,7 +277,7 @@ export default function PartyPage() {
                     disabled={creating}
                     className="mt-4 px-6 py-3 bg-amber-600/80 hover:bg-amber-600 disabled:bg-zinc-800 text-zinc-950 font-medium rounded-lg transition-colors text-sm"
                   >
-                    {creating ? "Creando..." : "Crear Party"}
+                    {creating ? "Creating..." : "Create Party"}
                   </button>
                 </div>
 
@@ -330,7 +330,7 @@ export default function PartyPage() {
 
                 {/* Members */}
                 <div className="space-y-1.5">
-                  <h3 className="text-xs text-zinc-500 uppercase tracking-wider">Miembros</h3>
+                  <h3 className="text-xs text-zinc-500 uppercase tracking-wider">Members</h3>
                   {partyMembers.map((m) => (
                     <div key={m.user_id} className="flex items-center gap-3 p-2.5 rounded border border-zinc-800/40 bg-zinc-900/30">
                       <div className="relative">
@@ -354,7 +354,7 @@ export default function PartyPage() {
                 {partyMembers.length < myParty.max_members && invitableFriends.length > 0 && (
                   <div className="p-3 rounded-lg border border-emerald-800/30 bg-emerald-900/10">
                     <h3 className="text-xs text-emerald-400 uppercase tracking-wider mb-2">
-                      Invitar Amigos Conectados
+                      Invite Online Friends
                     </h3>
                     <div className="space-y-1">
                       {invitableFriends.map((f) => (
@@ -379,7 +379,7 @@ export default function PartyPage() {
                                 : "bg-emerald-600/80 hover:bg-emerald-600 active:scale-95 text-zinc-950"
                             }`}
                           >
-                            {invitedIds.has(f.id) ? "Enviado ✓" : invitingIds.has(f.id) ? "Enviando..." : "+ Invitar"}
+                            {invitedIds.has(f.id) ? "Sent ✓" : invitingIds.has(f.id) ? "Sending..." : "+ Invite"}
                           </button>
                         </div>
                       ))}
@@ -389,7 +389,7 @@ export default function PartyPage() {
 
                 {invitableFriends.length === 0 && partyMembers.length < myParty.max_members && (
                   <div className="text-xs text-zinc-600 text-center py-2">
-                    No hay amigos conectados para invitar
+                    No online friends to invite
                   </div>
                 )}
               </div>

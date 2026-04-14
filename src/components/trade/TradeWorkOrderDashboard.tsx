@@ -58,7 +58,7 @@ export default function TradeWorkOrderDashboard() {
       const res = await fetch(url);
       if (!res.ok) {
         if (res.status === 401) {
-          setError("Necesitás estar logueado para ver tus Work Orders.");
+          setError("You need to be logged in to view your Work Orders.");
           setOrders([]);
           return;
         }
@@ -108,7 +108,7 @@ export default function TradeWorkOrderDashboard() {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="bg-zinc-900/60 border border-zinc-800/60 text-xs text-zinc-200 rounded-sm px-3 py-2 focus:outline-none focus:border-amber-500/40"
           >
-            <option value="">Todos los estados</option>
+            <option value="">All statuses</option>
             <option value="draft">Draft</option>
             <option value="in_progress">In Progress</option>
             <option value="completed">Completed</option>
@@ -155,10 +155,10 @@ export default function TradeWorkOrderDashboard() {
         </div>
       ) : orders.length === 0 ? (
         <div className="py-16 text-center border border-dashed border-zinc-800/60 rounded-sm">
-          <div className="text-zinc-500 text-sm">Todavía no hay Work Orders.</div>
+          <div className="text-zinc-500 text-sm">No Work Orders yet.</div>
           <div className="text-zinc-600 text-xs mt-1">
-            Creá uno desde <span className="text-amber-400">+ New Work Order</span> o
-            envialo desde una ruta en la pestaña Trade Routes.
+            Create one from <span className="text-amber-400">+ New Work Order</span> or
+            send it from a route in the Trade Routes tab.
           </div>
         </div>
       ) : (
@@ -172,7 +172,7 @@ export default function TradeWorkOrderDashboard() {
                 <th className="px-3 py-2.5 text-right font-mono font-medium">SCU</th>
                 <th className="px-3 py-2.5 text-right font-mono font-medium">Net Profit</th>
                 <th className="px-3 py-2.5 text-center font-mono font-medium">Estado</th>
-                <th className="px-3 py-2.5 text-right font-mono font-medium">Creado</th>
+                <th className="px-3 py-2.5 text-right font-mono font-medium">Created</th>
               </tr>
             </thead>
             <tbody>

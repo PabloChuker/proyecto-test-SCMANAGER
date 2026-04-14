@@ -94,8 +94,8 @@ export default function InventoryTab() {
       <ComponentSearch
         onSelect={addItem}
         disabled={adding}
-        buttonLabel="+ Inventario"
-        placeholder="Buscar componente para agregar al inventario..."
+        buttonLabel="+ Inventory"
+        placeholder="Search component to add to inventory..."
       />
 
       {/* Filter */}
@@ -104,7 +104,7 @@ export default function InventoryTab() {
           type="text"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filtrar inventario..."
+          placeholder="Filter inventory..."
           className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
         />
       )}
@@ -113,7 +113,7 @@ export default function InventoryTab() {
       {items.length === 0 ? (
         <div className="text-center text-zinc-600 py-8">
           <div className="text-3xl mb-2">📦</div>
-          Tu inventario esta vacio. Busca componentes arriba para agregarlos.
+          Your inventory is empty. Search for components above to add them.
         </div>
       ) : (
         Object.entries(grouped).map(([type, typeItems]) => (

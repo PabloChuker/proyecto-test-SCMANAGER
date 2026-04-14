@@ -257,7 +257,7 @@ export default function ShipSpecSheet({ shipId, onShipLoaded }: ShipSpecSheetPro
                     : "bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
                 }`}
               >
-                {addedToHangar ? "✓ Agregada al Hangar" : "＋ Agregar a mi Hangar"}
+                {addedToHangar ? "✓ Added to Hangar" : "＋ Add to my Hangar"}
               </button>
               {(() => {
                 const isInWishlist = wishlist.some((w) => w.shipReference === ship.reference);
@@ -283,10 +283,10 @@ export default function ShipSpecSheet({ shipId, onShipLoaded }: ShipSpecSheetPro
                     } ${isInWishlist && !addedToWishlist ? "cursor-not-allowed opacity-80" : ""}`}
                   >
                     {addedToWishlist
-                      ? "✓ En tu Wishlist"
+                      ? "✓ In your Wishlist"
                       : isInWishlist
-                      ? "★ En Wishlist"
-                      : "★ Agregar a Wishlist"}
+                      ? "★ In Wishlist"
+                      : "★ Add to Wishlist"}
                   </button>
                 );
               })()}
@@ -294,7 +294,7 @@ export default function ShipSpecSheet({ shipId, onShipLoaded }: ShipSpecSheetPro
                 href={`/loadout?ship=${ship.reference}`}
                 className="flex items-center gap-2 px-4 py-2 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs hover:bg-cyan-500/20 transition-colors backdrop-blur-sm"
               >
-                ⚙ Abrir en Loadout Manager
+                ⚙ Open in Loadout Manager
               </Link>
             </div>
           </div>

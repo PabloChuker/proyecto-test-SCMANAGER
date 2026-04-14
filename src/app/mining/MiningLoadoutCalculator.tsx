@@ -78,8 +78,8 @@ const SHIP_CONFIGS: Record<string, ShipConfig> = {
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
-  active: "Activo",
-  passive: "Pasivo",
+  active: "Active",
+  passive: "Passive",
   gadget: "Gadget",
 };
 

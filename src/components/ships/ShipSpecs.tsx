@@ -18,16 +18,16 @@ export function ShipSpecs({ ship }: ShipSpecsProps) {
   const specs = [
     { label: "SCM Speed",      value: s.maxSpeed ? `${Math.round(s.maxSpeed)} m/s` : null },
     { label: "Afterburner",    value: s.afterburnerSpeed ? `${Math.round(s.afterburnerSpeed)} m/s` : null },
-    { label: "Tripulación",    value: s.maxCrew?.toString() },
-    { label: "Carga",          value: s.cargo ? `${s.cargo} SCU` : null },
+    { label: "Crew",           value: s.maxCrew?.toString() },
+    { label: "Cargo",          value: s.cargo ? `${s.cargo} SCU` : null },
     { label: "Pitch Rate",     value: s.pitchRate ? `${s.pitchRate.toFixed(1)}°/s` : null },
     { label: "Yaw Rate",       value: s.yawRate ? `${s.yawRate.toFixed(1)}°/s` : null },
     { label: "Roll Rate",      value: s.rollRate ? `${s.rollRate.toFixed(1)}°/s` : null },
     { label: "H₂ Fuel",        value: s.hydrogenFuelCap ? formatCompact(s.hydrogenFuelCap) : null },
     { label: "QT Fuel",        value: s.quantumFuelCap ? formatCompact(s.quantumFuelCap) : null },
-    { label: "Largo",          value: s.lengthMeters ? `${s.lengthMeters.toFixed(1)} m` : null },
-    { label: "Ancho",          value: s.beamMeters ? `${s.beamMeters.toFixed(1)} m` : null },
-    { label: "Alto",           value: s.heightMeters ? `${s.heightMeters.toFixed(1)} m` : null },
+    { label: "Length",         value: s.lengthMeters ? `${s.lengthMeters.toFixed(1)} m` : null },
+    { label: "Beam",           value: s.beamMeters ? `${s.beamMeters.toFixed(1)} m` : null },
+    { label: "Height",         value: s.heightMeters ? `${s.heightMeters.toFixed(1)} m` : null },
   ].filter((spec) => spec.value != null);
 
   if (specs.length === 0) return null;
@@ -35,7 +35,7 @@ export function ShipSpecs({ ship }: ShipSpecsProps) {
   return (
     <div className="space-y-2">
       <h3 className="text-[11px] tracking-[0.18em] uppercase text-zinc-400 font-medium pb-2 border-b border-zinc-800/40">
-        Especificaciones
+        Specifications
       </h3>
 
       <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">

@@ -80,7 +80,7 @@ export default function WishlistTab() {
         onSelect={addItem}
         disabled={adding}
         buttonLabel="+ Wishlist"
-        placeholder="Buscar componente para agregar a la wishlist..."
+        placeholder="Search component to add to wishlist..."
       />
 
       <div className="px-2.5 py-1.5 rounded bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-400/80">
@@ -90,7 +90,7 @@ export default function WishlistTab() {
       {items.length === 0 ? (
         <div className="text-center text-zinc-600 py-8">
           <div className="text-3xl mb-2">⭐</div>
-          Tu wishlist esta vacia. Agrega componentes que necesites.
+          Your wishlist is empty. Add components you need.
         </div>
       ) : (
         <div className="space-y-1.5">

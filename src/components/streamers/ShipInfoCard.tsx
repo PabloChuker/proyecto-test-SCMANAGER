@@ -804,7 +804,7 @@ export default function ShipInfoCard({
               color: theme.textMuted,
             }}
           >
-            Cortesía de SC Labs
+            Courtesy of SC Labs
           </span>
           <span
             style={{

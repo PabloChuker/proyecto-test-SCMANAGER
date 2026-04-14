@@ -126,13 +126,13 @@ export default function TerminalDirectory() {
       {/* ── Filters ── */}
       <div className="flex flex-wrap gap-3 items-end">
         <div className="flex-1 min-w-[200px]">
-          <label className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1.5">Buscar Terminal</label>
-          <input type="text" placeholder="Nombre, código..." value={search}
+          <label className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1.5">Search Terminal</label>
+          <input type="text" placeholder="Name, code..." value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
             className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-sm px-3 py-1.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500/50" />
         </div>
         <div>
-          <label className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1.5">Sistema</label>
+          <label className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1.5">System</label>
           <select value={systemKey} onChange={e => { setSystemKey(e.target.value); setPage(1); }}
             className="bg-zinc-800/50 border border-zinc-700/60 rounded-sm px-3 py-1.5 text-sm text-zinc-100 focus:outline-none focus:border-cyan-500/50">
             {Object.keys(SYSTEM_MAP).map(k => <option key={k} value={k}>{k}</option>)}

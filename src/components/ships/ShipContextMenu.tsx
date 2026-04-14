@@ -94,7 +94,7 @@ export function ShipContextMenu({ target, onClose }: ShipContextMenuProps) {
       notes: "",
       acquisitionType: "pledge",
     });
-    setToast({ kind: "hangar", message: `${target.name} agregada al Hangar (Pledge)` });
+    setToast({ kind: "hangar", message: `${target.name} added to Hangar (Pledge)` });
     onClose();
 
     // Fetch loaners for this pledged ship and auto-add them to the hangar.
@@ -143,13 +143,13 @@ export function ShipContextMenu({ target, onClose }: ShipContextMenuProps) {
       notes: "",
       acquisitionType: "in_game",
     });
-    setToast({ kind: "hangar", message: `${target.name} agregada al Hangar (In-Game)` });
+    setToast({ kind: "hangar", message: `${target.name} added to Hangar (In-Game)` });
     onClose();
   };
 
   const handleAddToWishlist = () => {
     if (isInWishlist) {
-      setToast({ kind: "error", message: `${target.name} ya está en tu Wishlist` });
+      setToast({ kind: "error", message: `${target.name} is already in your Wishlist` });
       onClose();
       return;
     }
@@ -161,7 +161,7 @@ export function ShipContextMenu({ target, onClose }: ShipContextMenuProps) {
       targetPrice: null,
       notes: "",
     });
-    setToast({ kind: "wishlist", message: `${target.name} agregada a la Wishlist` });
+    setToast({ kind: "wishlist", message: `${target.name} added to Wishlist` });
     onClose();
   };
 
@@ -185,7 +185,7 @@ export function ShipContextMenu({ target, onClose }: ShipContextMenuProps) {
       >
         {/* Header con nombre de la nave */}
         <div className="px-3 py-2 border-b border-zinc-800/60 bg-zinc-950/80">
-          <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">Acciones</div>
+          <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">Actions</div>
           <div className="text-xs text-zinc-200 font-medium truncate">{target.name}</div>
           {target.manufacturer && (
             <div className="text-[9px] text-zinc-600 truncate">{target.manufacturer}</div>
@@ -196,7 +196,7 @@ export function ShipContextMenu({ target, onClose }: ShipContextMenuProps) {
         <div className="py-1">
           <div className="px-3 pt-1 pb-0.5">
             <div className="text-[9px] font-mono uppercase tracking-widest text-zinc-600">
-              {hangarCount > 0 ? `Agregar al Hangar (${hangarCount})` : "Agregar al Hangar"}
+              {hangarCount > 0 ? `Add to Hangar (${hangarCount})` : "Add to Hangar"}
             </div>
           </div>
           <MenuItem
@@ -207,21 +207,21 @@ export function ShipContextMenu({ target, onClose }: ShipContextMenuProps) {
           />
           <MenuItem
             icon="⛁"
-            label="Compra In-Game"
+            label="In-Game Purchase"
             onClick={handleAddToHangarInGame}
             color="emerald"
           />
           <div className="h-px bg-zinc-800/60 my-1" />
           <MenuItem
             icon="★"
-            label={isInWishlist ? "Ya está en Wishlist" : "Agregar a Wishlist"}
+            label={isInWishlist ? "Already in Wishlist" : "Add to Wishlist"}
             onClick={handleAddToWishlist}
             color="fuchsia"
             disabled={isInWishlist}
           />
           <div className="h-px bg-zinc-800/60 my-1" />
-          <MenuItem icon="🛸" label="Ver detalles" onClick={handleOpenDetail} color="cyan" />
-          <MenuItem icon="⚙" label="Abrir en Loadout Manager" onClick={handleOpenInLoadout} color="cyan" />
+          <MenuItem icon="🛸" label="View details" onClick={handleOpenDetail} color="cyan" />
+          <MenuItem icon="⚙" label="Open in Loadout Manager" onClick={handleOpenInLoadout} color="cyan" />
         </div>
       </div>
 

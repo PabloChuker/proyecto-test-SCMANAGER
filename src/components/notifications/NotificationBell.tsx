@@ -253,7 +253,7 @@ export default function NotificationBell() {
   const timeAgo = (dateStr: string) => {
     const diff = Date.now() - new Date(dateStr).getTime();
     const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "ahora";
+    if (mins < 1) return "now";
     if (mins < 60) return `${mins}m`;
     const hrs = Math.floor(mins / 60);
     if (hrs < 24) return `${hrs}h`;
@@ -303,7 +303,7 @@ export default function NotificationBell() {
           {/* List */}
           <div className="flex-1 overflow-y-auto">
             {notifications.length === 0 ? (
-              <div className="text-center text-zinc-600 py-8 text-xs">No hay notificaciones</div>
+              <div className="text-center text-zinc-600 py-8 text-xs">No notifications</div>
             ) : (
               notifications.map((n) => {
                 const icon = TYPE_ICONS[n.type] ?? "🔔";
@@ -364,7 +364,7 @@ export default function NotificationBell() {
                                   : "bg-zinc-700 hover:bg-red-600/80 hover:text-zinc-100 active:scale-95 text-zinc-300"
                               }`}
                             >
-                              {isActing ? "..." : "Rechazar"}
+                              {isActing ? "..." : "Decline"}
                             </button>
                           </div>
                         )}

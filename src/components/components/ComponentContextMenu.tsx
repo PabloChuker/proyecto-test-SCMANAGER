@@ -75,7 +75,7 @@ export function ComponentContextMenu({ target, onClose }: ComponentContextMenuPr
 
   const handleAddToInventory = async () => {
     if (!user) {
-      setToast({ kind: "error", message: "Necesitas iniciar sesión para usar el inventario" });
+      setToast({ kind: "error", message: "You need to sign in to use inventory" });
       return;
     }
     setBusy("inventory");
@@ -96,7 +96,7 @@ export function ComponentContextMenu({ target, onClose }: ComponentContextMenuPr
           .eq("id", existing.id);
         setToast({
           kind: "inventory",
-          message: `${target.name} +1 (x${(existing.quantity ?? 1) + 1} en inventario)`,
+          message: `${target.name} +1 (x${(existing.quantity ?? 1) + 1} in inventory)`,
         });
       } else {
         await supabase.from("user_inventory").insert({
@@ -107,11 +107,11 @@ export function ComponentContextMenu({ target, onClose }: ComponentContextMenuPr
           item_size: target.size,
           item_grade: target.grade,
         });
-        setToast({ kind: "inventory", message: `${target.name} agregado al Inventario` });
+        setToast({ kind: "inventory", message: `${target.name} added to Inventory` });
       }
     } catch (e: any) {
       console.error("[ComponentContextMenu] inventory error:", e);
-      setToast({ kind: "error", message: "No se pudo agregar al inventario" });
+      setToast({ kind: "error", message: "Could not add to inventory" });
     } finally {
       setBusy(null);
       onClose();
@@ -120,7 +120,7 @@ export function ComponentContextMenu({ target, onClose }: ComponentContextMenuPr
 
   const handleAddToWishlist = async () => {
     if (!user) {
-      setToast({ kind: "error", message: "Necesitas iniciar sesión para usar la wishlist" });
+      setToast({ kind: "error", message: "You need to sign in to use wishlist" });
       return;
     }
     setBusy("wishlist");
@@ -135,7 +135,7 @@ export function ComponentContextMenu({ target, onClose }: ComponentContextMenuPr
         .maybeSingle();
 
       if (existing) {
-        setToast({ kind: "info", message: `${target.name} ya está en tu Wishlist` });
+        setToast({ kind: "info", message: `${target.name} is already in your Wishlist` });
       } else {
         await supabase.from("user_wishlist").insert({
           user_id: user.id,
@@ -146,11 +146,11 @@ export function ComponentContextMenu({ target, onClose }: ComponentContextMenuPr
           item_grade: target.grade,
           priority: 2,
         });
-        setToast({ kind: "wishlist", message: `${target.name} agregado a la Wishlist` });
+        setToast({ kind: "wishlist", message: `${target.name} added to Wishlist` });
       }
     } catch (e: any) {
       console.error("[ComponentContextMenu] wishlist error:", e);
-      setToast({ kind: "error", message: "No se pudo agregar a la wishlist" });
+      setToast({ kind: "error", message: "Could not add to wishlist" });
     } finally {
       setBusy(null);
       onClose();
@@ -196,14 +196,14 @@ export function ComponentContextMenu({ target, onClose }: ComponentContextMenuPr
         <div className="py-1">
           <MenuItem
             icon="＋"
-            label={busy === "inventory" ? "Agregando..." : "Agregar al Inventario"}
+            label={busy === "inventory" ? "Adding..." : "Add to Inventory"}
             onClick={handleAddToInventory}
             color="emerald"
             disabled={busy !== null}
           />
           <MenuItem
             icon="★"
-            label={busy === "wishlist" ? "Agregando..." : "Agregar a Wishlist"}
+            label={busy === "wishlist" ? "Adding..." : "Add to Wishlist"}
             onClick={handleAddToWishlist}
             color="fuchsia"
             disabled={busy !== null}
@@ -211,7 +211,7 @@ export function ComponentContextMenu({ target, onClose }: ComponentContextMenuPr
           <div className="h-px bg-zinc-800/60 my-1" />
           <MenuItem
             icon="👤"
-            label="Abrir Mi Cuenta"
+            label="Open My Account"
             onClick={handleOpenAccount}
             color="cyan"
           />
@@ -220,7 +220,7 @@ export function ComponentContextMenu({ target, onClose }: ComponentContextMenuPr
         {!user && (
           <div className="px-3 py-1.5 border-t border-zinc-800/60 bg-red-500/5">
             <div className="text-[9px] text-red-400/80 font-mono uppercase tracking-wider">
-              Inicia sesión para usar estas opciones
+              Sign in to use these options
             </div>
           </div>
         )}

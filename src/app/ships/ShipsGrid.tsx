@@ -108,7 +108,7 @@ export function ShipsGrid() {
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") return;
         console.error("Error fetching ships:", err);
-        setError("No se pudieron cargar las naves. Verificá que la API esté corriendo.");
+        setError("Failed to load ships. Verify the API is running.");
       } finally {
         setLoading(false);
       }
