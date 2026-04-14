@@ -8,25 +8,25 @@ const PANELS = [
   {
     id: "loadout",
     label: "Loadout Manager & Stats",
-    video: "/videos/dps.mp4",
+    video: "/videos/loadout_new.mp4",
     href: "/loadout",
   },
   {
     id: "compare",
     label: "Ship Comparator",
-    video: "/videos/comparador.mp4",
+    video: "/videos/ships.mp4",
     href: "/compare",
   },
   {
     id: "mining",
     label: "Mining & Industry",
-    video: "/videos/mineria.mp4",
+    video: "/videos/industria.mp4",
     href: "/mining",
   },
   {
     id: "crafting",
     label: "Crafting",
-    video: "/videos/crafting.mp4",
+    video: "/videos/hangar.webm",
     href: "/crafting",
   },
 ];
