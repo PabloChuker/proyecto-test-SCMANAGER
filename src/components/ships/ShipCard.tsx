@@ -59,7 +59,17 @@ const MFR_PREFIXES = [
   "Aegis", "RSI", "Drake", "MISC", "Anvil", "Origin", "Crusader", "Argo",
   "Aopoa", "Consolidated Outland", "Esperia", "Gatac", "Greycat", "Kruger",
   "Musashi Industrial", "Tumbril", "Banu", "Vanduul", "Roberts Space Industries",
-  "Crusader Industries", "Musashi", "CO",
+  "Crusader Industries", "Musashi",
+  // "C.O." must come before "CO" so "C.O. HoverQuad" is stripped correctly.
+  "C.O.", "CO",
+];
+
+// Explicit overrides for ships whose generated slug doesn't match any file in
+// /public/ships/. Keyed by regex matched against the RAW ship name.
+const THUMB_OVERRIDES: Array<[RegExp, string]> = [
+  // ATLS paint/color variants all share the base ATLS mech image.
+  [/^atls\b.*\b(color|line|edition|paint|variant)\b/i, "/ships/atls.webp"],
+  [/^atls\s+(cool\s+metal|orange|snowland|ocean)/i,    "/ships/atls.webp"],
 ];
 
 // Wikelo exclusive variants — each ship gets its own thumbnail in /public/ships/wikelo/.
@@ -115,6 +125,11 @@ function getShipThumbUrl(
   const raw = name || "";
   const ref = opts?.reference || "";
   const hay = `${raw} ${ref}`;
+
+  // ── Explicit per-ship overrides (paint variants, etc.) ──
+  for (const [rx, url] of THUMB_OVERRIDES) {
+    if (rx.test(raw)) return url;
+  }
   // ── Wikelo exclusive thumbnails ──
   // Trigger if name OR reference mentions "wikelo" (avoids misrouting PYAM /
   // Exec Hangar / Teach ships that share ship names like "Fortune" or "Guardian").
@@ -154,7 +169,15 @@ function getShipThumbUrl(
   for (const m of MFR_PREFIXES) {
     if (n.startsWith(m + " ")) { n = n.slice(m.length + 1); break; }
   }
-  const slug = n.toLowerCase().replace(/[''()]/g, "").replace(/\s+/g, "-").replace(/[^a-z0-9._-]/g, "-").replace(/-+/g, "-").replace(/-$/, "");
+  const slug = n
+    .toLowerCase()
+    .replace(/[''()]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9._-]/g, "-")
+    .replace(/-+/g, "-")
+    // Collapse stray dots coming from "C.O." / abbreviations.
+    .replace(/\.+/g, "")
+    .replace(/^-+|-+$/g, "");
   return `/ships/${slug}.webp`;
 }
 
