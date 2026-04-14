@@ -105,7 +105,14 @@ export const useTradeWorkOrderStore = create<TradeWOState>((set, get) => ({
     set({ view: "editor", editingId: null, prefill: prefill || null }),
 
   openEdit: (id) =>
-    set({ view: "editor", editingId: id, prefill: null }),
+    set((s) => ({
+      view: "editor",
+      editingId: id,
+      prefill: null,
+      // Bump so the /trade page switches to the Work Orders tab when openEdit
+      // is fired from e.g. the Dashboard tab.
+      requestTabSwitch: s.requestTabSwitch + 1,
+    })),
 
   backToList: () =>
     set({ view: "list", editingId: null, prefill: null }),

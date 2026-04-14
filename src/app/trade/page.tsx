@@ -6,16 +6,18 @@ import TradeRoutes from "@/components/trade/TradeRoutes";
 import CommodityBrowser from "@/components/trade/CommodityBrowser";
 import TerminalDirectory from "@/components/trade/TerminalDirectory";
 import TradeWorkOrders from "@/components/trade/TradeWorkOrders";
+import TradeDashboard from "@/components/trade/TradeDashboard";
 import { PageVideoBackground } from "@/components/shared/PageVideoBackground";
 import { useTradeWorkOrderStore } from "@/store/useTradeWorkOrderStore";
 
-type Tab = "routes" | "commodities" | "terminals" | "workorders";
+type Tab = "routes" | "commodities" | "terminals" | "workorders" | "dashboard";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "routes", label: "Trade Routes" },
   { id: "commodities", label: "Commodities" },
   { id: "terminals", label: "Terminals" },
   { id: "workorders", label: "Work Orders" },
+  { id: "dashboard", label: "Dashboard" },
 ];
 
 export default function TradePage() {
@@ -65,6 +67,7 @@ export default function TradePage() {
             {activeTab === "commodities" && <CommodityBrowser />}
             {activeTab === "terminals" && <TerminalDirectory />}
             {activeTab === "workorders" && <TradeWorkOrders />}
+            {activeTab === "dashboard" && <TradeDashboard />}
           </div>
         </div>
       </div>
