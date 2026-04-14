@@ -49,7 +49,10 @@ export function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onToggleP
         const effectiveItem = getEffectiveItem ? getEffectiveItem(ch.id) : ch.equippedItem;
         const chStat = effectiveItem && chOn ? getKeyStat(ch.category || "WEAPON", effectiveItem.componentStats) : null;
         const chSize = ch.maxSize > 0 ? ch.maxSize : (effectiveItem?.size ?? 0);
-        const chOverridden = getEffectiveItem ? effectiveItem !== ch.equippedItem : false;
+        // Compare by item id, not object reference — avoids false MOD on default items
+        const chOverridden = effectiveItem && ch.equippedItem
+          ? effectiveItem.id !== ch.equippedItem.id
+          : (effectiveItem !== ch.equippedItem);
         return (
           <Row key={ch.id} catColor={chColor} size={chSize} item={effectiveItem} stat={chStat} isOn={chOn} isOverridden={chOverridden} onClick={() => onClickChild?.(ch)} onTogglePower={() => toggleComponent?.(ch.hardpointName)} hasChildren={false} depth={1} />
         );

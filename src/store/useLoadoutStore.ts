@@ -763,8 +763,11 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
         const item = parseEquipped(hp.equippedItem);
 
         const rawChildren: any[] = hp.childWeapons ?? hp.children ?? [];
-        const children: ResolvedChild[] = rawChildren.map((ch: any) => ({
-          id: ch.id ?? "",
+        const parentName = hp.hardpointName ?? hp.id ?? "";
+        const children: ResolvedChild[] = rawChildren.map((ch: any, idx: number) => ({
+          // Unique ID per child: parent name + child hardpoint name or index
+          // Prevents ID collisions when same weapon is on multiple gimbals
+          id: `${parentName}__${ch.hardpointName || idx}`,
           hardpointName: ch.hardpointName ?? "",
           category: ch.category ?? "WEAPON",
           minSize: ch.minSize ?? 0,
