@@ -12,13 +12,19 @@
 //   - Save as draft, start run, or complete run (snapshots payouts)
 // =============================================================================
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useTradeWorkOrderStore,
   TradeWorkOrder,
   TradeWOParticipant,
   TradeWOExpense,
 } from "@/store/useTradeWorkOrderStore";
+import { createClient } from "@/lib/supabase/client";
+
+// localStorage key for the unsaved new-WO draft. Only used when creating a
+// brand-new WO (no `editingId`) — edits of existing server WOs are not cached
+// locally since they are already persisted server-side.
+const DRAFT_KEY = "sc-labs:trade-wo-draft-v1";
 
 const ROLES = [
   { id: "pilot", label: "Pilot" },
@@ -109,9 +115,20 @@ export default function TradeWorkOrderCalculator() {
   const [error, setError] = useState<string | null>(null);
   const [serverId, setServerId] = useState<string | null>(null);
 
-  // ── Load existing (edit) or prefill (new from route) ──
+  // Party-loading UI state
+  const [loadingParty, setLoadingParty] = useState(false);
+  const [partyMsg, setPartyMsg] = useState<string | null>(null);
+
+  // Draft persistence — once the initial mount hydration runs, flip this on
+  // so the auto-save effect starts writing to localStorage.
+  const hydratedRef = useRef(false);
+
+  // ── Load existing (edit) or prefill (new from route) or restore draft ──
   useEffect(() => {
     if (!editingId) {
+      // 1) If a prefill is queued (from a TradeRoutes → WO action), it wins
+      //    over whatever is in localStorage (user just explicitly asked for
+      //    a fresh run from a specific route).
       const p = consumePrefill();
       if (p) {
         if (p.commodity_code) setCommodityCode(p.commodity_code);
@@ -127,10 +144,41 @@ export default function TradeWorkOrderCalculator() {
           setScuSold(p.scu_bought); // assume planning to sell full load
         }
         if (p.commodity_name) setTitle(`Run — ${p.commodity_name}`);
+        // Fresh prefill — wipe any stale draft so we don't overlay old data
+        try { localStorage.removeItem(DRAFT_KEY); } catch {}
+      } else {
+        // 2) Otherwise, try to restore an unsaved draft from localStorage
+        try {
+          const raw = localStorage.getItem(DRAFT_KEY);
+          if (raw) {
+            const d = JSON.parse(raw);
+            if (d && typeof d === "object") {
+              if (typeof d.title === "string") setTitle(d.title);
+              if (typeof d.partyId === "string") setPartyId(d.partyId);
+              if (typeof d.commodityCode === "string") setCommodityCode(d.commodityCode);
+              if (typeof d.commodityName === "string") setCommodityName(d.commodityName);
+              if (typeof d.buyStation === "string") setBuyStation(d.buyStation);
+              if (typeof d.buySystem === "string") setBuySystem(d.buySystem);
+              if (typeof d.sellStation === "string") setSellStation(d.sellStation);
+              if (typeof d.sellSystem === "string") setSellSystem(d.sellSystem);
+              if (typeof d.scuBought === "number") setScuBought(d.scuBought);
+              if (typeof d.scuSold === "number") setScuSold(d.scuSold);
+              if (typeof d.scuLost === "number") setScuLost(d.scuLost);
+              if (typeof d.buyPrice === "number") setBuyPrice(d.buyPrice);
+              if (typeof d.sellPrice === "number") setSellPrice(d.sellPrice);
+              if (typeof d.notes === "string") setNotes(d.notes);
+              if (Array.isArray(d.participants)) setParticipants(d.participants);
+              if (Array.isArray(d.expenses)) setExpenses(d.expenses);
+            }
+          }
+        } catch {
+          /* ignore corrupt draft */
+        }
       }
+      hydratedRef.current = true;
       return;
     }
-    // Edit mode
+    // Edit mode — ignore localStorage draft (edit targets a real server row)
     (async () => {
       setLoading(true);
       setError(null);
@@ -144,10 +192,75 @@ export default function TradeWorkOrderCalculator() {
         setError(e.message);
       } finally {
         setLoading(false);
+        hydratedRef.current = true;
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingId]);
+
+  // Keep a ref with the latest snapshot so we can also flush on unmount /
+  // tab close even when the debounced write hasn't fired yet.
+  const latestSnapshotRef = useRef<string | null>(null);
+
+  // ── Auto-save unsaved drafts to localStorage (new WOs only) ──
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    if (editingId) return; // editing an existing server WO — don't touch the draft key
+    if (serverId) return;  // already persisted server-side, no need to cache locally
+
+    const snapshot = JSON.stringify({
+      title, partyId,
+      commodityCode, commodityName,
+      buyStation, buySystem, sellStation, sellSystem,
+      scuBought, scuSold, scuLost, buyPrice, sellPrice,
+      notes, participants, expenses,
+    });
+    latestSnapshotRef.current = snapshot;
+
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(DRAFT_KEY, snapshot);
+      } catch {
+        /* localStorage quota / disabled — ignore */
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [
+    editingId, serverId,
+    title, partyId,
+    commodityCode, commodityName,
+    buyStation, buySystem, sellStation, sellSystem,
+    scuBought, scuSold, scuLost, buyPrice, sellPrice,
+    notes, participants, expenses,
+  ]);
+
+  // Flush the latest snapshot on unmount and on window beforeunload so we
+  // never lose the last few keystrokes when the user switches tab/view or
+  // closes the browser tab before the 250ms debounce fires.
+  useEffect(() => {
+    const flush = () => {
+      if (!hydratedRef.current) return;
+      if (editingId || serverId) return;
+      if (!latestSnapshotRef.current) return;
+      try {
+        localStorage.setItem(DRAFT_KEY, latestSnapshotRef.current);
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener("beforeunload", flush);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      flush();
+      window.removeEventListener("beforeunload", flush);
+      window.removeEventListener("pagehide", flush);
+    };
+  }, [editingId, serverId]);
+
+  // Helper: clear the draft snapshot (call on Save success / Volver / Delete)
+  const clearDraft = useCallback(() => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch {}
+  }, []);
 
   function hydrateFromServer(data: TradeWorkOrder) {
     setTitle(data.title || "Trade Run");
@@ -262,6 +375,86 @@ export default function TradeWorkOrderCalculator() {
     );
   }
 
+  // ── Load participants from the user's active party ──
+  // Queries party_members → parties → profiles, then merges any members not
+  // already in the local list. Keeps existing rows untouched so manual edits
+  // survive. Also stamps `partyId` so the WO links back to the party row.
+  async function loadFromParty() {
+    setLoadingParty(true);
+    setPartyMsg(null);
+    try {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Tenés que estar logueado");
+
+      const { data: memberships, error: mErr } = await supabase
+        .from("party_members")
+        .select("party_id")
+        .eq("user_id", user.id)
+        .limit(1);
+      if (mErr) throw mErr;
+      if (!memberships || memberships.length === 0) {
+        setPartyMsg("No estás en ninguna party. Creá una en /party primero.");
+        return;
+      }
+      const pid = memberships[0].party_id;
+
+      const { data: members, error: memErr } = await supabase
+        .from("party_members")
+        .select("user_id, role")
+        .eq("party_id", pid);
+      if (memErr) throw memErr;
+      if (!members || members.length === 0) {
+        setPartyMsg("La party está vacía.");
+        return;
+      }
+
+      const ids = members.map((m) => m.user_id);
+      const { data: profiles, error: pErr } = await supabase
+        .from("profiles")
+        .select("id, display_name, username")
+        .in("id", ids);
+      if (pErr) throw pErr;
+
+      const profileMap = new Map<string, { display_name?: string; username?: string }>();
+      (profiles ?? []).forEach((pf: any) => profileMap.set(pf.id, pf));
+
+      setPartyId(pid);
+
+      // Merge: skip users that are already in the local list (by user_id)
+      setParticipants((prev) => {
+        const existing = new Set(prev.map((p) => p.user_id).filter(Boolean));
+        const toAdd: LocalParticipant[] = [];
+        for (const m of members) {
+          if (existing.has(m.user_id)) continue;
+          const pf = profileMap.get(m.user_id) || {};
+          const name = pf.display_name || pf.username || "Jugador";
+          toAdd.push({
+            id: uid(),
+            localKey: uid(),
+            user_id: m.user_id,
+            display_name: name,
+            role: m.role === "leader" ? "pilot" : "crew",
+            role_pct: 0,
+            contribution_uec: 0,
+            contribution_note: null,
+            payout_uec: 0,
+            paid: false,
+            isNew: true,
+            dirty: true,
+          });
+        }
+        return [...prev, ...toAdd];
+      });
+
+      setPartyMsg(`${members.length} miembro${members.length === 1 ? "" : "s"} cargado${members.length === 1 ? "" : "s"} desde la party.`);
+    } catch (e: any) {
+      setPartyMsg(e.message || "No se pudo cargar la party.");
+    } finally {
+      setLoadingParty(false);
+    }
+  }
+
   function addExpense() {
     setExpenses((es) => [
       ...es,
@@ -342,6 +535,7 @@ export default function TradeWorkOrderCalculator() {
           woId = data.id;
           setServerId(data.id);
           hydrateFromServer(data);
+          clearDraft(); // first save succeeded — drop the cached draft
 
           // If user asked to complete on first save, do a follow-up PATCH
           if (targetStatus === "completed") {
@@ -461,6 +655,7 @@ export default function TradeWorkOrderCalculator() {
         method: "DELETE",
       });
       if (!r.ok) throw new Error("Delete failed");
+      clearDraft();
       backToList();
     } catch (e: any) {
       setError(e.message);
@@ -737,6 +932,14 @@ export default function TradeWorkOrderCalculator() {
               Σ {totals.pct_sum.toFixed(1)}%
             </span>
             <button
+              onClick={loadFromParty}
+              disabled={loadingParty}
+              title="Agregar todos los miembros de tu party actual"
+              className="text-[10px] uppercase tracking-widest px-2.5 py-1 bg-cyan-500/15 hover:bg-cyan-500/25 disabled:opacity-50 border border-cyan-500/30 rounded-sm text-cyan-300"
+            >
+              {loadingParty ? "Cargando…" : "⇪ Cargar Party"}
+            </button>
+            <button
               onClick={equalizePct}
               className="text-[10px] uppercase tracking-widest px-2 py-1 bg-zinc-800/60 hover:bg-zinc-700/60 border border-zinc-700/60 rounded-sm text-zinc-300"
             >
@@ -750,6 +953,12 @@ export default function TradeWorkOrderCalculator() {
             </button>
           </div>
         </div>
+
+        {partyMsg && (
+          <div className="mb-3 text-[10px] font-mono text-cyan-400/80 bg-cyan-500/5 border border-cyan-500/20 rounded-sm px-3 py-1.5">
+            {partyMsg}
+          </div>
+        )}
 
         {participants.length === 0 ? (
           <div className="text-[11px] text-zinc-600">
