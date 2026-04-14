@@ -48,20 +48,24 @@ function ConfigPanel({ onClose }: { onClose: () => void }) {
           <p className="text-[11px] text-zinc-600 mb-3">Selecciona el idioma por defecto de la interfaz</p>
           <div className="grid grid-cols-3 gap-1.5">
             {[
-              { code: "es", flag: "🇪🇸", label: "Español" },
-              { code: "en", flag: "🇬🇧", label: "English" },
-              { code: "de", flag: "🇩🇪", label: "Deutsch" },
-              { code: "fr", flag: "🇫🇷", label: "Français" },
-              { code: "it", flag: "🇮🇹", label: "Italiano" },
-              { code: "zh", flag: "🇨🇳", label: "中文" },
+              { code: "es", flagCode: "es", label: "Español" },
+              { code: "en", flagCode: "gb", label: "English" },
+              { code: "de", flagCode: "de", label: "Deutsch" },
+              { code: "fr", flagCode: "fr", label: "Français" },
+              { code: "it", flagCode: "it", label: "Italiano" },
+              { code: "zh", flagCode: "cn", label: "中文" },
             ].map(l => (
               <button key={l.code} onClick={() => setLang(l.code)}
-                className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs border transition-all ${
+                className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs border transition-all ${
                   lang === l.code
                     ? "border-amber-500/60 bg-amber-500/10 text-amber-400"
                     : "border-zinc-800/60 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
                 }`}>
-                <span className="text-base leading-none">{l.flag}</span>
+                <img
+                  src={`https://flagcdn.com/20x15/${l.flagCode}.png`}
+                  alt={l.label}
+                  className="w-5 h-auto rounded-[2px] flex-shrink-0"
+                />
                 <span>{l.label}</span>
               </button>
             ))}
