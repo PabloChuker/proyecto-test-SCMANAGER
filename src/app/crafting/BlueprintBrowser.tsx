@@ -146,7 +146,7 @@ export default function BlueprintBrowser() {
             {/* Header card */}
             <div className="bg-zinc-900/70 border border-zinc-800/60 rounded-xl overflow-hidden">
               {/* Amber accent top bar */}
-              <div className="h-1 bg-gradient-to-r from-amber-500 via-amber-400 to-cyan-500" />
+              <div className="h-1 bg-gradient-to-r from-[#4a6741] to-orange-500" />
               <div className="p-6">
                 <div className="flex items-start justify-between mb-4">
                   <div>
