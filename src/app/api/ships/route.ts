@@ -36,8 +36,9 @@ export const revalidate = 300;
 
 // POSIX regex (PostgreSQL `~*`) for names that must NEVER appear in the catalog.
 // Uses word boundaries (\y) so "BIS" doesn't match e.g. "Orbis".
+// F8A Lightning is a duplicate of the F8C variants (no thumb, no hull model).
 const HIDDEN_NAME_REGEX =
-  "(\\ybis\\y|best\\s+in\\s+show|power\\s+suit)";
+  "(\\ybis\\y|best\\s+in\\s+show|power\\s+suit|\\yf8a\\y)";
 
 // SQL-side ILIKE patterns for "in-game only" ships whose USD price we null out.
 // Matches the ship's name OR reference string (case-insensitive).
@@ -45,6 +46,7 @@ const INGAME_ONLY_PATTERNS = [
   "%wikelo%",
   "%executive hangar%",
   "%exec hangar%",
+  "%executive edition%", // e.g. "Anvil F8C Lightning Executive Edition"
   "%pyam%",
   "%teach%", // covers "Teach's Special", "Teach Special", etc.
 ];
@@ -306,3 +308,4 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+                                                                                                                                                                                                                                                                                                                    
