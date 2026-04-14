@@ -64,7 +64,7 @@ export default function MiningPage() {
 
         <div className="flex-1 z-10 relative flex flex-col min-w-0">
           <div className="relative px-4 py-3 flex-1 overflow-y-auto">
-            <div className="mb-4 border-b border-zinc-800/60 flex gap-2">
+            <div className="mb-4 border-b border-zinc-800/60 flex gap-2 justify-center">
               {TABS.map((tab) => (
                 <button
                   key={tab.id}
