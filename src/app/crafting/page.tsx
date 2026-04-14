@@ -61,7 +61,7 @@ export default function CraftingPage() {
 
         <div className="flex-1 z-10 relative flex flex-col min-w-0">
           <div className="relative px-4 py-3 flex-1 overflow-y-auto">
-            <div className="mb-4 border-b border-zinc-800/60 flex gap-2">
+            <div className="mb-4 border-b border-zinc-800/60 flex gap-2 justify-center">
               {TABS.map((tab) => (
                 <button
                   key={tab.id}
@@ -80,7 +80,7 @@ export default function CraftingPage() {
               ))}
             </div>
 
-            <div className="mt-6">
+            <div className="mt-6 max-w-5xl mx-auto">
               {activeTab === "blueprints" && <BlueprintBrowser />}
               {activeTab === "calculator" && <CraftingCalculator />}
               {activeTab === "materials" && <MaterialBrowser />}
