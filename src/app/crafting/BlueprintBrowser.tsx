@@ -10,7 +10,6 @@ export default function BlueprintBrowser() {
   const [selectedBlueprintId, setSelectedBlueprintId] = useState<string | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
 
-  // Auto-select first blueprint & expand all categories on load
   useMemo(() => {
     if (blueprints.length > 0 && !selectedBlueprintId) {
       setSelectedBlueprintId(blueprints[0].uuid);
@@ -45,18 +44,16 @@ export default function BlueprintBrowser() {
     return costs;
   };
 
-  /** Pretty-print a modifier key: "weapon_recoil_smoothness" → "Recoil Smoothness" */
-  const formatModKey = (key: string) => {
-    return key
+  const formatModKey = (key: string) =>
+    key
       .replace(/^(weapon_|armor_)/, "")
       .replace(/_/g, " ")
       .replace(/\b\w/g, (c) => c.toUpperCase());
-  };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="w-4 h-4 border-2 border-zinc-800 border-t-amber-500 rounded-full animate-spin mr-3" />
+      <div className="flex items-center justify-center py-24">
+        <div className="w-5 h-5 border-2 border-zinc-800 border-t-amber-500 rounded-full animate-spin mr-3" />
         <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest">Loading blueprints...</span>
       </div>
     );
@@ -64,62 +61,69 @@ export default function BlueprintBrowser() {
 
   if (error) {
     return (
-      <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-sm px-3 py-2">
+      <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">
         {error}
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 max-w-7xl">
-      {/* Category Tree */}
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 max-w-7xl">
+
+      {/* ── Sidebar: Category Tree ── */}
       <div className="lg:col-span-1">
-        <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-4">
-          <h3 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-4">
-            Categories
-          </h3>
-          <div className="space-y-1">
+        <div className="bg-zinc-900/70 border border-zinc-800/60 rounded-xl overflow-hidden">
+          {/* Sidebar header */}
+          <div className="px-4 py-3 border-b border-amber-500/20 bg-amber-500/5">
+            <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">
+              Categories
+            </h3>
+          </div>
+
+          <div className="p-3 space-y-1">
             {categories.map((category) => (
               <div key={category.id}>
                 <button
                   onClick={() => toggleCategory(category.id)}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded text-sm text-zinc-300 hover:bg-zinc-800/40 transition-colors"
+                  className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium text-zinc-200 hover:bg-zinc-800/60 transition-colors group"
                 >
-                  <span className="text-lg">{expandedCategories.has(category.id) ? "▼" : "▶"}</span>
+                  <span className="text-amber-500/70 group-hover:text-amber-400 transition-colors text-xs">
+                    {expandedCategories.has(category.id) ? "▼" : "▶"}
+                  </span>
                   <span className="flex-1 text-left">{category.name}</span>
-                  <span className="text-xs text-zinc-500 bg-zinc-800/50 px-2 py-0.5 rounded">
+                  <span className="text-[10px] text-amber-400/70 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full font-mono">
                     {category.count}
                   </span>
                 </button>
 
                 {expandedCategories.has(category.id) && (
-                  <div className="ml-4 space-y-0.5">
+                  <div className="ml-3 mt-1 space-y-1 border-l border-zinc-800/60 pl-3">
                     {category.subCategories.map((subCat) => {
                       const subBlueprints = blueprints.filter(
                         (b) => b.outputType === category.id && b.outputSubtype === subCat.id
                       );
                       return (
-                        <div key={subCat.id}>
-                          <div className="text-xs text-zinc-500 px-3 py-1.5 font-medium uppercase tracking-wider">
+                        <div key={subCat.id} className="mb-2">
+                          <div className="text-[10px] text-cyan-500/70 px-2 py-1 font-bold uppercase tracking-widest">
                             {subCat.name}
-                            <span className="ml-1 text-zinc-600">({subCat.count})</span>
+                            <span className="ml-1.5 text-zinc-600 font-normal">({subCat.count})</span>
                           </div>
-                          <div className="space-y-0.5 ml-2 max-h-48 overflow-y-auto">
+                          <div className="space-y-0.5 max-h-48 overflow-y-auto pr-1">
                             {subBlueprints.map((blueprint) => (
                               <button
                                 key={blueprint.uuid}
                                 onClick={() => setSelectedBlueprintId(blueprint.uuid)}
                                 className={`
-                                  w-full text-left px-3 py-1.5 rounded text-xs transition-colors
+                                  w-full text-left px-3 py-2 rounded-lg text-xs transition-all duration-150
                                   ${selectedBlueprintId === blueprint.uuid
-                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/30"
+                                    ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                                    : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 border border-transparent"
                                   }
                                 `}
                               >
-                                <span className="truncate block">{blueprint.outputName}</span>
+                                <span className="truncate block leading-snug">{blueprint.outputName}</span>
                                 {blueprint.isDefault && (
-                                  <span className="text-[9px] text-emerald-400 ml-1">DEFAULT</span>
+                                  <span className="text-[9px] text-emerald-400 font-bold tracking-wide">DEFAULT</span>
                                 )}
                               </button>
                             ))}
@@ -135,112 +139,122 @@ export default function BlueprintBrowser() {
         </div>
       </div>
 
-      {/* Blueprint Details */}
-      <div className="lg:col-span-3">
+      {/* ── Main Panel: Blueprint Details ── */}
+      <div className="lg:col-span-3 space-y-5">
         {selectedBlueprint ? (
-          <div className="space-y-4">
-            {/* Header */}
-            <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold text-amber-400 mb-1">
-                    {selectedBlueprint.outputName}
-                  </h2>
-                  <p className="text-zinc-500 text-xs font-mono mb-3">
-                    {selectedBlueprint.key}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  {selectedBlueprint.isDefault && (
-                    <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded">
-                      DEFAULT
-                    </span>
-                  )}
-                  {selectedBlueprint.rewardPools.length > 0 && (
-                    <span className="text-[10px] text-violet-400 bg-violet-500/10 border border-violet-500/20 px-2 py-1 rounded">
-                      MISSION REWARD
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-6">
-                <div>
-                  <span className="text-xs text-zinc-500 uppercase">Craft Time</span>
-                  <div className="text-lg font-mono text-cyan-400">
-                    {selectedBlueprint.craftTimeSeconds >= 60
-                      ? `${Math.floor(selectedBlueprint.craftTimeSeconds / 60)}m ${selectedBlueprint.craftTimeSeconds % 60}s`
-                      : `${selectedBlueprint.craftTimeSeconds}s`}
-                  </div>
-                </div>
-                <div>
-                  <span className="text-xs text-zinc-500 uppercase">Type</span>
-                  <div className="text-lg font-mono text-zinc-300">
-                    {selectedBlueprint.outputType.replace(/Char_Armor_/, "Armor/")}
-                  </div>
-                </div>
-                <div>
-                  <span className="text-xs text-zinc-500 uppercase">Subtype</span>
-                  <div className="text-lg font-mono text-zinc-300">
-                    {selectedBlueprint.outputSubtype}
-                  </div>
-                </div>
-                {selectedBlueprint.outputGrade && (
+          <>
+            {/* Header card */}
+            <div className="bg-zinc-900/70 border border-zinc-800/60 rounded-xl overflow-hidden">
+              {/* Amber accent top bar */}
+              <div className="h-1 bg-gradient-to-r from-amber-500 via-amber-400 to-cyan-500" />
+              <div className="p-6">
+                <div className="flex items-start justify-between mb-4">
                   <div>
-                    <span className="text-xs text-zinc-500 uppercase">Grade</span>
-                    <div className="text-lg font-mono text-zinc-300">
-                      {selectedBlueprint.outputGrade}
+                    <h2 className="text-2xl font-bold text-white tracking-tight mb-1">
+                      {selectedBlueprint.outputName}
+                    </h2>
+                    <p className="text-zinc-500 text-xs font-mono">
+                      {selectedBlueprint.key}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 flex-shrink-0 ml-4">
+                    {selectedBlueprint.isDefault && (
+                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                        Default
+                      </span>
+                    )}
+                    {selectedBlueprint.rewardPools.length > 0 && (
+                      <span className="text-[10px] font-bold text-violet-400 bg-violet-500/10 border border-violet-500/25 px-2.5 py-1 rounded-full uppercase tracking-wider">
+                        Mission Reward
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Stats row */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="bg-zinc-950/50 border border-cyan-500/15 rounded-lg px-4 py-3">
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Craft Time</div>
+                    <div className="text-lg font-mono font-bold text-cyan-400">
+                      {selectedBlueprint.craftTimeSeconds >= 60
+                        ? `${Math.floor(selectedBlueprint.craftTimeSeconds / 60)}m ${selectedBlueprint.craftTimeSeconds % 60}s`
+                        : `${selectedBlueprint.craftTimeSeconds}s`}
                     </div>
                   </div>
-                )}
+                  <div className="bg-zinc-950/50 border border-amber-500/15 rounded-lg px-4 py-3">
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Type</div>
+                    <div className="text-sm font-mono font-semibold text-amber-300 truncate">
+                      {selectedBlueprint.outputType.replace(/Char_Armor_/, "Armor/")}
+                    </div>
+                  </div>
+                  <div className="bg-zinc-950/50 border border-zinc-700/40 rounded-lg px-4 py-3">
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Subtype</div>
+                    <div className="text-sm font-mono font-semibold text-zinc-200 truncate">
+                      {selectedBlueprint.outputSubtype}
+                    </div>
+                  </div>
+                  {selectedBlueprint.outputGrade && (
+                    <div className="bg-zinc-950/50 border border-zinc-700/40 rounded-lg px-4 py-3">
+                      <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Grade</div>
+                      <div className="text-sm font-mono font-semibold text-zinc-200">
+                        {selectedBlueprint.outputGrade}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
             {/* Parts Breakdown */}
-            <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-6">
-              <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider mb-4">
-                Parts Breakdown
-              </h3>
-              <div className="space-y-4">
+            <div className="bg-zinc-900/70 border border-zinc-800/60 rounded-xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-zinc-800/60 bg-zinc-950/30">
+                <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest">
+                  Parts Breakdown
+                </h3>
+              </div>
+              <div className="p-6 space-y-4">
                 {selectedBlueprint.parts.map((part) => (
-                  <div key={part.groupKey} className="border border-zinc-800/40 rounded p-4">
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="font-mono text-sm text-cyan-400">
+                  <div
+                    key={part.groupKey}
+                    className="border border-zinc-800/50 rounded-xl p-5 bg-zinc-950/30 border-l-2 border-l-cyan-500/40"
+                  >
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="font-mono text-sm font-bold text-cyan-400 tracking-wide">
                         {part.groupName}
                       </h4>
                       {part.requiredCount > 1 && (
-                        <span className="text-[10px] text-zinc-500">
-                          x{part.requiredCount} required
+                        <span className="text-[10px] font-bold text-amber-400/70 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                          ×{part.requiredCount} required
                         </span>
                       )}
                     </div>
-                    {/* Materials */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-2">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
                       {part.materials.map((mat) => (
                         <div
                           key={mat.resourceUuid}
-                          className="bg-zinc-800/30 rounded p-2 border border-zinc-700/40"
+                          className="bg-zinc-900/60 rounded-lg p-3 border border-zinc-700/30 hover:border-amber-500/20 transition-colors"
                         >
-                          <div className="text-xs text-zinc-400">{mat.resourceName}</div>
-                          <div className="font-mono text-sm text-amber-400">
-                            {mat.quantityScu.toFixed(3)} SCU
+                          <div className="text-xs text-zinc-400 mb-1 leading-snug">{mat.resourceName}</div>
+                          <div className="font-mono text-sm font-bold text-amber-400">
+                            {mat.quantityScu.toFixed(3)}
+                            <span className="text-amber-500/50 font-normal text-xs ml-1">SCU</span>
                           </div>
                           {mat.minQuality > 0 && (
-                            <div className="text-[10px] text-zinc-600">
+                            <div className="text-[10px] text-zinc-600 mt-1">
                               Min Q: {mat.minQuality}
                             </div>
                           )}
                         </div>
                       ))}
                     </div>
-                    {/* Modifiers for this part */}
                     {part.modifiers.length > 0 && (
-                      <div className="mt-2 pt-2 border-t border-zinc-800/30">
-                        <div className="text-[10px] text-zinc-600 uppercase mb-1">Modifiers</div>
+                      <div className="pt-3 border-t border-zinc-800/40">
+                        <div className="text-[10px] text-zinc-600 uppercase tracking-wider mb-2">Modifiers</div>
                         <div className="flex flex-wrap gap-2">
                           {part.modifiers.map((mod) => (
                             <span
                               key={mod.propertyKey}
-                              className="text-[10px] px-2 py-0.5 bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/20"
+                              className="text-[10px] px-2.5 py-1 bg-cyan-500/8 text-cyan-400 rounded-full border border-cyan-500/20"
                             >
                               {formatModKey(mod.propertyKey)}: {mod.atMinQuality} → {mod.atMaxQuality}
                             </span>
@@ -255,35 +269,42 @@ export default function BlueprintBrowser() {
 
             {/* Quality Effects */}
             {Object.keys(selectedBlueprint.qualityEffects).length > 0 && (
-              <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-6">
-                <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider mb-4">
-                  Quality Effects
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-zinc-900/70 border border-zinc-800/60 rounded-xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-zinc-800/60 bg-zinc-950/30">
+                  <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest">
+                    Quality Effects
+                  </h3>
+                </div>
+                <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                   {Object.entries(selectedBlueprint.qualityEffects).map(([stat, effect]) => {
                     const isIncrease = effect.atMaxQuality >= effect.atMinQuality;
                     return (
-                      <div key={stat} className="border border-zinc-800/40 rounded p-4">
-                        <div className="text-xs text-zinc-400 uppercase mb-2">
+                      <div
+                        key={stat}
+                        className="border border-zinc-800/40 rounded-xl p-4 bg-zinc-950/20"
+                      >
+                        <div className="text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-3">
                           {formatModKey(stat)}
                         </div>
-                        <div className="flex justify-between items-baseline">
+                        <div className="flex justify-between items-baseline mb-3">
                           <div>
-                            <span className="text-xs text-zinc-500">Q0: </span>
-                            <span className="font-mono text-sm text-zinc-300">
-                              {effect.atMinQuality}
-                            </span>
+                            <span className="text-[10px] text-zinc-600 uppercase">Q0 </span>
+                            <span className="font-mono text-sm text-zinc-300">{effect.atMinQuality}</span>
                           </div>
+                          <span className="text-zinc-700 text-xs">→</span>
                           <div>
-                            <span className="text-xs text-zinc-500">Q1000: </span>
-                            <span className={`font-mono text-sm ${isIncrease ? "text-emerald-400" : "text-red-400"}`}>
+                            <span className="text-[10px] text-zinc-600 uppercase">Q1000 </span>
+                            <span className={`font-mono text-sm font-bold ${isIncrease ? "text-emerald-400" : "text-red-400"}`}>
                               {effect.atMaxQuality}
                             </span>
                           </div>
                         </div>
-                        <div className="mt-2 w-full bg-zinc-800/50 rounded h-2">
+                        <div className="w-full bg-zinc-800/60 rounded-full h-1.5">
                           <div
-                            className={`h-full rounded ${isIncrease ? "bg-gradient-to-r from-cyan-500 to-emerald-500" : "bg-gradient-to-r from-red-500 to-orange-500"}`}
+                            className={`h-full rounded-full ${isIncrease
+                              ? "bg-gradient-to-r from-[#4a6741] to-orange-500"
+                              : "bg-gradient-to-r from-red-700 to-orange-600"
+                            }`}
                             style={{
                               width: `${Math.min(100, Math.abs(effect.atMaxQuality - effect.atMinQuality) / Math.max(Math.abs(effect.atMinQuality), 1) * 100)}%`,
                             }}
@@ -297,65 +318,63 @@ export default function BlueprintBrowser() {
             )}
 
             {/* Total Materials Cost */}
-            <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-6">
-              <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider mb-4">
-                Total Material Cost
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            <div className="bg-zinc-900/70 border border-zinc-800/60 rounded-xl overflow-hidden">
+              <div className="px-6 py-4 border-b border-amber-500/20 bg-amber-500/5">
+                <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">
+                  Total Material Cost
+                </h3>
+              </div>
+              <div className="p-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {Object.entries(getTotalMaterials(selectedBlueprint))
                   .sort(([, a], [, b]) => b.scu - a.scu)
                   .map(([resId, { name, scu }]) => (
                     <div
                       key={resId}
-                      className="bg-zinc-800/30 rounded p-3 border border-zinc-700/40"
+                      className="bg-zinc-950/50 rounded-xl p-4 border border-amber-500/15 hover:border-amber-500/30 transition-colors"
                     >
-                      <div className="text-xs text-zinc-400 mb-1">{name}</div>
-                      <div className="font-mono text-sm text-amber-400">
-                        {scu.toFixed(3)} SCU
+                      <div className="text-xs text-zinc-400 mb-2 leading-snug">{name}</div>
+                      <div className="font-mono text-base font-bold text-amber-400">
+                        {scu.toFixed(3)}
+                        <span className="text-amber-500/50 font-normal text-xs ml-1">SCU</span>
                       </div>
                     </div>
                   ))}
               </div>
             </div>
 
-            {/* Reward Pools (Mission Sources) */}
-            {selectedBlueprint.rewardPools.length > 0 && (
-              <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-6">
-                <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider mb-4">
-                  How to Obtain
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {selectedBlueprint.rewardPools.map((pool) => (
-                    <span
-                      key={pool.poolUuid}
-                      className="text-xs px-3 py-1.5 bg-violet-500/10 text-violet-400 rounded border border-violet-500/20"
-                    >
-                      {formatPoolKey(pool.poolKey)}
-                    </span>
-                  ))}
+            {/* How to Obtain */}
+            {(selectedBlueprint.rewardPools.length > 0 || selectedBlueprint.isDefault) && (
+              <div className="bg-zinc-900/70 border border-zinc-800/60 rounded-xl overflow-hidden">
+                <div className="px-6 py-4 border-b border-zinc-800/60 bg-zinc-950/30">
+                  <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest">
+                    How to Obtain
+                  </h3>
                 </div>
-                {selectedBlueprint.isDefault && (
-                  <p className="text-xs text-emerald-400 mt-3">
-                    This blueprint is available by default — no missions required.
-                  </p>
-                )}
+                <div className="p-6">
+                  {selectedBlueprint.rewardPools.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {selectedBlueprint.rewardPools.map((pool) => (
+                        <span
+                          key={pool.poolUuid}
+                          className="text-xs px-3 py-1.5 bg-violet-500/10 text-violet-300 rounded-full border border-violet-500/25 font-medium"
+                        >
+                          {formatPoolKey(pool.poolKey)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {selectedBlueprint.isDefault && (
+                    <p className="text-xs text-emerald-400 font-medium">
+                      This blueprint is available by default — no missions required.
+                    </p>
+                  )}
+                </div>
               </div>
             )}
-
-            {!selectedBlueprint.rewardPools.length && selectedBlueprint.isDefault && (
-              <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-6">
-                <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider mb-4">
-                  How to Obtain
-                </h3>
-                <p className="text-xs text-emerald-400">
-                  This blueprint is available by default — no missions required.
-                </p>
-              </div>
-            )}
-          </div>
+          </>
         ) : (
-          <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-12 text-center">
-            <p className="text-zinc-400">Select a blueprint to view details</p>
+          <div className="bg-zinc-900/70 border border-zinc-800/60 rounded-xl p-16 text-center">
+            <p className="text-zinc-500 text-sm">Select a blueprint to view details</p>
           </div>
         )}
       </div>
@@ -363,12 +382,9 @@ export default function BlueprintBrowser() {
   );
 }
 
-/** Convert pool_key like "BP_MISSIONREWARD_CitizensForProsperityDestroyItems_AB" → "Citizens For Prosperity - Destroy Items (AB)" */
 function formatPoolKey(key: string): string {
   let cleaned = key.replace(/^BP_MISSIONREWARD_/, "");
-  // Split by underscore, rejoin with spaces
   cleaned = cleaned.replace(/_/g, " ");
-  // Try to add spaces before capital letters (camelCase segments)
   cleaned = cleaned.replace(/([a-z])([A-Z])/g, "$1 $2");
   return cleaned;
 }

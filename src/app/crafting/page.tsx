@@ -80,7 +80,7 @@ export default function CraftingPage() {
               ))}
             </div>
 
-            <div className="mt-6 max-w-5xl mx-auto">
+            <div className="mt-6 max-w-[1600px] mx-auto">
               {activeTab === "blueprints" && <BlueprintBrowser />}
               {activeTab === "calculator" && <CraftingCalculator />}
               {activeTab === "materials" && <MaterialBrowser />}
