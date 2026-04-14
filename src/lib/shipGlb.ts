@@ -90,6 +90,13 @@ const VARIANT_STRIP_REGEXES: RegExp[] = [
   /_(Sneak|War|Work)_?Special(_[A-Za-z0-9]+)*$/i,
   /_Special(_[A-Za-z0-9]+)*$/i,
   /_Edition$/i,
+  // Store / event variants that share geometry with their base ship:
+  //   RSI_Apollo_Triage_Tier_2        → RSI_Apollo_Triage
+  //   AEGS_Eclipse_BIS2950            → AEGS_Eclipse
+  //   AEGS_Idris_P_Collector_Military → AEGS_Idris_P
+  /_Tier_\d+$/i,
+  /_BIS\d*$/i,
+  /_Collector(_[A-Za-z0-9]+)*$/i,
 ];
 
 function stripVariantSuffix(reference: string): string {
