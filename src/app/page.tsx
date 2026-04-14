@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 const PANELS = [
   {
     id: "loadout",
-    label: "DPS Calculator",
+    label: "Loadout Manager",
     video: "/videos/loadout_new.mp4",
     href: "/loadout",
   },
