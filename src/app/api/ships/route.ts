@@ -22,6 +22,33 @@ import {
 
 export const revalidate = 300;
 
+// =============================================================================
+// CATALOG CLEANUP RULES (2026-04-14)
+// -----------------------------------------------------------------------------
+// 1) Hide entirely (never appear in /ships): BIS / Best in Show / Power Suit.
+// 2) In-game-only acquisitions — hide USD price (msrp_usd/warbond_usd → null):
+//    Wikelo, Executive Hangar, PYAM, Teach / Teach's Special.
+// 3) Dedup: collapse rows with same (name, manufacturer), keep the row with the
+//    most populated fields (ties → lower id).
+//
+// All rules are applied at the API layer; no rows are deleted from the DB.
+// =============================================================================
+
+// POSIX regex (PostgreSQL `~*`) for names that must NEVER appear in the catalog.
+// Uses word boundaries (\y) so "BIS" doesn't match e.g. "Orbis".
+const HIDDEN_NAME_REGEX =
+  "(\\ybis\\y|best\\s+in\\s+show|power\\s+suit)";
+
+// SQL-side ILIKE patterns for "in-game only" ships whose USD price we null out.
+// Matches the ship's name OR reference string (case-insensitive).
+const INGAME_ONLY_PATTERNS = [
+  "%wikelo%",
+  "%executive hangar%",
+  "%exec hangar%",
+  "%pyam%",
+  "%teach%", // covers "Teach's Special", "Teach Special", etc.
+];
+
 // Map sort keys to actual columns
 // Note: scm_speed and afterburner_speed are in ship_flight_stats, not ships
 const SORT_MAP: Record<string, string> = {
@@ -69,10 +96,17 @@ async function handleShipsQuery(params: ShipsQueryParams) {
     const sortOrder = validateSortDir(params.sortOrder);
     const sortCol = SORT_MAP[sortBy] || "s.name";
 
-    // Build WHERE conditions
+    // Build WHERE conditions (applied AFTER dedup, referencing alias `s`).
     const conditions: string[] = [];
     const queryParams: any[] = [];
     let paramIdx = 1;
+
+    // ── Always-on rule: hide BIS / Best in Show / Power Suit ──
+    conditions.push(
+      `COALESCE(s.name, '') !~* $${paramIdx} AND COALESCE(s.reference, '') !~* $${paramIdx}`,
+    );
+    queryParams.push(HIDDEN_NAME_REGEX);
+    paramIdx++;
 
     if (search) {
       conditions.push(
@@ -94,11 +128,35 @@ async function handleShipsQuery(params: ShipsQueryParams) {
       paramIdx++;
     }
 
-    const whereClause = conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
+    const whereClause = "WHERE " + conditions.join(" AND ");
 
-    // Count total
+    // Dedup CTE: collapse duplicates by (lower(name), lower(manufacturer)),
+    // keep the row with the most populated fields (ties → lower id).
+    // `s` below is the deduped alias, so downstream WHERE/ORDER BY still work.
+    const dedupCTE = `
+      WITH deduped AS (
+        SELECT *,
+          ROW_NUMBER() OVER (
+            PARTITION BY LOWER(COALESCE(name, '')), LOWER(COALESCE(manufacturer, ''))
+            ORDER BY
+              ( (CASE WHEN msrp_usd       IS NOT NULL THEN 1 ELSE 0 END)
+              + (CASE WHEN max_crew       IS NOT NULL THEN 1 ELSE 0 END)
+              + (CASE WHEN cargo_capacity IS NOT NULL THEN 1 ELSE 0 END)
+              + (CASE WHEN mass           IS NOT NULL THEN 1 ELSE 0 END)
+              + (CASE WHEN role           IS NOT NULL THEN 1 ELSE 0 END)
+              ) DESC,
+              id ASC
+          ) AS __rn
+        FROM ships
+      )
+    `;
+
+    // Count total (deduped + filtered)
     const countResult: any[] = await sql.unsafe(
-      `SELECT COUNT(*)::int as total FROM ships s ${whereClause}`,
+      `${dedupCTE}
+       SELECT COUNT(*)::int as total
+       FROM deduped s
+       ${whereClause} AND s.__rn = 1`,
       queryParams,
     );
     const total = countResult[0]?.total ?? 0;
@@ -107,13 +165,14 @@ async function handleShipsQuery(params: ShipsQueryParams) {
     const offset = (page - 1) * limit;
     const joinClause = `LEFT JOIN ship_flight_stats fs ON fs.ship_id = s.id`;
     const ships: any[] = await sql.unsafe(
-      `SELECT s.id, s.reference, s.name, s.manufacturer, s.role, s.size,
+      `${dedupCTE}
+       SELECT s.id, s.reference, s.name, s.manufacturer, s.role, s.size,
               s.max_crew, s.mass, s.cargo_capacity, s.game_version,
               s.msrp_usd, s.warbond_usd,
               fs.scm_speed, fs.max_speed as afterburner_speed
-       FROM ships s
+       FROM deduped s
        ${joinClause}
-       ${whereClause}
+       ${whereClause} AND s.__rn = 1
        ORDER BY ${sortCol} ${sortOrder} NULLS LAST
        LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
       [...queryParams, limit, offset],
@@ -125,8 +184,20 @@ async function handleShipsQuery(params: ShipsQueryParams) {
       [],
     );
 
+    // Helper: is this ship "in-game only"? (strip USD prices from response)
+    const isInGameOnly = (row: any): boolean => {
+      const hay = `${row.name ?? ""} ${row.reference ?? ""}`.toLowerCase();
+      return INGAME_ONLY_PATTERNS.some((p) => {
+        // strip leading/trailing % and match as substring
+        const needle = p.replace(/^%|%$/g, "").toLowerCase();
+        return hay.includes(needle);
+      });
+    };
+
     // Map to expected format
-    const data = ships.map((s) => ({
+    const data = ships.map((s) => {
+      const inGameOnly = isInGameOnly(s);
+      return {
       id: s.id,
       reference: s.reference,
       name: s.name,
@@ -135,8 +206,9 @@ async function handleShipsQuery(params: ShipsQueryParams) {
       size: s.size,
       manufacturer: s.manufacturer,
       gameVersion: s.game_version,
-      msrpUsd: s.msrp_usd != null ? Number(s.msrp_usd) : null,
-      warbondUsd: s.warbond_usd != null ? Number(s.warbond_usd) : null,
+      inGameOnly, // flag for UI if it wants to show a "In-Game Only" badge
+      msrpUsd: inGameOnly ? null : (s.msrp_usd != null ? Number(s.msrp_usd) : null),
+      warbondUsd: inGameOnly ? null : (s.warbond_usd != null ? Number(s.warbond_usd) : null),
       ship: {
         maxCrew: s.max_crew,
         mass: s.mass != null ? Number(s.mass) : null,
@@ -147,7 +219,8 @@ async function handleShipsQuery(params: ShipsQueryParams) {
         focus: null,
         career: null,
       },
-    }));
+      };
+    });
 
     return {
       data,

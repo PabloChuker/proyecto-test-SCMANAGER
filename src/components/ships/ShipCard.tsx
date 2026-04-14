@@ -16,6 +16,7 @@ interface ShipCardData {
   gameVersion: string;
   msrpUsd?: number | null;
   warbondUsd?: number | null;
+  inGameOnly?: boolean;
   ship: {
     maxCrew: number | null;
     cargo: number | null;
@@ -104,7 +105,13 @@ export function ShipCard({
             {roleIndicator.icon}
           </span>
           {/* Price badge */}
-          {ship.msrpUsd != null && ship.msrpUsd > 0 && (
+          {ship.inGameOnly ? (
+            <div className="absolute top-2 left-2.5">
+              <span className="text-[10px] font-mono font-medium text-cyan-300/90 bg-zinc-950/70 backdrop-blur-sm px-1.5 py-0.5 rounded-sm border border-cyan-500/30">
+                IN-GAME ONLY
+              </span>
+            </div>
+          ) : ship.msrpUsd != null && ship.msrpUsd > 0 ? (
             <div className="absolute top-2 left-2.5 flex items-center gap-1.5">
               <span className="text-[10px] font-mono font-medium text-amber-400/90 bg-zinc-950/70 backdrop-blur-sm px-1.5 py-0.5 rounded-sm">
                 ${ship.msrpUsd}
@@ -115,7 +122,7 @@ export function ShipCard({
                 </span>
               )}
             </div>
-          )}
+          ) : null}
         </div>
 
         {/* Card body */}

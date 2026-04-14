@@ -15,6 +15,9 @@ export interface ShipListItem {
   size: number;
   manufacturer: string | null;
   gameVersion: string;
+  msrpUsd?: number | null;
+  warbondUsd?: number | null;
+  inGameOnly?: boolean;
   ship: {
     maxCrew: number;
     cargo: number;
