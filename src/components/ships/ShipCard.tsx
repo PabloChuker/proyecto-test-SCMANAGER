@@ -82,6 +82,8 @@ const WIKELO_THUMBS: Array<[RegExp, string]> = [
   [/terrapin.*medic|medic.*terrapin/i,     "/ships/wikelo/Wikelo_TerraminMedic.png"],
   [/ursa.*medivac|medivac.*ursa/i,         "/ships/wikelo/Wikelo_UrsaMedivac.png"],
   [/super\s*hornet.*(mk\s*ii|mk2|mkii)|(?:mk\s*ii|mk2|mkii).*super\s*hornet/i, "/ships/wikelo/Wikelo_SuperHornetMk2.jpeg"],
+  // Wikelo variant is stored as "F7 Hornet Mk Wikelo" — no "Super", no "II".
+  [/f7\s*hornet.*\bmk\b|\bhornet\s*mk\b/i, "/ships/wikelo/Wikelo_SuperHornetMk2.jpeg"],
   [/idris[-\s]*p/i,                        "/ships/wikelo/Wikelo_IdrisP.jpeg"],
   [/c1.*spirit|spirit.*c1/i,               "/ships/wikelo/Wikelo_C1Spirit.png"],
   // Generic names
