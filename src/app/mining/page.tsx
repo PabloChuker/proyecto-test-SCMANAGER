@@ -11,15 +11,15 @@ import WorkOrderDashboard from "./WorkOrderDashboard";
 import RockCalculator from "./RockCalculator";
 import RefineryDataTable from "./RefineryDataTable";
 const TABS = [
-  { id: "loadout", label: "Loadout Calculator", icon: "⛏" },
   { id: "workorder", label: "Work Order", icon: "📈" },
   { id: "dashboard", label: "Dashboard", icon: "📊" },
   { id: "rock", label: "Rock Calculator", icon: "🪨" },
   { id: "refinery", label: "Refinery Data", icon: "🏚" },
+  { id: "loadout", label: "Loadout Calculator", icon: "⛏" },
 ];
 
 export default function MiningPage() {
-  const [activeTab, setActiveTab] = useState("loadout");
+  const [activeTab, setActiveTab] = useState("workorder");
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
