@@ -482,7 +482,7 @@ export function CargoGrid3D({ grids }: { grids: CargoGridData[] }) {
             return (
               <div key={g.id} className="mb-3">
                 {grids.length > 1 && (
-                  <p className="text-[9px] text-zinc-600 mb-1 truncate">{g.name.split("_").pop()}</p>
+                  <p className="text-[9px] text-zinc-600 mb-1 truncate">{g.className.split("_CargoGrid")[1]?.replace(/_/g, " ").trim() || `Grid ${gi}`}</p>
                 )}
                 <div className="flex flex-wrap gap-1">
                   {Array.from({ length: gz }, (_, z) => (
@@ -520,7 +520,7 @@ export function CargoGrid3D({ grids }: { grids: CargoGridData[] }) {
             <>
               {grids.length > 1 && (
                 <span className="text-zinc-600 mr-1">
-                  [{grids[hovered.gi]?.name?.split("_").pop()}]
+                  [{grids[hovered.gi]?.className?.split("_CargoGrid")[1]?.replace(/_/g, " ").trim() || `Grid ${hovered.gi}`}]
                 </span>
               )}
               <span className="text-amber-400/80">X:{hovered.x} Y:{hovered.y} Z:{hovered.z}</span>
@@ -562,7 +562,7 @@ export function CargoGrid3D({ grids }: { grids: CargoGridData[] }) {
 
         {/* Módulos activos */}
         <div className="text-[9px] font-mono text-zinc-600 whitespace-nowrap">
-          {grids.length > 1 ? `${grids.length} módulos` : `${grids[0]?.name?.split("_CargoGrid")[1]?.replace(/_/g, " ").trim() || "Grid"}`}
+          {grids.length > 1 ? `${grids.length} módulos` : `${grids[0]?.className?.split("_CargoGrid")[1]?.replace(/_/g, " ").trim() || "Grid"}`}
         </div>
       </div>
     </div>

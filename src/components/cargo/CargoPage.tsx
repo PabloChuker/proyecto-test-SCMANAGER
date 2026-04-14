@@ -1,13 +1,8 @@
 "use client";
 // =============================================================================
 // SC LABS — CargoPage
-// Layout: Header + sidebar izquierdo con lista de grids + viewer 3D.
-//
-// Lógica de selección:
-//   - Cada cargo grid es una entrada individual en el sidebar.
-//   - Al seleccionar una entrada, se buscan TODOS los grids con el mismo
-//     prefijo de nave (parte antes de "_CargoGrid_") y se pasan juntos
-//     al viewer 3D → muestra todos los módulos de la nave simultáneamente.
+// Sidebar: lista de naves con cargo grids.
+// Viewer: todos los módulos de la nave seleccionada, expandidos por instance_count.
 // =============================================================================
 
 import { useEffect, useState, useMemo } from "react";
@@ -32,82 +27,60 @@ const CargoGrid3D = dynamic(
 export interface CargoGridData {
   id: string;
   className: string;
-  name: string;
   scuCapacity: number;
   dimensions: { x: number; y: number; z: number };
+  instanceCount: number;
+  displayOrder: number;
 }
 
-interface ParsedGrid extends CargoGridData {
-  /** MANUFACTURER_ShipWords  — clave de agrupación */
-  shipPrefix: string;
-  /** Nombre limpio para mostrar: "Avenger Stalker", "Starfarer Side", etc. */
-  displayName: string;
-  /** Código de fabricante */
+interface ShipData {
+  id: string;
+  name: string;
   manufacturer: string;
-}
-
-// ─── Parser ──────────────────────────────────────────────────────────────────
-
-function parseGrid(g: CargoGridData): ParsedGrid {
-  const parts  = g.className.split("_");
-  const cgIdx  = parts.findIndex((p) => p.toLowerCase() === "cargogrid");
-
-  if (cgIdx === -1) {
-    return { ...g, shipPrefix: g.className, displayName: g.className, manufacturer: parts[0] ?? "" };
-  }
-
-  const manufacturer = parts[0] ?? "";
-  const shipWords    = parts.slice(1, cgIdx);           // entre fabricante y CargoGrid
-  const moduleWords  = parts.slice(cgIdx + 1);          // después de CargoGrid
-
-  const shipPrefix  = `${manufacturer}_${shipWords.join("_")}`;
-  const displayName = [...shipWords, ...moduleWords].join(" ");
-
-  return { ...g, shipPrefix, displayName, manufacturer };
+  totalSCU: number;
+  grids: CargoGridData[];
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function CargoPage() {
-  const [allGrids, setAllGrids]     = useState<ParsedGrid[]>([]);
+  const [ships, setShips]           = useState<ShipData[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
   const [search, setSearch]         = useState("");
-  /** ID del grid que el usuario ha seleccionado en el sidebar */
   const [selectedId, setSelectedId] = useState<string>("");
 
   useEffect(() => {
     fetch("/api/cargo-grids")
       .then((r) => r.json())
       .then((json) => {
-        const parsed = (json.data ?? []).map(parseGrid);
-        setAllGrids(parsed);
-        if (parsed.length > 0) setSelectedId(parsed[0].id);
+        const data: ShipData[] = json.data ?? [];
+        setShips(data);
+        if (data.length > 0) setSelectedId(data[0].id);
       })
-      .catch(() => setError("Error cargando cargo grids"))
+      .catch(() => setError("Error cargando naves"))
       .finally(() => setLoading(false));
   }, []);
 
-  // Grids filtrados por búsqueda (sidebar)
   const filtered = useMemo(() => {
     const q = search.toLowerCase().trim();
-    if (!q) return allGrids;
-    return allGrids.filter(
-      (g) =>
-        g.displayName.toLowerCase().includes(q) ||
-        g.manufacturer.toLowerCase().includes(q) ||
-        g.className.toLowerCase().includes(q),
+    if (!q) return ships;
+    return ships.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        s.manufacturer.toLowerCase().includes(q),
     );
-  }, [allGrids, search]);
+  }, [ships, search]);
 
-  // Grid seleccionado actualmente
-  const selectedGrid = allGrids.find((g) => g.id === selectedId) ?? null;
+  const selectedShip = ships.find((s) => s.id === selectedId) ?? null;
 
-  // Todos los grids de la misma nave que el seleccionado → se muestran juntos
-  const activeGrids = useMemo<ParsedGrid[]>(() => {
-    if (!selectedGrid) return [];
-    return allGrids.filter((g) => g.shipPrefix === selectedGrid.shipPrefix);
-  }, [allGrids, selectedGrid]);
+  // Grids expandidos por instance_count → pasados al 3D
+  const activeGrids = useMemo<CargoGridData[]>(() => {
+    if (!selectedShip) return [];
+    return selectedShip.grids.flatMap((g) =>
+      Array.from({ length: g.instanceCount }, () => g),
+    );
+  }, [selectedShip]);
 
   return (
     <main className="relative flex flex-col h-screen overflow-hidden text-zinc-100">
@@ -118,10 +91,9 @@ export function CargoPage() {
 
         <div className="flex flex-1 overflow-hidden">
 
-          {/* ── Sidebar izquierdo ── */}
+          {/* ── Sidebar ── */}
           <aside className="w-64 flex-shrink-0 flex flex-col border-r border-zinc-800/60 bg-zinc-950/80 backdrop-blur-xl overflow-hidden">
 
-            {/* Búsqueda */}
             <div className="p-3 border-b border-zinc-800/50">
               <input
                 type="text"
@@ -132,19 +104,17 @@ export function CargoPage() {
               />
             </div>
 
-            {/* Estado de carga / error */}
             {loading && (
               <div className="flex-1 flex items-center justify-center text-zinc-600 text-[10px] tracking-widest uppercase">
                 Cargando…
               </div>
             )}
             {error && (
-              <div className="flex-1 flex items-center justify-center text-red-500/60 text-[10px] tracking-widest uppercase px-4 text-center">
+              <div className="flex-1 flex items-center justify-center text-red-500/60 text-[10px] px-4 text-center">
                 {error}
               </div>
             )}
 
-            {/* Lista de grids */}
             {!loading && !error && (
               <nav className="flex-1 overflow-y-auto py-1">
                 {filtered.length === 0 && (
@@ -152,19 +122,23 @@ export function CargoPage() {
                     Sin resultados
                   </p>
                 )}
-                {filtered.map((g) => {
-                  const isSelected = g.id === selectedId;
-                  const isInGroup  = selectedGrid?.shipPrefix === g.shipPrefix;
+                {filtered.map((ship) => {
+                  const isSelected = ship.id === selectedId;
+                  // SCU real = suma de (scuCapacity * instanceCount) de cada módulo
+                  const realSCU = ship.grids.reduce(
+                    (s, g) => s + g.scuCapacity * g.instanceCount, 0,
+                  );
+                  const gridCount = ship.grids.reduce(
+                    (s, g) => s + g.instanceCount, 0,
+                  );
                   return (
                     <button
-                      key={g.id}
-                      onClick={() => setSelectedId(g.id)}
-                      className="w-full text-left px-3 py-2 transition-colors group"
+                      key={ship.id}
+                      onClick={() => setSelectedId(ship.id)}
+                      className="w-full text-left px-3 py-2 transition-colors"
                       style={
                         isSelected
                           ? { background: "rgba(245,158,11,0.12)", borderLeft: "2px solid rgb(245,158,11)" }
-                          : isInGroup
-                          ? { background: "rgba(245,158,11,0.05)", borderLeft: "2px solid rgba(245,158,11,0.3)" }
                           : { borderLeft: "2px solid transparent" }
                       }
                     >
@@ -172,16 +146,18 @@ export function CargoPage() {
                         className="text-[11px] font-medium leading-tight truncate"
                         style={{ color: isSelected ? "rgb(251,191,36)" : "rgb(161,161,170)" }}
                       >
-                        {g.displayName}
+                        {ship.name}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-[9px] text-zinc-600 font-mono">{g.manufacturer}</span>
+                        <span className="text-[9px] text-zinc-600 font-mono truncate">{ship.manufacturer}</span>
                         <span className="text-[9px] text-zinc-600">·</span>
-                        <span className="text-[9px] text-zinc-500 font-mono">{g.scuCapacity} SCU</span>
-                        <span className="text-[9px] text-zinc-600">·</span>
-                        <span className="text-[9px] text-zinc-600 font-mono">
-                          {g.dimensions.x}×{g.dimensions.y}×{g.dimensions.z}m
-                        </span>
+                        <span className="text-[9px] text-zinc-500 font-mono whitespace-nowrap">{realSCU} SCU</span>
+                        {gridCount > 1 && (
+                          <>
+                            <span className="text-[9px] text-zinc-600">·</span>
+                            <span className="text-[9px] text-zinc-600 font-mono whitespace-nowrap">{gridCount} grids</span>
+                          </>
+                        )}
                       </div>
                     </button>
                   );
@@ -189,13 +165,13 @@ export function CargoPage() {
               </nav>
             )}
 
-            {/* Footer: total SCU del grupo activo */}
-            {activeGrids.length > 0 && (
+            {/* Footer */}
+            {selectedShip && (
               <div className="border-t border-zinc-800/50 px-3 py-2">
-                <p className="text-[9px] text-zinc-500 uppercase tracking-wider">
-                  {activeGrids.length > 1
-                    ? `${activeGrids.length} módulos · ${activeGrids.reduce((s, g) => s + g.scuCapacity, 0)} SCU total`
-                    : `${activeGrids[0].scuCapacity} SCU`}
+                <p className="text-[9px] text-zinc-500 uppercase tracking-wider truncate">
+                  {selectedShip.name}
+                  {" · "}
+                  {selectedShip.grids.reduce((s, g) => s + g.scuCapacity * g.instanceCount, 0)} SCU
                 </p>
               </div>
             )}
@@ -204,10 +180,10 @@ export function CargoPage() {
           {/* ── Viewer 3D ── */}
           <div className="flex-1 relative overflow-hidden bg-zinc-950">
             {activeGrids.length > 0 ? (
-              <CargoGrid3D key={selectedGrid?.shipPrefix} grids={activeGrids} />
+              <CargoGrid3D key={selectedId} grids={activeGrids} />
             ) : (
               <div className="flex items-center justify-center h-full text-zinc-600 text-xs tracking-widest uppercase">
-                Selecciona un cargo grid
+                Selecciona una nave
               </div>
             )}
           </div>
