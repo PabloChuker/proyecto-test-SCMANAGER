@@ -20,13 +20,24 @@ interface HardpointSlotProps {
   isComponentOn?: (name: string) => boolean;
   toggleComponent?: (name: string) => void;
   onClickChild?: (child: ResolvedChild) => void;
+  getEffectiveItem?: (id: string) => EquippedItem | null;
 }
 
-export function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onTogglePower, childSlots, isComponentOn, toggleComponent, onClickChild }: HardpointSlotProps) {
+/** Check if an item is a turret/gimbal (has children) vs a direct weapon */
+function isTurretOrRack(item: EquippedItem | null): boolean {
+  if (!item) return false;
+  const n = (item.name ?? "") + " " + (item.type ?? "");
+  return /turret|gimbal|varipuck|rack/i.test(n);
+}
+
+export function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onTogglePower, childSlots, isComponentOn, toggleComponent, onClickChild, getEffectiveItem }: HardpointSlotProps) {
   const catColor = CAT_COLORS[hp.resolvedCategory] || "#52525b";
   const stat = item && isOn ? getKeyStat(hp.resolvedCategory, item.componentStats) : null;
   const displaySize = hp.maxSize > 0 ? hp.maxSize : (item?.size ?? 0);
-  const hasChildren = childSlots && childSlots.length > 0;
+  // Only show children if parent is a turret/gimbal/rack (not a direct weapon)
+  const parentIsTurret = (hp.resolvedCategory === "TURRET" || hp.resolvedCategory === "MISSILE_RACK")
+    && (!isOverridden || isTurretOrRack(item));
+  const hasChildren = parentIsTurret && childSlots && childSlots.length > 0;
 
   return (
     <>
@@ -35,10 +46,12 @@ export function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onToggleP
       {hasChildren && isOn && childSlots!.map(ch => {
         const chOn = isComponentOn ? isComponentOn(ch.hardpointName) : true;
         const chColor = CAT_COLORS[ch.category] || catColor;
-        const chStat = ch.equippedItem && chOn ? getKeyStat(ch.category || "WEAPON", ch.equippedItem.componentStats) : null;
-        const chSize = ch.maxSize > 0 ? ch.maxSize : (ch.equippedItem?.size ?? 0);
+        const effectiveItem = getEffectiveItem ? getEffectiveItem(ch.id) : ch.equippedItem;
+        const chStat = effectiveItem && chOn ? getKeyStat(ch.category || "WEAPON", effectiveItem.componentStats) : null;
+        const chSize = ch.maxSize > 0 ? ch.maxSize : (effectiveItem?.size ?? 0);
+        const chOverridden = getEffectiveItem ? effectiveItem !== ch.equippedItem : false;
         return (
-          <Row key={ch.id} catColor={chColor} size={chSize} item={ch.equippedItem} stat={chStat} isOn={chOn} isOverridden={false} onClick={() => onClickChild?.(ch)} onTogglePower={() => toggleComponent?.(ch.hardpointName)} hasChildren={false} depth={1} />
+          <Row key={ch.id} catColor={chColor} size={chSize} item={effectiveItem} stat={chStat} isOn={chOn} isOverridden={chOverridden} onClick={() => onClickChild?.(ch)} onTogglePower={() => toggleComponent?.(ch.hardpointName)} hasChildren={false} depth={1} />
         );
       })}
     </>

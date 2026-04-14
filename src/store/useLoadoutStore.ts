@@ -457,12 +457,18 @@ function computeStats(
 
     // TURRET/RACK with children: DPS comes from children, base stats from parent
     // Also create power instances for each child weapon
-    if ((cat === "TURRET" || cat === "MISSILE_RACK") && hp.children.length > 0) {
+    // If parent is overridden with a direct weapon (not turret/rack), skip children
+    const parentIsTurretOrRack = (cat === "TURRET" || cat === "MISSILE_RACK")
+      && (!overrides.has(hp.id) || (item?.type && /turret|gimbal|rack/i.test(item.type + " " + (item.name ?? ""))));
+    if (parentIsTurretOrRack && hp.children.length > 0) {
       if (!pn) accumBase(s);
       for (const child of hp.children) {
         const childOn = componentStates[child.hardpointName] !== false;
         if (!childOn) continue;
-        const cItem = child.equippedItem;
+        // Check overrides for child items (user may have swapped the weapon/missile)
+        const cItem = overrides.has(child.id)
+          ? (overrides.get(child.id) ?? null)
+          : child.equippedItem;
         if (!cItem) continue;
         accumDps(cItem.componentStats);
         if (!cItem.powerNetwork) accumBase(cItem.componentStats);
