@@ -63,6 +63,12 @@ const MFR_PREFIXES = [
 ];
 function getShipThumbUrl(name: string, manufacturer?: string | null): string {
   let n = name || "";
+  // Strip "Teach's Special" variants so these ships reuse their sister's thumb.
+  // Handles: straight quote, curly quote (’), no quote, prefix or suffix position.
+  n = n
+    .replace(/\s*[-–—]?\s*teach['’`]?s?\s+special\s*[-–—]?\s*/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   if (manufacturer) {
     const m = manufacturer.trim();
     if (n.startsWith(m + " ")) n = n.slice(m.length + 1);
@@ -185,3 +191,4 @@ function fmtCargo(cargo?: number | null): string {
   if (cargo >= 1000) return (cargo / 1000).toFixed(1) + "k";
   return Math.round(cargo).toString();
 }
+                                                                                                                                                                                           
