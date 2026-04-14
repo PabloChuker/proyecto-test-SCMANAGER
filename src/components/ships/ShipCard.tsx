@@ -105,15 +105,37 @@ const WIKELO_THUMBS: Array<[RegExp, string]> = [
   [/taurus/i,             "/ships/wikelo/Wikelo_Taurus.jpeg"],
 ];
 
-function getShipThumbUrl(name: string, manufacturer?: string | null): string {
+function getShipThumbUrl(
+  name: string,
+  manufacturer?: string | null,
+  opts?: { reference?: string | null; inGameOnly?: boolean },
+): string {
   const raw = name || "";
+  const ref = opts?.reference || "";
+  const hay = `${raw} ${ref}`;
   // ── Wikelo exclusive thumbnails ──
-  if (/wikelo/i.test(raw)) {
+  // Trigger if name OR reference mentions "wikelo" (avoids misrouting PYAM /
+  // Exec Hangar / Teach ships that share ship names like "Fortune" or "Guardian").
+  const wikeloScope = /wikelo/i.test(hay);
+  if (wikeloScope) {
     for (const [rx, url] of WIKELO_THUMBS) {
-      if (rx.test(raw)) return url;
+      if (rx.test(hay)) return url;
     }
     // Fall through to normal resolver if nothing matched (will try to reuse sister).
   }
+
+  // ── Wikelo-exclusive qualifiers (no "Wikelo" in name) ──
+  // The F8C Lightning and Wolf have Wikelo-only Military/Stealth variants.
+  // If a ship is named "F8C ... Military/Stealth" or "Wolf ... Military/Stealth"
+  // it's from Wikelo by definition — route to the Wikelo thumb even without the
+  // "wikelo" keyword in name/reference.
+  if (/f8c.*stealth|stealth.*f8c/i.test(hay))     return "/ships/wikelo/Wikelo_F8C_Stealth.jpeg";
+  if (/f8c.*(military|mil)\b|\b(military|mil).*f8c/i.test(hay))
+                                                    return "/ships/wikelo/Wikelo_F8C_Military.jpeg";
+  if (/\bwolf\b.*stealth|stealth.*\bwolf\b/i.test(hay))
+                                                    return "/ships/wikelo/Wikelo_Wolf_stealth.jpeg";
+  if (/\bwolf\b.*(military|mil)\b|\b(military|mil).*\bwolf\b/i.test(hay))
+                                                    return "/ships/wikelo/Wikelo_Wolf_Military.jpeg";
   let n = name || "";
   // Strip "Teach's Special" + "Wikelo's" variants so these ships reuse their sister's thumb
   // (when no explicit Wikelo override matched above).
@@ -143,7 +165,10 @@ export function ShipCard({
 }) {
   const roleIndicator = getRoleIndicator(ship.ship?.role || ship.ship?.career);
   const roleColor = roleIndicator.color;
-  const thumbUrl = getShipThumbUrl(ship.name, ship.manufacturer);
+  const thumbUrl = getShipThumbUrl(ship.name, ship.manufacturer, {
+    reference: ship.reference,
+    inGameOnly: ship.inGameOnly,
+  });
 
   return (
     <Link
