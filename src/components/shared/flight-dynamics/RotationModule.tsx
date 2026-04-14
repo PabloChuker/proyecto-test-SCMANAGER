@@ -37,7 +37,7 @@ export interface RotationModuleProps {
   axis: AxisKey;
   rate?: number | null;
   shipColor?: string;
-  glbUrl?: string | null;
+  glbUrl?: string | string[] | null;
   compact?: boolean;
 }
 

@@ -23,7 +23,7 @@ export interface ShipFlightDynamicsSingleProps {
   yawRate?:   number | null;
   rollRate?:  number | null;
   shipColor?: string;
-  glbUrl?:    string | null;
+  glbUrl?:    string | string[] | null;
   className?: string;
 }
 

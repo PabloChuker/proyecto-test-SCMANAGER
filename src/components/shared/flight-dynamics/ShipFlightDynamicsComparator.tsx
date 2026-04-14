@@ -21,7 +21,7 @@ export interface ShipDynamicsEntry {
   pitchRate?: number | null;
   yawRate?:   number | null;
   rollRate?:  number | null;
-  glbUrl?:    string | null;
+  glbUrl?:    string | string[] | null;
 }
 
 export interface ShipFlightDynamicsComparatorProps {

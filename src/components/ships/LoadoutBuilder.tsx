@@ -27,7 +27,7 @@ import { PowerManagementPanel } from "./PowerManagementPanel";
 import { ShipSelector } from "./ShipSelector";
 import { fmtStat, fmtDps } from "./loadout-utils";
 import { ShipFlightDynamicsSingle } from "@/components/shared/flight-dynamics";
-import { shipGlbUrl } from "@/lib/shipGlb";
+import { shipGlbCandidates } from "@/lib/shipGlb";
 import { useDpsGridLayout } from "@/lib/loadout-grid/useLoadoutGridLayout";
 import { DpsGridCanvas } from "@/components/domain/loadout/LoadoutGridCanvas";
 
@@ -408,7 +408,7 @@ function renderWidget(
             pitchRate={si.pitchRate}
             yawRate={si.yawRate}
             rollRate={si.rollRate}
-            glbUrl={shipGlbUrl(shipInfo.reference)}
+            glbUrl={shipGlbCandidates(shipInfo.reference)}
           />
         </div>
       );

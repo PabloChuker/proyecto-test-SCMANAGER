@@ -30,7 +30,12 @@ export interface ShipViewer3DProps {
   animate?: boolean;
   animationSpeed?: number;
   shipColor?: string;
-  glbUrl?: string | null;
+  /**
+   * Single URL or ordered list of candidate URLs. When an array is passed the
+   * viewer tries each URL in order and keeps the first that loads successfully
+   * — this enables "sister ship" fallbacks for variants (Wikelo / PYAM / …).
+   */
+  glbUrl?: string | string[] | null;
   className?: string;
 }
 
@@ -176,21 +181,44 @@ export function ShipViewer3D({
     scene.add(shipGroup);
 
     let cancelled = false;
-    if (glbUrl) {
-      loadGlb(glbUrl)
-        .then((source) => {
-          if (cancelled) return;
-          // Swap: remover la procedural y montar el GLB clonado
-          scene.remove(shipGroup);
-          disposeShipGeometry(shipGroup);
-          shipGroup = cloneGlbForScene(source);
-          shipIsGlb = true;
-          scene.add(shipGroup);
-        })
-        .catch((err) => {
-          if (cancelled) return;
-          console.warn("[ShipViewer3D] GLB load failed, keeping procedural:", glbUrl, err);
-        });
+    // glbUrl may be a single string or an ordered candidate list (sister-ship
+    // fallback chain). Try each in order until one loads.
+    const glbCandidates: string[] = Array.isArray(glbUrl)
+      ? glbUrl.filter((u): u is string => !!u)
+      : glbUrl
+        ? [glbUrl]
+        : [];
+    if (glbCandidates.length > 0) {
+      (async () => {
+        for (let i = 0; i < glbCandidates.length; i++) {
+          const url = glbCandidates[i];
+          try {
+            const source = await loadGlb(url);
+            if (cancelled) return;
+            scene.remove(shipGroup);
+            disposeShipGeometry(shipGroup);
+            shipGroup = cloneGlbForScene(source);
+            shipIsGlb = true;
+            scene.add(shipGroup);
+            return; // success
+          } catch (err) {
+            if (cancelled) return;
+            const isLast = i === glbCandidates.length - 1;
+            if (isLast) {
+              console.warn(
+                "[ShipViewer3D] All GLB candidates failed, keeping procedural:",
+                glbCandidates,
+                err,
+              );
+            } else {
+              console.info(
+                "[ShipViewer3D] GLB failed, trying sister fallback:",
+                url,
+              );
+            }
+          }
+        }
+      })();
     }
 
     // ─── Línea del eje de rotación ─────────────────────────────────────────
