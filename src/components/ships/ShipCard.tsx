@@ -131,9 +131,10 @@ function getShipThumbUrl(
     if (rx.test(raw)) return url;
   }
   // ── Wikelo exclusive thumbnails ──
-  // Trigger if name OR reference mentions "wikelo" (avoids misrouting PYAM /
-  // Exec Hangar / Teach ships that share ship names like "Fortune" or "Guardian").
-  const wikeloScope = /wikelo/i.test(hay);
+  // Trigger if name OR reference mentions "wikelo" or "pyam" — PYAM ships reuse
+  // the Wikelo sister thumbnails (both are in-game-only variants with the same
+  // external silhouette).
+  const wikeloScope = /wikelo|pyam/i.test(hay);
   if (wikeloScope) {
     for (const [rx, url] of WIKELO_THUMBS) {
       if (rx.test(hay)) return url;
