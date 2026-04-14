@@ -72,7 +72,7 @@ export default function BlueprintBrowser() {
 
       {/* ── Sidebar: Category Tree ── */}
       <div className="lg:col-span-1">
-        <div className="bg-zinc-900/70 border border-zinc-800/60 rounded-xl overflow-hidden">
+        <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl overflow-hidden">
           {/* Sidebar header */}
           <div className="px-4 py-3 border-b border-amber-500/20 bg-amber-500/5">
             <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">
@@ -144,7 +144,7 @@ export default function BlueprintBrowser() {
         {selectedBlueprint ? (
           <>
             {/* Header card */}
-            <div className="bg-zinc-900/70 border border-zinc-800/60 rounded-xl overflow-hidden">
+            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl overflow-hidden">
               {/* Amber accent top bar */}
               <div className="h-1 bg-gradient-to-r from-[#4a6741] to-orange-500" />
               <div className="p-6">
@@ -206,7 +206,7 @@ export default function BlueprintBrowser() {
             </div>
 
             {/* Parts Breakdown */}
-            <div className="bg-zinc-900/70 border border-zinc-800/60 rounded-xl overflow-hidden">
+            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl overflow-hidden">
               <div className="px-6 py-4 border-b border-zinc-800/60 bg-zinc-950/30">
                 <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest">
                   Parts Breakdown
@@ -269,7 +269,7 @@ export default function BlueprintBrowser() {
 
             {/* Quality Effects */}
             {Object.keys(selectedBlueprint.qualityEffects).length > 0 && (
-              <div className="bg-zinc-900/70 border border-zinc-800/60 rounded-xl overflow-hidden">
+              <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl overflow-hidden">
                 <div className="px-6 py-4 border-b border-zinc-800/60 bg-zinc-950/30">
                   <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest">
                     Quality Effects
@@ -318,7 +318,7 @@ export default function BlueprintBrowser() {
             )}
 
             {/* Total Materials Cost */}
-            <div className="bg-zinc-900/70 border border-zinc-800/60 rounded-xl overflow-hidden">
+            <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl overflow-hidden">
               <div className="px-6 py-4 border-b border-amber-500/20 bg-amber-500/5">
                 <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">
                   Total Material Cost
@@ -344,7 +344,7 @@ export default function BlueprintBrowser() {
 
             {/* How to Obtain */}
             {(selectedBlueprint.rewardPools.length > 0 || selectedBlueprint.isDefault) && (
-              <div className="bg-zinc-900/70 border border-zinc-800/60 rounded-xl overflow-hidden">
+              <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl overflow-hidden">
                 <div className="px-6 py-4 border-b border-zinc-800/60 bg-zinc-950/30">
                   <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest">
                     How to Obtain
@@ -373,7 +373,7 @@ export default function BlueprintBrowser() {
             )}
           </>
         ) : (
-          <div className="bg-zinc-900/70 border border-zinc-800/60 rounded-xl p-16 text-center">
+          <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-16 text-center">
             <p className="text-zinc-500 text-sm">Select a blueprint to view details</p>
           </div>
         )}
