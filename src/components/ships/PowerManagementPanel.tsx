@@ -346,28 +346,6 @@ export function PowerManagementPanel({
               })}
             </div>
 
-            {/* Category legend row */}
-            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 pt-0.5">
-              {CATEGORY_ORDER.filter(cat =>
-                columns.some(c => c.category === cat)
-              ).map(cat => {
-                const catCols = columns.filter(c => c.category === cat);
-                const totalPips = catCols.reduce((a, c) => a + c.totalPips, 0);
-                const allocPips = catCols.reduce((a, c) => a + c.allocatedPips, 0);
-                const color = catColor(cat);
-                return (
-                  <div key={cat} className="flex items-center gap-1">
-                    <div style={{ width: 6, height: 6, backgroundColor: color, borderRadius: 1 }} />
-                    <span className="text-[7px] font-mono text-zinc-500 uppercase tracking-wider">
-                      {cat}
-                    </span>
-                    <span className="text-[8px] font-mono font-bold" style={{ color }}>
-                      {allocPips}/{totalPips}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
           </div>
         )}
 
