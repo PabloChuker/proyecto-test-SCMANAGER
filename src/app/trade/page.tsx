@@ -41,7 +41,7 @@ export default function TradePage() {
         {/* ── Contenido ── */}
         <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
           {/* Tab Navigation */}
-          <div className="flex gap-2 mb-6 pb-4 border-b border-zinc-800/40">
+          <div className="flex gap-2 mb-6 pb-4 border-b border-zinc-800/40 justify-center">
             {TABS.map((tab) => (
               <button
                 key={tab.id}
