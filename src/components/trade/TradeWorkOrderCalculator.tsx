@@ -120,6 +120,15 @@ export default function TradeWorkOrderCalculator() {
   const [loadingParty, setLoadingParty] = useState(false);
   const [partyMsg, setPartyMsg] = useState<string | null>(null);
 
+  // Complete + Split modal state
+  const [showSplitModal, setShowSplitModal] = useState(false);
+  type SplitStrategy = "role_pct" | "equal" | "by_aporte";
+  const [splitStrategy, setSplitStrategy] = useState<SplitStrategy>("role_pct");
+  // When true, the next render will call saveAll("completed"). We use this
+  // because we need setParticipants(...) to fully flush before saveAll reads
+  // participants from its closure. A useEffect below handles the trigger.
+  const [pendingCompleteSave, setPendingCompleteSave] = useState(false);
+
   // Draft persistence — once the initial mount hydration runs, flip this on
   // so the auto-save effect starts writing to localStorage.
   const hydratedRef = useRef(false);
@@ -378,6 +387,107 @@ export default function TradeWorkOrderCalculator() {
     );
   }
 
+  /**
+   * computeSplitPreview
+   *
+   * Given a strategy, compute the recommended per-participant split for the
+   * Complete + Split modal. Each row returns:
+   *   - role_pct_preview : % of NET profit assigned (0-100)
+   *   - profit_share    : net_profit * role_pct_preview / 100
+   *   - payout          : contribution_uec + profit_share
+   *
+   * Strategies:
+   *   role_pct   → use whatever % the user already set; if sum is 0, show
+   *                zero profit shares (the UI warns and suggests Equalize).
+   *   equal      → divide net_profit in equal shares; last person absorbs
+   *                rounding residual.
+   *   by_aporte  → divide net_profit proportional to contribution_uec (the
+   *                participant's actual investment). Falls back to equal
+   *                if total_contrib is 0.
+   */
+  function computeSplitPreview(strategy: SplitStrategy) {
+    const n = participants.length;
+    const net = totals.net_profit;
+    const totalContrib = totals.total_contrib;
+    const rows = participants.map((p, i) => {
+      let pct = 0;
+      if (strategy === "role_pct") {
+        pct = Number(p.role_pct) || 0;
+      } else if (strategy === "equal") {
+        if (n === 0) pct = 0;
+        else if (i === n - 1) {
+          // last person absorbs rounding residual
+          const each = Math.floor((100 / n) * 100) / 100;
+          pct = Math.round((100 - each * (n - 1)) * 100) / 100;
+        } else {
+          pct = Math.floor((100 / n) * 100) / 100;
+        }
+      } else if (strategy === "by_aporte") {
+        if (totalContrib > 0) {
+          pct = ((p.contribution_uec || 0) / totalContrib) * 100;
+          pct = Math.round(pct * 100) / 100;
+        } else if (n > 0) {
+          // fallback: equal
+          pct = Math.round((100 / n) * 100) / 100;
+        }
+      }
+      const profit_share = Math.round((net * pct) / 100);
+      const payout = Math.round((p.contribution_uec || 0) + profit_share);
+      return {
+        localKey: p.localKey,
+        id: p.id,
+        display_name: p.display_name,
+        avatar_url: p.avatar_url,
+        contribution_uec: p.contribution_uec || 0,
+        role: p.role,
+        role_pct_preview: pct,
+        profit_share,
+        payout,
+      };
+    });
+    // Patch: ensure sum(pct) == 100 for equal/by_aporte by adjusting last row
+    if ((strategy === "equal" || strategy === "by_aporte") && rows.length > 0) {
+      const sum = rows.reduce((s, r) => s + r.role_pct_preview, 0);
+      const diff = Math.round((100 - sum) * 100) / 100;
+      if (Math.abs(diff) > 0.001) {
+        rows[rows.length - 1].role_pct_preview = Math.round(
+          (rows[rows.length - 1].role_pct_preview + diff) * 100,
+        ) / 100;
+        // recompute last row's shares
+        const last = rows[rows.length - 1];
+        last.profit_share = Math.round((net * last.role_pct_preview) / 100);
+        last.payout = Math.round((last.contribution_uec || 0) + last.profit_share);
+      }
+    }
+    return rows;
+  }
+
+  /**
+   * Apply the split preview to the local participants and trigger a save
+   * that also transitions status → "completed". We set `pendingCompleteSave`
+   * so that a useEffect fires saveAll("completed") on the NEXT render once
+   * participants state has flushed (and saveAll's useCallback has been
+   * rebuilt with the fresh closure).
+   */
+  function applySplitAndComplete() {
+    const rows = computeSplitPreview(splitStrategy);
+    const byKey = new Map(rows.map((r) => [r.localKey, r]));
+    setParticipants((ps) =>
+      ps.map((p) => {
+        const r = byKey.get(p.localKey);
+        if (!r) return p;
+        return {
+          ...p,
+          role_pct: r.role_pct_preview,
+          payout_uec: r.payout,
+          dirty: true,
+        };
+      }),
+    );
+    setShowSplitModal(false);
+    setPendingCompleteSave(true);
+  }
+
   // ── Load participants from the user's active party ──
   // Queries party_members → parties → profiles, then merges any members not
   // already in the local list. Keeps existing rows untouched so manual edits
@@ -529,6 +639,7 @@ export default function TradeWorkOrderCalculator() {
                 role_pct: p.role_pct,
                 contribution_uec: p.contribution_uec,
                 contribution_note: p.contribution_note,
+                payout_uec: p.payout_uec,
               })),
               expenses: expenses.map((e) => ({
                 payer_name: e.payer_name,
@@ -584,6 +695,7 @@ export default function TradeWorkOrderCalculator() {
                 role_pct: p.role_pct,
                 contribution_uec: p.contribution_uec,
                 contribution_note: p.contribution_note,
+                payout_uec: p.payout_uec,
               }),
             });
             if (!r.ok) throw new Error("Failed to add participant");
@@ -599,6 +711,7 @@ export default function TradeWorkOrderCalculator() {
                 role_pct: p.role_pct,
                 contribution_uec: p.contribution_uec,
                 contribution_note: p.contribution_note,
+                payout_uec: p.payout_uec,
                 paid: p.paid,
               }),
             });
@@ -652,6 +765,15 @@ export default function TradeWorkOrderCalculator() {
       notes, participants, expenses, serverId,
     ],
   );
+
+  // Fires saveAll("completed") on the render AFTER applySplitAndComplete
+  // mutated participants, so saveAll's closure sees the fresh role_pct/payout.
+  useEffect(() => {
+    if (!pendingCompleteSave) return;
+    setPendingCompleteSave(false);
+    saveAll("completed");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingCompleteSave, saveAll]);
 
   async function deleteOrder() {
     if (!serverId) {
@@ -757,9 +879,22 @@ export default function TradeWorkOrderCalculator() {
           )}
           {status !== "completed" && (
             <button
-              onClick={() => saveAll("completed")}
-              disabled={saving || !pctOk}
-              title={!pctOk ? "Los % de roles deben sumar 100" : ""}
+              onClick={() => {
+                // Open the split modal with a sensible default strategy:
+                //   - If the user already set some %, prefer role_pct
+                //   - If % are all 0 but aportes exist, suggest by_aporte
+                //   - Otherwise, equal split
+                if (totals.pct_sum > 0) {
+                  setSplitStrategy("role_pct");
+                } else if (totals.total_contrib > 0) {
+                  setSplitStrategy("by_aporte");
+                } else {
+                  setSplitStrategy("equal");
+                }
+                setShowSplitModal(true);
+              }}
+              disabled={saving || participants.length === 0}
+              title={participants.length === 0 ? "Agregá al menos un participante" : ""}
               className="px-3 py-1.5 text-[10px] uppercase tracking-widest bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-sm text-emerald-300 transition-colors disabled:opacity-40"
             >
               Complete + Split
@@ -1057,6 +1192,200 @@ export default function TradeWorkOrderCalculator() {
           placeholder="Detalles de la corrida, rutas alternativas, complicaciones…"
         />
       </div>
+
+      {/* ── Complete + Split modal ── */}
+      {showSplitModal && (() => {
+        const rows = computeSplitPreview(splitStrategy);
+        const payoutTotal = rows.reduce((s, r) => s + r.payout, 0);
+        const profitShareTotal = rows.reduce((s, r) => s + r.profit_share, 0);
+        const pctSum = rows.reduce((s, r) => s + r.role_pct_preview, 0);
+        const unassignedPct = splitStrategy === "role_pct" && Math.abs(pctSum) < 0.001;
+
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => setShowSplitModal(false)}
+          >
+            <div
+              className="bg-zinc-950 border border-emerald-500/30 rounded-sm w-full max-w-4xl max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between p-4 border-b border-zinc-800/60">
+                <div>
+                  <div className="text-[9px] uppercase tracking-[0.2em] text-emerald-400">
+                    Reparto final
+                  </div>
+                  <div className="text-lg font-mono text-zinc-100 mt-0.5">
+                    Complete + Split
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowSplitModal(false)}
+                  className="text-zinc-500 hover:text-zinc-300 text-xl leading-none"
+                >
+                  ×
+                </button>
+              </div>
+
+              {/* Summary */}
+              <div className="grid grid-cols-3 gap-3 p-4 border-b border-zinc-800/60">
+                <MiniStat
+                  label="Inversión total"
+                  value={`${fmt(totals.total_buy)} aUEC`}
+                  color="text-zinc-200"
+                />
+                <MiniStat
+                  label="Gastos"
+                  value={`${fmt(totals.total_expenses)} aUEC`}
+                  color="text-amber-300"
+                />
+                <MiniStat
+                  label="Profit neto"
+                  value={`${fmt(totals.net_profit)} aUEC`}
+                  color={totals.net_profit >= 0 ? "text-emerald-400" : "text-red-400"}
+                />
+              </div>
+
+              {/* Strategy selector */}
+              <div className="p-4 border-b border-zinc-800/60">
+                <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500 mb-2">
+                  Estrategia de reparto
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      { id: "role_pct", label: "Por % asignado", hint: "Usa los % que ya configuraste" },
+                      { id: "equal", label: "Partes iguales", hint: "Profit dividido en partes iguales" },
+                      { id: "by_aporte", label: "Por aporte", hint: "Profit proporcional a lo que cada uno puso" },
+                    ] as { id: SplitStrategy; label: string; hint: string }[]
+                  ).map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => setSplitStrategy(s.id)}
+                      title={s.hint}
+                      className={`px-3 py-1.5 text-[10px] uppercase tracking-widest border rounded-sm transition-colors ${
+                        splitStrategy === s.id
+                          ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
+                          : "bg-zinc-900/60 border-zinc-700/50 text-zinc-400 hover:text-zinc-200"
+                      }`}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+                {unassignedPct && (
+                  <div className="mt-3 p-2 bg-amber-950/30 border border-amber-800/40 rounded-sm text-[11px] text-amber-300">
+                    ⚠ Todos los % están en 0. Cambiá a "Partes iguales" o "Por aporte",
+                    o cerrá el modal y apretá <span className="font-mono">Equalize</span> primero.
+                  </div>
+                )}
+              </div>
+
+              {/* Per-participant breakdown */}
+              <div className="p-4">
+                <div className="grid grid-cols-12 gap-2 text-[9px] uppercase tracking-widest text-zinc-500 mb-2 px-1">
+                  <div className="col-span-4">Participante</div>
+                  <div className="col-span-2 text-right">Aporte</div>
+                  <div className="col-span-1 text-right">%</div>
+                  <div className="col-span-2 text-right">Profit share</div>
+                  <div className="col-span-3 text-right">Transferir (payout)</div>
+                </div>
+                <div className="space-y-1.5">
+                  {rows.map((r) => (
+                    <div
+                      key={r.localKey}
+                      className="grid grid-cols-12 gap-2 items-center px-2 py-2 bg-zinc-900/40 border border-zinc-800/50 rounded-sm text-xs"
+                    >
+                      <div className="col-span-4 flex items-center gap-2 min-w-0">
+                        {r.avatar_url ? (
+                          <img
+                            src={r.avatar_url}
+                            alt=""
+                            className="w-7 h-7 rounded-full shrink-0 border border-zinc-700/60 object-cover bg-zinc-900"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <div className="w-7 h-7 rounded-full shrink-0 border border-zinc-700/60 bg-zinc-800/80 flex items-center justify-center text-[10px] font-mono text-zinc-500">
+                            {(r.display_name || "?").charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <div className="truncate text-zinc-100">{r.display_name || "—"}</div>
+                          <div className="text-[9px] uppercase tracking-widest text-zinc-500">
+                            {r.role}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="col-span-2 text-right font-mono text-zinc-300">
+                        {fmt(r.contribution_uec)}
+                      </div>
+                      <div className="col-span-1 text-right font-mono text-zinc-400">
+                        {r.role_pct_preview.toFixed(1)}
+                      </div>
+                      <div
+                        className={`col-span-2 text-right font-mono ${
+                          r.profit_share >= 0 ? "text-emerald-400" : "text-red-400"
+                        }`}
+                      >
+                        {r.profit_share >= 0 ? "+" : ""}
+                        {fmt(r.profit_share)}
+                      </div>
+                      <div className="col-span-3 text-right font-mono font-bold text-emerald-300">
+                        {fmt(r.payout)} aUEC
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Totals row */}
+                <div className="grid grid-cols-12 gap-2 items-center px-2 py-2 mt-2 border-t border-zinc-800/60 text-xs">
+                  <div className="col-span-4 text-[10px] uppercase tracking-widest text-zinc-500">
+                    Totales
+                  </div>
+                  <div className="col-span-2 text-right font-mono text-zinc-400">
+                    {fmt(totals.total_contrib)}
+                  </div>
+                  <div className="col-span-1 text-right font-mono text-zinc-500">
+                    {pctSum.toFixed(1)}
+                  </div>
+                  <div className="col-span-2 text-right font-mono text-emerald-400">
+                    {fmt(profitShareTotal)}
+                  </div>
+                  <div className="col-span-3 text-right font-mono font-bold text-emerald-300">
+                    {fmt(payoutTotal)}
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-between gap-3 p-4 border-t border-zinc-800/60">
+                <div className="text-[11px] text-zinc-500">
+                  Al confirmar, guardamos el snapshot del reparto y marcamos la orden como <span className="text-emerald-400">completed</span>.
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setShowSplitModal(false)}
+                    disabled={saving}
+                    className="px-3 py-1.5 text-[10px] uppercase tracking-widest bg-zinc-800/60 hover:bg-zinc-700/60 border border-zinc-700/60 rounded-sm text-zinc-300"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={applySplitAndComplete}
+                    disabled={saving || (unassignedPct)}
+                    className="px-4 py-1.5 text-[10px] uppercase tracking-widest bg-emerald-500/25 hover:bg-emerald-500/35 border border-emerald-500/50 rounded-sm text-emerald-200 disabled:opacity-40"
+                  >
+                    {saving ? "Guardando…" : "Aplicar y Completar"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

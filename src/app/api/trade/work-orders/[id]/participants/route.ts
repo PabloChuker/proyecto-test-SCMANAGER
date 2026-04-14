@@ -49,6 +49,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
         role_pct: body.role_pct || 0,
         contribution_uec: body.contribution_uec || 0,
         contribution_note: body.contribution_note || null,
+        payout_uec: body.payout_uec || 0,
       })
       .select()
       .single();

@@ -118,6 +118,7 @@ export async function POST(request: NextRequest) {
         role_pct: p.role_pct || 0,
         contribution_uec: p.contribution_uec || 0,
         contribution_note: p.contribution_note || null,
+        payout_uec: p.payout_uec || 0,
       }));
       const { error: pErr } = await supabase.from("trade_wo_participants").insert(rows);
       if (pErr) throw pErr;
