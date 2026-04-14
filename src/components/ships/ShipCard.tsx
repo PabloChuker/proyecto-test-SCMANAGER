@@ -61,12 +61,66 @@ const MFR_PREFIXES = [
   "Musashi Industrial", "Tumbril", "Banu", "Vanduul", "Roberts Space Industries",
   "Crusader Industries", "Musashi", "CO",
 ];
+
+// Wikelo exclusive variants — each ship gets its own thumbnail in /public/ships/wikelo/.
+// Order matters: more specific patterns (e.g. "F8C Military") MUST come before the
+// generic fallback (e.g. "F8C"). First regex match wins.
+const WIKELO_THUMBS: Array<[RegExp, string]> = [
+  // Variants with qualifier first
+  [/f8c.*stealth|stealth.*f8c/i,           "/ships/wikelo/Wikelo_F8C_Stealth.jpeg"],
+  [/f8c.*(military|mil)|(?:military|mil).*f8c/i, "/ships/wikelo/Wikelo_F8C_Military.jpeg"],
+  [/wolf.*stealth|stealth.*wolf/i,         "/ships/wikelo/Wikelo_Wolf_stealth.jpeg"],
+  [/wolf.*(military|mil)|(?:military|mil).*wolf/i, "/ships/wikelo/Wikelo_Wolf_Military.jpeg"],
+  [/guardian.*mx|mx.*guardian/i,           "/ships/wikelo/Wikelo_GuardianMX.png"],
+  [/guardian.*qi|qi.*guardian/i,           "/ships/wikelo/Wikelo_GuardianQI.jpeg"],
+  [/starlancer.*max|max.*starlancer/i,     "/ships/wikelo/Wikelo_StarlancerMAX.png"],
+  [/starlancer.*tac|tac.*starlancer/i,     "/ships/wikelo/Wikelo_StarlancerTAC.png"],
+  [/zeus.*cl|cl.*zeus/i,                   "/ships/wikelo/Wikelo_ZeusCL.png"],
+  [/zeus.*es|es.*zeus/i,                   "/ships/wikelo/Wikelo_ZeusES.png"],
+  [/prowler.*utility|utility.*prowler/i,   "/ships/wikelo/Wikelo_ProwlerUtility.jpeg"],
+  [/apollo.*triage|triage.*apollo/i,       "/ships/wikelo/Wikelo_ApoloTriage.jpeg"],
+  [/terrapin.*medic|medic.*terrapin/i,     "/ships/wikelo/Wikelo_TerraminMedic.png"],
+  [/ursa.*medivac|medivac.*ursa/i,         "/ships/wikelo/Wikelo_UrsaMedivac.png"],
+  [/super\s*hornet.*(mk\s*ii|mk2|mkii)|(?:mk\s*ii|mk2|mkii).*super\s*hornet/i, "/ships/wikelo/Wikelo_SuperHornetMk2.jpeg"],
+  [/idris[-\s]*p/i,                        "/ships/wikelo/Wikelo_IdrisP.jpeg"],
+  [/c1.*spirit|spirit.*c1/i,               "/ships/wikelo/Wikelo_C1Spirit.png"],
+  // Generic names
+  [/\ba2\b/i,             "/ships/wikelo/Wikelo_A2.png"],
+  [/asgard/i,             "/ships/wikelo/Wikelo_Asgard.jpeg"],
+  [/firebird/i,           "/ships/wikelo/Wikelo_Firebird.png"],
+  [/fortune/i,            "/ships/wikelo/Wikelo_Fortune.jpeg"],
+  [/golem/i,              "/ships/wikelo/Wikelo_Golem.jpeg"],
+  [/guardian/i,           "/ships/wikelo/Wikelo_Guardian.png"],
+  [/\bion\b/i,            "/ships/wikelo/Wikelo_ION.jpeg"],
+  [/inferno/i,            "/ships/wikelo/Wikelo_Inferno.jpeg"],
+  [/intrepid/i,           "/ships/wikelo/Wikelo_Intrepid.png"],
+  [/meteor/i,             "/ships/wikelo/Wikelo_Meteor.png"],
+  [/\bnox\b/i,            "/ships/wikelo/Wikelo_Nox.png"],
+  [/peregrine/i,          "/ships/wikelo/Wikelo_Peregrine.png"],
+  [/polaris/i,            "/ships/wikelo/Wikelo_Polaris.jpeg"],
+  [/prospector/i,         "/ships/wikelo/Wikelo_Prospector.png"],
+  [/\bpulse\b/i,          "/ships/wikelo/Wikelo_Pulse.jpeg"],
+  [/\braft\b/i,           "/ships/wikelo/Wikelo_Raft.png"],
+  [/scorpius/i,           "/ships/wikelo/Wikelo_Scorpius.jpeg"],
+  [/taurus/i,             "/ships/wikelo/Wikelo_Taurus.jpeg"],
+];
+
 function getShipThumbUrl(name: string, manufacturer?: string | null): string {
+  const raw = name || "";
+  // ── Wikelo exclusive thumbnails ──
+  if (/wikelo/i.test(raw)) {
+    for (const [rx, url] of WIKELO_THUMBS) {
+      if (rx.test(raw)) return url;
+    }
+    // Fall through to normal resolver if nothing matched (will try to reuse sister).
+  }
   let n = name || "";
-  // Strip "Teach's Special" variants so these ships reuse their sister's thumb.
+  // Strip "Teach's Special" + "Wikelo's" variants so these ships reuse their sister's thumb
+  // (when no explicit Wikelo override matched above).
   // Handles: straight quote, curly quote (’), no quote, prefix or suffix position.
   n = n
     .replace(/\s*[-–—]?\s*teach['’`]?s?\s+special\s*[-–—]?\s*/gi, " ")
+    .replace(/\s*[-–—]?\s*wikelo['’`]?s?\s*[-–—]?\s*/gi, " ")
     .replace(/\s+/g, " ")
     .trim();
   if (manufacturer) {
