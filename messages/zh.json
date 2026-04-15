@@ -313,6 +313,41 @@
       "terminals": "码头",
       "workorders": "工单",
       "dashboard": "仪表盘"
+    },
+    "commodities": {
+      "search": "搜索",
+      "searchPlaceholder": "名称或代码...",
+      "type": "类型",
+      "all": "全部",
+      "raw": "原料",
+      "refined": "精炼",
+      "buy": "买入",
+      "sell": "卖出",
+      "margin": "利润",
+      "illegal": "非法",
+      "terminal": "终端",
+      "system": "星系",
+      "loadingStationPrices": "正在加载各站点价格...",
+      "noStationPrices": "无各站点价格数据",
+      "totalCount": "{count} 件商品",
+      "noResults": "未找到商品。"
+    },
+    "terminals": {
+      "search": "搜索终端",
+      "searchPlaceholder": "名称、代码...",
+      "system": "星系",
+      "maxContainer": "最大货柜",
+      "freightElevator": "货运电梯",
+      "loadingDock": "装卸区",
+      "loadingCommodities": "正在加载商品...",
+      "commodity": "商品",
+      "buy": "买入",
+      "sell": "卖出",
+      "stock": "库存",
+      "status": "状态",
+      "noCommodities": "无商品数据",
+      "totalCount": "{count} 个终端",
+      "noResults": "未找到终端。"
     }
   }
 }

@@ -313,6 +313,41 @@
       "terminals": "Terminals",
       "workorders": "Aufträge",
       "dashboard": "Übersicht"
+    },
+    "commodities": {
+      "search": "Suchen",
+      "searchPlaceholder": "Name oder Code...",
+      "type": "Typ",
+      "all": "Alle",
+      "raw": "Roh",
+      "refined": "Raffiniert",
+      "buy": "Kauf",
+      "sell": "Verkauf",
+      "margin": "Marge",
+      "illegal": "ILLEGAL",
+      "terminal": "Terminal",
+      "system": "System",
+      "loadingStationPrices": "Preise pro Station werden geladen...",
+      "noStationPrices": "Keine Stationspreisdaten",
+      "totalCount": "{count} Waren",
+      "noResults": "Keine Waren gefunden."
+    },
+    "terminals": {
+      "search": "Terminal suchen",
+      "searchPlaceholder": "Name, Code...",
+      "system": "System",
+      "maxContainer": "Max. Container",
+      "freightElevator": "Frachtaufzug",
+      "loadingDock": "Ladestation",
+      "loadingCommodities": "Waren werden geladen...",
+      "commodity": "Ware",
+      "buy": "Kauf",
+      "sell": "Verkauf",
+      "stock": "Bestand",
+      "status": "Status",
+      "noCommodities": "Keine Warendaten",
+      "totalCount": "{count} Terminals",
+      "noResults": "Keine Terminals gefunden."
     }
   }
 }

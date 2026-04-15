@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 
 interface Commodity {
   id: string | number;
@@ -53,6 +54,7 @@ const KIND_COLORS: Record<string, string> = {
 };
 
 export default function CommodityBrowser() {
+  const t = useTranslations("Trade.commodities");
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState("");
   const [rawFilter, setRawFilter] = useState<"all" | "raw" | "refined">("all");
@@ -127,11 +129,11 @@ export default function CommodityBrowser() {
       <div className="flex flex-wrap gap-3 items-end">
         <div className="flex-1 min-w-[200px]">
           <label className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1.5">
-            Search
+            {t("search")}
           </label>
           <input
             type="text"
-            placeholder="Name or code..."
+            placeholder={t("searchPlaceholder")}
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
@@ -142,7 +144,7 @@ export default function CommodityBrowser() {
         </div>
         <div>
           <label className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1.5">
-            Tipo
+            {t("type")}
           </label>
           <select
             value={kind}
@@ -152,7 +154,7 @@ export default function CommodityBrowser() {
             }}
             className="bg-zinc-800/50 border border-zinc-700/60 rounded-sm px-3 py-1.5 text-sm text-zinc-100 focus:outline-none focus:border-cyan-500/50"
           >
-            <option value="">Todos</option>
+            <option value="">{t("all")}</option>
             {data?.kinds?.map((k) => (
               <option key={k} value={k}>
                 {k}
@@ -174,7 +176,7 @@ export default function CommodityBrowser() {
                   : "text-zinc-500 border-zinc-700/60 hover:text-zinc-300 hover:border-zinc-600"
               }`}
             >
-              {v === "all" ? "Todos" : v === "raw" ? "Raw" : "Refined"}
+              {v === "all" ? t("all") : v === "raw" ? t("raw") : t("refined")}
             </button>
           ))}
         </div>
@@ -225,19 +227,19 @@ export default function CommodityBrowser() {
                     </div>
                     <div className="grid grid-cols-3 gap-2 text-[10px]">
                       <div>
-                        <div className="text-zinc-600 uppercase">Compra</div>
+                        <div className="text-zinc-600 uppercase">{t("buy")}</div>
                         <div className="font-mono text-cyan-400">
                           {fmtN(c.priceBuy)}
                         </div>
                       </div>
                       <div>
-                        <div className="text-zinc-600 uppercase">Venta</div>
+                        <div className="text-zinc-600 uppercase">{t("sell")}</div>
                         <div className="font-mono text-amber-400">
                           {fmtN(c.priceSell)}
                         </div>
                       </div>
                       <div>
-                        <div className="text-zinc-600 uppercase">Margen</div>
+                        <div className="text-zinc-600 uppercase">{t("margin")}</div>
                         <div
                           className={`font-mono ${m != null && m > 0 ? "text-emerald-400" : "text-zinc-600"}`}
                         >
@@ -249,7 +251,7 @@ export default function CommodityBrowser() {
                       <div className="flex gap-1.5 mt-2">
                         {c.isIllegal && (
                           <span className="text-[8px] px-1 py-0.5 bg-red-500/10 text-red-400 border border-red-500/20 rounded-sm font-mono">
-                            ILEGAL
+                            {t("illegal")}
                           </span>
                         )}
                         {c.isRaw && (
@@ -266,23 +268,23 @@ export default function CommodityBrowser() {
                     <div className="mt-1 p-2 bg-zinc-950/80 border border-zinc-800/40 rounded-sm max-h-72 overflow-y-auto">
                       {loadingPrices ? (
                         <div className="text-[10px] text-zinc-600 animate-pulse py-4 text-center">
-                          Cargando precios por estación...
+                          {t("loadingStationPrices")}
                         </div>
                       ) : stationPrices.length > 0 ? (
                         <table className="w-full text-[10px]">
                           <thead>
                             <tr className="text-zinc-600 border-b border-zinc-800/40">
                               <th className="text-left py-1 font-mono">
-                                Terminal
+                                {t("terminal")}
                               </th>
                               <th className="text-left py-1 font-mono">
-                                Sistema
+                                {t("system")}
                               </th>
                               <th className="text-right py-1 font-mono">
-                                Compra
+                                {t("buy")}
                               </th>
                               <th className="text-right py-1 font-mono">
-                                Venta
+                                {t("sell")}
                               </th>
                             </tr>
                           </thead>
@@ -314,7 +316,7 @@ export default function CommodityBrowser() {
                         </table>
                       ) : (
                         <div className="text-[10px] text-zinc-600 py-4 text-center">
-                          Sin datos de precios por estación
+                          {t("noStationPrices")}
                         </div>
                       )}
                     </div>
@@ -328,7 +330,7 @@ export default function CommodityBrowser() {
           {data.totalPages > 1 && (
             <div className="flex items-center justify-between">
               <div className="text-[10px] font-mono text-zinc-600">
-                {data.total} commodities
+                {t("totalCount", { count: data.total })}
               </div>
               <div className="flex gap-1.5">
                 <button
@@ -355,7 +357,7 @@ export default function CommodityBrowser() {
       ) : (
         !loading && (
           <div className="py-16 text-center text-zinc-600 text-sm">
-            No se encontraron commodities.
+            {t("noResults")}
           </div>
         )
       )}

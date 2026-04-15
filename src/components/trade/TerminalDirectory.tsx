@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTranslations } from "next-intl";
 
 interface Terminal {
   id: number;
@@ -66,6 +67,7 @@ const AMENITY_BADGES = [
 ] as const;
 
 export default function TerminalDirectory() {
+  const tt = useTranslations("Trade.terminals");
   const [search, setSearch] = useState("");
   const [systemKey, setSystemKey] = useState("All");
   const [amenityFilter, setAmenityFilter] = useState<string | null>(null);
@@ -126,13 +128,13 @@ export default function TerminalDirectory() {
       {/* ── Filters ── */}
       <div className="flex flex-wrap gap-3 items-end">
         <div className="flex-1 min-w-[200px]">
-          <label className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1.5">Search Terminal</label>
-          <input type="text" placeholder="Name, code..." value={search}
+          <label className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1.5">{tt("search")}</label>
+          <input type="text" placeholder={tt("searchPlaceholder")} value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
             className="w-full bg-zinc-800/50 border border-zinc-700/60 rounded-sm px-3 py-1.5 text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-cyan-500/50" />
         </div>
         <div>
-          <label className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1.5">System</label>
+          <label className="text-[10px] uppercase tracking-widest text-zinc-500 block mb-1.5">{tt("system")}</label>
           <select value={systemKey} onChange={e => { setSystemKey(e.target.value); setPage(1); }}
             className="bg-zinc-800/50 border border-zinc-700/60 rounded-sm px-3 py-1.5 text-sm text-zinc-100 focus:outline-none focus:border-cyan-500/50">
             {Object.keys(SYSTEM_MAP).map(k => <option key={k} value={k}>{k}</option>)}
@@ -192,25 +194,25 @@ export default function TerminalDirectory() {
                       </div>
                     </div>
                     <div className="flex gap-4 mt-2 text-[10px]">
-                      <span className="text-zinc-600">Max Container: <span className="text-zinc-400 font-mono">{t.maxContainerSize} SCU</span></span>
-                      {t.hasFreightElevator && <span className="text-zinc-600">Freight Elevator</span>}
-                      {t.hasLoadingDock && <span className="text-zinc-600">Loading Dock</span>}
+                      <span className="text-zinc-600">{tt("maxContainer")}: <span className="text-zinc-400 font-mono">{t.maxContainerSize} SCU</span></span>
+                      {t.hasFreightElevator && <span className="text-zinc-600">{tt("freightElevator")}</span>}
+                      {t.hasLoadingDock && <span className="text-zinc-600">{tt("loadingDock")}</span>}
                     </div>
                   </button>
 
                   {isExpanded && (
                     <div className="mt-1 p-2 bg-zinc-950/80 border border-zinc-800/40 rounded-sm max-h-72 overflow-y-auto">
                       {loadingCommodities ? (
-                        <div className="text-[10px] text-zinc-600 animate-pulse py-4 text-center">Cargando commodities...</div>
+                        <div className="text-[10px] text-zinc-600 animate-pulse py-4 text-center">{tt("loadingCommodities")}</div>
                       ) : commodities.length > 0 ? (
                         <table className="w-full text-[10px]">
                           <thead>
                             <tr className="text-zinc-600 border-b border-zinc-800/40">
-                              <th className="text-left py-1 font-mono">Commodity</th>
-                              <th className="text-right py-1 font-mono">Compra</th>
-                              <th className="text-right py-1 font-mono">Venta</th>
-                              <th className="text-right py-1 font-mono">Stock</th>
-                              <th className="text-center py-1 font-mono">Estado</th>
+                              <th className="text-left py-1 font-mono">{tt("commodity")}</th>
+                              <th className="text-right py-1 font-mono">{tt("buy")}</th>
+                              <th className="text-right py-1 font-mono">{tt("sell")}</th>
+                              <th className="text-right py-1 font-mono">{tt("stock")}</th>
+                              <th className="text-center py-1 font-mono">{tt("status")}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -237,7 +239,7 @@ export default function TerminalDirectory() {
                           </tbody>
                         </table>
                       ) : (
-                        <div className="text-[10px] text-zinc-600 py-4 text-center">Sin datos de commodities</div>
+                        <div className="text-[10px] text-zinc-600 py-4 text-center">{tt("noCommodities")}</div>
                       )}
                     </div>
                   )}
@@ -248,7 +250,7 @@ export default function TerminalDirectory() {
 
           {data.totalPages > 1 && (
             <div className="flex items-center justify-between">
-              <div className="text-[10px] font-mono text-zinc-600">{data.total} terminales</div>
+              <div className="text-[10px] font-mono text-zinc-600">{tt("totalCount", { count: data.total })}</div>
               <div className="flex gap-1.5">
                 <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}
                   className="px-2.5 py-1 text-[10px] bg-zinc-800/40 hover:bg-zinc-700/40 disabled:opacity-30 border border-zinc-700/60 rounded-sm transition-colors">←</button>
@@ -260,7 +262,7 @@ export default function TerminalDirectory() {
           )}
         </>
       ) : !loading && (
-        <div className="py-16 text-center text-zinc-600 text-sm">No se encontraron terminales.</div>
+        <div className="py-16 text-center text-zinc-600 text-sm">{tt("noResults")}</div>
       )}
     </div>
   );

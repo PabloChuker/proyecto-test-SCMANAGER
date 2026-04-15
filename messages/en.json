@@ -313,6 +313,41 @@
       "terminals": "Terminals",
       "workorders": "Work Orders",
       "dashboard": "Dashboard"
+    },
+    "commodities": {
+      "search": "Search",
+      "searchPlaceholder": "Name or code...",
+      "type": "Type",
+      "all": "All",
+      "raw": "Raw",
+      "refined": "Refined",
+      "buy": "Buy",
+      "sell": "Sell",
+      "margin": "Margin",
+      "illegal": "ILLEGAL",
+      "terminal": "Terminal",
+      "system": "System",
+      "loadingStationPrices": "Loading prices per station...",
+      "noStationPrices": "No per-station price data",
+      "totalCount": "{count} commodities",
+      "noResults": "No commodities found."
+    },
+    "terminals": {
+      "search": "Search Terminal",
+      "searchPlaceholder": "Name, code...",
+      "system": "System",
+      "maxContainer": "Max Container",
+      "freightElevator": "Freight Elevator",
+      "loadingDock": "Loading Dock",
+      "loadingCommodities": "Loading commodities...",
+      "commodity": "Commodity",
+      "buy": "Buy",
+      "sell": "Sell",
+      "stock": "Stock",
+      "status": "Status",
+      "noCommodities": "No commodity data",
+      "totalCount": "{count} terminals",
+      "noResults": "No terminals found."
     }
   }
 }

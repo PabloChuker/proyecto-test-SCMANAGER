@@ -313,6 +313,41 @@
       "terminals": "Terminales",
       "workorders": "Órdenes",
       "dashboard": "Panel"
+    },
+    "commodities": {
+      "search": "Buscar",
+      "searchPlaceholder": "Nombre o código...",
+      "type": "Tipo",
+      "all": "Todos",
+      "raw": "Crudo",
+      "refined": "Refinado",
+      "buy": "Compra",
+      "sell": "Venta",
+      "margin": "Margen",
+      "illegal": "ILEGAL",
+      "terminal": "Terminal",
+      "system": "Sistema",
+      "loadingStationPrices": "Cargando precios por estación...",
+      "noStationPrices": "Sin datos de precios por estación",
+      "totalCount": "{count} mercancías",
+      "noResults": "No se encontraron mercancías."
+    },
+    "terminals": {
+      "search": "Buscar Terminal",
+      "searchPlaceholder": "Nombre, código...",
+      "system": "Sistema",
+      "maxContainer": "Contenedor Máx",
+      "freightElevator": "Montacargas",
+      "loadingDock": "Muelle de Carga",
+      "loadingCommodities": "Cargando mercancías...",
+      "commodity": "Mercancía",
+      "buy": "Compra",
+      "sell": "Venta",
+      "stock": "Stock",
+      "status": "Estado",
+      "noCommodities": "Sin datos de mercancías",
+      "totalCount": "{count} terminales",
+      "noResults": "No se encontraron terminales."
     }
   }
 }
