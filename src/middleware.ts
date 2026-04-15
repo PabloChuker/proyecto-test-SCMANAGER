@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
+import { LOCALE_COOKIE, isLocale, pickLocaleFromAcceptLanguage } from "@/i18n/config";
 
 // ─── Simple in-memory rate limiter (per-IP, resets every window) ────────────
 
@@ -65,6 +66,21 @@ export async function middleware(request: NextRequest) {
 
   // Refresh Supabase auth session (handles token refresh via cookies)
   const response = await updateSession(request);
+
+  // Persist detected locale on first visit so next-intl keeps it stable.
+  if (!isApi) {
+    const current = request.cookies.get(LOCALE_COOKIE)?.value;
+    if (!isLocale(current)) {
+      const detected = pickLocaleFromAcceptLanguage(
+        request.headers.get("accept-language"),
+      );
+      response.cookies.set(LOCALE_COOKIE, detected, {
+        path: "/",
+        maxAge: 60 * 60 * 24 * 365,
+        sameSite: "lax",
+      });
+    }
+  }
 
   // Security headers
   response.headers.set("X-Content-Type-Options", "nosniff");

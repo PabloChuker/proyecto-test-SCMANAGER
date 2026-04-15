@@ -1,0 +1,57 @@
+{
+  "Common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "loading": "Loading...",
+    "error": "Error",
+    "retry": "Retry",
+    "search": "Search",
+    "clear": "Clear",
+    "back": "Back",
+    "next": "Next",
+    "yes": "Yes",
+    "no": "No",
+    "accept": "Accept",
+    "decline": "Decline",
+    "delete": "Delete",
+    "edit": "Edit",
+    "add": "Add",
+    "remove": "Remove",
+    "confirm": "Confirm"
+  },
+  "Nav": {
+    "home": "Home",
+    "hangar": "Hangar",
+    "ships": "Ships",
+    "compare": "Compare",
+    "components": "Components",
+    "cargo": "Cargo",
+    "dps": "DPS",
+    "crafting": "Crafting",
+    "mining": "Mining",
+    "trade": "Trade",
+    "activities": "Activities",
+    "streamers": "Streamers",
+    "organization": "Org",
+    "party": "Party",
+    "friends": "Friends",
+    "profile": "Profile",
+    "myAccount": "My Account",
+    "login": "Log In",
+    "logout": "Log Out",
+    "signUp": "Sign Up"
+  },
+  "LanguageSwitcher": {
+    "label": "Language",
+    "change": "Change language"
+  },
+  "Header": {
+    "sections": {
+      "ships": "Ships",
+      "industry": "Industry",
+      "social": "Social",
+      "hangar": "Hangar"
+    }
+  }
+}

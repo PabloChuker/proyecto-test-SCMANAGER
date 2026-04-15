@@ -1,0 +1,57 @@
+{
+  "Common": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "close": "Cerrar",
+    "loading": "Cargando...",
+    "error": "Error",
+    "retry": "Reintentar",
+    "search": "Buscar",
+    "clear": "Limpiar",
+    "back": "Volver",
+    "next": "Siguiente",
+    "yes": "Sí",
+    "no": "No",
+    "accept": "Aceptar",
+    "decline": "Rechazar",
+    "delete": "Eliminar",
+    "edit": "Editar",
+    "add": "Agregar",
+    "remove": "Quitar",
+    "confirm": "Confirmar"
+  },
+  "Nav": {
+    "home": "Inicio",
+    "hangar": "Hangar",
+    "ships": "Naves",
+    "compare": "Comparar",
+    "components": "Componentes",
+    "cargo": "Carga",
+    "dps": "DPS",
+    "crafting": "Crafteo",
+    "mining": "Minería",
+    "trade": "Comercio",
+    "activities": "Actividades",
+    "streamers": "Streamers",
+    "organization": "Org",
+    "party": "Party",
+    "friends": "Amigos",
+    "profile": "Perfil",
+    "myAccount": "Mi Cuenta",
+    "login": "Ingresar",
+    "logout": "Salir",
+    "signUp": "Registrarse"
+  },
+  "LanguageSwitcher": {
+    "label": "Idioma",
+    "change": "Cambiar idioma"
+  },
+  "Header": {
+    "sections": {
+      "ships": "Naves",
+      "industry": "Industria",
+      "social": "Social",
+      "hangar": "Hangar"
+    }
+  }
+}

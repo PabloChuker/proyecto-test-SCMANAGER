@@ -1,0 +1,57 @@
+{
+  "Common": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "close": "Fermer",
+    "loading": "Chargement...",
+    "error": "Erreur",
+    "retry": "Réessayer",
+    "search": "Rechercher",
+    "clear": "Effacer",
+    "back": "Retour",
+    "next": "Suivant",
+    "yes": "Oui",
+    "no": "Non",
+    "accept": "Accepter",
+    "decline": "Refuser",
+    "delete": "Supprimer",
+    "edit": "Modifier",
+    "add": "Ajouter",
+    "remove": "Retirer",
+    "confirm": "Confirmer"
+  },
+  "Nav": {
+    "home": "Accueil",
+    "hangar": "Hangar",
+    "ships": "Vaisseaux",
+    "compare": "Comparer",
+    "components": "Composants",
+    "cargo": "Cargaison",
+    "dps": "DPS",
+    "crafting": "Artisanat",
+    "mining": "Minage",
+    "trade": "Commerce",
+    "activities": "Activités",
+    "streamers": "Streamers",
+    "organization": "Org",
+    "party": "Groupe",
+    "friends": "Amis",
+    "profile": "Profil",
+    "myAccount": "Mon compte",
+    "login": "Connexion",
+    "logout": "Déconnexion",
+    "signUp": "S'inscrire"
+  },
+  "LanguageSwitcher": {
+    "label": "Langue",
+    "change": "Changer de langue"
+  },
+  "Header": {
+    "sections": {
+      "ships": "Vaisseaux",
+      "industry": "Industrie",
+      "social": "Social",
+      "hangar": "Hangar"
+    }
+  }
+}

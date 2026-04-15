@@ -1,0 +1,57 @@
+{
+  "Common": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "loading": "Wird geladen...",
+    "error": "Fehler",
+    "retry": "Erneut versuchen",
+    "search": "Suchen",
+    "clear": "Löschen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "yes": "Ja",
+    "no": "Nein",
+    "accept": "Akzeptieren",
+    "decline": "Ablehnen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "add": "Hinzufügen",
+    "remove": "Entfernen",
+    "confirm": "Bestätigen"
+  },
+  "Nav": {
+    "home": "Start",
+    "hangar": "Hangar",
+    "ships": "Schiffe",
+    "compare": "Vergleichen",
+    "components": "Komponenten",
+    "cargo": "Fracht",
+    "dps": "DPS",
+    "crafting": "Herstellung",
+    "mining": "Bergbau",
+    "trade": "Handel",
+    "activities": "Aktivitäten",
+    "streamers": "Streamer",
+    "organization": "Org",
+    "party": "Gruppe",
+    "friends": "Freunde",
+    "profile": "Profil",
+    "myAccount": "Mein Konto",
+    "login": "Anmelden",
+    "logout": "Abmelden",
+    "signUp": "Registrieren"
+  },
+  "LanguageSwitcher": {
+    "label": "Sprache",
+    "change": "Sprache ändern"
+  },
+  "Header": {
+    "sections": {
+      "ships": "Schiffe",
+      "industry": "Industrie",
+      "social": "Sozial",
+      "hangar": "Hangar"
+    }
+  }
+}

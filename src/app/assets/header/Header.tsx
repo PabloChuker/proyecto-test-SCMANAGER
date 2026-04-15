@@ -4,9 +4,11 @@ import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { NAV_SECTIONS } from "./navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import NotificationBell from "@/components/notifications/NotificationBell";
+import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
 
 interface HeaderProps {
   subtitle?: string;
@@ -14,6 +16,7 @@ interface HeaderProps {
 
 export default function Header({ subtitle }: HeaderProps) {
   const pathname = usePathname();
+  const t = useTranslations("Header.sections");
   const { user, profile, loading, signInWithDiscord, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
@@ -86,6 +89,7 @@ export default function Header({ subtitle }: HeaderProps) {
           {NAV_SECTIONS.map((section) => {
             const isOpen = activeSection === section.key;
             const isActive = isSectionActive(section);
+            const sectionLabel = t.has(section.key) ? t(section.key) : section.label;
 
             if (!section.items) {
               return (
@@ -96,7 +100,7 @@ export default function Header({ subtitle }: HeaderProps) {
                     isActive ? "text-amber-400" : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
-                  {section.label}
+                  {sectionLabel}
                 </Link>
               );
             }
@@ -109,7 +113,7 @@ export default function Header({ subtitle }: HeaderProps) {
                     isActive || isOpen ? "text-amber-400" : "text-zinc-400 hover:text-zinc-200"
                   }`}
                 >
-                  {section.label}
+                  {sectionLabel}
                   <svg
                     width="8"
                     height="8"
@@ -156,6 +160,7 @@ export default function Header({ subtitle }: HeaderProps) {
 
         {/* ── Right: Auth ── */}
         <div className="flex items-center gap-2 justify-end">
+          <LanguageSwitcher />
           {loading ? (
             <div className="w-6 h-6 rounded-full bg-zinc-800 animate-pulse" />
           ) : user ? (
