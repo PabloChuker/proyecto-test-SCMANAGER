@@ -5,18 +5,16 @@ import Image from "next/image";
 import Link from "next/link";
 import Header from "@/app/assets/header/Header";
 import { SIDEBAR_ITEMS } from "@/app/assets/header/navigation";
-import BlueprintBrowser from "./BlueprintBrowser";
-import CraftingCalculator from "./CraftingCalculator";
+import BlueprintWorkbench from "./BlueprintWorkbench";
 import MaterialBrowser from "./MaterialBrowser";
 import { useTranslations } from "next-intl";
 
 export default function CraftingPage() {
-  const [activeTab, setActiveTab] = useState("blueprints");
+  const [activeTab, setActiveTab] = useState("workbench");
   const t = useTranslations("PageTitles");
   const tc = useTranslations("Crafting.tabs");
   const TABS = [
-    { id: "blueprints", label: tc("blueprints"), icon: "📐" },
-    { id: "calculator", label: tc("calculator"), icon: "🧮" },
+    { id: "workbench", label: `${tc("blueprints")} & ${tc("calculator")}`, icon: "📐" },
     { id: "materials", label: tc("materials"), icon: "⚗" },
   ];
 
@@ -83,8 +81,7 @@ export default function CraftingPage() {
             </div>
 
             <div className="mt-6 max-w-[1600px] mx-auto">
-              {activeTab === "blueprints" && <BlueprintBrowser />}
-              {activeTab === "calculator" && <CraftingCalculator />}
+              {activeTab === "workbench" && <BlueprintWorkbench />}
               {activeTab === "materials" && <MaterialBrowser />}
             </div>
           </div>
