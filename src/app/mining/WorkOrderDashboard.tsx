@@ -39,15 +39,16 @@ function typeIcon(t: string) {
   return ({ ship: "⛏", roc: "💎", salvage: "♻", share: "🏛" } as any)[t] || "📋";
 }
 
-function typeLabel(t: string) {
-  return ({ ship: "Ship Mining", roc: "ROC / FPS", salvage: "Salvage", share: "Share aUEC" } as any)[t] || t;
+function typeLabel(tr: (k: string) => string, t: string) {
+  const known = ["ship", "roc", "salvage", "share"];
+  return known.includes(t) ? tr(`orderType.${t}`) : t;
 }
 
-function statusBadge(s: OrderStatus) {
+function statusBadge(tr: (k: string) => string, s: OrderStatus) {
   switch (s) {
-    case "in_progress": return { label: "In Progress", color: "bg-amber-500/20 text-amber-400 border-amber-500/40" };
-    case "completed": return { label: "Ready", color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/40" };
-    case "collected": return { label: "Collected", color: "bg-blue-500/20 text-blue-400 border-blue-500/40" };
+    case "in_progress": return { label: tr("statusBadge.in_progress"), color: "bg-amber-500/20 text-amber-400 border-amber-500/40" };
+    case "completed": return { label: tr("statusBadge.completed"), color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/40" };
+    case "collected": return { label: tr("statusBadge.collected"), color: "bg-blue-500/20 text-blue-400 border-blue-500/40" };
   }
 }
 
@@ -61,8 +62,9 @@ function fmtCountdown(seconds: number) {
   return `${padZ(h)}:${padZ(m)}:${padZ(s)}`;
 }
 
-function mvReasonLabel(r: string) {
-  return ({ refine_complete: "Refined", sell: "Sold", craft: "Crafting", distribute: "Distributed", manual_add: "Added", manual_remove: "Removed" } as any)[r] || r;
+function mvReasonLabel(tr: (k: string) => string, r: string) {
+  const known = ["refine_complete", "sell", "craft", "distribute", "manual_add", "manual_remove"];
+  return known.includes(r) ? tr(`mvReason.${r}`) : r;
 }
 
 function qualityBadge(q: number | undefined | null) {
@@ -702,7 +704,7 @@ export default function WorkOrderDashboard() {
                         <span className="text-xl">{typeIcon(order.type)}</span>
                         <div>
                           <div className="text-sm text-zinc-200 font-bold flex items-center gap-2">
-                            {order.refinery || typeLabel(order.type)}
+                            {order.refinery || typeLabel(t, order.type)}
                             {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">{t("party")}</span>}
                           </div>
                           <div className="text-[11px] text-zinc-500">{oreLineWithQuality(order.ores)} · {fmtAuec(order.grossValue)} aUEC</div>
@@ -740,7 +742,7 @@ export default function WorkOrderDashboard() {
                         <span className="text-xl">{typeIcon(order.type)}</span>
                         <div>
                           <div className="text-sm text-zinc-200 font-bold flex items-center gap-2">
-                            {order.refinery || typeLabel(order.type)}
+                            {order.refinery || typeLabel(t, order.type)}
                             {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">{t("party")}</span>}
                           </div>
                           <div className="text-[11px] text-zinc-500">
@@ -777,7 +779,7 @@ export default function WorkOrderDashboard() {
                         <span className="text-lg opacity-60">{typeIcon(order.type)}</span>
                         <div>
                           <div className="text-xs text-zinc-400 flex items-center gap-2">
-                            {order.refinery || typeLabel(order.type)} · {fmtDate(order.createdAt)}
+                            {order.refinery || typeLabel(t, order.type)} · {fmtDate(order.createdAt)}
                             {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">{t("party")}</span>}
                           </div>
                           <div className="text-[11px] text-zinc-600">{oreLineWithQuality(order.ores)}</div>
@@ -891,7 +893,7 @@ export default function WorkOrderDashboard() {
                         {mv.delta > 0 ? "+" : ""}{mv.delta.toFixed(1)}
                       </span>
                       <span className="text-zinc-300 uppercase">{mv.mineralName}</span>
-                      <span className="text-zinc-600">— {mvReasonLabel(mv.reason)}</span>
+                      <span className="text-zinc-600">— {mvReasonLabel(t, mv.reason)}</span>
                       {mv.crewMember && <span className="text-zinc-500">→ {mv.crewMember}</span>}
                     </div>
                     <span className="text-[10px] text-zinc-600">{fmtDate(mv.createdAt)}</span>
@@ -998,11 +1000,11 @@ export default function WorkOrderDashboard() {
             <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg p-4">
               <div className="text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold mb-3">{t("byActivityType")}</div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {Object.entries(stats.byType).map(([t, d]) => (
-                  <div key={t} className="bg-zinc-800/40 rounded-lg p-3">
+                {Object.entries(stats.byType).map(([typ, d]) => (
+                  <div key={typ} className="bg-zinc-800/40 rounded-lg p-3">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-lg">{typeIcon(t)}</span>
-                      <span className="text-xs font-bold text-zinc-300 uppercase">{typeLabel(t)}</span>
+                      <span className="text-lg">{typeIcon(typ)}</span>
+                      <span className="text-xs font-bold text-zinc-300 uppercase">{typeLabel(t, typ)}</span>
                     </div>
                     <div className="text-lg font-mono font-bold text-amber-400">{d.count}</div>
                     <div className="text-[11px] text-zinc-500">{fmtAuec(d.gross)} aUEC</div>

@@ -623,7 +623,26 @@
       "loadingPrices": "Chargement des prix...",
       "noSellLocations": "Aucun lieu de vente trouvé pour ce bien.",
       "best": "Meilleur",
-      "total": "Total"
+      "total": "Total",
+      "orderType": {
+        "ship": "Minage Vaisseau",
+        "roc": "ROC / FPS",
+        "salvage": "Salvage",
+        "share": "Partager aUEC"
+      },
+      "statusBadge": {
+        "in_progress": "En Cours",
+        "completed": "Prêt",
+        "collected": "Récolté"
+      },
+      "mvReason": {
+        "refine_complete": "Raffiné",
+        "sell": "Vendu",
+        "craft": "Crafting",
+        "distribute": "Distribué",
+        "manual_add": "Ajouté",
+        "manual_remove": "Retiré"
+      }
     }
   },
   "Trade": {

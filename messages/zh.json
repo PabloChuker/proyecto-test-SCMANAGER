@@ -623,7 +623,26 @@
       "loadingPrices": "正在加载价格...",
       "noSellLocations": "未找到此商品的出售地点。",
       "best": "最佳",
-      "total": "总计"
+      "total": "总计",
+      "orderType": {
+        "ship": "飞船采矿",
+        "roc": "ROC / FPS",
+        "salvage": "拆解",
+        "share": "分享 aUEC"
+      },
+      "statusBadge": {
+        "in_progress": "进行中",
+        "completed": "就绪",
+        "collected": "已收取"
+      },
+      "mvReason": {
+        "refine_complete": "已精炼",
+        "sell": "已售出",
+        "craft": "制作中",
+        "distribute": "已分配",
+        "manual_add": "已添加",
+        "manual_remove": "已移除"
+      }
     }
   },
   "Trade": {

@@ -623,7 +623,26 @@
       "loadingPrices": "Preise werden geladen...",
       "noSellLocations": "Keine Verkaufsorte für diese Ware gefunden.",
       "best": "Beste",
-      "total": "Gesamt"
+      "total": "Gesamt",
+      "orderType": {
+        "ship": "Schiff-Mining",
+        "roc": "ROC / FPS",
+        "salvage": "Salvage",
+        "share": "aUEC teilen"
+      },
+      "statusBadge": {
+        "in_progress": "In Bearbeitung",
+        "completed": "Bereit",
+        "collected": "Abgeholt"
+      },
+      "mvReason": {
+        "refine_complete": "Raffiniert",
+        "sell": "Verkauft",
+        "craft": "Crafting",
+        "distribute": "Verteilt",
+        "manual_add": "Hinzugefügt",
+        "manual_remove": "Entfernt"
+      }
     }
   },
   "Trade": {

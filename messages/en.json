@@ -623,7 +623,26 @@
       "loadingPrices": "Loading prices...",
       "noSellLocations": "No sell locations found for this commodity.",
       "best": "Best",
-      "total": "Total"
+      "total": "Total",
+      "orderType": {
+        "ship": "Ship Mining",
+        "roc": "ROC / FPS",
+        "salvage": "Salvage",
+        "share": "Share aUEC"
+      },
+      "statusBadge": {
+        "in_progress": "In Progress",
+        "completed": "Ready",
+        "collected": "Collected"
+      },
+      "mvReason": {
+        "refine_complete": "Refined",
+        "sell": "Sold",
+        "craft": "Crafting",
+        "distribute": "Distributed",
+        "manual_add": "Added",
+        "manual_remove": "Removed"
+      }
     }
   },
   "Trade": {

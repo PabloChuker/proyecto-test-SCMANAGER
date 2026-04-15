@@ -623,7 +623,26 @@
       "loadingPrices": "Cargando precios...",
       "noSellLocations": "No se encontraron lugares de venta para este commodity.",
       "best": "Mejor",
-      "total": "Total"
+      "total": "Total",
+      "orderType": {
+        "ship": "Minería Nave",
+        "roc": "ROC / FPS",
+        "salvage": "Salvage",
+        "share": "Compartir aUEC"
+      },
+      "statusBadge": {
+        "in_progress": "En Progreso",
+        "completed": "Listo",
+        "collected": "Recolectado"
+      },
+      "mvReason": {
+        "refine_complete": "Refinado",
+        "sell": "Vendido",
+        "craft": "Crafteando",
+        "distribute": "Distribuido",
+        "manual_add": "Añadido",
+        "manual_remove": "Eliminado"
+      }
     }
   },
   "Trade": {
