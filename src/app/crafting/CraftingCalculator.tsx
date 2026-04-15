@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { useCraftingData } from "./useCraftingData";
 import type { Blueprint } from "./types";
 
@@ -143,6 +144,7 @@ const formatModKey = (key: string) =>
    Main Component
    ═══════════════════════════════════════════════════════ */
 export default function CraftingCalculator() {
+  const t = useTranslations("Crafting.calculator");
   const { blueprints, loading, error } = useCraftingData();
 
   const [queue, setQueue] = useState<CraftQueueItem[]>([]);
@@ -271,13 +273,13 @@ export default function CraftingCalculator() {
   }, [selectedBlueprint, qualityPercentage]);
 
   const getQualityColor = (q: number) => q < 250 ? "text-red-400" : q < 500 ? "text-orange-400" : q < 750 ? "text-yellow-400" : "text-emerald-400";
-  const getQualityLabel = (q: number) => q < 250 ? "Poor" : q < 500 ? "Substandard" : q < 750 ? "Standard" : q < 900 ? "High" : "Excellent";
+  const getQualityLabel = (q: number) => q < 250 ? t("poor") : q < 500 ? t("substandard") : q < 750 ? t("standard") : q < 900 ? t("high") : t("excellent");
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="w-4 h-4 border-2 border-zinc-800 border-t-amber-500 rounded-full animate-spin mr-3" />
-        <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest">Loading...</span>
+        <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest">{t("loading")}</span>
       </div>
     );
   }
@@ -293,7 +295,7 @@ export default function CraftingCalculator() {
     switch (wId) {
       case "queue":
         return (
-          <DragWidget key={wId} id={wId} label="Craft Queue" {...dragProps}>
+          <DragWidget key={wId} id={wId} label={t("widgetQueue")} {...dragProps}>
             <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-b-lg p-4 space-y-4">
               <div className="flex gap-2">
                 <select
@@ -301,7 +303,7 @@ export default function CraftingCalculator() {
                   onChange={(e) => setSelectedBlueprintId(e.target.value)}
                   className="flex-1 px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-zinc-100 text-xs focus:outline-none focus:border-amber-500"
                 >
-                  <option value="">Select blueprint...</option>
+                  <option value="">{t("selectBlueprintPlaceholder")}</option>
                   {blueprints
                     .sort((a, b) => a.outputName.localeCompare(b.outputName))
                     .map((bp) => (
@@ -313,11 +315,11 @@ export default function CraftingCalculator() {
                   disabled={!selectedBlueprintId}
                   className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 disabled:bg-zinc-700 disabled:cursor-not-allowed text-white text-xs font-medium rounded transition-colors"
                 >
-                  Add
+                  {t("add")}
                 </button>
               </div>
               {queue.length === 0 ? (
-                <p className="text-zinc-600 text-xs text-center py-4">No items in queue</p>
+                <p className="text-zinc-600 text-xs text-center py-4">{t("noItemsInQueue")}</p>
               ) : (
                 <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
                   {queue.map(({ blueprintId, quantity }) => {
@@ -327,7 +329,7 @@ export default function CraftingCalculator() {
                       <div key={blueprintId} className="flex items-center justify-between gap-2 bg-zinc-800/40 border border-zinc-700/40 rounded px-3 py-2">
                         <div className="flex-1 min-w-0">
                           <div className="font-mono text-xs text-amber-400 truncate">{bp.outputName}</div>
-                          <div className="text-[10px] text-zinc-500">{bp.craftTimeSeconds}s / unit</div>
+                          <div className="text-[10px] text-zinc-500">{t("secondsPerUnit", { seconds: bp.craftTimeSeconds })}</div>
                         </div>
                         <input
                           type="number"
@@ -353,10 +355,10 @@ export default function CraftingCalculator() {
 
       case "quality-slider":
         return (
-          <DragWidget key={wId} id={wId} label="Material Quality" {...dragProps}>
+          <DragWidget key={wId} id={wId} label={t("widgetQuality")} {...dragProps}>
             <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-b-lg p-4 space-y-3">
               <div className="flex justify-between items-center">
-                <span className="text-xs text-zinc-400">Quality Level</span>
+                <span className="text-xs text-zinc-400">{t("qualityLevel")}</span>
                 <div className="text-right">
                   <span className={`font-mono text-lg ${getQualityColor(qualityLevel)}`}>{qualityLevel}</span>
                   <span className={`ml-2 text-xs font-semibold ${getQualityColor(qualityLevel)}`}>{getQualityLabel(qualityLevel)}</span>
@@ -369,7 +371,7 @@ export default function CraftingCalculator() {
                 style={{ background: "linear-gradient(to right, rgb(239,68,68) 0%, rgb(234,179,8) 50%, rgb(34,197,94) 100%)" }}
               />
               <div className="flex justify-between text-[10px] text-zinc-500">
-                <span>Poor (0)</span><span>Standard (500)</span><span>Excellent (1000)</span>
+                <span>{t("poorZero")}</span><span>{t("standardFiveHundred")}</span><span>{t("excellentThousand")}</span>
               </div>
             </div>
           </DragWidget>
@@ -377,16 +379,16 @@ export default function CraftingCalculator() {
 
       case "summary":
         return (
-          <DragWidget key={wId} id={wId} label="Summary" {...dragProps}>
+          <DragWidget key={wId} id={wId} label={t("widgetSummary")} {...dragProps}>
             <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-b-lg p-4 space-y-3 text-sm">
               <div>
-                <span className="text-zinc-500 text-xs">Total Items</span>
+                <span className="text-zinc-500 text-xs">{t("totalItems")}</span>
                 <div className="font-mono text-lg text-amber-400">
                   {queue.reduce((sum, q) => sum + q.quantity, 0)}
                 </div>
               </div>
               <div className="border-t border-zinc-700 pt-3">
-                <span className="text-zinc-500 text-xs">Total Craft Time</span>
+                <span className="text-zinc-500 text-xs">{t("totalCraftTime")}</span>
                 <div className="font-mono text-lg text-cyan-400">
                   {Math.floor(totalCraftTime / 60)}m {totalCraftTime % 60}s
                 </div>
@@ -397,10 +399,10 @@ export default function CraftingCalculator() {
 
       case "shopping-list":
         return (
-          <DragWidget key={wId} id={wId} label="Shopping List" {...dragProps}>
+          <DragWidget key={wId} id={wId} label={t("widgetShopping")} {...dragProps}>
             <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-b-lg p-4">
               {queue.length === 0 ? (
-                <p className="text-zinc-600 text-xs text-center py-4">Add items to queue to see materials</p>
+                <p className="text-zinc-600 text-xs text-center py-4">{t("addItemsHint")}</p>
               ) : (
                 <div className="grid grid-cols-2 gap-2">
                   {Object.entries(aggregatedMaterials)
@@ -419,12 +421,12 @@ export default function CraftingCalculator() {
 
       case "quality-stats":
         return (
-          <DragWidget key={wId} id={wId} label="Quality Impact on Stats" {...dragProps}>
+          <DragWidget key={wId} id={wId} label={t("widgetQualityStats")} {...dragProps}>
             <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-b-lg p-4">
               {selectedBlueprint && Object.keys(modifiedStats).length > 0 ? (
                 <>
                   <p className="text-[10px] text-zinc-500 mb-4">
-                    Effects for <span className="text-amber-400 font-mono">{selectedBlueprint.outputName}</span> at quality {qualityLevel}
+                    {t("effectsForPrefix")} <span className="text-amber-400 font-mono">{selectedBlueprint.outputName}</span> {t("atQualitySuffix", { level: qualityLevel })}
                   </p>
                   <div className="space-y-4">
                     {Object.entries(modifiedStats).map(([stat, values]) => {
@@ -440,7 +442,7 @@ export default function CraftingCalculator() {
                           </div>
                           <div>
                             <div className="flex justify-between text-[10px] text-zinc-500 mb-0.5">
-                              <span>Base (Q 0)</span>
+                              <span>{t("baseQ0")}</span>
                               <span className="font-mono text-zinc-400">{values.base.toFixed(1)}</span>
                             </div>
                             <div className="h-1.5 bg-zinc-800/50 rounded">
@@ -449,7 +451,7 @@ export default function CraftingCalculator() {
                           </div>
                           <div>
                             <div className="flex justify-between text-[10px] text-zinc-500 mb-0.5">
-                              <span>Modified (Q {qualityLevel})</span>
+                              <span>{t("modifiedQ", { level: qualityLevel })}</span>
                               <span className={`font-mono ${isPositive ? "text-emerald-400" : "text-red-400"}`}>{values.modified.toFixed(1)}</span>
                             </div>
                             <div className="h-1.5 bg-zinc-800/50 rounded">
@@ -459,7 +461,7 @@ export default function CraftingCalculator() {
                           {values.bonus !== 0 && (
                             <div className="pt-1.5 border-t border-zinc-700/50">
                               <div className="flex justify-between text-[10px]">
-                                <span className="text-zinc-600">Bonus</span>
+                                <span className="text-zinc-600">{t("bonus")}</span>
                                 <span className={`font-mono ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
                                   {isPositive ? "+" : ""}{values.bonus.toFixed(2)}
                                 </span>
@@ -472,7 +474,7 @@ export default function CraftingCalculator() {
                   </div>
                 </>
               ) : (
-                <p className="text-zinc-600 text-xs text-center py-6">Select a blueprint to see quality impact</p>
+                <p className="text-zinc-600 text-xs text-center py-6">{t("selectBlueprintHint")}</p>
               )}
             </div>
           </DragWidget>
@@ -480,19 +482,19 @@ export default function CraftingCalculator() {
 
       case "recommendations":
         return (
-          <DragWidget key={wId} id={wId} label="Recommendations" {...dragProps}>
+          <DragWidget key={wId} id={wId} label={t("widgetRecommendations")} {...dragProps}>
             <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-b-lg p-4 space-y-3">
               <div className="border border-red-800/40 bg-red-900/10 rounded p-3">
-                <div className="text-xs font-semibold text-red-400 mb-1">Poor Quality (0-250)</div>
-                <p className="text-[10px] text-red-300">Not recommended for critical applications. Stats will be significantly reduced.</p>
+                <div className="text-xs font-semibold text-red-400 mb-1">{t("recPoorTitle")}</div>
+                <p className="text-[10px] text-red-300">{t("recPoorDesc")}</p>
               </div>
               <div className="border border-amber-800/40 bg-amber-900/10 rounded p-3">
-                <div className="text-xs font-semibold text-amber-400 mb-1">Standard Quality (500-750)</div>
-                <p className="text-[10px] text-amber-300">Acceptable for most uses. Provides reliable performance with moderate bonuses.</p>
+                <div className="text-xs font-semibold text-amber-400 mb-1">{t("recStandardTitle")}</div>
+                <p className="text-[10px] text-amber-300">{t("recStandardDesc")}</p>
               </div>
               <div className="border border-emerald-800/40 bg-emerald-900/10 rounded p-3">
-                <div className="text-xs font-semibold text-emerald-400 mb-1">Excellent Quality (900+)</div>
-                <p className="text-[10px] text-emerald-300">Maximum performance. Stats reach peak values, ideal for specialized roles.</p>
+                <div className="text-xs font-semibold text-emerald-400 mb-1">{t("recExcellentTitle")}</div>
+                <p className="text-[10px] text-emerald-300">{t("recExcellentDesc")}</p>
               </div>
             </div>
           </DragWidget>
@@ -510,7 +512,7 @@ export default function CraftingCalculator() {
           onClick={resetLayout}
           className="px-3 py-1 text-[10px] font-mono uppercase tracking-widest text-zinc-600 hover:text-amber-400 border border-zinc-800/40 hover:border-amber-500/30 rounded transition-colors"
         >
-          ⠿ Reset Layout
+          ⠿ {t("resetLayout")}
         </button>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">

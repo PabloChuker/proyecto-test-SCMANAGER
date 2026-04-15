@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { useCraftingData } from "./useCraftingData";
 import type { Blueprint } from "./types";
 
 export default function BlueprintBrowser() {
+  const t = useTranslations("Crafting.blueprints");
   const { blueprints, categories, loading, error } = useCraftingData();
 
   const [selectedBlueprintId, setSelectedBlueprintId] = useState<string | null>(null);
@@ -54,7 +56,7 @@ export default function BlueprintBrowser() {
     return (
       <div className="flex items-center justify-center py-24">
         <div className="w-5 h-5 border-2 border-zinc-800 border-t-amber-500 rounded-full animate-spin mr-3" />
-        <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest">Loading blueprints...</span>
+        <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest">{t("loadingBlueprints")}</span>
       </div>
     );
   }
@@ -76,7 +78,7 @@ export default function BlueprintBrowser() {
           {/* Sidebar header */}
           <div className="px-4 py-3 border-b border-amber-500/20 bg-amber-500/5">
             <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">
-              Categories
+              {t("categories")}
             </h3>
           </div>
 
@@ -123,7 +125,7 @@ export default function BlueprintBrowser() {
                               >
                                 <span className="truncate block leading-snug">{blueprint.outputName}</span>
                                 {blueprint.isDefault && (
-                                  <span className="text-[9px] text-emerald-400 font-bold tracking-wide">DEFAULT</span>
+                                  <span className="text-[9px] text-emerald-400 font-bold tracking-wide">{t("default")}</span>
                                 )}
                               </button>
                             ))}
@@ -160,12 +162,12 @@ export default function BlueprintBrowser() {
                   <div className="flex gap-2 flex-shrink-0 ml-4">
                     {selectedBlueprint.isDefault && (
                       <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1 rounded-full uppercase tracking-wider">
-                        Default
+                        {t("defaultPill")}
                       </span>
                     )}
                     {selectedBlueprint.rewardPools.length > 0 && (
                       <span className="text-[10px] font-bold text-violet-400 bg-violet-500/10 border border-violet-500/25 px-2.5 py-1 rounded-full uppercase tracking-wider">
-                        Mission Reward
+                        {t("missionReward")}
                       </span>
                     )}
                   </div>
@@ -174,7 +176,7 @@ export default function BlueprintBrowser() {
                 {/* Stats row */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="bg-zinc-950/50 border border-cyan-500/15 rounded-lg px-4 py-3">
-                    <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Craft Time</div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">{t("craftTime")}</div>
                     <div className="text-lg font-mono font-bold text-cyan-400">
                       {selectedBlueprint.craftTimeSeconds >= 60
                         ? `${Math.floor(selectedBlueprint.craftTimeSeconds / 60)}m ${selectedBlueprint.craftTimeSeconds % 60}s`
@@ -182,20 +184,20 @@ export default function BlueprintBrowser() {
                     </div>
                   </div>
                   <div className="bg-zinc-950/50 border border-amber-500/15 rounded-lg px-4 py-3">
-                    <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Type</div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">{t("type")}</div>
                     <div className="text-sm font-mono font-semibold text-amber-300 truncate">
                       {selectedBlueprint.outputType.replace(/Char_Armor_/, "Armor/")}
                     </div>
                   </div>
                   <div className="bg-zinc-950/50 border border-zinc-700/40 rounded-lg px-4 py-3">
-                    <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Subtype</div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">{t("subtype")}</div>
                     <div className="text-sm font-mono font-semibold text-zinc-200 truncate">
                       {selectedBlueprint.outputSubtype}
                     </div>
                   </div>
                   {selectedBlueprint.outputGrade && (
                     <div className="bg-zinc-950/50 border border-zinc-700/40 rounded-lg px-4 py-3">
-                      <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">Grade</div>
+                      <div className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">{t("grade")}</div>
                       <div className="text-sm font-mono font-semibold text-zinc-200">
                         {selectedBlueprint.outputGrade}
                       </div>
@@ -209,7 +211,7 @@ export default function BlueprintBrowser() {
             <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl overflow-hidden">
               <div className="px-6 py-4 border-b border-zinc-800/60 bg-zinc-950/30">
                 <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest">
-                  Parts Breakdown
+                  {t("partsBreakdown")}
                 </h3>
               </div>
               <div className="p-6 space-y-4">
@@ -224,7 +226,7 @@ export default function BlueprintBrowser() {
                       </h4>
                       {part.requiredCount > 1 && (
                         <span className="text-[10px] font-bold text-amber-400/70 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
-                          ×{part.requiredCount} required
+                          {t("requiredCount", { count: part.requiredCount })}
                         </span>
                       )}
                     </div>
@@ -241,7 +243,7 @@ export default function BlueprintBrowser() {
                           </div>
                           {mat.minQuality > 0 && (
                             <div className="text-[10px] text-zinc-600 mt-1">
-                              Min Q: {mat.minQuality}
+                              {t("minQ", { value: mat.minQuality })}
                             </div>
                           )}
                         </div>
@@ -249,7 +251,7 @@ export default function BlueprintBrowser() {
                     </div>
                     {part.modifiers.length > 0 && (
                       <div className="pt-3 border-t border-zinc-800/40">
-                        <div className="text-[10px] text-zinc-600 uppercase tracking-wider mb-2">Modifiers</div>
+                        <div className="text-[10px] text-zinc-600 uppercase tracking-wider mb-2">{t("modifiers")}</div>
                         <div className="flex flex-wrap gap-2">
                           {part.modifiers.map((mod) => (
                             <span
@@ -272,7 +274,7 @@ export default function BlueprintBrowser() {
               <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl overflow-hidden">
                 <div className="px-6 py-4 border-b border-zinc-800/60 bg-zinc-950/30">
                   <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest">
-                    Quality Effects
+                    {t("qualityEffects")}
                   </h3>
                 </div>
                 <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -321,7 +323,7 @@ export default function BlueprintBrowser() {
             <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl overflow-hidden">
               <div className="px-6 py-4 border-b border-amber-500/20 bg-amber-500/5">
                 <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest">
-                  Total Material Cost
+                  {t("totalMaterialCost")}
                 </h3>
               </div>
               <div className="p-6 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
@@ -347,7 +349,7 @@ export default function BlueprintBrowser() {
               <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl overflow-hidden">
                 <div className="px-6 py-4 border-b border-zinc-800/60 bg-zinc-950/30">
                   <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest">
-                    How to Obtain
+                    {t("howToObtain")}
                   </h3>
                 </div>
                 <div className="p-6">
@@ -365,7 +367,7 @@ export default function BlueprintBrowser() {
                   )}
                   {selectedBlueprint.isDefault && (
                     <p className="text-xs text-emerald-400 font-medium">
-                      This blueprint is available by default — no missions required.
+                      {t("defaultInfo")}
                     </p>
                   )}
                 </div>
@@ -374,7 +376,7 @@ export default function BlueprintBrowser() {
           </>
         ) : (
           <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-16 text-center">
-            <p className="text-zinc-500 text-sm">Select a blueprint to view details</p>
+            <p className="text-zinc-500 text-sm">{t("selectPrompt")}</p>
           </div>
         )}
       </div>
