@@ -24,6 +24,16 @@ export function fmtDps(v: number): string {
   return v.toFixed(1);
 }
 
+// ── Number formatters used by widget components ──────────────────────────────
+export const fmtNum  = (v: number | null) => (v != null && v > 0 ? Math.round(v).toString() : "—");
+export const fmtDec  = (v: number | null) => (v != null && v > 0 ? v.toFixed(1) : "—");
+export const fmtMass = (v: number | null): string => {
+  if (!v || v <= 0) return "—";
+  if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + "M";
+  if (v >= 1_000)     return Math.round(v / 1_000).toLocaleString() + "k";
+  return Math.round(v).toLocaleString();
+};
+
 export function fmtPrice(v: number): string {
   if (v >= 1000000) return (v / 1000000).toFixed(2) + "M";
   if (v >= 1000) return (v / 1000).toFixed(1) + "k";

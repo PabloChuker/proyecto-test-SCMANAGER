@@ -98,11 +98,22 @@ export function DpsGridCanvas({ layout, renderWidget }: DpsGridCanvasProps) {
   useEffect(() => { setMounted(true); }, []);
 
   // ── Layout state ──────────────────────────────────────────────────────────
-  const [gridLayout, setGridLayout] = useState<Layout[]>(() => {
+  // Initial value is always the defaults (SSR-safe, no localStorage access).
+  // On mount, a one-shot useEffect merges in the persisted layout so we don't
+  // block hydration with a synchronous localStorage read.
+  const [gridLayout, setGridLayout] = useState<Layout[]>(() => toRgl(columnOrder));
+
+  // One-shot: restore saved layout after mount (avoids blocking SSR hydration)
+  const hydratedRef = useRef(false);
+  useEffect(() => {
+    if (hydratedRef.current) return;
+    hydratedRef.current = true;
     const saved = loadSaved();
-    const defaults = toRgl(columnOrder);
-    return saved ? mergeSavedWithDefaults(saved, defaults, visibleSet) : defaults;
-  });
+    if (saved) {
+      setGridLayout(prev => mergeSavedWithDefaults(saved, prev, visibleSet));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Re-sync cuando cambian los widgets visibles (cambio de nave)
   const prevVisible = useRef(visibleIds);

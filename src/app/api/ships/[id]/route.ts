@@ -444,29 +444,15 @@ export async function GET(
 
     const ship = shipRows[0];
 
-    // ── 2. Load satellite data ──
-    let flightStats: any = null;
-    let fuelStats: any = null;
-
-    try {
-      const fsRows: any[] = await sql.unsafe(
-        `SELECT * FROM ship_flight_stats WHERE ship_id::text = $1 LIMIT 1`,
-        [String(ship.id)],
-      );
-      if (fsRows.length > 0) flightStats = fsRows[0];
-    } catch (e) {
-      console.warn("[ships/[id]] Could not load flight stats:", e);
-    }
-
-    try {
-      const fRows: any[] = await sql.unsafe(
-        `SELECT * FROM ship_fuel WHERE ship_id::text = $1 LIMIT 1`,
-        [String(ship.id)],
-      );
-      if (fRows.length > 0) fuelStats = fRows[0];
-    } catch (e) {
-      console.warn("[ships/[id]] Could not load fuel stats:", e);
-    }
+    // ── 2. Load satellite data in parallel ──
+    const [flightStats, fuelStats] = await Promise.all([
+      sql.unsafe(`SELECT * FROM ship_flight_stats WHERE ship_id::text = $1 LIMIT 1`, [String(ship.id)])
+        .then((rows: any[]) => rows[0] ?? null)
+        .catch((e: unknown) => { console.warn("[ships/[id]] Could not load flight stats:", e); return null; }),
+      sql.unsafe(`SELECT * FROM ship_fuel WHERE ship_id::text = $1 LIMIT 1`, [String(ship.id)])
+        .then((rows: any[]) => rows[0] ?? null)
+        .catch((e: unknown) => { console.warn("[ships/[id]] Could not load fuel stats:", e); return null; }),
+    ]);
 
     // ── 3. Get hardpoints from NEW schema (match by ship reference) ──
     const hardpointRows: any[] = await sql.unsafe(

@@ -153,7 +153,8 @@ async function queryCatalog(params: CatalogParams) {
     return { data: [], meta: { total: 0, limit } };
   }
 
-  // Query each table
+  // Query each table — single round-trip per table using COUNT(*) OVER() window
+  // function to avoid the separate COUNT query (N+1 → N queries).
   const allItems: any[] = [];
   let totalCount = 0;
 
@@ -188,20 +189,14 @@ async function queryCatalog(params: CatalogParams) {
       const where = conds.length > 0 ? "WHERE " + conds.join(" AND ") : "";
       const orderCol = def.sizeCol ? `${def.sizeCol} DESC NULLS LAST, ` : "";
 
-      // Count
-      const countRows: any[] = await sql.unsafe(
-        `SELECT COUNT(*)::int as total FROM ${def.table} ${where}`,
-        params,
+      // Single query: data + total count via window function (no separate COUNT round-trip)
+      const rows: any[] = await sql.unsafe(
+        `SELECT *, COUNT(*) OVER()::int AS _total_count FROM ${def.table} ${where} ORDER BY ${orderCol}${def.nameCol} ASC LIMIT $${idx}`,
+        [...params, limit],
       );
-      const count = countRows[0]?.total ?? 0;
-      totalCount += count;
 
-      // Fetch
-      if (count > 0) {
-        const rows: any[] = await sql.unsafe(
-          `SELECT * FROM ${def.table} ${where} ORDER BY ${orderCol}${def.nameCol} ASC LIMIT $${idx}`,
-          [...params, limit],
-        );
+      if (rows.length > 0) {
+        totalCount += rows[0]._total_count ?? rows.length;
         for (const row of rows) {
           allItems.push(mapRow(row, def));
         }
