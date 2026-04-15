@@ -91,6 +91,66 @@
       "inventory": "Inventar",
       "wishlist": "Wunschliste",
       "loadouts": "Loadouts"
+    },
+    "componentTypes": {
+      "weapon": "🔫 Waffe",
+      "shield": "🛡 Schild",
+      "powerPlant": "⚡ Kraftwerk",
+      "cooler": "❄ Kühler",
+      "quantum": "🌀 Quantum",
+      "missile": "🚀 Rakete"
+    },
+    "inventory": {
+      "loading": "Inventar wird geladen...",
+      "addButton": "+ Inventar",
+      "searchPlaceholder": "Komponente suchen, um sie dem Inventar hinzuzufügen...",
+      "filter": "Inventar filtern...",
+      "empty": "Dein Inventar ist leer. Suche oben nach Komponenten, um sie hinzuzufügen.",
+      "totalComponents": "{count} Komponenten insgesamt im Inventar"
+    },
+    "wishlist": {
+      "loading": "Wunschliste wird geladen...",
+      "addButton": "+ Wunschliste",
+      "searchPlaceholder": "Komponente suchen, um sie zur Wunschliste hinzuzufügen...",
+      "hint": "⭐ Deine Wunschliste wird bei Aktivitäts-Verlosungen genutzt, um benötigte Items zu priorisieren",
+      "empty": "Deine Wunschliste ist leer. Füge Komponenten hinzu, die du brauchst.",
+      "totalItems": "{count} Einträge in der Wunschliste",
+      "priorities": {
+        "low": "Niedrig",
+        "normal": "Normal",
+        "high": "Hoch",
+        "urgent": "Dringend"
+      }
+    },
+    "loadouts": {
+      "loading": "Loadouts werden geladen...",
+      "hintPrefix": "🔧 Speichere Loadouts aus dem ",
+      "hintLink": "Loadout Manager",
+      "hintSuffix": " mit dem Button \"Loadout speichern\"",
+      "empty": "Du hast keine gespeicherten Loadouts. Erstelle eines im Loadout Manager und speichere es.",
+      "openInDps": "In DPS öffnen",
+      "noComponents": "Keine gespeicherten Komponenten",
+      "haveIt": "Vorhanden ✓",
+      "markAsInventory": "Als im Inventar markieren",
+      "addToWishlist": "Zur Wunschliste hinzufügen",
+      "addInv": "+ Inv",
+      "addWl": "+ WL",
+      "wishlistBadge": "Wunschliste ⭐"
+    },
+    "componentSearch": {
+      "categories": {
+        "all": "Alle",
+        "weapons": "🔫 Waffen",
+        "shields": "🛡 Schilde",
+        "powerPlants": "⚡ Kraftwerke",
+        "coolers": "❄ Kühler",
+        "quantum": "🌀 Quantum",
+        "missiles": "🚀 Raketen"
+      },
+      "searchButton": "Suchen",
+      "placeholder": "Komponente suchen...",
+      "addButton": "+ Hinzufügen",
+      "noResults": "Keine Ergebnisse"
     }
   },
   "Notifications": {

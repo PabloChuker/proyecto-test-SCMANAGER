@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useTranslations } from "next-intl";
 
 interface ComponentResult {
   reference: string;
@@ -17,17 +18,19 @@ interface Props {
   placeholder?: string;
 }
 
-const CATEGORIES = [
-  { value: "", label: "Todas" },
-  { value: "WEAPON", label: "🔫 Armas" },
-  { value: "SHIELD", label: "🛡 Shields" },
-  { value: "POWER_PLANT", label: "⚡ Power Plants" },
-  { value: "COOLER", label: "❄ Coolers" },
-  { value: "QUANTUM_DRIVE", label: "🌀 Quantum" },
-  { value: "MISSILE", label: "🚀 Misiles" },
-];
-
-export default function ComponentSearch({ onSelect, disabled, buttonLabel = "+ Add", placeholder = "Search component..." }: Props) {
+export default function ComponentSearch({ onSelect, disabled, buttonLabel, placeholder }: Props) {
+  const t = useTranslations("MyAccount.componentSearch");
+  const categories = [
+    { value: "", label: t("categories.all") },
+    { value: "WEAPON", label: t("categories.weapons") },
+    { value: "SHIELD", label: t("categories.shields") },
+    { value: "POWER_PLANT", label: t("categories.powerPlants") },
+    { value: "COOLER", label: t("categories.coolers") },
+    { value: "QUANTUM_DRIVE", label: t("categories.quantum") },
+    { value: "MISSILE", label: t("categories.missiles") },
+  ];
+  const resolvedButtonLabel = buttonLabel ?? t("addButton");
+  const resolvedPlaceholder = placeholder ?? t("placeholder");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [results, setResults] = useState<ComponentResult[]>([]);
@@ -70,7 +73,7 @@ export default function ComponentSearch({ onSelect, disabled, buttonLabel = "+ A
           onChange={(e) => setCategory(e.target.value)}
           className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-200 focus:border-amber-500 focus:outline-none"
         >
-          {CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <option key={c.value} value={c.value}>{c.label}</option>
           ))}
         </select>
@@ -79,7 +82,7 @@ export default function ComponentSearch({ onSelect, disabled, buttonLabel = "+ A
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && search()}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           className="flex-1 bg-zinc-800 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
         />
         <button
@@ -87,7 +90,7 @@ export default function ComponentSearch({ onSelect, disabled, buttonLabel = "+ A
           disabled={searching}
           className="px-3 py-1.5 bg-amber-600/80 hover:bg-amber-600 text-zinc-950 text-sm rounded transition-colors"
         >
-          {searching ? "..." : "Search"}
+          {searching ? "..." : t("searchButton")}
         </button>
       </div>
 
@@ -106,7 +109,7 @@ export default function ComponentSearch({ onSelect, disabled, buttonLabel = "+ A
                 disabled={disabled}
                 className="px-2 py-0.5 text-[10px] bg-emerald-600/80 hover:bg-emerald-600 active:scale-95 text-zinc-950 rounded transition-all disabled:bg-zinc-700 disabled:text-zinc-400"
               >
-                {buttonLabel}
+                {resolvedButtonLabel}
               </button>
             </div>
           ))}
@@ -114,7 +117,7 @@ export default function ComponentSearch({ onSelect, disabled, buttonLabel = "+ A
       )}
 
       {open && results.length === 0 && !searching && (
-        <div className="text-xs text-zinc-600 text-center py-2">Sin resultados</div>
+        <div className="text-xs text-zinc-600 text-center py-2">{t("noResults")}</div>
       )}
     </div>
   );

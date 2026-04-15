@@ -91,6 +91,66 @@
       "inventory": "Inventario",
       "wishlist": "Lista de deseos",
       "loadouts": "Loadouts"
+    },
+    "componentTypes": {
+      "weapon": "🔫 Arma",
+      "shield": "🛡 Escudo",
+      "powerPlant": "⚡ Generador",
+      "cooler": "❄ Cooler",
+      "quantum": "🌀 Quantum",
+      "missile": "🚀 Misil"
+    },
+    "inventory": {
+      "loading": "Cargando inventario...",
+      "addButton": "+ Inventario",
+      "searchPlaceholder": "Busca un componente para agregar al inventario...",
+      "filter": "Filtrar inventario...",
+      "empty": "Tu inventario esta vacio. Busca componentes arriba para agregarlos.",
+      "totalComponents": "{count} componentes totales en inventario"
+    },
+    "wishlist": {
+      "loading": "Cargando lista de deseos...",
+      "addButton": "+ Lista de deseos",
+      "searchPlaceholder": "Busca un componente para agregar a la lista de deseos...",
+      "hint": "⭐ Tu lista de deseos se usa en el sorteo de actividades para priorizar items que necesitas",
+      "empty": "Tu lista de deseos esta vacia. Agrega componentes que necesites.",
+      "totalItems": "{count} items en la lista de deseos",
+      "priorities": {
+        "low": "Baja",
+        "normal": "Normal",
+        "high": "Alta",
+        "urgent": "Urgente"
+      }
+    },
+    "loadouts": {
+      "loading": "Cargando loadouts...",
+      "hintPrefix": "🔧 Guarda loadouts desde el ",
+      "hintLink": "Loadout Manager",
+      "hintSuffix": " con el boton \"Guardar Loadout\"",
+      "empty": "No tenes loadouts guardados. Arma uno en el Loadout Manager y guardalo.",
+      "openInDps": "Abrir en DPS",
+      "noComponents": "Sin componentes guardados",
+      "haveIt": "Tengo ✓",
+      "markAsInventory": "Marcar como en inventario",
+      "addToWishlist": "Agregar a la lista de deseos",
+      "addInv": "+ Inv",
+      "addWl": "+ LD",
+      "wishlistBadge": "Deseado ⭐"
+    },
+    "componentSearch": {
+      "categories": {
+        "all": "Todas",
+        "weapons": "🔫 Armas",
+        "shields": "🛡 Escudos",
+        "powerPlants": "⚡ Generadores",
+        "coolers": "❄ Coolers",
+        "quantum": "🌀 Quantum",
+        "missiles": "🚀 Misiles"
+      },
+      "searchButton": "Buscar",
+      "placeholder": "Buscar componente...",
+      "addButton": "+ Agregar",
+      "noResults": "Sin resultados"
     }
   },
   "Notifications": {

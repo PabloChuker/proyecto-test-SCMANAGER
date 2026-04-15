@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/contexts/AuthContext";
 import { createClient } from "@/lib/supabase/client";
 import ComponentSearch from "./ComponentSearch";
@@ -16,14 +17,15 @@ interface InventoryItem {
   notes: string | null;
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  WEAPON: "🔫 Arma", SHIELD: "🛡 Shield", POWER_PLANT: "⚡ Power Plant",
-  COOLER: "❄ Cooler", QUANTUM_DRIVE: "🌀 Quantum", MISSILE: "🚀 Misil",
-};
-
 export default function InventoryTab() {
   const { user } = useAuth();
   const supabase = createClient();
+  const t = useTranslations("MyAccount.inventory");
+  const tt = useTranslations("MyAccount.componentTypes");
+  const TYPE_LABELS: Record<string, string> = {
+    WEAPON: tt("weapon"), SHIELD: tt("shield"), POWER_PLANT: tt("powerPlant"),
+    COOLER: tt("cooler"), QUANTUM_DRIVE: tt("quantum"), MISSILE: tt("missile"),
+  };
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
@@ -86,7 +88,7 @@ export default function InventoryTab() {
     return acc;
   }, {} as Record<string, InventoryItem[]>);
 
-  if (loading) return <div className="text-zinc-500 animate-pulse text-center py-8">Cargando inventario...</div>;
+  if (loading) return <div className="text-zinc-500 animate-pulse text-center py-8">{t("loading")}</div>;
 
   return (
     <div className="space-y-5">
@@ -94,8 +96,8 @@ export default function InventoryTab() {
       <ComponentSearch
         onSelect={addItem}
         disabled={adding}
-        buttonLabel="+ Inventory"
-        placeholder="Search component to add to inventory..."
+        buttonLabel={t("addButton")}
+        placeholder={t("searchPlaceholder")}
       />
 
       {/* Filter */}
@@ -104,7 +106,7 @@ export default function InventoryTab() {
           type="text"
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          placeholder="Filter inventory..."
+          placeholder={t("filter")}
           className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
         />
       )}
@@ -113,7 +115,7 @@ export default function InventoryTab() {
       {items.length === 0 ? (
         <div className="text-center text-zinc-600 py-8">
           <div className="text-3xl mb-2">📦</div>
-          Your inventory is empty. Search for components above to add them.
+          {t("empty")}
         </div>
       ) : (
         Object.entries(grouped).map(([type, typeItems]) => (
@@ -142,7 +144,7 @@ export default function InventoryTab() {
 
       {items.length > 0 && (
         <div className="text-xs text-zinc-600 text-center">
-          {items.reduce((a, i) => a + i.quantity, 0)} componentes totales en inventario
+          {t("totalComponents", { count: items.reduce((a, i) => a + i.quantity, 0) })}
         </div>
       )}
     </div>

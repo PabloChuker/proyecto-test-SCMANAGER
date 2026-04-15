@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/contexts/AuthContext";
 import { createClient } from "@/lib/supabase/client";
 import ComponentSearch from "./ComponentSearch";
@@ -16,17 +17,18 @@ interface WishlistItem {
   notes: string | null;
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  WEAPON: "🔫 Arma", SHIELD: "🛡 Shield", POWER_PLANT: "⚡ Power Plant",
-  COOLER: "❄ Cooler", QUANTUM_DRIVE: "🌀 Quantum", MISSILE: "🚀 Misil",
-};
-
-const PRIORITY_LABELS = ["", "Baja", "Normal", "Alta", "Urgente"];
 const PRIORITY_COLORS = ["", "text-zinc-500", "text-zinc-300", "text-amber-400", "text-red-400"];
 
 export default function WishlistTab() {
   const { user } = useAuth();
   const supabase = createClient();
+  const t = useTranslations("MyAccount.wishlist");
+  const tt = useTranslations("MyAccount.componentTypes");
+  const TYPE_LABELS: Record<string, string> = {
+    WEAPON: tt("weapon"), SHIELD: tt("shield"), POWER_PLANT: tt("powerPlant"),
+    COOLER: tt("cooler"), QUANTUM_DRIVE: tt("quantum"), MISSILE: tt("missile"),
+  };
+  const PRIORITY_LABELS = ["", t("priorities.low"), t("priorities.normal"), t("priorities.high"), t("priorities.urgent")];
   const [items, setItems] = useState<WishlistItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
@@ -72,25 +74,25 @@ export default function WishlistTab() {
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, priority } : i)));
   }, [supabase]);
 
-  if (loading) return <div className="text-zinc-500 animate-pulse text-center py-8">Cargando wishlist...</div>;
+  if (loading) return <div className="text-zinc-500 animate-pulse text-center py-8">{t("loading")}</div>;
 
   return (
     <div className="space-y-5">
       <ComponentSearch
         onSelect={addItem}
         disabled={adding}
-        buttonLabel="+ Wishlist"
-        placeholder="Search component to add to wishlist..."
+        buttonLabel={t("addButton")}
+        placeholder={t("searchPlaceholder")}
       />
 
       <div className="px-2.5 py-1.5 rounded bg-blue-500/10 border border-blue-500/20 text-[11px] text-blue-400/80">
-        ⭐ Tu wishlist se usa en el sorteo de actividades para priorizar items que necesitas
+        {t("hint")}
       </div>
 
       {items.length === 0 ? (
         <div className="text-center text-zinc-600 py-8">
           <div className="text-3xl mb-2">⭐</div>
-          Your wishlist is empty. Add components you need.
+          {t("empty")}
         </div>
       ) : (
         <div className="space-y-1.5">
@@ -124,7 +126,7 @@ export default function WishlistTab() {
             </div>
           ))}
           <div className="text-xs text-zinc-600 text-center">
-            {items.length} items en wishlist
+            {t("totalItems", { count: items.length })}
           </div>
         </div>
       )}

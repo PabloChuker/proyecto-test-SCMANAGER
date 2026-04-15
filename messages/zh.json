@@ -91,6 +91,66 @@
       "inventory": "库存",
       "wishlist": "心愿单",
       "loadouts": "配装"
+    },
+    "componentTypes": {
+      "weapon": "🔫 武器",
+      "shield": "🛡 护盾",
+      "powerPlant": "⚡ 发电机",
+      "cooler": "❄ 冷却器",
+      "quantum": "🌀 量子",
+      "missile": "🚀 导弹"
+    },
+    "inventory": {
+      "loading": "正在加载库存...",
+      "addButton": "+ 库存",
+      "searchPlaceholder": "搜索组件以添加到库存...",
+      "filter": "筛选库存...",
+      "empty": "你的库存为空。在上方搜索组件以添加。",
+      "totalComponents": "库存中共有 {count} 个组件"
+    },
+    "wishlist": {
+      "loading": "正在加载心愿单...",
+      "addButton": "+ 心愿单",
+      "searchPlaceholder": "搜索组件以添加到心愿单...",
+      "hint": "⭐ 你的心愿单将在活动抽奖中用于优先分配你需要的物品",
+      "empty": "你的心愿单为空。添加你需要的组件。",
+      "totalItems": "心愿单中有 {count} 项",
+      "priorities": {
+        "low": "低",
+        "normal": "普通",
+        "high": "高",
+        "urgent": "紧急"
+      }
+    },
+    "loadouts": {
+      "loading": "正在加载配装...",
+      "hintPrefix": "🔧 从 ",
+      "hintLink": "配装管理器",
+      "hintSuffix": " 使用\"保存配装\"按钮保存配装",
+      "empty": "你没有已保存的配装。在配装管理器中构建一个并保存。",
+      "openInDps": "在 DPS 中打开",
+      "noComponents": "没有保存的组件",
+      "haveIt": "已拥有 ✓",
+      "markAsInventory": "标记为已在库存中",
+      "addToWishlist": "添加到心愿单",
+      "addInv": "+ 库",
+      "addWl": "+ 愿",
+      "wishlistBadge": "心愿 ⭐"
+    },
+    "componentSearch": {
+      "categories": {
+        "all": "全部",
+        "weapons": "🔫 武器",
+        "shields": "🛡 护盾",
+        "powerPlants": "⚡ 发电机",
+        "coolers": "❄ 冷却器",
+        "quantum": "🌀 量子",
+        "missiles": "🚀 导弹"
+      },
+      "searchButton": "搜索",
+      "placeholder": "搜索组件...",
+      "addButton": "+ 添加",
+      "noResults": "无结果"
     }
   },
   "Notifications": {

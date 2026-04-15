@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { useTranslations, useLocale } from "next-intl";
 import { useAuth } from "@/contexts/AuthContext";
 import { createClient } from "@/lib/supabase/client";
 
@@ -36,6 +37,8 @@ const TYPE_ICONS: Record<string, string> = {
 export default function LoadoutsTab() {
   const { user } = useAuth();
   const supabase = createClient();
+  const t = useTranslations("MyAccount.loadouts");
+  const locale = useLocale();
   const [loadouts, setLoadouts] = useState<Loadout[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -117,18 +120,18 @@ export default function LoadoutsTab() {
     setWishlist((prev) => new Set(prev).add(item.item_reference));
   }, [user, supabase]);
 
-  if (loading) return <div className="text-zinc-500 animate-pulse text-center py-8">Cargando loadouts...</div>;
+  if (loading) return <div className="text-zinc-500 animate-pulse text-center py-8">{t("loading")}</div>;
 
   return (
     <div className="space-y-5">
       <div className="px-2.5 py-1.5 rounded bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-400/80">
-        🔧 Guarda loadouts desde el <Link href="/ships" className="underline hover:text-amber-300">Loadout Manager</Link> con el boton &quot;Guardar Loadout&quot;
+        {t("hintPrefix")}<Link href="/ships" className="underline hover:text-amber-300">{t("hintLink")}</Link>{t("hintSuffix")}
       </div>
 
       {loadouts.length === 0 ? (
         <div className="text-center text-zinc-600 py-8">
           <div className="text-3xl mb-2">🔧</div>
-          You have no saved loadouts. Build one in the Loadout Manager and save it.
+          {t("empty")}
         </div>
       ) : (
         <div className="space-y-2">
@@ -145,7 +148,7 @@ export default function LoadoutsTab() {
                     <span className="text-[10px] text-amber-400/60 bg-amber-500/10 px-1.5 rounded">{lo.ship_name}</span>
                   </div>
                   <div className="text-[10px] text-zinc-500 mt-0.5">
-                    {new Date(lo.updated_at).toLocaleDateString("es-AR")}
+                    {new Date(lo.updated_at).toLocaleDateString(locale)}
                     {lo.notes && <span className="ml-2">{lo.notes}</span>}
                   </div>
                 </div>
@@ -154,7 +157,7 @@ export default function LoadoutsTab() {
                   onClick={(e) => e.stopPropagation()}
                   className="px-2 py-1 text-[10px] bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded transition-colors"
                 >
-                  Abrir en DPS
+                  {t("openInDps")}
                 </Link>
                 <button onClick={(e) => { e.stopPropagation(); deleteLoadout(lo.id); }} className="text-zinc-600 hover:text-red-400 text-xs">✕</button>
                 <svg width="12" height="12" viewBox="0 0 12 12" className={`text-zinc-500 transition-transform ${expanded === lo.id ? "rotate-180" : ""}`}>
@@ -166,7 +169,7 @@ export default function LoadoutsTab() {
               {expanded === lo.id && (
                 <div className="border-t border-zinc-800/30 px-3 py-2 space-y-1">
                   {expandedItems.length === 0 ? (
-                    <div className="text-xs text-zinc-600 py-2">Sin componentes guardados</div>
+                    <div className="text-xs text-zinc-600 py-2">{t("noComponents")}</div>
                   ) : (
                     expandedItems.map((item) => {
                       const inInv = inventory.has(item.item_reference) || item.in_inventory;
@@ -179,26 +182,26 @@ export default function LoadoutsTab() {
 
                           {/* Status badges */}
                           {inInv ? (
-                            <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-1 rounded border border-emerald-500/20">Tengo ✓</span>
+                            <span className="text-[9px] bg-emerald-500/10 text-emerald-400 px-1 rounded border border-emerald-500/20">{t("haveIt")}</span>
                           ) : (
                             <button
                               onClick={() => addToInventory(item)}
                               className="text-[9px] text-zinc-500 hover:text-emerald-400 transition-colors px-1"
-                              title="Marcar como en inventario"
+                              title={t("markAsInventory")}
                             >
-                              + Inv
+                              {t("addInv")}
                             </button>
                           )}
 
                           {inWl ? (
-                            <span className="text-[9px] bg-amber-500/10 text-amber-400 px-1 rounded border border-amber-500/20">Wishlist ⭐</span>
+                            <span className="text-[9px] bg-amber-500/10 text-amber-400 px-1 rounded border border-amber-500/20">{t("wishlistBadge")}</span>
                           ) : !inInv ? (
                             <button
                               onClick={() => addToWishlist(item)}
                               className="text-[9px] text-zinc-500 hover:text-amber-400 transition-colors px-1"
-                              title="Add to wishlist"
+                              title={t("addToWishlist")}
                             >
-                              + WL
+                              {t("addWl")}
                             </button>
                           ) : null}
                         </div>

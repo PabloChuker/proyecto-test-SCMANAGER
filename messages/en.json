@@ -91,6 +91,66 @@
       "inventory": "Inventory",
       "wishlist": "Wishlist",
       "loadouts": "Loadouts"
+    },
+    "componentTypes": {
+      "weapon": "🔫 Weapon",
+      "shield": "🛡 Shield",
+      "powerPlant": "⚡ Power Plant",
+      "cooler": "❄ Cooler",
+      "quantum": "🌀 Quantum",
+      "missile": "🚀 Missile"
+    },
+    "inventory": {
+      "loading": "Loading inventory...",
+      "addButton": "+ Inventory",
+      "searchPlaceholder": "Search component to add to inventory...",
+      "filter": "Filter inventory...",
+      "empty": "Your inventory is empty. Search for components above to add them.",
+      "totalComponents": "{count} total components in inventory"
+    },
+    "wishlist": {
+      "loading": "Loading wishlist...",
+      "addButton": "+ Wishlist",
+      "searchPlaceholder": "Search component to add to wishlist...",
+      "hint": "⭐ Your wishlist is used in activity raffles to prioritize items you need",
+      "empty": "Your wishlist is empty. Add components you need.",
+      "totalItems": "{count} items in wishlist",
+      "priorities": {
+        "low": "Low",
+        "normal": "Normal",
+        "high": "High",
+        "urgent": "Urgent"
+      }
+    },
+    "loadouts": {
+      "loading": "Loading loadouts...",
+      "hintPrefix": "🔧 Save loadouts from the ",
+      "hintLink": "Loadout Manager",
+      "hintSuffix": " with the \"Save Loadout\" button",
+      "empty": "You have no saved loadouts. Build one in the Loadout Manager and save it.",
+      "openInDps": "Open in DPS",
+      "noComponents": "No saved components",
+      "haveIt": "Owned ✓",
+      "markAsInventory": "Mark as in inventory",
+      "addToWishlist": "Add to wishlist",
+      "addInv": "+ Inv",
+      "addWl": "+ WL",
+      "wishlistBadge": "Wishlist ⭐"
+    },
+    "componentSearch": {
+      "categories": {
+        "all": "All",
+        "weapons": "🔫 Weapons",
+        "shields": "🛡 Shields",
+        "powerPlants": "⚡ Power Plants",
+        "coolers": "❄ Coolers",
+        "quantum": "🌀 Quantum",
+        "missiles": "🚀 Missiles"
+      },
+      "searchButton": "Search",
+      "placeholder": "Search component...",
+      "addButton": "+ Add",
+      "noResults": "No results"
     }
   },
   "Notifications": {

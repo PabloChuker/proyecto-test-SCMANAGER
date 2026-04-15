@@ -91,6 +91,66 @@
       "inventory": "Inventaire",
       "wishlist": "Liste de souhaits",
       "loadouts": "Loadouts"
+    },
+    "componentTypes": {
+      "weapon": "🔫 Arme",
+      "shield": "🛡 Bouclier",
+      "powerPlant": "⚡ Générateur",
+      "cooler": "❄ Refroidisseur",
+      "quantum": "🌀 Quantum",
+      "missile": "🚀 Missile"
+    },
+    "inventory": {
+      "loading": "Chargement de l'inventaire...",
+      "addButton": "+ Inventaire",
+      "searchPlaceholder": "Rechercher un composant à ajouter à l'inventaire...",
+      "filter": "Filtrer l'inventaire...",
+      "empty": "Votre inventaire est vide. Recherchez des composants ci-dessus pour les ajouter.",
+      "totalComponents": "{count} composants au total dans l'inventaire"
+    },
+    "wishlist": {
+      "loading": "Chargement de la liste de souhaits...",
+      "addButton": "+ Liste",
+      "searchPlaceholder": "Rechercher un composant à ajouter à la liste de souhaits...",
+      "hint": "⭐ Votre liste de souhaits est utilisée dans les tirages d'activités pour prioriser les objets dont vous avez besoin",
+      "empty": "Votre liste de souhaits est vide. Ajoutez les composants dont vous avez besoin.",
+      "totalItems": "{count} objets dans la liste de souhaits",
+      "priorities": {
+        "low": "Basse",
+        "normal": "Normale",
+        "high": "Haute",
+        "urgent": "Urgente"
+      }
+    },
+    "loadouts": {
+      "loading": "Chargement des loadouts...",
+      "hintPrefix": "🔧 Enregistrez vos loadouts depuis le ",
+      "hintLink": "Loadout Manager",
+      "hintSuffix": " avec le bouton « Enregistrer Loadout »",
+      "empty": "Vous n'avez aucun loadout enregistré. Créez-en un dans le Loadout Manager et enregistrez-le.",
+      "openInDps": "Ouvrir dans DPS",
+      "noComponents": "Aucun composant enregistré",
+      "haveIt": "Possédé ✓",
+      "markAsInventory": "Marquer comme dans l'inventaire",
+      "addToWishlist": "Ajouter à la liste de souhaits",
+      "addInv": "+ Inv",
+      "addWl": "+ LS",
+      "wishlistBadge": "Souhait ⭐"
+    },
+    "componentSearch": {
+      "categories": {
+        "all": "Toutes",
+        "weapons": "🔫 Armes",
+        "shields": "🛡 Boucliers",
+        "powerPlants": "⚡ Générateurs",
+        "coolers": "❄ Refroidisseurs",
+        "quantum": "🌀 Quantum",
+        "missiles": "🚀 Missiles"
+      },
+      "searchButton": "Rechercher",
+      "placeholder": "Rechercher un composant...",
+      "addButton": "+ Ajouter",
+      "noResults": "Aucun résultat"
     }
   },
   "Notifications": {
