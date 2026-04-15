@@ -13,6 +13,7 @@ import { SIDEBAR_ITEMS } from "@/app/assets/header/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { createClient } from "@/lib/supabase/client";
 import { PageVideoBackground } from "@/components/shared/PageVideoBackground";
+import { useTranslations } from "next-intl";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 type SectionId = "config" | "subs" | "org";
@@ -20,18 +21,20 @@ type SectionId = "config" | "subs" | "org";
 // ── Panel: Configuración ───────────────────────────────────────────────────
 
 function ConfigPanel({ onClose }: { onClose: () => void }) {
+  const t = useTranslations("Profile.config");
   const [lang, setLang] = useState("es");
   const [notifOn, setNotifOn] = useState(true);
   const [privacyOpen, setPrivacyOpen] = useState(false);
-  const [privacy, setPrivacy] = useState("Everyone");
+  const [privacy, setPrivacy] = useState<"everyone" | "organization" | "friends" | "nobody">("everyone");
   const [linkedOpen, setLinkedOpen] = useState(true);
+  const privacyOptions: Array<"everyone" | "organization" | "friends" | "nobody"> = ["everyone", "organization", "friends", "nobody"];
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="bg-zinc-900/50 backdrop-blur-sm px-6 py-5 border-b border-zinc-800/30 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
           <Settings size={16} className="text-amber-500" />
-          <span className="font-mono text-xs tracking-[0.15em] uppercase text-zinc-300">Site settings</span>
+          <span className="font-mono text-xs tracking-[0.15em] uppercase text-zinc-300">{t("title")}</span>
         </div>
         <button onClick={onClose} className="w-8 h-8 rounded border border-zinc-700/50 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-all"><X size={13} /></button>
       </div>
@@ -42,10 +45,10 @@ function ConfigPanel({ onClose }: { onClose: () => void }) {
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
               <Globe size={12} className="text-zinc-600" />
-              <span className="text-[10px] font-mono tracking-[0.15em] uppercase text-zinc-500">Default language</span>
+              <span className="text-[10px] font-mono tracking-[0.15em] uppercase text-zinc-500">{t("languageLabel")}</span>
             </div>
           </div>
-          <p className="text-[11px] text-zinc-600 mb-3">Select the default interface language</p>
+          <p className="text-[11px] text-zinc-600 mb-3">{t("languageDesc")}</p>
           <div className="grid grid-cols-3 gap-1.5">
             {[
               { code: "es", flagCode: "es", label: "Spanish" },
@@ -78,8 +81,8 @@ function ConfigPanel({ onClose }: { onClose: () => void }) {
         <div className="flex items-center gap-3 py-3 border-b border-zinc-800/20">
           <div className="w-8 h-8 rounded-lg bg-zinc-800/50 flex items-center justify-center text-zinc-400 flex-shrink-0"><Bell size={14} /></div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm text-zinc-300">Notifications</div>
-            <div className="text-xs text-zinc-600 mt-0.5">Receive system alerts and warnings</div>
+            <div className="text-sm text-zinc-300">{t("notifications")}</div>
+            <div className="text-xs text-zinc-600 mt-0.5">{t("notificationsDesc")}</div>
           </div>
           <button
             onClick={() => setNotifOn(v => !v)}
@@ -101,14 +104,14 @@ function ConfigPanel({ onClose }: { onClose: () => void }) {
           >
             <div className="w-8 h-8 rounded-lg bg-zinc-800/50 flex items-center justify-center text-zinc-400 flex-shrink-0"><Eye size={14} /></div>
             <div className="flex-1 min-w-0 text-left">
-              <div className="text-sm text-zinc-300">Profile privacy</div>
-              <div className="text-xs text-zinc-500 mt-0.5">{privacy}</div>
+              <div className="text-sm text-zinc-300">{t("profilePrivacy")}</div>
+              <div className="text-xs text-zinc-500 mt-0.5">{t(`privacyOptions.${privacy}`)}</div>
             </div>
             <ChevronDown size={13} className={`text-zinc-600 flex-shrink-0 transition-transform ${privacyOpen ? "rotate-180" : ""}`} />
           </button>
           {privacyOpen && (
             <div className="mb-2 ml-11 flex flex-col gap-1">
-              {["Everyone", "Organization", "Friends", "Nobody"].map(opt => (
+              {privacyOptions.map(opt => (
                 <button
                   key={opt}
                   onClick={() => { setPrivacy(opt); setPrivacyOpen(false); }}
@@ -117,7 +120,7 @@ function ConfigPanel({ onClose }: { onClose: () => void }) {
                       ? "bg-amber-500/10 text-amber-400 border border-amber-500/25"
                       : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
                   }`}
-                >{opt}</button>
+                >{t(`privacyOptions.${opt}`)}</button>
               ))}
             </div>
           )}
@@ -131,7 +134,7 @@ function ConfigPanel({ onClose }: { onClose: () => void }) {
           >
             <div className="flex items-center gap-2">
               <Link2 size={12} className="text-zinc-600 group-hover:text-zinc-400 transition-colors" />
-              <span className="text-[10px] font-mono tracking-[0.15em] uppercase text-zinc-500 group-hover:text-zinc-300 transition-colors">Linkable accounts</span>
+              <span className="text-[10px] font-mono tracking-[0.15em] uppercase text-zinc-500 group-hover:text-zinc-300 transition-colors">{t("linkableAccounts")}</span>
             </div>
             <ChevronDown
               size={12}
@@ -148,10 +151,10 @@ function ConfigPanel({ onClose }: { onClose: () => void }) {
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm text-zinc-300">Discord</div>
-                  <div className="text-xs text-zinc-500 mt-0.5">sr_frost#0001 · Linked</div>
+                  <div className="text-sm text-zinc-300">{t("discord")}</div>
+                  <div className="text-xs text-zinc-500 mt-0.5">sr_frost#0001 · {t("discordLinked")}</div>
                 </div>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-lime-700/40 text-lime-500 bg-lime-500/5">Active</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-lime-700/40 text-lime-500 bg-lime-500/5">{t("active")}</span>
               </div>
               {/* RSI */}
               <div className="flex items-center gap-3 py-3 border-b border-zinc-800/20 opacity-50">
@@ -162,8 +165,8 @@ function ConfigPanel({ onClose }: { onClose: () => void }) {
                   </svg>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm text-zinc-500">RSI Account</div>
-                  <div className="text-xs text-zinc-700 mt-0.5">Not linked</div>
+                  <div className="text-sm text-zinc-500">{t("rsiAccount")}</div>
+                  <div className="text-xs text-zinc-700 mt-0.5">{t("notLinked")}</div>
                 </div>
                 <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-zinc-700/40 text-zinc-600 bg-zinc-900/30">—</span>
               </div>
@@ -173,9 +176,9 @@ function ConfigPanel({ onClose }: { onClose: () => void }) {
 
         {/* Placeholders */}
         <div>
-          <div className="text-[10px] font-mono tracking-[0.15em] uppercase text-zinc-600 mb-2">Coming soon</div>
+          <div className="text-[10px] font-mono tracking-[0.15em] uppercase text-zinc-600 mb-2">{t("comingSoon")}</div>
           {[
-            { icon: <Shield size={14} />, label: "Security & 2FA", desc: "Two-factor authentication" },
+            { icon: <Shield size={14} />, label: t("security2fa"), desc: t("security2faDesc") },
           ].map(item => (
             <div key={item.label} className="flex items-center gap-3 py-3 border-b border-zinc-800/20 opacity-35 cursor-not-allowed select-none">
               <div className="w-8 h-8 rounded-lg bg-zinc-800/50 flex items-center justify-center text-zinc-600 flex-shrink-0">{item.icon}</div>
@@ -195,13 +198,14 @@ function ConfigPanel({ onClose }: { onClose: () => void }) {
 // ── Panel: Suscripciones ───────────────────────────────────────────────────
 
 function SubsPanel({ onClose }: { onClose: () => void }) {
+  const t = useTranslations("Profile.subs");
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="bg-zinc-900/50 backdrop-blur-sm px-6 py-5 border-b border-zinc-800/30 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
           <Lock size={16} className="text-zinc-500" />
-          <span className="font-mono text-xs tracking-[0.15em] uppercase text-zinc-300">Funciones especiales</span>
+          <span className="font-mono text-xs tracking-[0.15em] uppercase text-zinc-300">{t("title")}</span>
         </div>
         <button onClick={onClose} className="w-8 h-8 rounded border border-zinc-700/50 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-all"><X size={13} /></button>
       </div>
@@ -211,8 +215,8 @@ function SubsPanel({ onClose }: { onClose: () => void }) {
           <Lock size={24} className="text-zinc-700" />
         </div>
         <div>
-          <div className="text-base font-bold text-zinc-400 mb-1">Coming soon</div>
-          <p className="text-xs text-zinc-600 leading-relaxed">This section will be available later.</p>
+          <div className="text-base font-bold text-zinc-400 mb-1">{t("comingSoon")}</div>
+          <p className="text-xs text-zinc-600 leading-relaxed">{t("comingSoonDesc")}</p>
         </div>
       </div>
     </div>
@@ -222,13 +226,14 @@ function SubsPanel({ onClose }: { onClose: () => void }) {
 // ── Panel: Organización ────────────────────────────────────────────────────
 
 function OrgInfoPanel({ orgName, onClose }: { orgName: string | null; onClose: () => void }) {
+  const t = useTranslations("Profile.org");
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="bg-zinc-900/50 backdrop-blur-sm px-6 py-5 border-b border-zinc-800/30 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
           <Shield size={16} className="text-amber-500" />
-          <span className="font-mono text-xs tracking-[0.15em] uppercase text-zinc-300">Organization</span>
+          <span className="font-mono text-xs tracking-[0.15em] uppercase text-zinc-300">{t("title")}</span>
         </div>
         <button onClick={onClose} className="w-8 h-8 rounded border border-zinc-700/50 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-all"><X size={13} /></button>
       </div>
@@ -245,7 +250,7 @@ function OrgInfoPanel({ orgName, onClose }: { orgName: string | null; onClose: (
                 <div className="text-lg font-bold text-zinc-100 tracking-wide">{orgName}</div>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-lime-400" />
-                  <span className="text-xs text-zinc-500 font-mono">15 members online</span>
+                  <span className="text-xs text-zinc-500 font-mono">{t("membersOnline", { count: 15 })}</span>
                 </div>
               </div>
             </div>
@@ -254,31 +259,31 @@ function OrgInfoPanel({ orgName, onClose }: { orgName: string | null; onClose: (
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/20 p-3 text-center">
                 <div className="text-2xl font-bold text-lime-400">15</div>
-                <div className="text-xs text-zinc-500 mt-0.5">Members online</div>
+                <div className="text-xs text-zinc-500 mt-0.5">{t("membersOnlineLabel")}</div>
               </div>
               <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/20 p-3 text-center">
                 <div className="text-2xl font-bold text-amber-400">3</div>
-                <div className="text-xs text-zinc-500 mt-0.5">Rank</div>
+                <div className="text-xs text-zinc-500 mt-0.5">{t("rank")}</div>
               </div>
             </div>
 
             {/* Bio */}
             <div>
-              <div className="text-[10px] font-mono tracking-[0.15em] uppercase text-zinc-500 mb-2">Description</div>
+              <div className="text-[10px] font-mono tracking-[0.15em] uppercase text-zinc-500 mb-2">{t("description")}</div>
               <div className="rounded-xl border border-zinc-800/40 bg-zinc-900/20 p-4 min-h-[90px]">
                 <p className="text-sm text-zinc-500 leading-relaxed italic">
-                  We are an organization dedicated to tactical analysis, mining, and combat operations in the Star Citizen universe. Join us and become part of a growing community.
+                  {t("descriptionText")}
                 </p>
               </div>
-              <p className="text-[10px] text-zinc-700 mt-2 font-mono">* Editable by org founder — coming soon</p>
+              <p className="text-[10px] text-zinc-700 mt-2 font-mono">{t("editableNote")}</p>
             </div>
           </>
         ) : (
           <div className="flex flex-col items-center justify-center h-48 text-center gap-3">
             <Shield size={36} className="text-zinc-800" />
             <div>
-              <p className="text-sm text-zinc-500">You don't belong to any organization</p>
-              <p className="text-xs text-zinc-700 mt-1">Organization management will be available soon</p>
+              <p className="text-sm text-zinc-500">{t("notMember")}</p>
+              <p className="text-xs text-zinc-700 mt-1">{t("managementSoon")}</p>
             </div>
           </div>
         )}
@@ -293,6 +298,7 @@ export default function ProfilePage() {
   const { user, profile, loading, signOut, refreshProfile } = useAuth();
   const router = useRouter();
   const supabase = createClient();
+  const t = useTranslations("Profile");
 
   // Section state
   const [activeSection, setActiveSection] = useState<SectionId | null>(null);
@@ -359,7 +365,7 @@ export default function ProfilePage() {
     return (
       <main className="relative min-h-screen text-zinc-100 flex items-center justify-center">
         <PageVideoBackground src="/videos/comparador.mp4" />
-        <div className="relative z-10 text-zinc-500 font-mono text-sm animate-pulse">LOADING PROFILE...</div>
+        <div className="relative z-10 text-zinc-500 font-mono text-sm animate-pulse">{t("loading")}</div>
       </main>
     );
   }
@@ -398,7 +404,7 @@ export default function ProfilePage() {
       {/* Dot grid background (above the video, below content) */}
       <div className="fixed inset-0 pointer-events-none z-[1]" style={dotBg} />
 
-      <Header subtitle="Perfil" />
+      <Header subtitle={t("subtitle")} />
 
       <div className="flex flex-1 min-h-0 relative z-10">
         {/* Sidebar */}
@@ -467,7 +473,7 @@ export default function ProfilePage() {
                 <div className="font-bold text-[30px] text-zinc-100 tracking-wide leading-none">{heroName}</div>
                 <div className="flex items-center gap-1.5 mt-1.5 font-mono text-xs text-lime-400">
                   <div className="w-1.5 h-1.5 rounded-full bg-lime-400" />
-                  ONLINE
+                  {t("hero.online")}
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-3">
                   <span className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1 rounded-full border border-slate-600/30 bg-slate-500/10 text-slate-300">
@@ -490,13 +496,13 @@ export default function ProfilePage() {
                       : "border-amber-600 bg-transparent text-amber-500 hover:bg-amber-500/10"
                   }`}
                 >
-                  {editMode ? "EDITING…" : "EDIT PROFILE"}
+                  {editMode ? t("hero.editing") : t("hero.edit")}
                 </button>
                 <button
                   onClick={signOut}
                   className="text-[10px] font-mono tracking-widest uppercase text-zinc-600 hover:text-zinc-400 transition-colors"
                 >
-                  Sign out
+                  {t("hero.signOut")}
                 </button>
               </div>
             </div>
@@ -517,7 +523,7 @@ export default function ProfilePage() {
                       className="flex items-center gap-2 text-sm text-zinc-300 hover:text-zinc-100 transition-colors"
                     >
                       <ChevronDown size={16} className="-rotate-90" />
-                      Back to profile
+                      {t("accountSettings.backToProfile")}
                     </button>
                   </div>
                   <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(245,158,11,0.3) transparent" }}>
@@ -531,7 +537,7 @@ export default function ProfilePage() {
                   {/* Profile data section */}
                   <div className="px-7 py-5 border-b border-zinc-800/30">
                     <div className="font-mono text-[10px] tracking-[0.12em] uppercase text-zinc-500 mb-3.5">
-                      Profile data
+                      {t("data.title")}
                     </div>
 
                     {editMode ? (
@@ -539,7 +545,7 @@ export default function ProfilePage() {
                         <div className="grid grid-cols-2 gap-x-10 gap-y-0">
                           <div>
                             <div className="flex justify-between items-center py-2.5 border-b border-zinc-800/30">
-                              <span className="text-sm text-zinc-400">Display name</span>
+                              <span className="text-sm text-zinc-400">{t("data.displayName")}</span>
                               <input
                                 value={displayName}
                                 onChange={(e) => setDisplayName(e.target.value)}
@@ -547,21 +553,21 @@ export default function ProfilePage() {
                               />
                             </div>
                             <div className="flex justify-between items-center py-2.5">
-                              <span className="text-sm text-zinc-400">Organization</span>
+                              <span className="text-sm text-zinc-400">{t("data.organization")}</span>
                               <span className="text-sm font-medium text-zinc-200">{orgName ?? "—"}</span>
                             </div>
                           </div>
                           <div>
                             <div className="flex justify-between items-center py-2.5 border-b border-zinc-800/30">
-                              <span className="text-sm text-zinc-400">RSI Handle</span>
+                              <span className="text-sm text-zinc-400">{t("data.rsiHandle")}</span>
                               <span className="text-sm text-yellow-500 cursor-pointer">{profile?.username ?? "—"} ↗</span>
                             </div>
                             <div className="flex justify-between items-center py-2.5">
-                              <span className="text-sm text-zinc-400">Country</span>
+                              <span className="text-sm text-zinc-400">{t("data.country")}</span>
                               <input
                                 value={country}
                                 onChange={(e) => setCountry(e.target.value)}
-                                placeholder="Country"
+                                placeholder={t("data.countryPlaceholder")}
                                 className="w-[155px] bg-zinc-800 border border-zinc-600/70 rounded-md px-3 py-1.5 text-[13px] text-zinc-100 placeholder-zinc-600 focus:border-amber-500 focus:outline-none"
                               />
                             </div>
@@ -572,14 +578,14 @@ export default function ProfilePage() {
                             onClick={cancelEdit}
                             className="h-9 px-4 rounded-lg border border-zinc-600/50 bg-transparent text-zinc-400 text-sm cursor-pointer transition-all hover:bg-zinc-800"
                           >
-                            Cancel
+                            {t("hero.cancel")}
                           </button>
                           <button
                             onClick={handleSave}
                             disabled={saving}
                             className="h-9 px-5 rounded-lg border-none bg-amber-600 text-white font-bold text-sm cursor-pointer transition-opacity hover:opacity-90 disabled:opacity-50"
                           >
-                            {saving ? "SAVING..." : "SAVE"}
+                            {saving ? t("hero.saving") : t("hero.save")}
                           </button>
                         </div>
                       </>
@@ -587,21 +593,21 @@ export default function ProfilePage() {
                       <><div className="grid grid-cols-2 gap-x-10">
                         <div>
                           <div className="flex justify-between items-center py-2.5 border-b border-zinc-800/30">
-                            <span className="text-sm text-zinc-400">Display name</span>
+                            <span className="text-sm text-zinc-400">{t("data.displayName")}</span>
                             <span className="text-sm font-medium text-zinc-100">{heroName}</span>
                           </div>
                           <div className="flex justify-between items-center py-2.5">
-                            <span className="text-sm text-zinc-400">Organization</span>
+                            <span className="text-sm text-zinc-400">{t("data.organization")}</span>
                             <span className="text-sm font-medium text-zinc-200">{orgName ?? "—"}</span>
                           </div>
                         </div>
                         <div>
                           <div className="flex justify-between items-center py-2.5 border-b border-zinc-800/30">
-                            <span className="text-sm text-zinc-400">RSI Handle</span>
+                            <span className="text-sm text-zinc-400">{t("data.rsiHandle")}</span>
                             <span className="text-sm text-yellow-500 cursor-pointer">{profile?.username ?? "—"} ↗</span>
                           </div>
                           <div className="flex justify-between items-center py-2.5">
-                            <span className="text-sm text-zinc-400">Country</span>
+                            <span className="text-sm text-zinc-400">{t("data.country")}</span>
                             <span className={`text-sm font-medium ${country ? "text-zinc-100" : "text-zinc-600"}`}>{country || "—"}</span>
                           </div>
                         </div>
@@ -612,7 +618,7 @@ export default function ProfilePage() {
                         <div className="mt-4 pt-3 border-t border-zinc-700/40">
                           <div className="flex items-center gap-1.5 mb-2">
                             <Link2 size={10} className="text-zinc-500" />
-                            <span className="text-[10px] font-mono tracking-[0.12em] uppercase text-zinc-500">Linked accounts</span>
+                            <span className="text-[10px] font-mono tracking-[0.12em] uppercase text-zinc-500">{t("data.linkedAccounts")}</span>
                           </div>
                           <div className="flex flex-wrap gap-2">
                             <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-indigo-500/40 bg-indigo-500/10">
@@ -631,7 +637,7 @@ export default function ProfilePage() {
                   {/* Menu sections */}
                   <div className="px-7 py-5 flex-1">
                     <div className="text-[10px] font-mono tracking-[0.12em] uppercase text-zinc-500 mb-4">
-                      Account settings
+                      {t("accountSettings.title")}
                     </div>
                     <div className="space-y-2">
                       {[
@@ -639,24 +645,24 @@ export default function ProfilePage() {
                           id: "config" as SectionId,
                           icon: <Settings size={17} />,
                           iconCls: "bg-zinc-800/80 text-zinc-400",
-                          label: "Site settings",
-                          desc: "Language, notifications and preferences",
+                          label: t("accountSettings.siteSettings"),
+                          desc: t("accountSettings.siteSettingsDesc"),
                           soon: false,
                         },
                         {
                           id: "subs" as SectionId,
                           icon: <Lock size={17} />,
                           iconCls: "bg-zinc-800/50 text-zinc-600",
-                          label: "Special features",
-                          desc: "Coming soon",
+                          label: t("accountSettings.specialFeatures"),
+                          desc: t("accountSettings.specialFeaturesDesc"),
                           soon: true,
                         },
                         {
                           id: "org" as SectionId,
                           icon: <Shield size={17} />,
                           iconCls: "bg-slate-500/10 text-slate-400",
-                          label: "Organization",
-                          desc: orgName ?? "No organization",
+                          label: t("accountSettings.organization"),
+                          desc: orgName ?? t("accountSettings.noOrganization"),
                           soon: false,
                         },
                       ].map(item => (
@@ -677,7 +683,7 @@ export default function ProfilePage() {
                             <div className="text-xs text-zinc-500 mt-0.5 truncate">{item.desc}</div>
                           </div>
                           {item.soon ? (
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-zinc-700/50 text-zinc-600 bg-zinc-900/50 flex-shrink-0">SOON</span>
+                            <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-zinc-700/50 text-zinc-600 bg-zinc-900/50 flex-shrink-0">{t("accountSettings.soon")}</span>
                           ) : (
                             <ChevronDown
                               size={14}

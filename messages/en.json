@@ -153,6 +153,78 @@
       "noResults": "No results"
     }
   },
+  "Profile": {
+    "subtitle": "Profile",
+    "loading": "LOADING PROFILE...",
+    "hero": {
+      "edit": "EDIT PROFILE",
+      "editing": "EDITING…",
+      "save": "SAVE",
+      "saving": "SAVING...",
+      "cancel": "Cancel",
+      "signOut": "Sign out",
+      "online": "ONLINE"
+    },
+    "data": {
+      "title": "Profile data",
+      "displayName": "Display name",
+      "organization": "Organization",
+      "rsiHandle": "RSI Handle",
+      "country": "Country",
+      "countryPlaceholder": "Country",
+      "linkedAccounts": "Linked accounts"
+    },
+    "accountSettings": {
+      "title": "Account settings",
+      "siteSettings": "Site settings",
+      "siteSettingsDesc": "Language, notifications and preferences",
+      "specialFeatures": "Special features",
+      "specialFeaturesDesc": "Coming soon",
+      "organization": "Organization",
+      "noOrganization": "No organization",
+      "soon": "SOON",
+      "backToProfile": "Back to profile"
+    },
+    "config": {
+      "title": "Site settings",
+      "languageLabel": "Default language",
+      "languageDesc": "Select the default interface language",
+      "notifications": "Notifications",
+      "notificationsDesc": "Receive system alerts and warnings",
+      "profilePrivacy": "Profile privacy",
+      "privacyOptions": {
+        "everyone": "Everyone",
+        "organization": "Organization",
+        "friends": "Friends",
+        "nobody": "Nobody"
+      },
+      "linkableAccounts": "Linkable accounts",
+      "discord": "Discord",
+      "discordLinked": "Linked",
+      "rsiAccount": "RSI Account",
+      "notLinked": "Not linked",
+      "active": "Active",
+      "comingSoon": "Coming soon",
+      "security2fa": "Security & 2FA",
+      "security2faDesc": "Two-factor authentication"
+    },
+    "subs": {
+      "title": "Special features",
+      "comingSoon": "Coming soon",
+      "comingSoonDesc": "This section will be available later."
+    },
+    "org": {
+      "title": "Organization",
+      "membersOnline": "{count} members online",
+      "membersOnlineLabel": "Members online",
+      "rank": "Rank",
+      "description": "Description",
+      "descriptionText": "We are an organization dedicated to tactical analysis, mining, and combat operations in the Star Citizen universe. Join us and become part of a growing community.",
+      "editableNote": "* Editable by org founder — coming soon",
+      "notMember": "You don't belong to any organization",
+      "managementSoon": "Organization management will be available soon"
+    }
+  },
   "Notifications": {
     "title": "Notifications",
     "tooltip": "Notifications",

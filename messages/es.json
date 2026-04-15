@@ -153,6 +153,78 @@
       "noResults": "Sin resultados"
     }
   },
+  "Profile": {
+    "subtitle": "Perfil",
+    "loading": "CARGANDO PERFIL...",
+    "hero": {
+      "edit": "EDITAR PERFIL",
+      "editing": "EDITANDO…",
+      "save": "GUARDAR",
+      "saving": "GUARDANDO...",
+      "cancel": "Cancelar",
+      "signOut": "Cerrar sesion",
+      "online": "EN LINEA"
+    },
+    "data": {
+      "title": "Datos de perfil",
+      "displayName": "Nombre",
+      "organization": "Organizacion",
+      "rsiHandle": "RSI Handle",
+      "country": "Pais",
+      "countryPlaceholder": "Pais",
+      "linkedAccounts": "Cuentas vinculadas"
+    },
+    "accountSettings": {
+      "title": "Ajustes de cuenta",
+      "siteSettings": "Ajustes del sitio",
+      "siteSettingsDesc": "Idioma, notificaciones y preferencias",
+      "specialFeatures": "Funciones especiales",
+      "specialFeaturesDesc": "Proximamente",
+      "organization": "Organizacion",
+      "noOrganization": "Sin organizacion",
+      "soon": "PRONTO",
+      "backToProfile": "Volver al perfil"
+    },
+    "config": {
+      "title": "Ajustes del sitio",
+      "languageLabel": "Idioma por defecto",
+      "languageDesc": "Selecciona el idioma por defecto de la interfaz",
+      "notifications": "Notificaciones",
+      "notificationsDesc": "Recibe alertas y avisos del sistema",
+      "profilePrivacy": "Privacidad del perfil",
+      "privacyOptions": {
+        "everyone": "Todos",
+        "organization": "Organizacion",
+        "friends": "Amigos",
+        "nobody": "Nadie"
+      },
+      "linkableAccounts": "Cuentas vinculables",
+      "discord": "Discord",
+      "discordLinked": "Vinculada",
+      "rsiAccount": "Cuenta RSI",
+      "notLinked": "No vinculada",
+      "active": "Activa",
+      "comingSoon": "Proximamente",
+      "security2fa": "Seguridad y 2FA",
+      "security2faDesc": "Autenticacion de dos factores"
+    },
+    "subs": {
+      "title": "Funciones especiales",
+      "comingSoon": "Proximamente",
+      "comingSoonDesc": "Esta seccion estara disponible mas adelante."
+    },
+    "org": {
+      "title": "Organizacion",
+      "membersOnline": "{count} miembros en linea",
+      "membersOnlineLabel": "Miembros en linea",
+      "rank": "Rango",
+      "description": "Descripcion",
+      "descriptionText": "Somos una organizacion dedicada al analisis tactico, mineria y operaciones de combate en el universo Star Citizen. Unete y forma parte de una comunidad en crecimiento.",
+      "editableNote": "* Editable por el fundador de la org — proximamente",
+      "notMember": "No perteneces a ninguna organizacion",
+      "managementSoon": "La gestion de organizaciones estara disponible pronto"
+    }
+  },
   "Notifications": {
     "title": "Notificaciones",
     "tooltip": "Notificaciones",

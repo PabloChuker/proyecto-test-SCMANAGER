@@ -153,6 +153,78 @@
       "noResults": "无结果"
     }
   },
+  "Profile": {
+    "subtitle": "个人资料",
+    "loading": "正在加载个人资料...",
+    "hero": {
+      "edit": "编辑资料",
+      "editing": "编辑中…",
+      "save": "保存",
+      "saving": "保存中...",
+      "cancel": "取消",
+      "signOut": "退出登录",
+      "online": "在线"
+    },
+    "data": {
+      "title": "资料信息",
+      "displayName": "显示名称",
+      "organization": "组织",
+      "rsiHandle": "RSI 账号",
+      "country": "国家",
+      "countryPlaceholder": "国家",
+      "linkedAccounts": "已关联账户"
+    },
+    "accountSettings": {
+      "title": "账户设置",
+      "siteSettings": "站点设置",
+      "siteSettingsDesc": "语言、通知和偏好设置",
+      "specialFeatures": "特殊功能",
+      "specialFeaturesDesc": "即将推出",
+      "organization": "组织",
+      "noOrganization": "无组织",
+      "soon": "即将",
+      "backToProfile": "返回资料"
+    },
+    "config": {
+      "title": "站点设置",
+      "languageLabel": "默认语言",
+      "languageDesc": "选择默认的界面语言",
+      "notifications": "通知",
+      "notificationsDesc": "接收系统提醒和警告",
+      "profilePrivacy": "资料隐私",
+      "privacyOptions": {
+        "everyone": "所有人",
+        "organization": "组织",
+        "friends": "好友",
+        "nobody": "仅自己"
+      },
+      "linkableAccounts": "可关联账户",
+      "discord": "Discord",
+      "discordLinked": "已关联",
+      "rsiAccount": "RSI 账户",
+      "notLinked": "未关联",
+      "active": "活动",
+      "comingSoon": "即将推出",
+      "security2fa": "安全与 2FA",
+      "security2faDesc": "双因素认证"
+    },
+    "subs": {
+      "title": "特殊功能",
+      "comingSoon": "即将推出",
+      "comingSoonDesc": "此版块稍后将开放。"
+    },
+    "org": {
+      "title": "组织",
+      "membersOnline": "{count} 名成员在线",
+      "membersOnlineLabel": "成员在线",
+      "rank": "等级",
+      "description": "描述",
+      "descriptionText": "我们是一个致力于战术分析、采矿和战斗作业的星际公民组织。加入我们，成为不断壮大社区的一员。",
+      "editableNote": "* 可由组织创始人编辑 — 即将开放",
+      "notMember": "你不属于任何组织",
+      "managementSoon": "组织管理功能即将推出"
+    }
+  },
   "Notifications": {
     "title": "通知",
     "tooltip": "通知",

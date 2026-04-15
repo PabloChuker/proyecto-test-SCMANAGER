@@ -153,6 +153,78 @@
       "noResults": "Keine Ergebnisse"
     }
   },
+  "Profile": {
+    "subtitle": "Profil",
+    "loading": "PROFIL WIRD GELADEN...",
+    "hero": {
+      "edit": "PROFIL BEARBEITEN",
+      "editing": "BEARBEITEN…",
+      "save": "SPEICHERN",
+      "saving": "SPEICHERN...",
+      "cancel": "Abbrechen",
+      "signOut": "Abmelden",
+      "online": "ONLINE"
+    },
+    "data": {
+      "title": "Profildaten",
+      "displayName": "Anzeigename",
+      "organization": "Organisation",
+      "rsiHandle": "RSI Handle",
+      "country": "Land",
+      "countryPlaceholder": "Land",
+      "linkedAccounts": "Verknüpfte Konten"
+    },
+    "accountSettings": {
+      "title": "Kontoeinstellungen",
+      "siteSettings": "Website-Einstellungen",
+      "siteSettingsDesc": "Sprache, Benachrichtigungen und Einstellungen",
+      "specialFeatures": "Besondere Funktionen",
+      "specialFeaturesDesc": "Bald verfügbar",
+      "organization": "Organisation",
+      "noOrganization": "Keine Organisation",
+      "soon": "BALD",
+      "backToProfile": "Zurück zum Profil"
+    },
+    "config": {
+      "title": "Website-Einstellungen",
+      "languageLabel": "Standardsprache",
+      "languageDesc": "Wähle die Standardsprache der Oberfläche",
+      "notifications": "Benachrichtigungen",
+      "notificationsDesc": "Systemhinweise und Warnungen erhalten",
+      "profilePrivacy": "Profil-Privatsphäre",
+      "privacyOptions": {
+        "everyone": "Alle",
+        "organization": "Organisation",
+        "friends": "Freunde",
+        "nobody": "Niemand"
+      },
+      "linkableAccounts": "Verknüpfbare Konten",
+      "discord": "Discord",
+      "discordLinked": "Verknüpft",
+      "rsiAccount": "RSI-Konto",
+      "notLinked": "Nicht verknüpft",
+      "active": "Aktiv",
+      "comingSoon": "Bald verfügbar",
+      "security2fa": "Sicherheit & 2FA",
+      "security2faDesc": "Zwei-Faktor-Authentifizierung"
+    },
+    "subs": {
+      "title": "Besondere Funktionen",
+      "comingSoon": "Bald verfügbar",
+      "comingSoonDesc": "Dieser Bereich wird später verfügbar sein."
+    },
+    "org": {
+      "title": "Organisation",
+      "membersOnline": "{count} Mitglieder online",
+      "membersOnlineLabel": "Mitglieder online",
+      "rank": "Rang",
+      "description": "Beschreibung",
+      "descriptionText": "Wir sind eine Organisation, die sich taktischer Analyse, Bergbau und Kampfoperationen im Star-Citizen-Universum widmet. Schließe dich uns an und werde Teil einer wachsenden Gemeinschaft.",
+      "editableNote": "* Vom Org-Gründer editierbar — bald verfügbar",
+      "notMember": "Du gehörst keiner Organisation an",
+      "managementSoon": "Organisationsverwaltung wird bald verfügbar sein"
+    }
+  },
   "Notifications": {
     "title": "Benachrichtigungen",
     "tooltip": "Benachrichtigungen",
