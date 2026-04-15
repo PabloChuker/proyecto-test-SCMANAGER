@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import miningModules from "@/data/mining/mining-modules.json";
 
 interface Laser {
@@ -90,6 +91,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 export default function MiningLoadoutCalculator() {
+  const t = useTranslations("Mining.loadout");
   const [ship, setShip] = useState<string>("prospector");
   const [lasers, setLasers] = useState<Laser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -250,7 +252,7 @@ export default function MiningLoadoutCalculator() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-4">
           <label className="text-xs tracking-[0.1em] uppercase text-zinc-400 block mb-2">
-            Nave Minera
+            {t("miningShip")}
           </label>
           <select
             value={ship}
@@ -259,8 +261,7 @@ export default function MiningLoadoutCalculator() {
           >
             {Object.entries(SHIP_CONFIGS).map(([key, cfg]) => (
               <option key={key} value={key}>
-                {cfg.name} — {cfg.cargo} SCU · {cfg.turrets} torreta
-                {cfg.turrets > 1 ? "s" : ""} · Láser S{cfg.laserSize}
+                {cfg.name} — {cfg.cargo} SCU · {t("turretsCount", { n: cfg.turrets })} · {t("laserSize", { n: cfg.laserSize })}
               </option>
             ))}
           </select>
@@ -270,7 +271,7 @@ export default function MiningLoadoutCalculator() {
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
               <div className="text-[10px] tracking-[0.1em] uppercase text-zinc-500">
-                Torretas
+                {t("turrets")}
               </div>
               <div className="text-lg font-mono font-bold text-amber-400">
                 {shipConfig.turrets}
@@ -278,7 +279,7 @@ export default function MiningLoadoutCalculator() {
             </div>
             <div>
               <div className="text-[10px] tracking-[0.1em] uppercase text-zinc-500">
-                Cargo
+                {t("cargo")}
               </div>
               <div className="text-lg font-mono font-bold text-cyan-400">
                 {effectiveCargo}{" "}
@@ -287,7 +288,7 @@ export default function MiningLoadoutCalculator() {
             </div>
             <div>
               <div className="text-[10px] tracking-[0.1em] uppercase text-zinc-500">
-                Láser
+                {t("laser")}
               </div>
               <div className="text-lg font-mono font-bold text-emerald-400">
                 S{shipConfig.laserSize}
@@ -313,10 +314,10 @@ export default function MiningLoadoutCalculator() {
                 </div>
                 <div onClick={() => setUseMoleBags(!useMoleBags)}>
                   <span className="text-xs text-zinc-300 group-hover:text-zinc-100 transition-colors">
-                    Sacos MOLE en Prospector
+                    {t("moleBagsTitle")}
                   </span>
                   <span className="text-[10px] text-zinc-600 block">
-                    Reemplaza 4 sacos de 8 SCU por 4 de 12 SCU → 48 SCU total
+                    {t("moleBagsDesc")}
                   </span>
                 </div>
               </label>
@@ -330,7 +331,7 @@ export default function MiningLoadoutCalculator() {
         <div className="flex items-center justify-center py-12">
           <div className="w-4 h-4 border-2 border-zinc-800 border-t-amber-500 rounded-full animate-spin mr-3" />
           <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest">
-            Cargando lásers...
+            {t("loadingLasers")}
           </span>
         </div>
       ) : (
@@ -347,7 +348,7 @@ export default function MiningLoadoutCalculator() {
               >
                 <div className="flex items-center justify-between">
                   <div className="text-xs font-mono text-amber-400 uppercase tracking-wider">
-                    Torreta {turretIdx + 1}
+                    {t("turretN", { n: turretIdx + 1 })}
                   </div>
                   {selectedLaser && (
                     <div className="flex items-center gap-3">
@@ -355,7 +356,7 @@ export default function MiningLoadoutCalculator() {
                         {selectedLaser.manufacturer}
                       </span>
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-400 font-mono">
-                        {slotCount} slot{slotCount !== 1 ? "s" : ""}
+                        {t("slotsCount", { n: slotCount })}
                       </span>
                     </div>
                   )}
@@ -364,18 +365,18 @@ export default function MiningLoadoutCalculator() {
                 {/* Laser selector */}
                 <div>
                   <label className="text-xs tracking-[0.1em] uppercase text-zinc-400 block mb-2">
-                    Láser
+                    {t("laser")}
                     {shipConfig.fixedLaser && (
                       <span className="ml-2 text-[10px] text-zinc-600 normal-case tracking-normal">
-                        (fijo — no intercambiable en esta nave)
+                        {t("fixedLaserHint")}
                       </span>
                     )}
                   </label>
                   {shipConfig.fixedLaser ? (
                     <div className="w-full bg-zinc-800/30 border border-zinc-700/50 rounded px-3 py-2 text-sm text-zinc-400 cursor-not-allowed">
                       {selectedLaser
-                        ? `${selectedLaser.name} (S${selectedLaser.size}) — Power: ${selectedLaser.miningPower}`
-                        : shipConfig.fixedLaserName || "Láser fijo"}
+                        ? `${selectedLaser.name} (S${selectedLaser.size}) — ${t("power")}: ${selectedLaser.miningPower}`
+                        : shipConfig.fixedLaserName || t("fixedLaserFallback")}
                     </div>
                   ) : (
                     <select
@@ -388,12 +389,11 @@ export default function MiningLoadoutCalculator() {
                       }
                       className="w-full bg-zinc-800/50 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500/50"
                     >
-                      <option value="">-- Seleccionar Láser --</option>
+                      <option value="">{t("selectLaser")}</option>
                       {availableLasers.map((laser) => (
                         <option key={laser.id} value={laser.id}>
-                          {laser.name} (S{laser.size}) — Power:{" "}
-                          {laser.miningPower} · {laser.moduleSlots ?? 0} slot
-                          {(laser.moduleSlots ?? 0) !== 1 ? "s" : ""}
+                          {laser.name} (S{laser.size}) — {t("power")}:{" "}
+                          {laser.miningPower} · {t("slotsCount", { n: laser.moduleSlots ?? 0 })}
                         </option>
                       ))}
                     </select>
@@ -404,20 +404,20 @@ export default function MiningLoadoutCalculator() {
                 {selectedLaser && (
                   <div className="grid grid-cols-4 gap-2 bg-zinc-950/40 rounded p-2">
                     <MiniStat
-                      label="Power"
+                      label={t("mini.power")}
                       value={selectedLaser.miningPower || 0}
                     />
                     <MiniStat
-                      label="Resist."
+                      label={t("mini.resist")}
                       value={selectedLaser.resistance || 0}
                     />
                     <MiniStat
-                      label="Instab."
+                      label={t("mini.instab")}
                       value={selectedLaser.instability || 0}
                       negative
                     />
                     <MiniStat
-                      label="Calor"
+                      label={t("mini.heat")}
                       value={selectedLaser.heatOutput || 0}
                       negative
                     />
@@ -428,8 +428,7 @@ export default function MiningLoadoutCalculator() {
                 {slotCount > 0 && (
                   <div>
                     <label className="text-xs tracking-[0.1em] uppercase text-zinc-400 block mb-2">
-                      Módulos ({slotCount} disponible
-                      {slotCount > 1 ? "s" : ""})
+                      {t("modulesAvailable", { n: slotCount })}
                     </label>
                     <div
                       className={`grid gap-2 ${
@@ -447,12 +446,12 @@ export default function MiningLoadoutCalculator() {
                         return (
                           <div key={slotIdx} className="space-y-1">
                             <div className="text-[10px] text-zinc-600 font-mono">
-                              Slot {slotIdx + 1}
+                              {t("slotN", { n: slotIdx + 1 })}
                               {selectedMod && (
                                 <span
                                   className={`ml-1 ${CATEGORY_COLORS[selectedMod.category]}`}
                                 >
-                                  [{CATEGORY_LABELS[selectedMod.category]}]
+                                  [{t(`category.${selectedMod.category}`)}]
                                 </span>
                               )}
                             </div>
@@ -467,8 +466,8 @@ export default function MiningLoadoutCalculator() {
                               }
                               className="w-full bg-zinc-800/50 border border-zinc-700 rounded px-2 py-1.5 text-xs text-zinc-100 focus:outline-none focus:border-amber-500/50"
                             >
-                              <option value="">-- Vacío --</option>
-                              <optgroup label="Activos">
+                              <option value="">{t("empty")}</option>
+                              <optgroup label={t("optgroup.active")}>
                                 {allModules
                                   .filter((m) => m.category === "active")
                                   .map((mod) => (
@@ -477,7 +476,7 @@ export default function MiningLoadoutCalculator() {
                                     </option>
                                   ))}
                               </optgroup>
-                              <optgroup label="Pasivos">
+                              <optgroup label={t("optgroup.passive")}>
                                 {allModules
                                   .filter((m) => m.category === "passive")
                                   .map((mod) => (
@@ -486,7 +485,7 @@ export default function MiningLoadoutCalculator() {
                                     </option>
                                   ))}
                               </optgroup>
-                              <optgroup label="Gadgets">
+                              <optgroup label={t("optgroup.gadget")}>
                                 {allModules
                                   .filter((m) => m.category === "gadget")
                                   .map((mod) => (
@@ -505,7 +504,7 @@ export default function MiningLoadoutCalculator() {
 
                 {slotCount === 0 && turret.laserId && (
                   <div className="text-xs text-zinc-600 italic py-1">
-                    Este láser no tiene slots para módulos
+                    {t("noSlots")}
                   </div>
                 )}
               </div>
@@ -517,60 +516,60 @@ export default function MiningLoadoutCalculator() {
       {/* Stats Summary */}
       <div>
         <h3 className="text-xs tracking-[0.1em] uppercase text-zinc-500 mb-3 font-mono">
-          Estadísticas Combinadas
+          {t("combinedStats")}
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          <StatBox label="Mining Power" value={stats.miningPower} unit="" />
+          <StatBox label={t("stat.miningPower")} value={stats.miningPower} unit="" />
           <StatBox
-            label="Resistencia"
+            label={t("stat.resistance")}
             value={stats.resistance}
             unit=""
             color={stats.resistance > 0 ? "emerald" : "zinc"}
           />
           <StatBox
-            label="Inestabilidad"
+            label={t("stat.instability")}
             value={stats.instability}
             unit=""
             color={stats.instability <= 0 ? "emerald" : "red"}
           />
-          <StatBox label="Rango Óptimo" value={stats.optimalRange} unit="m" />
-          <StatBox label="Rango Máximo" value={stats.maxRange} unit="m" />
+          <StatBox label={t("stat.optimalRange")} value={stats.optimalRange} unit="m" />
+          <StatBox label={t("stat.maxRange")} value={stats.maxRange} unit="m" />
           <StatBox
-            label="Opt Charge Rate"
+            label={t("stat.optChargeRate")}
             value={stats.optChargeRate}
             unit="%"
             color={stats.optChargeRate > 0 ? "emerald" : "zinc"}
           />
           <StatBox
-            label="Opt Charge Window"
+            label={t("stat.optChargeWindow")}
             value={stats.optChargeWindow}
             unit="%"
           />
           <StatBox
-            label="Inert Filter"
+            label={t("stat.inertFilter")}
             value={stats.inertFilter}
             unit="%"
             color={stats.inertFilter < 0 ? "emerald" : "zinc"}
           />
           <StatBox
-            label="Overcharge Rate"
+            label={t("stat.overchargeRate")}
             value={stats.overchargeRate}
             unit="%"
           />
           <StatBox
-            label="Extract Power"
+            label={t("stat.extractPower")}
             value={stats.extractPower}
             unit="%"
             color={stats.extractPower > 0 ? "emerald" : "zinc"}
           />
           <StatBox
-            label="Calor Generado"
+            label={t("stat.heatOutput")}
             value={stats.heatOutput}
             unit=""
             color={stats.heatOutput > 0 ? "red" : "zinc"}
           />
           <StatBox
-            label="Shatter Damage"
+            label={t("stat.shatterDamage")}
             value={stats.shatterDamage}
             unit=""
           />

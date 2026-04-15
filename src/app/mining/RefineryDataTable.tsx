@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import minerals from "@/data/mining/minerals.json";
 import refineries from "@/data/mining/refineries.json";
 
@@ -20,6 +21,7 @@ interface Refinery {
 }
 
 export default function RefineryDataTable() {
+  const t = useTranslations("Mining.refinery");
   const [systemFilter, setSystemFilter] = useState("all");
   const [sortBy, setSortBy] = useState("");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -74,14 +76,14 @@ export default function RefineryDataTable() {
     <div className="space-y-6 max-w-full">
       <div className="flex items-center gap-4">
         <label className="text-xs tracking-[0.1em] uppercase text-zinc-400">
-          Filter by System:
+          {t("filterBySystem")}
         </label>
         <select
           value={systemFilter}
           onChange={(e) => setSystemFilter(e.target.value)}
           className="bg-zinc-800/50 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500/50"
         >
-          <option value="all">All Systems</option>
+          <option value="all">{t("allSystems")}</option>
           {systems.map((system) => (
             <option key={system} value={system}>
               {system}
@@ -95,7 +97,7 @@ export default function RefineryDataTable() {
           <thead>
             <tr className="border-b border-zinc-800/60 bg-zinc-900/50">
               <th className="px-4 py-3 text-left text-xs tracking-[0.1em] uppercase text-zinc-400 sticky left-0 bg-zinc-900/50 z-10 min-w-[200px]">
-                Refinery
+                {t("refinery")}
               </th>
               {shipMinerals.map((mineral) => (
                 <th
@@ -147,16 +149,16 @@ export default function RefineryDataTable() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
         <div className="bg-emerald-950 border border-emerald-900 rounded-lg p-3">
-          <div className="text-emerald-400 font-semibold mb-1">High Bonus</div>
-          <div className="text-emerald-300">{">"}5% improvement</div>
+          <div className="text-emerald-400 font-semibold mb-1">{t("highBonus")}</div>
+          <div className="text-emerald-300">{t("highBonusDesc")}</div>
         </div>
         <div className="bg-zinc-800/40 border border-zinc-700 rounded-lg p-3">
-          <div className="text-zinc-400 font-semibold mb-1">Neutral</div>
-          <div className="text-zinc-400">0% change</div>
+          <div className="text-zinc-400 font-semibold mb-1">{t("neutral")}</div>
+          <div className="text-zinc-400">{t("neutralDesc")}</div>
         </div>
         <div className="bg-red-950 border border-red-900 rounded-lg p-3">
-          <div className="text-red-400 font-semibold mb-1">High Penalty</div>
-          <div className="text-red-300">"{">"}5% reduction</div>
+          <div className="text-red-400 font-semibold mb-1">{t("highPenalty")}</div>
+          <div className="text-red-300">{t("highPenaltyDesc")}</div>
         </div>
       </div>
     </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import minerals from "@/data/mining/minerals.json";
 import refineries from "@/data/mining/refineries.json";
 import refiningMethods from "@/data/mining/refining-methods.json";
@@ -66,11 +67,11 @@ interface CrewMember {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const TAB_CONFIG: { key: TabMode; label: string; icon: string }[] = [
-  { key: "ship", label: "SHIP MINING", icon: "⛏" },
-  { key: "roc", label: "ROC / FPS", icon: "💎" },
-  { key: "salvage", label: "SALVAGE", icon: "♻" },
-  { key: "share", label: "SHARE AUEC", icon: "🏛" },
+const TAB_CONFIG: { key: TabMode; icon: string }[] = [
+  { key: "ship", icon: "⛏" },
+  { key: "roc", icon: "💎" },
+  { key: "salvage", icon: "♻" },
+  { key: "share", icon: "🏛" },
 ];
 
 const MOTRADER_FEE_PERCENT = 3.75;
@@ -174,6 +175,7 @@ function useCountdown() {
 // ═════════════════════════════════════════════════════════════════════════════
 
 export default function WorkOrderCalculator() {
+  const t = useTranslations("Mining.woc");
   const typedMinerals = minerals as Mineral[];
   const typedRefineries = refineries as Refinery[];
   const typedMethods = refiningMethods as RefiningMethod[];
@@ -473,7 +475,7 @@ export default function WorkOrderCalculator() {
               }`}
           >
             <div className="text-lg mb-0.5">{tab.icon}</div>
-            {tab.label}
+            {t(`tab.${tab.key}`)}
           </button>
         ))}
       </div>
@@ -488,9 +490,9 @@ export default function WorkOrderCalculator() {
             {/* Panel header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-amber-500/20 bg-zinc-900/50">
               <h3 className="text-sm font-bold tracking-[0.1em] uppercase text-amber-400">
-                {mode === "ship" ? "Ship Ores / Refining" : mode === "roc" ? "Mineable Gems" : "Salvage"}
+                {mode === "ship" ? t("panel.ship") : mode === "roc" ? t("panel.roc") : t("panel.salvage")}
               </h3>
-              <span className="text-zinc-600 cursor-help text-lg" title="Select materials and enter quantities">❓</span>
+              <span className="text-zinc-600 cursor-help text-lg" title={t("panel.helpTip")}>❓</span>
             </div>
 
             <div className="p-4 space-y-4">
@@ -525,7 +527,7 @@ export default function WorkOrderCalculator() {
               {/* ── Ore Chooser Grid ── */}
               <div>
                 <div className="text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold mb-2">
-                  Ore Chooser:
+                  {t("oreChooser")}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {tabMinerals.map((mineral) => {
@@ -547,13 +549,13 @@ export default function WorkOrderCalculator() {
                     onClick={selectAllOres}
                     className="px-2.5 py-1 rounded text-[11px] font-bold tracking-wider border border-blue-500 bg-blue-500/30 text-blue-200 hover:bg-blue-500/50 transition-all"
                   >
-                    ALL
+                    {t("all")}
                   </button>
                   <button
                     onClick={selectNoneOres}
                     className="px-2.5 py-1 rounded text-[11px] font-bold tracking-wider border border-zinc-500 bg-zinc-700/50 text-zinc-200 hover:bg-zinc-600/50 transition-all"
                   >
-                    NONE
+                    {t("none")}
                   </button>
                 </div>
               </div>
@@ -561,18 +563,18 @@ export default function WorkOrderCalculator() {
               {/* ── Material Table ── */}
               <div>
                 <div className="flex items-center justify-between text-[10px] tracking-[0.15em] uppercase text-zinc-500 font-bold border-b border-zinc-700/50 pb-1 mb-2">
-                  <span className="flex-1">Material</span>
+                  <span className="flex-1">{t("material")}</span>
                   <span className="w-20 text-right">
-                    Quality<br />
+                    {t("quality")}<br />
                     <span className="text-zinc-600">(0-1000)</span>
                   </span>
                   <span className="w-24 text-right">
-                    QTY<br />
+                    {t("qty")}<br />
                     <span className="text-zinc-600">({unitLabel})</span>
                   </span>
                   {mode === "ship" && (
                     <span className="w-20 text-right">
-                      Yield<br />
+                      {t("yield")}<br />
                       <span className="text-zinc-600">({unitLabel})</span>
                     </span>
                   )}
@@ -580,7 +582,7 @@ export default function WorkOrderCalculator() {
 
                 {selectedOres.size === 0 && (
                   <p className="text-center text-amber-600 text-sm py-4 italic">
-                    No ore is selected
+                    {t("noOreSelected")}
                   </p>
                 )}
 
@@ -638,9 +640,12 @@ export default function WorkOrderCalculator() {
                   <div className="flex items-start gap-2">
                     <span className="text-blue-400 text-sm">ℹ</span>
                     <div>
-                      <div className="text-sm font-bold text-zinc-200">Cargo & Component Salvage?</div>
+                      <div className="text-sm font-bold text-zinc-200">{t("salvageInfoTitle")}</div>
                       <p className="text-[11px] text-zinc-400 mt-1">
-                        Use the composite add tool <span className="inline-block w-4 h-4 bg-zinc-700 rounded text-[9px] text-center leading-4">📦</span> to add component and cargo sales to the <strong className="text-zinc-300">Final Sell Price</strong> of this order.
+                        {t.rich("salvageInfoBody", {
+                          box: () => <span className="inline-block w-4 h-4 bg-zinc-700 rounded text-[9px] text-center leading-4">📦</span>,
+                          final: (chunks) => <strong className="text-zinc-300">{chunks}</strong>,
+                        })}
                       </p>
                     </div>
                   </div>
@@ -651,7 +656,7 @@ export default function WorkOrderCalculator() {
               {mode === "ship" && (
                 <div className="mt-4 space-y-2">
                   <div className="text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold">
-                    Refinery Timer (from game order):
+                    {t("refineryTimer")}
                   </div>
 
                   {/* Input row — hidden when running */}
@@ -685,7 +690,7 @@ export default function WorkOrderCalculator() {
                         disabled={timer.totalInputSeconds <= 0}
                         className="ml-2 px-4 py-1.5 bg-amber-500 text-zinc-900 rounded font-bold text-sm hover:bg-amber-400 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                       >
-                        ▶ Start
+                        ▶ {t("start")}
                       </button>
                     </div>
                   )}
@@ -699,7 +704,7 @@ export default function WorkOrderCalculator() {
                           : "bg-amber-500 text-zinc-900 shadow-[0_0_10px_rgba(245,158,11,0.3)]"
                         }`}
                     >
-                      {timer.finished ? "✓ READY TO COLLECT" : timer.display}
+                      {timer.finished ? `✓ ${t("readyToCollect")}` : timer.display}
                     </div>
                   )}
 
@@ -708,16 +713,16 @@ export default function WorkOrderCalculator() {
                     <div className="flex justify-center gap-2">
                       {timer.running && (
                         <button onClick={timer.pause} className="px-3 py-1 bg-zinc-700 text-zinc-300 rounded text-xs font-bold hover:bg-zinc-600">
-                          ⏸ Pause
+                          ⏸ {t("pause")}
                         </button>
                       )}
                       {!timer.running && timer.remaining > 0 && (
                         <button onClick={timer.resume} className="px-3 py-1 bg-amber-500/80 text-zinc-900 rounded text-xs font-bold hover:bg-amber-400">
-                          ▶ Resume
+                          ▶ {t("resume")}
                         </button>
                       )}
                       <button onClick={timer.reset} className="px-3 py-1 bg-zinc-800 text-zinc-400 rounded text-xs font-bold hover:bg-zinc-700">
-                        ↺ Reset
+                        ↺ {t("reset")}
                       </button>
                     </div>
                   )}
@@ -733,9 +738,9 @@ export default function WorkOrderCalculator() {
         <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-700/40 bg-zinc-900/50">
             <h3 className="text-sm font-bold tracking-[0.1em] uppercase text-zinc-300">
-              Crew / Party
+              {t("crewParty")}
             </h3>
-            <span className="text-zinc-600 cursor-help text-lg" title="Crew members for this work order">👥</span>
+            <span className="text-zinc-600 cursor-help text-lg" title={t("crewHelpTip")}>👥</span>
           </div>
 
           <div className="p-4 space-y-4">
@@ -743,7 +748,7 @@ export default function WorkOrderCalculator() {
             {user && availableSessions.length > 0 && (
               <div className="border border-cyan-500/20 rounded-lg p-3 bg-cyan-500/5 space-y-2">
                 <div className="text-[10px] tracking-[0.1em] uppercase text-cyan-400 font-bold">
-                  Load crew from mining session:
+                  {t("loadCrewFromSession")}
                 </div>
                 <div className="flex items-center gap-2">
                   <select
@@ -751,10 +756,10 @@ export default function WorkOrderCalculator() {
                     onChange={(e) => handleSessionSelect(e.target.value)}
                     className="flex-1 bg-zinc-800/70 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-cyan-500/50"
                   >
-                    <option value="">Select a session...</option>
+                    <option value="">{t("selectSession")}</option>
                     {availableSessions.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {s.name} ({s.memberCount} members)
+                        {s.name} ({t("membersCount", { n: s.memberCount })})
                       </option>
                     ))}
                   </select>
@@ -763,21 +768,21 @@ export default function WorkOrderCalculator() {
                       onClick={loadSessionCrew}
                       className="px-4 py-2 bg-cyan-500/20 border border-cyan-500/40 rounded text-xs font-bold text-cyan-300 hover:bg-cyan-500/30 transition-colors whitespace-nowrap"
                     >
-                      Load ({sessionCrew.length})
+                      {t("load", { n: sessionCrew.length })}
                     </button>
                   )}
                 </div>
-                {loadingCrew && <div className="text-[10px] text-zinc-500">Loading members...</div>}
+                {loadingCrew && <div className="text-[10px] text-zinc-500">{t("loadingMembers")}</div>}
                 {crewLoaded && (
                   <div className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
-                    <span>✓</span> Crew loaded from session
+                    <span>✓</span> {t("crewLoaded")}
                   </div>
                 )}
               </div>
             )}
 
             {loadingSessions && (
-              <div className="text-center py-2 text-xs text-zinc-500">Loading sessions...</div>
+              <div className="text-center py-2 text-xs text-zinc-500">{t("loadingSessions")}</div>
             )}
 
             {/* Add member input */}
@@ -788,13 +793,13 @@ export default function WorkOrderCalculator() {
                 value={newMemberName}
                 onChange={(e) => setNewMemberName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && addCrewMember()}
-                placeholder="Add crew member..."
+                placeholder={t("addCrewMember")}
                 className="flex-1 bg-transparent text-xs text-zinc-200 border-b border-zinc-700 focus:outline-none focus:border-amber-500/50 pb-1"
               />
               <button
                 onClick={addCrewMember}
                 className="text-amber-400 hover:text-amber-300 text-xl leading-none"
-                title="Add member"
+                title={t("addMember")}
               >
                 +
               </button>
@@ -804,7 +809,7 @@ export default function WorkOrderCalculator() {
             <div className="border border-amber-500/20 rounded-lg overflow-hidden">
               <div className="grid grid-cols-[auto_1fr_auto] gap-2 px-3 py-1.5 bg-zinc-800/40 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40">
                 <span>#</span>
-                <span>Member</span>
+                <span>{t("memberHeader")}</span>
                 <span></span>
               </div>
 
@@ -836,7 +841,7 @@ export default function WorkOrderCalculator() {
                     <button
                       onClick={() => removeCrewMember(member.id)}
                       className="text-zinc-600 hover:text-red-400 text-sm transition-colors"
-                      title="Remove"
+                      title={t("remove")}
                     >
                       ✕
                     </button>
@@ -850,7 +855,7 @@ export default function WorkOrderCalculator() {
                   onClick={clearCrew}
                   className="text-[10px] font-bold text-red-400 hover:text-red-300 flex items-center gap-1"
                 >
-                  <span className="text-sm">⊗</span> CLEAR ALL
+                  <span className="text-sm">⊗</span> {t("clearAll")}
                 </button>
               </div>
             </div>
@@ -869,7 +874,7 @@ export default function WorkOrderCalculator() {
               : "bg-amber-500 hover:bg-amber-400 text-zinc-900 shadow-[0_0_15px_rgba(245,158,11,0.3)] hover:shadow-[0_0_20px_rgba(245,158,11,0.5)]"
             }`}
         >
-          {submitted ? "✓ Order Saved to Dashboard" : "Submit Work Order"}
+          {submitted ? t("orderSaved") : t("submitWorkOrder")}
         </button>
       </div>
 
@@ -877,10 +882,7 @@ export default function WorkOrderCalculator() {
       <div className="mt-6 bg-blue-500/5 border border-blue-500/20 rounded-lg p-4 flex items-start gap-3">
         <span className="text-blue-400 text-lg">ℹ</span>
         <p className="text-xs text-zinc-400 leading-relaxed">
-          <strong className="text-zinc-300">NOTE:</strong> This is a standalone calculator. If you want to work on more than one order,
-          store consecutive orders or share your work orders with friends then consider logging in and
-          creating/joining a <strong className="text-zinc-300">session</strong> from the dashboard.
-          Work orders inside Sessions can be captured automatically from the game or by uploading screenshots using OCR.
+          <strong className="text-zinc-300">{t("footerNoteLabel")}</strong> {t("footerNoteBody")}
         </p>
       </div>
     </div>

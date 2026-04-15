@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import {
   getSessions, getOrders, getActiveSessionId, setActiveSessionId,
   createSession, deleteSession, deleteOrder, collectOrder,
@@ -95,17 +96,18 @@ function oreLineWithQuality(ores: { id: string; name: string; yieldQty: number; 
 
 type DashTab = "sessions" | "orders" | "inventory" | "crew" | "stats";
 
-const TABS: { key: DashTab; label: string; icon: string }[] = [
-  { key: "sessions", label: "SESSIONS", icon: "📋" },
-  { key: "orders", label: "WORK ORDERS", icon: "⛏" },
-  { key: "inventory", label: "INVENTORY", icon: "📦" },
-  { key: "crew", label: "CREW SHARES", icon: "👥" },
-  { key: "stats", label: "STATS", icon: "📊" },
+const TABS: { key: DashTab; icon: string }[] = [
+  { key: "sessions", icon: "📋" },
+  { key: "orders", icon: "⛏" },
+  { key: "inventory", icon: "📦" },
+  { key: "crew", icon: "👥" },
+  { key: "stats", icon: "📊" },
 ];
 
 // ═════════════════════════════════════════════════════════════════════════════
 
 export default function WorkOrderDashboard() {
+  const t = useTranslations("Mining.dashboard");
   const [tab, setTab] = useState<DashTab>("orders");
   const [sessions, setSessions] = useState<WOSession[]>([]);
   const [orders, setOrders] = useState<WorkOrder[]>([]);
@@ -516,14 +518,14 @@ export default function WorkOrderDashboard() {
       {/* ── Tabs + Connection Status + Reset Button ── */}
       <div className="flex items-center gap-3">
         <div className="flex-1 grid grid-cols-5 gap-0 border border-zinc-700/60 rounded-lg overflow-hidden">
-          {TABS.map((t) => (
+          {TABS.map((tb) => (
             <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
+              key={tb.key}
+              onClick={() => setTab(tb.key)}
               className={`py-3 text-center text-[10px] tracking-[0.1em] uppercase font-bold transition-all
-                ${tab === t.key ? "bg-amber-500 text-zinc-900" : "bg-zinc-900/60 text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-200"}`}
+                ${tab === tb.key ? "bg-amber-500 text-zinc-900" : "bg-zinc-900/60 text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-200"}`}
             >
-              <span className="mr-1">{t.icon}</span>{t.label}
+              <span className="mr-1">{tb.icon}</span>{t(`tab.${tb.key}`)}
             </button>
           ))}
         </div>
@@ -535,7 +537,7 @@ export default function WorkOrderDashboard() {
               ? "bg-emerald-500/10 border-emerald-500/30"
               : "bg-zinc-800/50 border-zinc-700/50"
           }`}
-          title={isPartyMode ? "Party mode - connected to Supabase" : "Solo mode - localStorage only"}
+          title={isPartyMode ? t("partyModeTooltip") : t("soloModeTooltip")}
         >
           <span
             className={`w-2 h-2 rounded-full ${
@@ -545,7 +547,7 @@ export default function WorkOrderDashboard() {
           <span className={`text-[9px] tracking-[0.15em] uppercase font-bold ${
             isPartyMode ? "text-emerald-400" : "text-zinc-500"
           }`}>
-            {isPartyMode ? "Party Connected" : "Solo Mode"}
+            {isPartyMode ? t("partyConnected") : t("soloMode")}
           </span>
         </div>
 
@@ -553,9 +555,9 @@ export default function WorkOrderDashboard() {
         <button
           onClick={() => setShowResetConfirm(true)}
           className="px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded text-[10px] font-bold text-red-400 hover:bg-red-500/20 hover:border-red-500/50 transition-colors flex-shrink-0"
-          title="Reset all mining data"
+          title={t("resetAllTooltip")}
         >
-          🗑 Reset All
+          🗑 {t("resetAll")}
         </button>
       </div>
 
@@ -563,14 +565,14 @@ export default function WorkOrderDashboard() {
       {(sbSessionId || activeId) && (
         <div className="flex items-center justify-between bg-zinc-900/60 border border-amber-500/20 rounded-lg px-4 py-2">
           <div className="text-xs text-zinc-400">
-            Session: <span className="text-amber-400 font-bold">
+            {t("session")}: <span className="text-amber-400 font-bold">
               {sbSessionId
-                ? sbSessions.find((s) => s.id === sbSessionId)?.name || "Party Session"
+                ? sbSessions.find((s) => s.id === sbSessionId)?.name || t("partySession")
                 : sessions.find((s) => s.id === activeId)?.name || "—"}
             </span>
           </div>
           {!user && activeId && (
-            <button onClick={() => { setActiveSessionId(null); setActiveId(null); }} className="text-[10px] text-zinc-600 hover:text-zinc-400">Show All</button>
+            <button onClick={() => { setActiveSessionId(null); setActiveId(null); }} className="text-[10px] text-zinc-600 hover:text-zinc-400">{t("showAll")}</button>
           )}
         </div>
       )}
@@ -579,21 +581,21 @@ export default function WorkOrderDashboard() {
       {tab === "sessions" && (
         <div className="space-y-4">
           <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg p-4">
-            <div className="text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold mb-3">Create New Session</div>
+            <div className="text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold mb-3">{t("createNewSession")}</div>
             <div className="flex gap-2">
               <input
                 type="text"
                 value={newSessionName}
                 onChange={(e) => setNewSessionName(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleCreateSession()}
-                placeholder="Session name (optional)"
+                placeholder={t("sessionNamePlaceholder")}
                 className="flex-1 bg-zinc-800/50 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 focus:outline-none focus:border-amber-500/50"
               />
               <button
                 onClick={handleCreateSession}
                 className="px-4 py-2 bg-amber-500 text-zinc-900 rounded text-sm font-bold hover:bg-amber-400"
               >
-                + Create
+                + {t("create")}
               </button>
             </div>
           </div>
@@ -601,9 +603,9 @@ export default function WorkOrderDashboard() {
           {/* Local Sessions — only show when NOT logged in with Supabase */}
           {!sbSessionId && (
           <div>
-            <div className="text-xs tracking-[0.1em] uppercase text-zinc-500 font-bold mb-2">Local Sessions</div>
+            <div className="text-xs tracking-[0.1em] uppercase text-zinc-500 font-bold mb-2">{t("localSessions")}</div>
             {sessions.length === 0 ? (
-              <div className="text-center py-12 text-zinc-600 text-sm">No local sessions yet.</div>
+              <div className="text-center py-12 text-zinc-600 text-sm">{t("noLocalSessions")}</div>
             ) : (
               sessions.map((session) => {
                 const oc = orders.filter((o) => o.sessionId === session.id).length;
@@ -619,9 +621,9 @@ export default function WorkOrderDashboard() {
                     <div>
                       <div className="text-sm font-bold text-zinc-200 flex items-center gap-2">
                         📋 {session.name}
-                        {isA && <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded uppercase tracking-wider">Active</span>}
+                        {isA && <span className="text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded uppercase tracking-wider">{t("active")}</span>}
                       </div>
-                      <div className="text-[11px] text-zinc-500 mt-1">{fmtDate(session.createdAt)} · {oc} orders · {fmtAuec(tg)} aUEC</div>
+                      <div className="text-[11px] text-zinc-500 mt-1">{fmtDate(session.createdAt)} · {t("ordersCount", { n: oc })} · {fmtAuec(tg)} aUEC</div>
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDeleteSession(session.id); }}
@@ -639,7 +641,7 @@ export default function WorkOrderDashboard() {
           {/* Supabase Sessions (Party Sessions) */}
           {sbSessions.length > 0 && (
             <div>
-              <div className="text-xs tracking-[0.1em] uppercase text-emerald-500 font-bold mb-2">Party Sessions</div>
+              <div className="text-xs tracking-[0.1em] uppercase text-emerald-500 font-bold mb-2">{t("partySessions")}</div>
               {sbSessions.map((session) => {
                 const oc = sbWorkOrders.filter((o) => o.session_id === session.id).length;
                 const tg = sbWorkOrders.filter((o) => o.session_id === session.id).reduce((s, o) => s + o.gross_value, 0);
@@ -654,11 +656,11 @@ export default function WorkOrderDashboard() {
                     <div>
                       <div className="text-sm font-bold text-zinc-200 flex items-center gap-2">
                         👥 {session.name}
-                        {isA && <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">Active</span>}
-                        <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded">Party</span>
+                        {isA && <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">{t("active")}</span>}
+                        <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded">{t("party")}</span>
                       </div>
                       <div className="text-[11px] text-zinc-500 mt-1">
-                        {fmtDate(session.created_at)} · {oc} orders · {fmtAuec(tg)} aUEC · {session.member_count} members
+                        {fmtDate(session.created_at)} · {t("ordersCount", { n: oc })} · {fmtAuec(tg)} aUEC · {t("membersCount", { n: session.member_count })}
                       </div>
                     </div>
                   </div>
@@ -675,9 +677,9 @@ export default function WorkOrderDashboard() {
           {/* Status summary */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "In Progress", count: inProgress.length, color: "text-amber-400", bg: "border-amber-500/30" },
-              { label: "Ready to Collect", count: completed.length, color: "text-emerald-400", bg: "border-emerald-500/30" },
-              { label: "Collected", count: collected.length, color: "text-blue-400", bg: "border-blue-500/30" },
+              { label: t("status.in_progress"), count: inProgress.length, color: "text-amber-400", bg: "border-amber-500/30" },
+              { label: t("status.readyToCollect"), count: completed.length, color: "text-emerald-400", bg: "border-emerald-500/30" },
+              { label: t("status.collected"), count: collected.length, color: "text-blue-400", bg: "border-blue-500/30" },
             ].map((s) => (
               <div key={s.label} className={`bg-zinc-900/70 border ${s.bg} rounded-lg p-3 text-center`}>
                 <div className={`text-2xl font-mono font-bold ${s.color}`}>{s.count}</div>
@@ -689,7 +691,7 @@ export default function WorkOrderDashboard() {
           {/* In Progress orders with live countdown */}
           {inProgress.length > 0 && (
             <div>
-              <div className="text-xs tracking-[0.1em] uppercase text-amber-500 font-bold mb-2">⏳ In Progress</div>
+              <div className="text-xs tracking-[0.1em] uppercase text-amber-500 font-bold mb-2">⏳ {t("status.in_progress")}</div>
               <div className="space-y-2">
                 {inProgress.map((order) => {
                   const rem = getRemainingSeconds(order);
@@ -701,7 +703,7 @@ export default function WorkOrderDashboard() {
                         <div>
                           <div className="text-sm text-zinc-200 font-bold flex items-center gap-2">
                             {order.refinery || typeLabel(order.type)}
-                            {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">Party</span>}
+                            {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">{t("party")}</span>}
                           </div>
                           <div className="text-[11px] text-zinc-500">{oreLineWithQuality(order.ores)} · {fmtAuec(order.grossValue)} aUEC</div>
                         </div>
@@ -709,13 +711,13 @@ export default function WorkOrderDashboard() {
                       <div className="flex items-center gap-3">
                         <div className="text-right">
                           <div className="font-mono text-lg font-bold text-amber-400">{fmtCountdown(rem)}</div>
-                          <div className="text-[9px] text-zinc-600">remaining</div>
+                          <div className="text-[9px] text-zinc-600">{t("remaining")}</div>
                         </div>
                         <button
                           onClick={() => handleForceComplete(order.id)}
                           className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] font-bold text-zinc-400 hover:text-zinc-200 hover:border-zinc-500"
                         >
-                          Skip →
+                          {t("skip")} →
                         </button>
                       </div>
                     </div>
@@ -728,7 +730,7 @@ export default function WorkOrderDashboard() {
           {/* Completed orders — ready to collect */}
           {completed.length > 0 && (
             <div>
-              <div className="text-xs tracking-[0.1em] uppercase text-emerald-500 font-bold mb-2">✓ Ready to Collect</div>
+              <div className="text-xs tracking-[0.1em] uppercase text-emerald-500 font-bold mb-2">✓ {t("status.readyToCollect")}</div>
               <div className="space-y-2">
                 {completed.map((order) => {
                   const isParty = (order as any)._source === "supabase";
@@ -739,7 +741,7 @@ export default function WorkOrderDashboard() {
                         <div>
                           <div className="text-sm text-zinc-200 font-bold flex items-center gap-2">
                             {order.refinery || typeLabel(order.type)}
-                            {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">Party</span>}
+                            {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">{t("party")}</span>}
                           </div>
                           <div className="text-[11px] text-zinc-500">
                             {oreLineWithQuality(order.ores)}
@@ -752,7 +754,7 @@ export default function WorkOrderDashboard() {
                           onClick={() => handleCollect(order.id)}
                           className="px-4 py-2 bg-emerald-500 text-zinc-900 rounded font-bold text-xs hover:bg-emerald-400 transition-colors shadow-[0_0_10px_rgba(16,185,129,0.3)]"
                         >
-                          📥 Collect
+                          📥 {t("collect")}
                         </button>
                       </div>
                     </div>
@@ -765,7 +767,7 @@ export default function WorkOrderDashboard() {
           {/* Collected orders */}
           {collected.length > 0 && (
             <div>
-              <div className="text-xs tracking-[0.1em] uppercase text-blue-500 font-bold mb-2">📦 Collected</div>
+              <div className="text-xs tracking-[0.1em] uppercase text-blue-500 font-bold mb-2">📦 {t("status.collected")}</div>
               <div className="space-y-1">
                 {collected.map((order) => {
                   const isParty = (order as any)._source === "supabase";
@@ -776,7 +778,7 @@ export default function WorkOrderDashboard() {
                         <div>
                           <div className="text-xs text-zinc-400 flex items-center gap-2">
                             {order.refinery || typeLabel(order.type)} · {fmtDate(order.createdAt)}
-                            {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">Party</span>}
+                            {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">{t("party")}</span>}
                           </div>
                           <div className="text-[11px] text-zinc-600">{oreLineWithQuality(order.ores)}</div>
                         </div>
@@ -787,7 +789,7 @@ export default function WorkOrderDashboard() {
                           onClick={() => setDistOrderId(order.id)}
                           className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[10px] font-bold text-zinc-500 hover:text-amber-400 hover:border-amber-500/30 transition-colors"
                         >
-                          👥 Distribute
+                          👥 {t("distribute")}
                         </button>
                         <button
                           onClick={() => handleDeleteOrder(order.id)}
@@ -804,7 +806,7 @@ export default function WorkOrderDashboard() {
           )}
 
           {filteredOrders.length === 0 && (
-            <div className="text-center py-12 text-zinc-600 text-sm">No work orders yet. Submit one from the Work Order calculator.</div>
+            <div className="text-center py-12 text-zinc-600 text-sm">{t("noWorkOrders")}</div>
           )}
         </div>
       )}
@@ -814,30 +816,30 @@ export default function WorkOrderDashboard() {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <div className="text-lg font-bold text-zinc-300 tracking-wide font-mono">Material Inventory</div>
-              <p className="text-[11px] text-zinc-500">Global consolidated stock from all collected orders.</p>
+              <div className="text-lg font-bold text-zinc-300 tracking-wide font-mono">{t("materialInventory")}</div>
+              <p className="text-[11px] text-zinc-500">{t("materialInventoryDesc")}</p>
             </div>
             {mergedInventory.length > 0 && (
               <button
                 onClick={() => setShowClearConfirm(true)}
                 className="px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded text-[10px] font-bold text-red-400 hover:bg-red-500/20 hover:border-red-500/50 transition-colors"
               >
-                🗑 Clear Inventory
+                🗑 {t("clearInventory")}
               </button>
             )}
           </div>
 
           {mergedInventory.length === 0 ? (
-            <div className="text-center py-12 text-zinc-600 text-sm">No materials in inventory. Collect completed orders to add materials.</div>
+            <div className="text-center py-12 text-zinc-600 text-sm">{t("noMaterials")}</div>
           ) : (
             <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg overflow-hidden">
               <div className="grid grid-cols-[2fr_auto_1fr_1fr_auto_auto] gap-2 px-4 py-2 bg-zinc-800/40 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40">
-                <span>Material</span>
-                <span className="text-center">Quality</span>
-                <span className="text-right">Available</span>
-                <span className="text-right">Total Received</span>
-                <span className="text-right">Best Price</span>
-                <span>Actions</span>
+                <span>{t("col.material")}</span>
+                <span className="text-center">{t("col.quality")}</span>
+                <span className="text-right">{t("col.available")}</span>
+                <span className="text-right">{t("col.totalReceived")}</span>
+                <span className="text-right">{t("col.bestPrice")}</span>
+                <span>{t("col.actions")}</span>
               </div>
               {mergedInventory.filter((i) => i.quantity > 0 || i.totalReceived > 0).map((item) => {
                 const q = (item as any).quality as number | undefined;
@@ -847,7 +849,7 @@ export default function WorkOrderDashboard() {
                   <div key={item.mineralId} className="grid grid-cols-[2fr_auto_1fr_1fr_auto_auto] gap-2 px-4 py-3 border-b border-zinc-800/30 items-center">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold text-zinc-200 uppercase">{item.mineralName}</span>
-                      {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">Party</span>}
+                      {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">{t("party")}</span>}
                     </div>
                     <span className="text-center min-w-[60px]">{qualityBadge(q) || <span className="text-xs text-zinc-600">—</span>}</span>
                     <span className={`text-sm font-mono text-right font-bold ${item.quantity > 0 ? "text-emerald-400" : "text-zinc-600"}`}>
@@ -862,13 +864,13 @@ export default function WorkOrderDashboard() {
                         onClick={() => openSellModal(item.mineralId, item.mineralName)}
                         className="px-2 py-1 bg-amber-500/10 border border-amber-500/30 rounded text-[9px] font-bold text-amber-400 hover:bg-amber-500/20"
                       >
-                        Sell
+                        {t("sell")}
                       </button>
                       <button
                         onClick={() => setInvAction({ mineralId: item.mineralId, mineralName: item.mineralName, type: "craft", qty: 0, member: "" })}
                         className="px-2 py-1 bg-blue-500/10 border border-blue-500/30 rounded text-[9px] font-bold text-blue-400 hover:bg-blue-500/20"
                       >
-                        Craft
+                        {t("craft")}
                       </button>
                     </div>
                   </div>
@@ -880,7 +882,7 @@ export default function WorkOrderDashboard() {
           {/* Recent movements */}
           {mergedMovements.length > 0 && (
             <div>
-              <div className="text-xs tracking-[0.1em] uppercase text-zinc-500 font-bold mb-2">Recent Movements</div>
+              <div className="text-xs tracking-[0.1em] uppercase text-zinc-500 font-bold mb-2">{t("recentMovements")}</div>
               <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
                 {mergedMovements.slice(0, 30).map((mv) => (
                   <div key={mv.id} className="flex items-center justify-between px-4 py-2 border-b border-zinc-800/30 text-xs">
@@ -904,16 +906,16 @@ export default function WorkOrderDashboard() {
       {/* ═══════ CREW SHARES ═══════ */}
       {tab === "crew" && (
         <div className="space-y-4">
-          <div className="text-lg font-bold text-zinc-300 tracking-wide font-mono">Crew Share Summary</div>
+          <div className="text-lg font-bold text-zinc-300 tracking-wide font-mono">{t("crewShareSummary")}</div>
 
           {/* Supabase members (party session) */}
           {sbMembers.length > 0 && (
             <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg overflow-hidden mb-4">
               <div className="px-4 py-2 bg-zinc-800/40 text-[10px] tracking-[0.15em] uppercase text-emerald-500 font-bold border-b border-zinc-700/40">
-                Party Members
+                {t("partyMembers")}
               </div>
               <div className="grid grid-cols-[2fr_1fr_1fr] gap-2 px-4 py-2 bg-zinc-800/20 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40">
-                <span>Member</span><span className="text-right">Role</span><span className="text-right">Share %</span>
+                <span>{t("col.member")}</span><span className="text-right">{t("col.role")}</span><span className="text-right">{t("col.sharePct")}</span>
               </div>
               {sbMembers.map((m, i) => (
                 <div key={m.id} className="grid grid-cols-[2fr_1fr_1fr] gap-2 px-4 py-3 border-b border-zinc-800/30 items-center">
@@ -930,14 +932,14 @@ export default function WorkOrderDashboard() {
 
           {/* Local crew shares summary */}
           {crewShares.length === 0 && sbMembers.length === 0 ? (
-            <div className="text-center py-12 text-zinc-600 text-sm">No crew data yet.</div>
+            <div className="text-center py-12 text-zinc-600 text-sm">{t("noCrewData")}</div>
           ) : crewShares.length > 0 ? (
             <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg overflow-hidden">
               <div className="px-4 py-2 bg-zinc-800/40 text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold border-b border-zinc-700/40">
-                Payout History
+                {t("payoutHistory")}
               </div>
               <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-2 px-4 py-2 bg-zinc-800/20 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40">
-                <span>Member</span><span className="text-right">Orders</span><span className="text-right">aUEC Payout</span><span className="text-right">Materials Value</span><span className="text-right">Avg/Order</span>
+                <span>{t("col.member")}</span><span className="text-right">{t("col.orders")}</span><span className="text-right">{t("col.auecPayout")}</span><span className="text-right">{t("col.materialsValue")}</span><span className="text-right">{t("col.avgOrder")}</span>
               </div>
               {crewShares.map((m, i) => (
                 <div key={m.name} className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr] gap-2 px-4 py-3 border-b border-zinc-800/30 items-center">
@@ -961,12 +963,12 @@ export default function WorkOrderDashboard() {
         <div className="space-y-6">
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {[
-              { l: "Total Orders", v: stats.totalOrders.toString(), c: "text-zinc-100" },
-              { l: "Total Gross", v: fmtAuec(stats.totalGross), c: "text-amber-400" },
-              { l: "Total Net", v: fmtAuec(stats.totalNet), c: "text-emerald-400" },
-              { l: "Expenses", v: fmtAuec(stats.totalExpenses), c: "text-red-400" },
-              { l: "Total Yield", v: `${Math.round(stats.totalYield)} su`, c: "text-blue-400" },
-              { l: "Avg/Order", v: fmtAuec(stats.avgOrderValue), c: "text-zinc-300" },
+              { l: t("stat.totalOrders"), v: stats.totalOrders.toString(), c: "text-zinc-100" },
+              { l: t("stat.totalGross"), v: fmtAuec(stats.totalGross), c: "text-amber-400" },
+              { l: t("stat.totalNet"), v: fmtAuec(stats.totalNet), c: "text-emerald-400" },
+              { l: t("stat.expenses"), v: fmtAuec(stats.totalExpenses), c: "text-red-400" },
+              { l: t("stat.totalYield"), v: `${Math.round(stats.totalYield)} su`, c: "text-blue-400" },
+              { l: t("stat.avgOrder"), v: fmtAuec(stats.avgOrderValue), c: "text-zinc-300" },
             ].map((c) => (
               <div key={c.l} className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg p-3">
                 <div className="text-[9px] tracking-[0.15em] uppercase text-zinc-500 font-bold mb-1">{c.l}</div>
@@ -979,22 +981,22 @@ export default function WorkOrderDashboard() {
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-zinc-900/70 border border-amber-500/20 rounded-lg p-3 text-center">
               <div className="text-lg font-mono font-bold text-amber-400">{stats.byStatus.in_progress}</div>
-              <div className="text-[9px] text-zinc-500 uppercase">In Progress</div>
+              <div className="text-[9px] text-zinc-500 uppercase">{t("status.in_progress")}</div>
             </div>
             <div className="bg-zinc-900/70 border border-emerald-500/20 rounded-lg p-3 text-center">
               <div className="text-lg font-mono font-bold text-emerald-400">{stats.byStatus.completed}</div>
-              <div className="text-[9px] text-zinc-500 uppercase">Ready</div>
+              <div className="text-[9px] text-zinc-500 uppercase">{t("ready")}</div>
             </div>
             <div className="bg-zinc-900/70 border border-blue-500/20 rounded-lg p-3 text-center">
               <div className="text-lg font-mono font-bold text-blue-400">{stats.byStatus.collected}</div>
-              <div className="text-[9px] text-zinc-500 uppercase">Collected</div>
+              <div className="text-[9px] text-zinc-500 uppercase">{t("status.collected")}</div>
             </div>
           </div>
 
           {/* By type + top ores */}
           {Object.keys(stats.byType).length > 0 && (
             <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg p-4">
-              <div className="text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold mb-3">By Activity Type</div>
+              <div className="text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold mb-3">{t("byActivityType")}</div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {Object.entries(stats.byType).map(([t, d]) => (
                   <div key={t} className="bg-zinc-800/40 rounded-lg p-3">
@@ -1012,7 +1014,7 @@ export default function WorkOrderDashboard() {
 
           {stats.topOres.length > 0 && (
             <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg p-4">
-              <div className="text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold mb-3">Top Ores</div>
+              <div className="text-[10px] tracking-[0.15em] uppercase text-amber-500 font-bold mb-3">{t("topOres")}</div>
               <div className="space-y-2">
                 {stats.topOres.map((ore, i) => {
                   const mx = stats.topOres[0]?.totalValue || 1;
@@ -1031,7 +1033,7 @@ export default function WorkOrderDashboard() {
             </div>
           )}
 
-          {stats.totalOrders === 0 && <div className="text-center py-12 text-zinc-600 text-sm">No stats yet.</div>}
+          {stats.totalOrders === 0 && <div className="text-center py-12 text-zinc-600 text-sm">{t("noStats")}</div>}
         </div>
       )}
 
@@ -1041,14 +1043,14 @@ export default function WorkOrderDashboard() {
           <div className="bg-zinc-900 border-2 border-amber-500 rounded-xl p-6 w-full max-w-sm">
             <h3 className="text-lg font-bold text-zinc-100 mb-1 capitalize">{invAction.type} {invAction.mineralName}</h3>
             <p className="text-[11px] text-zinc-500 mb-4">
-              Available: {inventory.find((i) => i.mineralId === invAction.mineralId)?.quantity.toFixed(1) || 0}
+              {t("available")}: {inventory.find((i) => i.mineralId === invAction.mineralId)?.quantity.toFixed(1) || 0}
             </p>
             <input
               type="number"
               min="0"
               value={invAction.qty || ""}
               onChange={(e) => setInvAction({ ...invAction, qty: parseFloat(e.target.value) || 0 })}
-              placeholder="Quantity"
+              placeholder={t("quantity")}
               className="w-full bg-zinc-800/50 border border-zinc-700 rounded px-3 py-2 text-sm font-mono text-zinc-100 mb-3 focus:outline-none focus:border-amber-500"
             />
             {invAction.type === "distribute" && (
@@ -1056,13 +1058,13 @@ export default function WorkOrderDashboard() {
                 type="text"
                 value={invAction.member}
                 onChange={(e) => setInvAction({ ...invAction, member: e.target.value })}
-                placeholder="Crew member name"
+                placeholder={t("crewMemberName")}
                 className="w-full bg-zinc-800/50 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-100 mb-3 focus:outline-none focus:border-amber-500"
               />
             )}
             <div className="flex gap-2">
-              <button onClick={() => setInvAction(null)} className="flex-1 py-2 bg-zinc-800 text-zinc-300 rounded font-bold text-sm">Cancel</button>
-              <button onClick={handleInvAction} className="flex-1 py-2 bg-amber-500 text-zinc-900 rounded font-bold text-sm hover:bg-amber-400">Confirm</button>
+              <button onClick={() => setInvAction(null)} className="flex-1 py-2 bg-zinc-800 text-zinc-300 rounded font-bold text-sm">{t("cancel")}</button>
+              <button onClick={handleInvAction} className="flex-1 py-2 bg-amber-500 text-zinc-900 rounded font-bold text-sm hover:bg-amber-400">{t("confirm")}</button>
             </div>
           </div>
         </div>
@@ -1072,22 +1074,22 @@ export default function WorkOrderDashboard() {
       {showClearConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-zinc-900 border-2 border-red-500 rounded-xl p-6 w-full max-w-sm shadow-[0_0_30px_rgba(239,68,68,0.2)]">
-            <h3 className="text-lg font-bold text-zinc-100 mb-2">Clear Inventory?</h3>
+            <h3 className="text-lg font-bold text-zinc-100 mb-2">{t("clearInventoryTitle")}</h3>
             <p className="text-sm text-zinc-400 mb-4">
-              This will permanently delete all inventory items and movement history for the current session. This action cannot be undone.
+              {t("clearInventoryBody")}
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowClearConfirm(false)}
                 className="flex-1 py-2.5 bg-zinc-800 text-zinc-300 rounded-lg font-bold text-sm hover:bg-zinc-700 transition-colors"
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 onClick={handleClearInventory}
                 className="flex-1 py-2.5 bg-red-500 text-white rounded-lg font-bold text-sm hover:bg-red-400 transition-colors"
               >
-                Clear All
+                {t("clearAllButton")}
               </button>
             </div>
           </div>
@@ -1098,22 +1100,22 @@ export default function WorkOrderDashboard() {
       {showResetConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-zinc-900 border-2 border-red-500 rounded-xl p-6 w-full max-w-sm shadow-[0_0_30px_rgba(239,68,68,0.3)]">
-            <h3 className="text-lg font-bold text-zinc-100 mb-2">Reset All Mining Data?</h3>
+            <h3 className="text-lg font-bold text-zinc-100 mb-2">{t("resetAllTitle")}</h3>
             <p className="text-sm text-zinc-400 mb-4">
-              This will permanently delete ALL work orders, inventory, movements, and session data. This cannot be undone.
+              {t("resetAllBody")}
             </p>
             <div className="flex gap-2">
               <button
                 onClick={() => setShowResetConfirm(false)}
                 className="flex-1 py-2.5 bg-zinc-800 text-zinc-300 rounded-lg font-bold text-sm hover:bg-zinc-700 transition-colors"
               >
-                Cancel
+                {t("cancel")}
               </button>
               <button
                 onClick={handleResetAll}
                 className="flex-1 py-2.5 bg-red-600 text-white rounded-lg font-bold text-sm hover:bg-red-500 transition-colors"
               >
-                Reset Everything
+                {t("resetEverything")}
               </button>
             </div>
           </div>
@@ -1152,17 +1154,17 @@ export default function WorkOrderDashboard() {
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
             <div className="bg-zinc-900 border-2 border-amber-500 rounded-xl p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto">
-              <h3 className="text-lg font-bold text-zinc-100 mb-1">Material Distribution</h3>
-              <p className="text-[11px] text-zinc-500 mb-4">Based on crew share percentages for order {distOrderId.slice(3, 14)}</p>
+              <h3 className="text-lg font-bold text-zinc-100 mb-1">{t("materialDistribution")}</h3>
+              <p className="text-[11px] text-zinc-500 mb-4">{t("distributionFor", { id: distOrderId.slice(3, 14) })}</p>
               {dist.map((member) => (
                 <div key={member.memberName} className="mb-4 bg-zinc-800/40 rounded-lg p-3">
-                  <div className="text-sm font-bold text-amber-400 mb-2">👤 {member.memberName} <span className="text-zinc-500 font-normal">({member.share} shares)</span></div>
+                  <div className="text-sm font-bold text-amber-400 mb-2">👤 {member.memberName} <span className="text-zinc-500 font-normal">({t("sharesCount", { n: member.share })})</span></div>
                   <div className="space-y-1">
                     {member.minerals.filter((m) => m.qty > 0).map((m) => (
                       <div key={m.mineralId} className="flex items-center justify-between text-xs">
                         <span className="text-zinc-300 uppercase">{m.mineralName}</span>
                         <div className="flex items-center gap-3">
-                          <span className="font-mono text-zinc-400">{m.qty.toFixed(1)} units</span>
+                          <span className="font-mono text-zinc-400">{t("unitsCount", { n: m.qty.toFixed(1) })}</span>
                           <span className="font-mono text-amber-400">{fmtAuec(m.value)} aUEC</span>
                           <button
                             onClick={() => {
@@ -1185,7 +1187,7 @@ export default function WorkOrderDashboard() {
                             }}
                             className="px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/30 rounded text-[9px] font-bold text-emerald-400 hover:bg-emerald-500/20"
                           >
-                            Give
+                            {t("give")}
                           </button>
                         </div>
                       </div>
@@ -1193,7 +1195,7 @@ export default function WorkOrderDashboard() {
                   </div>
                 </div>
               ))}
-              <button onClick={() => setDistOrderId(null)} className="w-full py-2 bg-zinc-800 text-zinc-300 rounded font-bold text-sm mt-2">Close</button>
+              <button onClick={() => setDistOrderId(null)} className="w-full py-2 bg-zinc-800 text-zinc-300 rounded font-bold text-sm mt-2">{t("close")}</button>
             </div>
           </div>
         );
@@ -1205,19 +1207,19 @@ export default function WorkOrderDashboard() {
           <div className="bg-zinc-900 border-2 border-amber-500 rounded-xl p-6 w-full max-w-lg max-h-[80vh] overflow-hidden shadow-[0_0_30px_rgba(245,158,11,0.2)] flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-bold text-zinc-100">
-                Sell Locations — <span className="text-amber-400">{sellModalName}</span>
+                {t("sellLocations")} — <span className="text-amber-400">{sellModalName}</span>
               </h3>
               <button onClick={() => setSellModalItem(null)} className="text-zinc-500 hover:text-zinc-300 text-xl">✕</button>
             </div>
-            <p className="text-[11px] text-zinc-500 mb-3">Sorted by highest buy price (best for you to sell). Prices are per SCU.</p>
+            <p className="text-[11px] text-zinc-500 mb-3">{t("sellLocationsHint")}</p>
             <div className="flex-1 overflow-y-auto space-y-0">
               <div className="grid grid-cols-[1fr_0.7fr_auto] gap-2 px-3 py-1.5 bg-zinc-800/40 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40 sticky top-0">
-                <span>Station</span><span>System</span><span className="text-right">Price (aUEC/SCU)</span>
+                <span>{t("col.station")}</span><span>{t("col.system")}</span><span className="text-right">{t("col.priceUnit")}</span>
               </div>
               {loadingSellData ? (
-                <div className="text-center py-8 text-zinc-500 text-sm">Loading prices...</div>
+                <div className="text-center py-8 text-zinc-500 text-sm">{t("loadingPrices")}</div>
               ) : sellLocations.length === 0 ? (
-                <div className="text-center py-8 text-zinc-600 text-sm italic">No sell locations found for this commodity.</div>
+                <div className="text-center py-8 text-zinc-600 text-sm italic">{t("noSellLocations")}</div>
               ) : (
                 sellLocations.map((loc, i) => {
                   const invItem = mergedInventory.find((it) => it.mineralId === sellModalItem);
@@ -1226,12 +1228,12 @@ export default function WorkOrderDashboard() {
                     <div key={`${loc.station}-${i}`} className={`grid grid-cols-[1fr_0.7fr_auto] gap-2 px-3 py-2.5 border-b border-zinc-800/30 items-center ${i === 0 ? "bg-amber-500/5 border-l-2 border-l-amber-500" : i < 3 ? "bg-emerald-500/5" : ""}`}>
                       <div>
                         <span className="text-xs font-bold text-zinc-200">{loc.station}</span>
-                        {i === 0 && <span className="ml-2 text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded font-bold uppercase">Best</span>}
+                        {i === 0 && <span className="ml-2 text-[9px] px-1.5 py-0.5 bg-amber-500/20 text-amber-400 rounded font-bold uppercase">{t("best")}</span>}
                       </div>
                       <span className="text-[11px] text-zinc-400">{loc.system}</span>
                       <div className="text-right">
                         <span className={`text-sm font-mono font-bold ${i === 0 ? "text-amber-400" : i < 3 ? "text-emerald-400" : "text-zinc-300"}`}>{loc.price.toLocaleString()}</span>
-                        {totalValue > 0 && <div className="text-[9px] text-zinc-600">Total: {fmtAuec(totalValue)} aUEC</div>}
+                        {totalValue > 0 && <div className="text-[9px] text-zinc-600">{t("total")}: {fmtAuec(totalValue)} aUEC</div>}
                       </div>
                     </div>
                   );
@@ -1239,7 +1241,7 @@ export default function WorkOrderDashboard() {
               )}
             </div>
             <div className="mt-4 pt-3 border-t border-zinc-700">
-              <button onClick={() => setSellModalItem(null)} className="w-full py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm font-bold hover:bg-zinc-700 transition-colors">Close</button>
+              <button onClick={() => setSellModalItem(null)} className="w-full py-2.5 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-300 text-sm font-bold hover:bg-zinc-700 transition-colors">{t("close")}</button>
             </div>
           </div>
         </div>
