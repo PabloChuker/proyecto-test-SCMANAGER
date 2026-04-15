@@ -583,7 +583,19 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   // Este componente sólo necesita exponer: visibleIds, widgetBlocks, widgetWidth.
 
   useEffect(() => { if (mountedRef.current) return; mountedRef.current = true; const urlShip = searchParams.get("ship"); loadShip(urlShip || shipId, searchParams.get("build") || null); }, [shipId]);
-  useEffect(() => { const c = overrides.size; if (!mountedRef.current) return; if (c === overrideCountRef.current && c === 0) return; overrideCountRef.current = c; const encoded = encodeBuild(); const url = new URL(window.location.href); if (encoded) url.searchParams.set("build", encoded); else url.searchParams.delete("build"); window.history.replaceState({}, "", url.toString()); }, [overrides, encodeBuild]);
+  useEffect(() => {
+    const c = overrides.size;
+    if (!mountedRef.current) return;
+    if (c === overrideCountRef.current && c === 0) return;
+    overrideCountRef.current = c;
+    const encoded = encodeBuild();
+    const url = new URL(window.location.href);
+    // Always stamp the ship reference so the URL is self-contained
+    if (shipInfo?.reference) url.searchParams.set("ship", shipInfo.reference);
+    if (encoded) url.searchParams.set("build", encoded);
+    else url.searchParams.delete("build");
+    window.history.replaceState({}, "", url.toString());
+  }, [overrides, encodeBuild, shipInfo]);
 
   const stats = getStats();
   const useful = hardpoints.filter(hp => isUsefulSlot(hp, getEffectiveItem(hp.id)));

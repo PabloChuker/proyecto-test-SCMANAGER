@@ -791,12 +791,32 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
         try {
           const d = JSON.parse(atob(buildParam));
           if (typeof d === "object" && d) {
+            // Build a flat lookup: hardpointName → slot id (covers top-level + children)
+            const slotId = new Map<string, string>();
             for (const hp of resolved) {
-              const ref = (d as any)[hp.hardpointName];
-              if (ref === undefined) continue;
-              if (ref === null) { restored.set(hp.id, null); continue; }
-              const f = resolved.map(h => h.defaultItem).filter((i): i is EquippedItem => !!i).find(i => i.reference === ref || i.className === ref);
-              if (f) restored.set(hp.id, f);
+              slotId.set(hp.hardpointName, hp.id);
+              for (const ch of hp.children) slotId.set(ch.hardpointName, ch.id);
+            }
+            // Default items for legacy format fallback
+            const allDefaults = [
+              ...resolved.map(h => h.defaultItem),
+              ...resolved.flatMap(h => h.children.map(c => c.equippedItem)),
+            ].filter((i): i is EquippedItem => !!i);
+
+            for (const [hpName, val] of Object.entries(d as Record<string, any>)) {
+              const id = slotId.get(hpName);
+              if (!id) continue;
+              if (val === null) { restored.set(id, null); continue; }
+              // New rich format: { r, i, n, ln, t, s, g, m, cs, pn }
+              if (typeof val === "object" && "r" in val) {
+                restored.set(id, { id: val.i ?? val.r, reference: val.r, name: val.n ?? val.r, localizedName: val.ln ?? null, className: val.r ?? null, type: val.t ?? "WEAPON", size: val.s ?? null, grade: val.g ?? null, manufacturer: val.m ?? null, componentStats: val.cs ?? null, powerNetwork: val.pn ?? null });
+                continue;
+              }
+              // Legacy format: value is a plain reference string
+              if (typeof val === "string") {
+                const f = allDefaults.find(i => i.reference === val || i.className === val);
+                if (f) restored.set(id, f);
+              }
             }
           }
         } catch {}
@@ -904,5 +924,24 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
     set({ instancePower: newAlloc, allocatedPower: catAlloc });
   },
 
-  encodeBuild: () => { const { hardpoints, overrides } = get(); if (overrides.size === 0) return ""; const e: Record<string, string | null> = {}; for (const [hpId, item] of overrides.entries()) { const hp = hardpoints.find(h => h.id === hpId); if (hp) e[hp.hardpointName] = item?.reference ?? null; } return btoa(JSON.stringify(e)); },
+  encodeBuild: () => {
+    const { hardpoints, overrides } = get();
+    if (overrides.size === 0) return "";
+    const encItem = (item: EquippedItem | null): any => {
+      if (!item) return null;
+      return { r: item.reference, i: item.id, n: item.name, ln: item.localizedName, t: item.type, s: item.size, g: item.grade, m: item.manufacturer, cs: item.componentStats, pn: item.powerNetwork };
+    };
+    const e: Record<string, any> = {};
+    for (const [hpId, item] of overrides.entries()) {
+      // Search top-level hardpoints first
+      const hp = hardpoints.find(h => h.id === hpId);
+      if (hp) { e[hp.hardpointName] = encItem(item); continue; }
+      // Search children (turret sub-weapons etc.)
+      for (const h of hardpoints) {
+        const ch = h.children.find(c => c.id === hpId);
+        if (ch) { e[ch.hardpointName] = encItem(item); break; }
+      }
+    }
+    return btoa(JSON.stringify(e));
+  },
 }));
