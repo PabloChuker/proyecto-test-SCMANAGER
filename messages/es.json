@@ -536,5 +536,28 @@
       "errorNeedLogin": "Necesitás iniciar sesión para ver el dashboard.",
       "errorLoadFailed": "No se pudo cargar el dashboard."
     }
+  },
+  "Components": {
+    "loading": "Cargando...",
+    "loadoutManager": "Gestor de Loadout",
+    "searchCategory": "Buscar {category}...",
+    "allSizes": "Todos los tamaños",
+    "sizeN": "Tamaño {n}",
+    "rowsCount": "{shown} / {total} filas",
+    "truncatedHint": "Mostrando las primeras {shown} filas de {total}. Usa la búsqueda o los filtros para acotar.",
+    "noResults": "Sin resultados",
+    "category": {
+      "ships": "Naves",
+      "weapons": "Armas",
+      "missiles": "Misiles",
+      "emps": "Generadores EMP",
+      "shields": "Escudos",
+      "power_plants": "Reactores",
+      "coolers": "Refrigeradores",
+      "quantum_drives": "Motores cuánticos",
+      "qed": "Generadores QED",
+      "mining": "Láseres de minería",
+      "turrets": "Torretas"
+    }
   }
 }

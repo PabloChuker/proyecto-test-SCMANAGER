@@ -536,5 +536,28 @@
       "errorNeedLogin": "Vous devez être connecté pour voir le tableau de bord.",
       "errorLoadFailed": "Impossible de charger le tableau de bord."
     }
+  },
+  "Components": {
+    "loading": "Chargement...",
+    "loadoutManager": "Gestionnaire de loadout",
+    "searchCategory": "Rechercher {category}...",
+    "allSizes": "Toutes les tailles",
+    "sizeN": "Taille {n}",
+    "rowsCount": "{shown} / {total} lignes",
+    "truncatedHint": "Affichage des {shown} premières lignes sur {total}. Utilise la recherche ou les filtres pour affiner.",
+    "noResults": "Aucun résultat",
+    "category": {
+      "ships": "Vaisseaux",
+      "weapons": "Armes",
+      "missiles": "Missiles",
+      "emps": "Générateurs EMP",
+      "shields": "Boucliers",
+      "power_plants": "Réacteurs",
+      "coolers": "Refroidisseurs",
+      "quantum_drives": "Lecteurs quantiques",
+      "qed": "Générateurs QED",
+      "mining": "Lasers miniers",
+      "turrets": "Tourelles"
+    }
   }
 }

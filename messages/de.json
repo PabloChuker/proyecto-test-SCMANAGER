@@ -536,5 +536,28 @@
       "errorNeedLogin": "Du musst angemeldet sein, um das Dashboard zu sehen.",
       "errorLoadFailed": "Dashboard konnte nicht geladen werden."
     }
+  },
+  "Components": {
+    "loading": "Wird geladen...",
+    "loadoutManager": "Loadout-Manager",
+    "searchCategory": "{category} suchen...",
+    "allSizes": "Alle Größen",
+    "sizeN": "Größe {n}",
+    "rowsCount": "{shown} / {total} Zeilen",
+    "truncatedHint": "Zeige die ersten {shown} von {total} Zeilen. Suche oder Filter zum Eingrenzen verwenden.",
+    "noResults": "Keine Ergebnisse",
+    "category": {
+      "ships": "Schiffe",
+      "weapons": "Waffen",
+      "missiles": "Raketen",
+      "emps": "EMP-Generatoren",
+      "shields": "Schilde",
+      "power_plants": "Reaktoren",
+      "coolers": "Kühler",
+      "quantum_drives": "Quantenantriebe",
+      "qed": "QED-Generatoren",
+      "mining": "Bergbaulaser",
+      "turrets": "Geschütztürme"
+    }
   }
 }

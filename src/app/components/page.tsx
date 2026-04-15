@@ -6,6 +6,7 @@
 // =============================================================================
 
 import { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useTranslations } from "next-intl";
 import { useSearchParams } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
@@ -116,6 +117,7 @@ export default function ComponentsPage() {
 }
 
 function ComponentsPageInner() {
+  const t = useTranslations("Components");
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const initialCat = (tabParam && CATEGORIES.find(c => c.key === tabParam)) || CATEGORIES[0];
@@ -216,7 +218,7 @@ function ComponentsPageInner() {
       <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/70 via-zinc-950/85 to-zinc-950/95 pointer-events-none z-0" />
 
       {/* ═══ Header (full width) ═══ */}
-      <Header subtitle={activeCategory.label} />
+      <Header subtitle={t(`category.${activeCategory.key}`)} />
 
       {/* ═══ Body: Sidebar + Content ═══ */}
       <div className="flex flex-1 min-h-0">
@@ -225,10 +227,10 @@ function ComponentsPageInner() {
           {/* Loadout Manager link */}
           <Link
             href="/loadout"
-            title="Loadout Manager"
+            title={t("loadoutManager")}
             className="w-9 h-9 sm:w-10 sm:h-10 rounded flex items-center justify-center transition-all duration-150 hover:bg-zinc-800/40 mb-1"
           >
-            <Image src="/icons/DPS_calculator.png" alt="Loadout Manager" width={22} height={22} className="opacity-50 hover:opacity-80 transition-opacity" />
+            <Image src="/icons/DPS_calculator.png" alt={t("loadoutManager")} width={22} height={22} className="opacity-50 hover:opacity-80 transition-opacity" />
           </Link>
           <div className="w-6 h-px bg-zinc-800 mb-1" />
 
@@ -238,7 +240,7 @@ function ComponentsPageInner() {
               <button
                 key={cat.key}
                 onClick={() => handleCategoryClick(cat)}
-                title={cat.label}
+                title={t(`category.${cat.key}`)}
                 className={`
                   w-9 h-9 sm:w-10 sm:h-10 rounded flex items-center justify-center transition-all duration-150
                   ${isActive
@@ -249,7 +251,7 @@ function ComponentsPageInner() {
               >
                 <Image
                   src={cat.icon}
-                  alt={cat.label}
+                  alt={t(`category.${cat.key}`)}
                   width={22}
                   height={22}
                   className={`transition-opacity ${isActive ? "opacity-100" : "opacity-40 hover:opacity-70"}`}
@@ -273,7 +275,7 @@ function ComponentsPageInner() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder={`Search ${activeCategory.label.toLowerCase()}...`}
+              placeholder={t("searchCategory", { category: t(`category.${activeCategory.key}`).toLowerCase() })}
               className="w-full pl-8 pr-3 py-1.5 bg-zinc-900/60 border border-zinc-800/50 rounded text-xs text-zinc-300 placeholder-zinc-700 focus:outline-none focus:border-amber-500/40 transition-colors"
             />
           </div>
@@ -285,9 +287,9 @@ function ComponentsPageInner() {
               onChange={(e) => setSizeFilter(e.target.value)}
               className="bg-zinc-900/60 border border-zinc-800/50 rounded text-xs text-zinc-400 px-2 py-1.5 focus:outline-none focus:border-amber-500/40"
             >
-              <option value="">All Sizes</option>
+              <option value="">{t("allSizes")}</option>
               {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12].map((s) => (
-                <option key={s} value={s}>Size {s}</option>
+                <option key={s} value={s}>{t("sizeN", { n: s })}</option>
               ))}
             </select>
           )}
@@ -302,11 +304,11 @@ function ComponentsPageInner() {
                 }`}
                 title={
                   truncated
-                    ? `Mostrando las primeras ${rows.length} filas de ${meta.total}. Usá la búsqueda o los filtros para acotar.`
+                    ? t("truncatedHint", { shown: rows.length, total: meta.total })
                     : undefined
                 }
               >
-                {rows.length} / {meta.total} rows
+                {t("rowsCount", { shown: rows.length, total: meta.total })}
                 {truncated && <span className="ml-1">⚠</span>}
               </span>
             );
@@ -321,12 +323,12 @@ function ComponentsPageInner() {
                 <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
                   <path d="M12 2a10 10 0 0 1 10 10" />
                 </svg>
-                Loading...
+                {t("loading")}
               </div>
             </div>
           ) : rows.length === 0 ? (
             <div className="flex items-center justify-center h-64 text-zinc-700 text-sm">
-              No results found
+              {t("noResults")}
             </div>
           ) : (
             <table className="min-w-full w-max text-xs border-collapse">

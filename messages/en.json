@@ -536,5 +536,28 @@
       "errorNeedLogin": "You need to be logged in to view the dashboard.",
       "errorLoadFailed": "Could not load the dashboard."
     }
+  },
+  "Components": {
+    "loading": "Loading...",
+    "loadoutManager": "Loadout Manager",
+    "searchCategory": "Search {category}...",
+    "allSizes": "All Sizes",
+    "sizeN": "Size {n}",
+    "rowsCount": "{shown} / {total} rows",
+    "truncatedHint": "Showing the first {shown} rows of {total}. Use search or filters to narrow down.",
+    "noResults": "No results found",
+    "category": {
+      "ships": "Ships",
+      "weapons": "Weapons",
+      "missiles": "Missiles",
+      "emps": "EMP Generators",
+      "shields": "Shields",
+      "power_plants": "Power Plants",
+      "coolers": "Coolers",
+      "quantum_drives": "Quantum Drives",
+      "qed": "QED Generators",
+      "mining": "Mining Lasers",
+      "turrets": "Turrets"
+    }
   }
 }

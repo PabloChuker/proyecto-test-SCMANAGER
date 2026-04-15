@@ -536,5 +536,28 @@
       "errorNeedLogin": "您需要登录才能查看仪表板。",
       "errorLoadFailed": "无法加载仪表板。"
     }
+  },
+  "Components": {
+    "loading": "加载中...",
+    "loadoutManager": "装载管理器",
+    "searchCategory": "搜索{category}...",
+    "allSizes": "所有尺寸",
+    "sizeN": "尺寸 {n}",
+    "rowsCount": "{shown} / {total} 行",
+    "truncatedHint": "显示 {total} 行中的前 {shown} 行。使用搜索或筛选器缩小范围。",
+    "noResults": "未找到结果",
+    "category": {
+      "ships": "飞船",
+      "weapons": "武器",
+      "missiles": "导弹",
+      "emps": "EMP 发生器",
+      "shields": "护盾",
+      "power_plants": "电源",
+      "coolers": "散热器",
+      "quantum_drives": "量子驱动器",
+      "qed": "QED 发生器",
+      "mining": "采矿激光器",
+      "turrets": "炮塔"
+    }
   }
 }
