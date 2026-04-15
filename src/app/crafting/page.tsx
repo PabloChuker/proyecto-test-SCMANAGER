@@ -13,10 +13,11 @@ import { useTranslations } from "next-intl";
 export default function CraftingPage() {
   const [activeTab, setActiveTab] = useState("blueprints");
   const t = useTranslations("PageTitles");
+  const tc = useTranslations("Crafting.tabs");
   const TABS = [
-    { id: "blueprints", label: "Blueprints", icon: "📐" },
-    { id: "calculator", label: "Calculator", icon: "🧮" },
-    { id: "materials", label: "Materials", icon: "⚗" },
+    { id: "blueprints", label: tc("blueprints"), icon: "📐" },
+    { id: "calculator", label: tc("calculator"), icon: "🧮" },
+    { id: "materials", label: tc("materials"), icon: "⚗" },
   ];
 
   return (

@@ -255,7 +255,11 @@
   "Hangar": {
     "loading": "Loading hangar...",
     "importButton": "Import from extension",
-    "tabs": { "fleet": "Fleet", "buyback": "Buyback", "ccu": "CCU Chains" },
+    "tabs": {
+      "fleet": "Fleet",
+      "buyback": "Buyback",
+      "ccu": "CCU Chains"
+    },
     "empty": "Your hangar is empty. Import from the extension to get started."
   },
   "Ships": {
@@ -285,5 +289,30 @@
     "saveLoadout": "Save Loadout",
     "resetLayout": "Reset Layout",
     "exportImage": "Export Image"
+  },
+  "Crafting": {
+    "tabs": {
+      "blueprints": "Blueprints",
+      "calculator": "Calculator",
+      "materials": "Materials"
+    }
+  },
+  "Mining": {
+    "tabs": {
+      "workorder": "Work Order",
+      "dashboard": "Dashboard",
+      "rock": "Rock Calculator",
+      "refinery": "Refinery Data",
+      "loadout": "Loadout Calculator"
+    }
+  },
+  "Trade": {
+    "tabs": {
+      "routes": "Trade Routes",
+      "commodities": "Commodities",
+      "terminals": "Terminals",
+      "workorders": "Work Orders",
+      "dashboard": "Dashboard"
+    }
   }
 }

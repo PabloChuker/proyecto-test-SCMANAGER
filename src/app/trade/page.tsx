@@ -13,18 +13,18 @@ import { useTranslations } from "next-intl";
 
 type Tab = "routes" | "commodities" | "terminals" | "workorders" | "dashboard";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "routes", label: "Trade Routes" },
-  { id: "commodities", label: "Commodities" },
-  { id: "terminals", label: "Terminals" },
-  { id: "workorders", label: "Work Orders" },
-  { id: "dashboard", label: "Dashboard" },
-];
-
 export default function TradePage() {
   const [activeTab, setActiveTab] = useState<Tab>("routes");
   const requestTabSwitch = useTradeWorkOrderStore((s) => s.requestTabSwitch);
   const t = useTranslations("PageTitles");
+  const tt = useTranslations("Trade.tabs");
+  const TABS: { id: Tab; label: string }[] = [
+    { id: "routes", label: tt("routes") },
+    { id: "commodities", label: tt("commodities") },
+    { id: "terminals", label: tt("terminals") },
+    { id: "workorders", label: tt("workorders") },
+    { id: "dashboard", label: tt("dashboard") },
+  ];
 
   // When TradeRoutes fires "Send to WO", switch to the Work Orders tab
   useEffect(() => {

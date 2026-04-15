@@ -11,17 +11,17 @@ import WorkOrderDashboard from "./WorkOrderDashboard";
 import RockCalculator from "./RockCalculator";
 import RefineryDataTable from "./RefineryDataTable";
 import { useTranslations } from "next-intl";
-const TABS = [
-  { id: "workorder", label: "Work Order", icon: "📈" },
-  { id: "dashboard", label: "Dashboard", icon: "📊" },
-  { id: "rock", label: "Rock Calculator", icon: "🪨" },
-  { id: "refinery", label: "Refinery Data", icon: "🏚" },
-  { id: "loadout", label: "Loadout Calculator", icon: "⛏" },
-];
-
 export default function MiningPage() {
   const [activeTab, setActiveTab] = useState("workorder");
   const t = useTranslations("PageTitles");
+  const tm = useTranslations("Mining.tabs");
+  const TABS = [
+    { id: "workorder", label: tm("workorder"), icon: "📈" },
+    { id: "dashboard", label: tm("dashboard"), icon: "📊" },
+    { id: "rock", label: tm("rock"), icon: "🪨" },
+    { id: "refinery", label: tm("refinery"), icon: "🏚" },
+    { id: "loadout", label: tm("loadout"), icon: "⛏" },
+  ];
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">

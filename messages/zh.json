@@ -255,7 +255,11 @@
   "Hangar": {
     "loading": "正在加载机库...",
     "importButton": "从扩展导入",
-    "tabs": { "fleet": "舰队", "buyback": "回购", "ccu": "CCU 链" },
+    "tabs": {
+      "fleet": "舰队",
+      "buyback": "回购",
+      "ccu": "CCU 链"
+    },
     "empty": "你的机库为空。请从扩展导入以开始使用。"
   },
   "Ships": {
@@ -285,5 +289,30 @@
     "saveLoadout": "保存配装",
     "resetLayout": "重置布局",
     "exportImage": "导出图片"
+  },
+  "Crafting": {
+    "tabs": {
+      "blueprints": "蓝图",
+      "calculator": "计算器",
+      "materials": "材料"
+    }
+  },
+  "Mining": {
+    "tabs": {
+      "workorder": "工单",
+      "dashboard": "仪表盘",
+      "rock": "岩石计算器",
+      "refinery": "精炼数据",
+      "loadout": "装备配置"
+    }
+  },
+  "Trade": {
+    "tabs": {
+      "routes": "贸易路线",
+      "commodities": "商品",
+      "terminals": "码头",
+      "workorders": "工单",
+      "dashboard": "仪表盘"
+    }
   }
 }

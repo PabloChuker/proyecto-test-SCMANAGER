@@ -255,7 +255,11 @@
   "Hangar": {
     "loading": "Hangar wird geladen...",
     "importButton": "Aus Erweiterung importieren",
-    "tabs": { "fleet": "Flotte", "buyback": "Rückkauf", "ccu": "CCU-Ketten" },
+    "tabs": {
+      "fleet": "Flotte",
+      "buyback": "Rückkauf",
+      "ccu": "CCU-Ketten"
+    },
     "empty": "Dein Hangar ist leer. Importiere aus der Erweiterung, um zu starten."
   },
   "Ships": {
@@ -285,5 +289,30 @@
     "saveLoadout": "Loadout speichern",
     "resetLayout": "Layout zurücksetzen",
     "exportImage": "Bild exportieren"
+  },
+  "Crafting": {
+    "tabs": {
+      "blueprints": "Baupläne",
+      "calculator": "Rechner",
+      "materials": "Materialien"
+    }
+  },
+  "Mining": {
+    "tabs": {
+      "workorder": "Auftrag",
+      "dashboard": "Übersicht",
+      "rock": "Gesteinsrechner",
+      "refinery": "Raffinerie",
+      "loadout": "Ausrüstung"
+    }
+  },
+  "Trade": {
+    "tabs": {
+      "routes": "Handelsrouten",
+      "commodities": "Waren",
+      "terminals": "Terminals",
+      "workorders": "Aufträge",
+      "dashboard": "Übersicht"
+    }
   }
 }

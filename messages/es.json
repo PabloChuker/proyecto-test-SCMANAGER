@@ -255,7 +255,11 @@
   "Hangar": {
     "loading": "Cargando hangar...",
     "importButton": "Importar desde extension",
-    "tabs": { "fleet": "Flota", "buyback": "Buyback", "ccu": "Cadenas CCU" },
+    "tabs": {
+      "fleet": "Flota",
+      "buyback": "Buyback",
+      "ccu": "Cadenas CCU"
+    },
     "empty": "Tu hangar esta vacio. Importa desde la extension para empezar."
   },
   "Ships": {
@@ -285,5 +289,30 @@
     "saveLoadout": "Guardar Loadout",
     "resetLayout": "Reiniciar Layout",
     "exportImage": "Exportar Imagen"
+  },
+  "Crafting": {
+    "tabs": {
+      "blueprints": "Planos",
+      "calculator": "Calculadora",
+      "materials": "Materiales"
+    }
+  },
+  "Mining": {
+    "tabs": {
+      "workorder": "Órdenes",
+      "dashboard": "Panel",
+      "rock": "Calculadora de Rocas",
+      "refinery": "Refinería",
+      "loadout": "Equipamiento"
+    }
+  },
+  "Trade": {
+    "tabs": {
+      "routes": "Rutas",
+      "commodities": "Mercancías",
+      "terminals": "Terminales",
+      "workorders": "Órdenes",
+      "dashboard": "Panel"
+    }
   }
 }
