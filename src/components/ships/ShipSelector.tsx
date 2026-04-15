@@ -1,15 +1,19 @@
 // =============================================================================
-// AL FILO — ShipSelector v2 (Industrial Dual-Panel)
+// AL FILO — ShipSelector v3 (Debounced API Search)
 //
 // Two-panel dropdown: Manufacturers (left) → Ships (right)
-// Calls loadShip() from Zustand store + updates URL
+// Ships are fetched on-demand — no longer preloads 500 ships into memory.
+//   · First open  → fetch first 100 ships + full manufacturer list
+//   · Search input → debounced 300 ms → API call with search param
+//   · Manufacturer click → immediate API call with manufacturer param
 // =============================================================================
 
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useLoadoutStore } from "@/store/useLoadoutStore";
+import { useShallow } from "zustand/react/shallow";
 import {
   ShipContextMenu,
   type ShipContextMenuTarget,
@@ -26,43 +30,88 @@ interface ShipEntry {
   crew: number | null;
 }
 
+const SEARCH_DEBOUNCE_MS = 300;
+
 export function ShipSelector() {
   const router = useRouter();
-  const { shipInfo, loadShip } = useLoadoutStore();
+  const { shipInfo, loadShip } = useLoadoutStore(
+    useShallow(s => ({ shipInfo: s.shipInfo, loadShip: s.loadShip }))
+  );
+
   const [open, setOpen] = useState(false);
   const [ships, setShips] = useState<ShipEntry[]>([]);
+  const [allManufacturers, setAllManufacturers] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedMfr, setSelectedMfr] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasFetchedOnceRef = useRef(false);
 
   // ── Context menu state ──
   const [contextMenu, setContextMenu] = useState<ShipContextMenuTarget | null>(null);
 
-  // Fetch ship list once
-  useEffect(() => {
-    if (ships.length > 0) return;
+  const fetchShips = useCallback((params: { search?: string; manufacturer?: string } = {}) => {
     setLoading(true);
-    fetch('/api/ships', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ limit: 500 }) })
+    const qs = new URLSearchParams({ limit: "100", sortBy: "name" });
+    if (params.search) qs.set("search", params.search);
+    if (params.manufacturer) qs.set("manufacturer", params.manufacturer);
+
+    fetch("/api/ships?" + qs)
       .then(r => r.json())
       .then(d => {
-        const list: ShipEntry[] = (d.data ?? d.items ?? []).map((s: any) => ({
+        const list: ShipEntry[] = (d.data ?? []).map((s: any) => ({
           id: s.id,
           reference: s.reference,
           name: s.name,
           localizedName: s.localizedName,
           manufacturer: s.manufacturer || "Unknown",
-          role: s.ship?.role ?? s.role ?? null,
+          role: s.ship?.role ?? null,
           scmSpeed: s.ship?.scmSpeed ?? null,
           crew: s.ship?.maxCrew ?? null,
         }));
-        list.sort((a, b) => a.name.localeCompare(b.name));
         setShips(list);
+        // Capture the full manufacturer list once (comes from every response via meta)
+        if (!hasFetchedOnceRef.current && d.meta?.manufacturers?.length) {
+          setAllManufacturers([...d.meta.manufacturers].sort());
+          hasFetchedOnceRef.current = true;
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [ships.length]);
+  }, []);
+
+  // Load on first open
+  useEffect(() => {
+    if (!open || hasFetchedOnceRef.current) return;
+    fetchShips();
+  }, [open, fetchShips]);
+
+  // Debounce search input — fires API call 300 ms after user stops typing
+  useEffect(() => {
+    if (!open) return;
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+    if (!search) {
+      // Search cleared: restore manufacturer filter or show all
+      fetchShips(selectedMfr ? { manufacturer: selectedMfr } : {});
+      return;
+    }
+
+    searchTimerRef.current = setTimeout(() => {
+      fetchShips({ search });
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+  }, [search, open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Manufacturer filter — immediate, no debounce
+  const handleMfrSelect = useCallback((mfr: string | null) => {
+    setSelectedMfr(mfr);
+    setSearch("");
+    fetchShips(mfr ? { manufacturer: mfr } : {});
+  }, [fetchShips]);
 
   // Close on outside click
   useEffect(() => {
@@ -78,42 +127,12 @@ export function ShipSelector() {
     if (open) setTimeout(() => searchRef.current?.focus(), 50);
   }, [open]);
 
-  const manufacturers = useMemo(() => {
-    const mfrs = [...new Set(ships.map(s => s.manufacturer || "Unknown"))];
-    mfrs.sort();
-    return mfrs;
-  }, [ships]);
-
-  const filtered = useMemo(() => {
-    let list = ships;
-    if (search) {
-      const q = search.toLowerCase();
-      list = list.filter(s =>
-        s.name.toLowerCase().includes(q) ||
-        (s.localizedName?.toLowerCase().includes(q)) ||
-        (s.manufacturer?.toLowerCase().includes(q)) ||
-        (s.role?.toLowerCase().includes(q))
-      );
-    } else if (selectedMfr) {
-      list = list.filter(s => s.manufacturer === selectedMfr);
-    }
-    return list;
-  }, [ships, search, selectedMfr]);
-
-  const mfrCounts = useMemo(() => {
-    const c: Record<string, number> = {};
-    for (const s of ships) c[s.manufacturer || "Unknown"] = (c[s.manufacturer || "Unknown"] || 0) + 1;
-    return c;
-  }, [ships]);
-
   const handleSelect = (ship: ShipEntry) => {
     setOpen(false);
     setSearch("");
     setSelectedMfr(null);
-    // Stay on current page (e.g. /loadout) — only navigate away if on /ships/
     const path = window.location.pathname;
     if (path.startsWith("/loadout")) {
-      // Stay on Loadout Manager, just update query param
       const url = new URL(window.location.href);
       url.searchParams.set("ship", ship.reference);
       url.searchParams.delete("build");
@@ -146,7 +165,13 @@ export function ShipSelector() {
           <div className="p-2 border-b border-zinc-800/60">
             <div className="flex items-center gap-2 bg-zinc-800/50 border border-zinc-700/40 px-2 py-1.5">
               <svg className="w-3 h-3 text-zinc-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-              <input ref={searchRef} value={search} onChange={e => { setSearch(e.target.value); if (e.target.value) setSelectedMfr(null); }} placeholder="Search by name, manufacturer, or role..." className="flex-1 bg-transparent text-[11px] font-mono text-zinc-300 placeholder:text-zinc-700 outline-none" />
+              <input
+                ref={searchRef}
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Search by name, manufacturer, or role..."
+                className="flex-1 bg-transparent text-[11px] font-mono text-zinc-300 placeholder:text-zinc-700 outline-none"
+              />
               {search && (
                 <button onClick={() => setSearch("")} className="text-zinc-600 hover:text-zinc-400">
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
@@ -158,23 +183,35 @@ export function ShipSelector() {
           <div className="flex max-h-[360px]">
             {!search && (
               <div className="w-36 border-r border-zinc-800/50 overflow-y-auto flex-shrink-0">
-                <button onClick={() => setSelectedMfr(null)} className={"w-full text-left px-2.5 py-1.5 flex items-center justify-between transition-colors " + (!selectedMfr ? "bg-yellow-500/10 text-yellow-400" : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30")}>
+                <button
+                  onClick={() => handleMfrSelect(null)}
+                  className={"w-full text-left px-2.5 py-1.5 flex items-center justify-between transition-colors " + (!selectedMfr ? "bg-yellow-500/10 text-yellow-400" : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30")}
+                >
                   <span className="text-[9px] font-mono tracking-wider uppercase">All Ships</span>
-                  <span className="text-[8px] font-mono text-zinc-700">{ships.length}</span>
                 </button>
-                {manufacturers.map(m => (
-                  <button key={m} onClick={() => setSelectedMfr(m)} className={"w-full text-left px-2.5 py-1.5 flex items-center justify-between transition-colors " + (selectedMfr === m ? "bg-yellow-500/10 text-yellow-400" : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30")}>
-                    <span className="text-[9px] font-mono truncate">{m}</span>
-                    <span className="text-[8px] font-mono text-zinc-700 flex-shrink-0 ml-1">{mfrCounts[m] || 0}</span>
+                {allManufacturers.map(m => (
+                  <button
+                    key={m}
+                    onClick={() => handleMfrSelect(m)}
+                    className={"w-full text-left px-2.5 py-1.5 transition-colors " + (selectedMfr === m ? "bg-yellow-500/10 text-yellow-400" : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/30")}
+                  >
+                    <span className="text-[9px] font-mono truncate block">{m}</span>
                   </button>
                 ))}
               </div>
             )}
 
             <div className="flex-1 overflow-y-auto">
-              {loading && <div className="flex items-center justify-center py-8"><div className="w-3 h-3 border-2 border-zinc-800 border-t-yellow-500 rounded-full animate-spin mr-2" /><span className="text-[10px] font-mono text-zinc-600">Loading...</span></div>}
-              {!loading && filtered.length === 0 && <div className="py-8 text-center text-[10px] font-mono text-zinc-700">No ships found</div>}
-              {!loading && filtered.map(ship => {
+              {loading && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="w-3 h-3 border-2 border-zinc-800 border-t-yellow-500 rounded-full animate-spin mr-2" />
+                  <span className="text-[10px] font-mono text-zinc-600">Loading...</span>
+                </div>
+              )}
+              {!loading && ships.length === 0 && (
+                <div className="py-8 text-center text-[10px] font-mono text-zinc-700">No ships found</div>
+              )}
+              {!loading && ships.map(ship => {
                 const isCurrent = ship.reference === currentRef;
                 return (
                   <button
@@ -191,12 +228,11 @@ export function ShipSelector() {
                         y: e.clientY,
                       });
                     }}
-                    className={"w-full text-left px-3 py-2 flex items-center gap-2.5 transition-colors border-b border-zinc-800/30 " + (isCurrent ? "bg-yellow-500/8" : "hover:bg-zinc-800/30")}>
+                    className={"w-full text-left px-3 py-2 flex items-center gap-2.5 transition-colors border-b border-zinc-800/30 " + (isCurrent ? "bg-yellow-500/8" : "hover:bg-zinc-800/30")}
+                  >
                     <div className={"w-1.5 h-1.5 rounded-full flex-shrink-0 " + (isCurrent ? "bg-yellow-500" : "bg-zinc-700")} />
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className={"text-[11px] truncate " + (isCurrent ? "text-yellow-200 font-medium" : "text-zinc-300")}>{ship.localizedName || ship.name}</span>
-                      </div>
+                      <span className={"text-[11px] truncate block " + (isCurrent ? "text-yellow-200 font-medium" : "text-zinc-300")}>{ship.localizedName || ship.name}</span>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-[8px] font-mono text-zinc-600">{ship.manufacturer}</span>
                         {ship.role && <span className="text-[8px] font-mono text-yellow-600/50">{ship.role}</span>}
@@ -213,13 +249,15 @@ export function ShipSelector() {
           </div>
 
           <div className="px-3 py-1.5 border-t border-zinc-800/50 bg-zinc-900/50 flex items-center justify-between">
-            <span className="text-[8px] font-mono text-zinc-700">{filtered.length} ship{filtered.length !== 1 ? "s" : ""}</span>
+            <span className="text-[8px] font-mono text-zinc-700">
+              {ships.length} ship{ships.length !== 1 ? "s" : ""}{search || selectedMfr ? " matching" : ""}
+            </span>
             <button onClick={() => setOpen(false)} className="text-[8px] font-mono text-zinc-600 hover:text-zinc-400 tracking-wider uppercase">ESC</button>
           </div>
         </div>
       )}
 
-      {/* Context menu global (dentro del panelRef para no disparar el outside-click del dropdown) */}
+      {/* Context menu — inside panelRef so outside-click handler doesn't fire */}
       <ShipContextMenu target={contextMenu} onClose={() => setContextMenu(null)} />
     </div>
   );

@@ -16,6 +16,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef, useMemo, memo } from "react";
+import Image from "next/image";
 import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { useLoadoutStore } from "@/store/useLoadoutStore";
@@ -339,6 +340,23 @@ function savePositions(positions: SavedPos[]) {
   } catch {}
 }
 
+// ─── Ship card image with error fallback ─────────────────────────────────────
+function ShipCardImage({ name, manufacturer }: { name: string; manufacturer: string | null }) {
+  const [imgError, setImgError] = useState(false);
+  const src = getShipImageUrl(name, manufacturer);
+  return (
+    <div className="relative bg-zinc-800/20 border-b border-zinc-800/50 overflow-hidden" style={{ height: 270 }}>
+      {!imgError ? (
+        <Image src={src} alt={name} fill className="object-cover" draggable={false} onError={() => setImgError(true)} />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-[10px] font-mono text-zinc-700 uppercase tracking-widest">Ship Preview</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Widget visual wrapper (header + content) ────────────────────────────────
 // El header tiene la clase ".rgl-drag-handle" para que el drag custom lo
 // detecte. `overflow="visible"` se usa en widgets que abren popups (ship-
@@ -372,7 +390,7 @@ function WidgetShell({ id, label, icon, badge, children, overflow = "hidden" }: 
   return (
     <div className={`flex flex-col ${outerOverflow} rounded-sm`} data-widget-id={id}>
       <div className="rgl-drag-handle flex items-center gap-2 px-2.5 py-2 bg-zinc-950/60 border border-zinc-800/30 border-b-0 select-none group rounded-t-sm shrink-0 cursor-grab active:cursor-grabbing">
-        {icon && <img src={icon} alt="" className="w-4 h-4 brightness-125" />}
+        {icon && <Image src={icon} alt="" width={16} height={16} className="brightness-125" />}
         <span className="text-[11px] font-mono font-bold text-zinc-300 tracking-[0.12em] group-hover:text-zinc-100 transition-colors uppercase">{label}</span>
         <span className="flex-1" />
         {badge != null && <span className="text-[10px] font-mono font-semibold text-zinc-500">{badge}</span>}
@@ -484,10 +502,7 @@ function renderWidget(
     case "ship-card":
       return W(
         <div className="bg-zinc-900/80 border border-zinc-800/60">
-          <div className="relative bg-zinc-800/20 border-b border-zinc-800/50 overflow-hidden" style={{ height: 270 }}>
-            <img src={getShipImageUrl(shipInfo.name, shipInfo.manufacturer)} alt={shipInfo.name} className="w-full h-full object-cover" draggable="false" onError={(e) => { const img = e.currentTarget; img.style.display = "none"; const fb = img.nextElementSibling as HTMLElement; if (fb) fb.style.display = "flex"; }} />
-            <div className="absolute inset-0 items-center justify-center" style={{ display: "none" }}><span className="text-[10px] font-mono text-zinc-700 uppercase tracking-widest">Ship Preview</span></div>
-          </div>
+          <ShipCardImage name={shipInfo.name} manufacturer={shipInfo.manufacturer} />
           <div className="p-2.5 space-y-2">
             <div>
               <div className="text-sm font-medium text-zinc-200 tracking-wide">{shipInfo.localizedName || shipInfo.name}</div>
@@ -524,7 +539,7 @@ function renderWidget(
           <div className={flightMode === "NAV" ? "opacity-30" : ""}>
             <div className="text-[7px] font-mono text-zinc-600 tracking-wider uppercase mb-0.5">Sustained</div>
             <div className="flex items-baseline gap-3">
-              <img src="/icons/weapons.png" alt="" className="w-4 h-4" style={{ opacity: 0.5 }} />
+              <Image src="/icons/weapons.png" alt="" width={16} height={16} style={{ opacity: 0.5 }} />
               <span className="text-2xl font-mono font-bold tabular-nums text-red-500">{fmtDps(stats.totalDps)}</span>
               <span className="text-[10px] font-mono text-zinc-500">dps</span>
               <span className="text-lg font-mono font-bold tabular-nums text-red-400/70">{fmtStat(stats.totalAlpha)}</span>
@@ -533,7 +548,7 @@ function renderWidget(
           </div>
           <div className={flightMode === "NAV" ? "opacity-30" : ""}>
             <div className="flex items-baseline gap-3">
-              <img src="/icons/missile.png" alt="" className="w-4 h-4" style={{ opacity: 0.5 }} />
+              <Image src="/icons/missile.png" alt="" width={16} height={16} style={{ opacity: 0.5 }} />
               <span className="text-lg font-mono font-bold tabular-nums text-orange-500">{stats.summary.missiles > 0 ? fmtStat(stats.totalAlpha) : "0"}</span>
               <span className="text-[10px] font-mono text-zinc-500">dmg</span>
             </div>
@@ -547,7 +562,7 @@ function renderWidget(
           </div>
           <div>
             <div className="flex items-baseline gap-3">
-              <img src="/icons/shilds.png" alt="" className="w-4 h-4" style={{ opacity: 0.5 }} />
+              <Image src="/icons/shilds.png" alt="" width={16} height={16} style={{ opacity: 0.5 }} />
               <span className="text-xl font-mono font-bold tabular-nums text-blue-500">{stats.shieldHp > 0 ? fmtStat(stats.shieldHp) : (si.shieldHpTotal ? fmtStat(si.shieldHpTotal) : "0")}</span>
               <span className="text-[10px] font-mono text-zinc-500">hp</span>
               {stats.shieldRegen > 0 && (<><span className="text-sm font-mono tabular-nums text-blue-400/70">{fmtStat(stats.shieldRegen)}</span><span className="text-[10px] font-mono text-zinc-500">hp/s</span></>)}
@@ -555,7 +570,7 @@ function renderWidget(
           </div>
           {si.hullHp && si.hullHp > 0 && (
             <div><div className="flex items-baseline gap-3">
-              <img src="/icons/Ships.png" alt="" className="w-4 h-4" style={{ opacity: 0.5 }} />
+              <Image src="/icons/Ships.png" alt="" width={16} height={16} style={{ opacity: 0.5 }} />
               <span className="text-lg font-mono font-bold tabular-nums text-zinc-400">{fmtStat(si.hullHp)}</span>
               <span className="text-[10px] font-mono text-zinc-500">hp</span>
             </div></div>
@@ -1005,7 +1020,7 @@ function SigBadge({ icon, label, value, color }: { icon: string; label: string; 
   const fmt = (v: number) => v >= 1000 ? (v / 1000).toFixed(1) + "K" : Math.round(v).toString();
   return (
     <div className="flex items-center gap-1">
-      <img src={icon} alt="" className="w-3.5 h-3.5" style={{ opacity: 0.7 }} />
+      <Image src={icon} alt="" width={14} height={14} style={{ opacity: 0.7 }} />
       <span className="text-[10px] font-mono font-bold tabular-nums" style={{ color }}>{fmt(value)}</span>
       <span className="text-[7px] font-mono text-zinc-600 tracking-wider">{label}</span>
     </div>
