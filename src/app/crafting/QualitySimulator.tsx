@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { useCraftingData } from "./useCraftingData";
 
 const formatModKey = (key: string) =>
   key.replace(/^(weapon_|armor_)/, "").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 export default function QualitySimulator() {
+  const t = useTranslations("Crafting.quality");
   const { blueprints, loading, error } = useCraftingData();
 
   const [selectedBlueprintId, setSelectedBlueprintId] = useState<string>("");
@@ -47,7 +49,7 @@ export default function QualitySimulator() {
     q < 250 ? "text-red-400" : q < 500 ? "text-orange-400" : q < 750 ? "text-yellow-400" : "text-emerald-400";
 
   const getQualityLabel = (q: number) =>
-    q < 250 ? "Poor" : q < 500 ? "Substandard" : q < 750 ? "Standard" : q < 900 ? "High" : "Excellent";
+    q < 250 ? t("poor") : q < 500 ? t("substandard") : q < 750 ? t("standard") : q < 900 ? t("high") : t("excellent");
 
   const getGradientColor = (q: number) => {
     if (q < 250) return "linear-gradient(to right, rgb(239, 68, 68), rgb(239, 68, 68))";
@@ -60,7 +62,7 @@ export default function QualitySimulator() {
     return (
       <div className="flex items-center justify-center py-20">
         <div className="w-4 h-4 border-2 border-zinc-800 border-t-amber-500 rounded-full animate-spin mr-3" />
-        <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest">Loading...</span>
+        <span className="text-xs text-zinc-500 font-mono uppercase tracking-widest">{t("loading")}</span>
       </div>
     );
   }
@@ -77,7 +79,7 @@ export default function QualitySimulator() {
       {/* Blueprint Selection */}
       <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-6">
         <label className="text-xs text-zinc-400 uppercase block mb-3">
-          Select Blueprint ({bpWithEffects.length} with quality effects)
+          {t("selectBlueprint", { count: bpWithEffects.length })}
         </label>
         <select
           value={selectedBlueprintId}
@@ -99,7 +101,7 @@ export default function QualitySimulator() {
             <div className="space-y-4">
               <div>
                 <div className="flex justify-between items-baseline mb-3">
-                  <span className="text-sm text-zinc-300 font-medium">Quality Level</span>
+                  <span className="text-sm text-zinc-300 font-medium">{t("qualityLevel")}</span>
                   <div className="text-right">
                     <span className={`text-3xl font-mono font-bold ${getQualityColor(qualityLevel)}`}>{qualityLevel}</span>
                     <span className={`ml-2 text-sm font-semibold ${getQualityColor(qualityLevel)}`}>{getQualityLabel(qualityLevel)}</span>
@@ -112,7 +114,7 @@ export default function QualitySimulator() {
                   style={{ background: getGradientColor(qualityLevel) }}
                 />
                 <div className="flex justify-between text-xs text-zinc-500 mt-3">
-                  <span>Poor</span><span>Substandard</span><span>Standard</span><span>High</span><span>Excellent</span>
+                  <span>{t("poor")}</span><span>{t("substandard")}</span><span>{t("standard")}</span><span>{t("high")}</span><span>{t("excellent")}</span>
                 </div>
               </div>
             </div>
@@ -123,15 +125,15 @@ export default function QualitySimulator() {
             <h2 className="text-xl font-bold text-amber-400 mb-2">{selectedBlueprint.outputName}</h2>
             <div className="flex gap-6 text-sm">
               <div>
-                <span className="text-zinc-500">Type</span>
+                <span className="text-zinc-500">{t("type")}</span>
                 <div className="font-mono text-zinc-200">{selectedBlueprint.outputType.replace(/Char_Armor_/, "Armor/")}</div>
               </div>
               <div>
-                <span className="text-zinc-500">Subtype</span>
+                <span className="text-zinc-500">{t("subtype")}</span>
                 <div className="font-mono text-zinc-200">{selectedBlueprint.outputSubtype}</div>
               </div>
               <div>
-                <span className="text-zinc-500">Craft Time</span>
+                <span className="text-zinc-500">{t("craftTime")}</span>
                 <div className="font-mono text-cyan-400">{selectedBlueprint.craftTimeSeconds}s</div>
               </div>
             </div>
@@ -141,7 +143,7 @@ export default function QualitySimulator() {
           {Object.keys(modifiedStats).length > 0 && (
             <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-6">
               <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider mb-6">
-                Quality Impact on Stats
+                {t("qualityImpact")}
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {Object.entries(modifiedStats).map(([stat, values]) => {
@@ -157,7 +159,7 @@ export default function QualitySimulator() {
                       </div>
                       <div>
                         <div className="flex justify-between items-baseline text-xs text-zinc-500 mb-1">
-                          <span>Base (Quality 0)</span>
+                          <span>{t("baseQuality0")}</span>
                           <span className="font-mono text-zinc-400">{values.base.toFixed(1)}</span>
                         </div>
                         <div className="h-2 bg-zinc-800/50 rounded">
@@ -166,7 +168,7 @@ export default function QualitySimulator() {
                       </div>
                       <div>
                         <div className="flex justify-between items-baseline text-xs text-zinc-500 mb-1">
-                          <span>Modified (Quality {qualityLevel})</span>
+                          <span>{t("modifiedQuality", { level: qualityLevel })}</span>
                           <span className={`font-mono ${isPositive ? "text-emerald-400" : "text-red-400"}`}>{values.modified.toFixed(1)}</span>
                         </div>
                         <div className="h-2 bg-zinc-800/50 rounded">
@@ -176,7 +178,7 @@ export default function QualitySimulator() {
                       {values.bonus !== 0 && (
                         <div className="pt-2 border-t border-zinc-700/50">
                           <div className="flex justify-between items-baseline text-xs">
-                            <span className="text-zinc-600">Bonus</span>
+                            <span className="text-zinc-600">{t("bonus")}</span>
                             <span className={`font-mono ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
                               {isPositive ? "+" : ""}{values.bonus.toFixed(2)}
                             </span>
@@ -192,19 +194,19 @@ export default function QualitySimulator() {
 
           {/* Recommendations */}
           <div className="bg-zinc-900/80 border border-zinc-800/60 rounded-lg p-6">
-            <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider mb-4">Recommendations</h3>
+            <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider mb-4">{t("recommendations")}</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="border border-red-800/40 bg-red-900/10 rounded p-4">
-                <div className="text-sm font-semibold text-red-400 mb-2">Poor Quality (0-250)</div>
-                <p className="text-xs text-red-300">Not recommended for critical applications. Stats will be significantly reduced.</p>
+                <div className="text-sm font-semibold text-red-400 mb-2">{t("recPoorTitle")}</div>
+                <p className="text-xs text-red-300">{t("recPoorDesc")}</p>
               </div>
               <div className="border border-amber-800/40 bg-amber-900/10 rounded p-4">
-                <div className="text-sm font-semibold text-amber-400 mb-2">Standard Quality (500-750)</div>
-                <p className="text-xs text-amber-300">Acceptable for most uses. Provides reliable performance with moderate bonuses.</p>
+                <div className="text-sm font-semibold text-amber-400 mb-2">{t("recStandardTitle")}</div>
+                <p className="text-xs text-amber-300">{t("recStandardDesc")}</p>
               </div>
               <div className="border border-emerald-800/40 bg-emerald-900/10 rounded p-4">
-                <div className="text-sm font-semibold text-emerald-400 mb-2">Excellent Quality (900+)</div>
-                <p className="text-xs text-emerald-300">Maximum performance. Stats reach peak values, ideal for specialized roles.</p>
+                <div className="text-sm font-semibold text-emerald-400 mb-2">{t("recExcellentTitle")}</div>
+                <p className="text-xs text-emerald-300">{t("recExcellentDesc")}</p>
               </div>
             </div>
           </div>
