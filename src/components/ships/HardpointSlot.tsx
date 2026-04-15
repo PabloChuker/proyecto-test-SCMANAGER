@@ -5,6 +5,7 @@
 
 "use client";
 
+import { memo } from "react";
 import type { EquippedItem, ResolvedHardpoint, ResolvedChild } from "@/store/useLoadoutStore";
 import { CAT_COLORS, getKeyStat } from "./loadout-utils";
 
@@ -30,11 +31,10 @@ function isTurretOrRack(item: EquippedItem | null): boolean {
   return /turret|gimbal|varipuck|rack/i.test(n);
 }
 
-export function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onTogglePower, childSlots, isComponentOn, toggleComponent, onClickChild, getEffectiveItem }: HardpointSlotProps) {
+export const HardpointSlot = memo(function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onTogglePower, childSlots, isComponentOn, toggleComponent, onClickChild, getEffectiveItem }: HardpointSlotProps) {
   const catColor = CAT_COLORS[hp.resolvedCategory] || "#52525b";
   const stat = item && isOn ? getKeyStat(hp.resolvedCategory, item.componentStats) : null;
   const displaySize = hp.maxSize > 0 ? hp.maxSize : (item?.size ?? 0);
-  // Only show children if parent is a turret/gimbal/rack (not a direct weapon)
   const parentIsTurret = (hp.resolvedCategory === "TURRET" || hp.resolvedCategory === "MISSILE_RACK")
     && (!isOverridden || isTurretOrRack(item));
   const hasChildren = parentIsTurret && childSlots && childSlots.length > 0;
@@ -42,14 +42,12 @@ export function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onToggleP
   return (
     <>
       <Row catColor={catColor} size={displaySize} item={item} stat={stat} isOn={isOn} isOverridden={isOverridden} onClick={onClick} onTogglePower={onTogglePower} hasChildren={hasChildren} depth={0} />
-      {/* Render turret/rack children */}
       {hasChildren && isOn && childSlots!.map(ch => {
         const chOn = isComponentOn ? isComponentOn(ch.hardpointName) : true;
         const chColor = CAT_COLORS[ch.category] || catColor;
         const effectiveItem = getEffectiveItem ? getEffectiveItem(ch.id) : ch.equippedItem;
         const chStat = effectiveItem && chOn ? getKeyStat(ch.category || "WEAPON", effectiveItem.componentStats) : null;
         const chSize = ch.maxSize > 0 ? ch.maxSize : (effectiveItem?.size ?? 0);
-        // Compare by item id, not object reference — avoids false MOD on default items
         const chOverridden = effectiveItem && ch.equippedItem
           ? effectiveItem.id !== ch.equippedItem.id
           : (effectiveItem !== ch.equippedItem);
@@ -59,10 +57,9 @@ export function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onToggleP
       })}
     </>
   );
-}
+});
 
-// Shared row renderer for both parent and child
-function Row({ catColor, size, item, stat, isOn, isOverridden, onClick, onTogglePower, hasChildren, depth }: {
+const Row = memo(function Row({ catColor, size, item, stat, isOn, isOverridden, onClick, onTogglePower, hasChildren, depth }: {
   catColor: string; size: number; item: EquippedItem | null;
   stat: { v: string; l: string } | null; isOn: boolean; isOverridden: boolean;
   onClick: () => void; onTogglePower: () => void; hasChildren?: boolean; depth: number;
@@ -105,12 +102,11 @@ function Row({ catColor, size, item, stat, isOn, isOverridden, onClick, onToggle
       </button>
     </div>
   );
-}
+});
 
 const SKIP_CATEGORIES = new Set(["OTHER", "ARMOR", "FUEL_TANK", "FUEL_INTAKE", "AVIONICS", "THRUSTER_MAIN", "THRUSTER_MANEUVERING"]);
 
 export function isUsefulSlot(hp: ResolvedHardpoint, item: EquippedItem | null): boolean {
-  // Skip empty weapon_rack / weapon_regen_pool hardpoints (non-functional slots)
   const n = hp.hardpointName.toLowerCase();
   if (!item && (n.includes("weapon_rack") || n.includes("weapon_regen_pool"))) return false;
   if (item) return true;
