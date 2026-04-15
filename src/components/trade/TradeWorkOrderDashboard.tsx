@@ -10,6 +10,7 @@
 // =============================================================================
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   useTradeWorkOrderStore,
   TradeWorkOrder,
@@ -40,6 +41,7 @@ function fmtDate(iso: string | null | undefined) {
 }
 
 export default function TradeWorkOrderDashboard() {
+  const t = useTranslations("Trade.wod");
   const openNew = useTradeWorkOrderStore((s) => s.openNew);
   const openEdit = useTradeWorkOrderStore((s) => s.openEdit);
 
@@ -58,7 +60,7 @@ export default function TradeWorkOrderDashboard() {
       const res = await fetch(url);
       if (!res.ok) {
         if (res.status === 401) {
-          setError("You need to be logged in to view your Work Orders.");
+          setError(t("loginRequired"));
           setOrders([]);
           return;
         }
@@ -71,7 +73,7 @@ export default function TradeWorkOrderDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter]);
+  }, [statusFilter, t]);
 
   useEffect(() => {
     load();
@@ -97,9 +99,9 @@ export default function TradeWorkOrderDashboard() {
       <div className="flex flex-wrap items-center gap-3 justify-between">
         <div>
           <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
-            Trade System
+            {t("tradeSystem")}
           </div>
-          <div className="text-xl font-mono text-amber-400">Work Orders</div>
+          <div className="text-xl font-mono text-amber-400">{t("workOrders")}</div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -108,31 +110,31 @@ export default function TradeWorkOrderDashboard() {
             onChange={(e) => setStatusFilter(e.target.value)}
             className="bg-zinc-900/60 border border-zinc-800/60 text-xs text-zinc-200 rounded-sm px-3 py-2 focus:outline-none focus:border-amber-500/40"
           >
-            <option value="">All statuses</option>
-            <option value="draft">Draft</option>
-            <option value="in_progress">In Progress</option>
-            <option value="completed">Completed</option>
-            <option value="archived">Archived</option>
+            <option value="">{t("allStatuses")}</option>
+            <option value="draft">{t("status.draft")}</option>
+            <option value="in_progress">{t("status.in_progress")}</option>
+            <option value="completed">{t("status.completed")}</option>
+            <option value="archived">{t("status.archived")}</option>
           </select>
           <button
             onClick={() => openNew()}
             className="text-sm tracking-[0.1em] uppercase px-4 py-2 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 rounded transition-colors text-amber-400"
           >
-            + New Work Order
+            {t("newWorkOrder")}
           </button>
         </div>
       </div>
 
       {/* ── Stats strip ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <StatCard label="Active Runs" value={stats.active.toString()} accent="text-cyan-400" />
-        <StatCard label="Completed" value={stats.completed.toString()} accent="text-emerald-400" />
+        <StatCard label={t("activeRuns")} value={stats.active.toString()} accent="text-cyan-400" />
+        <StatCard label={t("completedCount")} value={stats.completed.toString()} accent="text-emerald-400" />
         <StatCard
-          label="Lifetime Profit"
+          label={t("lifetimeProfit")}
           value={`${fmt(stats.lifetimeProfit)} aUEC`}
           accent={stats.lifetimeProfit >= 0 ? "text-emerald-400" : "text-red-400"}
         />
-        <StatCard label="Total SCU sold" value={fmt(stats.totalScu)} accent="text-amber-400" />
+        <StatCard label={t("totalScuSold")} value={fmt(stats.totalScu)} accent="text-amber-400" />
       </div>
 
       {/* ── Errors ── */}
@@ -155,10 +157,11 @@ export default function TradeWorkOrderDashboard() {
         </div>
       ) : orders.length === 0 ? (
         <div className="py-16 text-center border border-dashed border-zinc-800/60 rounded-sm">
-          <div className="text-zinc-500 text-sm">No Work Orders yet.</div>
+          <div className="text-zinc-500 text-sm">{t("noWorkOrders")}</div>
           <div className="text-zinc-600 text-xs mt-1">
-            Create one from <span className="text-amber-400">+ New Work Order</span> or
-            send it from a route in the Trade Routes tab.
+            {t.rich("createHint", {
+              btn: (chunks) => <span className="text-amber-400">{chunks}</span>,
+            })}
           </div>
         </div>
       ) : (
@@ -166,13 +169,13 @@ export default function TradeWorkOrderDashboard() {
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-zinc-800/60 bg-zinc-950/80 text-zinc-500">
-                <th className="px-3 py-2.5 text-left font-mono font-medium">Título</th>
-                <th className="px-3 py-2.5 text-left font-mono font-medium">Commodity</th>
-                <th className="px-3 py-2.5 text-left font-mono font-medium">Ruta</th>
+                <th className="px-3 py-2.5 text-left font-mono font-medium">{t("col.title")}</th>
+                <th className="px-3 py-2.5 text-left font-mono font-medium">{t("col.commodity")}</th>
+                <th className="px-3 py-2.5 text-left font-mono font-medium">{t("col.route")}</th>
                 <th className="px-3 py-2.5 text-right font-mono font-medium">SCU</th>
-                <th className="px-3 py-2.5 text-right font-mono font-medium">Net Profit</th>
-                <th className="px-3 py-2.5 text-center font-mono font-medium">Estado</th>
-                <th className="px-3 py-2.5 text-right font-mono font-medium">Created</th>
+                <th className="px-3 py-2.5 text-right font-mono font-medium">{t("col.netProfit")}</th>
+                <th className="px-3 py-2.5 text-center font-mono font-medium">{t("col.status")}</th>
+                <th className="px-3 py-2.5 text-right font-mono font-medium">{t("col.created")}</th>
               </tr>
             </thead>
             <tbody>
@@ -192,7 +195,7 @@ export default function TradeWorkOrderDashboard() {
                     <td className="px-3 py-2">
                       <div className="text-zinc-100 font-medium">{o.title}</div>
                       {o.party_id && (
-                        <div className="text-[10px] text-cyan-500/80">Party run</div>
+                        <div className="text-[10px] text-cyan-500/80">{t("partyRun")}</div>
                       )}
                     </td>
                     <td className="px-3 py-2">
@@ -226,7 +229,7 @@ export default function TradeWorkOrderDashboard() {
                       <span
                         className={`inline-block px-2 py-0.5 border rounded-sm text-[10px] uppercase tracking-wider ${STATUS_STYLES[o.status] || STATUS_STYLES.draft}`}
                       >
-                        {o.status}
+                        {t(`status.${o.status}`)}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-zinc-500 text-[10px]">

@@ -13,6 +13,7 @@
 // =============================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import {
   useTradeWorkOrderStore,
   TradeWorkOrder,
@@ -27,23 +28,23 @@ import { createClient } from "@/lib/supabase/client";
 const DRAFT_KEY = "sc-labs:trade-wo-draft-v1";
 
 const ROLES = [
-  { id: "pilot", label: "Pilot" },
-  { id: "escort", label: "Escort" },
-  { id: "scout", label: "Scout" },
-  { id: "financier", label: "Financier" },
-  { id: "mule", label: "Mule" },
-  { id: "crew", label: "Crew" },
-  { id: "other", label: "Other" },
-];
+  { id: "pilot" },
+  { id: "escort" },
+  { id: "scout" },
+  { id: "financier" },
+  { id: "mule" },
+  { id: "crew" },
+  { id: "other" },
+] as const;
 
 const EXPENSE_TYPES = [
-  { id: "fuel", label: "Fuel" },
-  { id: "repair", label: "Repair" },
-  { id: "ammo", label: "Ammo" },
-  { id: "fee", label: "Fee" },
-  { id: "insurance", label: "Insurance" },
-  { id: "general", label: "General" },
-];
+  { id: "fuel" },
+  { id: "repair" },
+  { id: "ammo" },
+  { id: "fee" },
+  { id: "insurance" },
+  { id: "general" },
+] as const;
 
 function fmt(n: number) {
   return Math.round(n || 0).toLocaleString();
@@ -89,6 +90,7 @@ interface LocalExpense {
 }
 
 export default function TradeWorkOrderCalculator() {
+  const t = useTranslations("Trade.wo");
   const editingId = useTradeWorkOrderStore((s) => s.editingId);
   const consumePrefill = useTradeWorkOrderStore((s) => s.consumePrefill);
   const backToList = useTradeWorkOrderStore((s) => s.backToList);
@@ -235,14 +237,14 @@ export default function TradeWorkOrderCalculator() {
     });
     latestSnapshotRef.current = snapshot;
 
-    const t = setTimeout(() => {
+    const timer = setTimeout(() => {
       try {
         localStorage.setItem(DRAFT_KEY, snapshot);
       } catch {
         /* localStorage quota / disabled — ignore */
       }
     }, 250);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [
     editingId, serverId,
     title, partyId,
@@ -880,14 +882,14 @@ export default function TradeWorkOrderCalculator() {
             onClick={backToList}
             className="text-[10px] uppercase tracking-widest text-zinc-500 hover:text-zinc-300"
           >
-            ← Volver al listado
+            {t("backToList")}
           </button>
           <div className="text-zinc-700">|</div>
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="bg-transparent text-lg font-mono text-amber-400 border-b border-transparent focus:border-amber-500/40 focus:outline-none px-1"
-            placeholder="Trade Run"
+            placeholder={t("titlePlaceholder")}
           />
           <span
             className={`text-[10px] uppercase tracking-widest px-2 py-0.5 border rounded-sm ${
@@ -898,7 +900,7 @@ export default function TradeWorkOrderCalculator() {
                   : "bg-zinc-700/30 text-zinc-300 border-zinc-600/40"
             }`}
           >
-            {status}
+            {t(`status.${status}`)}
           </span>
         </div>
 
@@ -909,7 +911,7 @@ export default function TradeWorkOrderCalculator() {
               disabled={saving}
               className="px-3 py-1.5 text-[10px] uppercase tracking-widest bg-red-950/30 hover:bg-red-900/40 border border-red-800/40 rounded-sm text-red-400 transition-colors"
             >
-              Delete
+              {t("delete")}
             </button>
           )}
           <button
@@ -917,7 +919,7 @@ export default function TradeWorkOrderCalculator() {
             disabled={saving}
             className="px-3 py-1.5 text-[10px] uppercase tracking-widest bg-zinc-800/60 hover:bg-zinc-700/60 border border-zinc-700/60 rounded-sm text-zinc-300 transition-colors"
           >
-            {saving ? "Saving…" : "Save"}
+            {saving ? t("saving") : t("save")}
           </button>
           {status !== "in_progress" && status !== "completed" && (
             <button
@@ -925,7 +927,7 @@ export default function TradeWorkOrderCalculator() {
               disabled={saving}
               className="px-3 py-1.5 text-[10px] uppercase tracking-widest bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/30 rounded-sm text-cyan-300 transition-colors"
             >
-              Start Run
+              {t("startRun")}
             </button>
           )}
           {status !== "completed" && (
@@ -945,10 +947,10 @@ export default function TradeWorkOrderCalculator() {
                 setShowSplitModal(true);
               }}
               disabled={saving || participants.length === 0}
-              title={participants.length === 0 ? "Add at least one participant" : ""}
+              title={participants.length === 0 ? t("addAtLeastOneParticipant") : ""}
               className="px-3 py-1.5 text-[10px] uppercase tracking-widest bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-sm text-emerald-300 transition-colors disabled:opacity-40"
             >
-              Complete + Split
+              {t("completeAndSplit")}
             </button>
           )}
         </div>
@@ -963,20 +965,20 @@ export default function TradeWorkOrderCalculator() {
       {/* ── Route / Commodity ── */}
       <div className={sectionCard}>
         <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500 mb-3">
-          Route and cargo
+          {t("routeAndCargo")}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
-            <label className={labelClass}>Commodity</label>
+            <label className={labelClass}>{t("commodity")}</label>
             <input
               value={commodityName}
               onChange={(e) => setCommodityName(e.target.value)}
               className={inputClass}
-              placeholder="ej. Agricium"
+              placeholder={t("commodityPlaceholder")}
             />
           </div>
           <div>
-            <label className={labelClass}>Código</label>
+            <label className={labelClass}>{t("code")}</label>
             <input
               value={commodityCode}
               onChange={(e) => setCommodityCode(e.target.value)}
@@ -985,42 +987,42 @@ export default function TradeWorkOrderCalculator() {
             />
           </div>
           <div>
-            <label className={labelClass}>Party ID (opcional)</label>
+            <label className={labelClass}>{t("partyIdOptional")}</label>
             <input
               value={partyId}
               onChange={(e) => setPartyId(e.target.value)}
               className={inputClass}
-              placeholder="uuid de party"
+              placeholder={t("partyIdPlaceholder")}
             />
           </div>
           <div>
-            <label className={labelClass}>Estado</label>
+            <label className={labelClass}>{t("statusLabel")}</label>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as any)}
               className={inputClass}
             >
-              <option value="draft">draft</option>
-              <option value="in_progress">in_progress</option>
-              <option value="completed">completed</option>
-              <option value="archived">archived</option>
+              <option value="draft">{t("status.draft")}</option>
+              <option value="in_progress">{t("status.in_progress")}</option>
+              <option value="completed">{t("status.completed")}</option>
+              <option value="archived">{t("status.archived")}</option>
             </select>
           </div>
 
           <div>
-            <label className={labelClass}>Origen — Terminal</label>
+            <label className={labelClass}>{t("originTerminal")}</label>
             <input value={buyStation} onChange={(e) => setBuyStation(e.target.value)} className={inputClass} placeholder="ej. CRU-L1" />
           </div>
           <div>
-            <label className={labelClass}>Origen — Sistema</label>
+            <label className={labelClass}>{t("originSystem")}</label>
             <input value={buySystem} onChange={(e) => setBuySystem(e.target.value)} className={inputClass} placeholder="Stanton" />
           </div>
           <div>
-            <label className={labelClass}>Destino — Terminal</label>
+            <label className={labelClass}>{t("destTerminal")}</label>
             <input value={sellStation} onChange={(e) => setSellStation(e.target.value)} className={inputClass} placeholder="ej. Area18" />
           </div>
           <div>
-            <label className={labelClass}>Destino — Sistema</label>
+            <label className={labelClass}>{t("destSystem")}</label>
             <input value={sellSystem} onChange={(e) => setSellSystem(e.target.value)} className={inputClass} placeholder="Stanton" />
           </div>
         </div>
@@ -1029,38 +1031,38 @@ export default function TradeWorkOrderCalculator() {
       {/* ── Cargo + precios ── */}
       <div className={sectionCard}>
         <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500 mb-3">
-          Cargo y precios
+          {t("cargoAndPrices")}
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div>
-            <label className={labelClass}>SCU comprado</label>
+            <label className={labelClass}>{t("scuBought")}</label>
             <input type="number" min={0} value={scuBought || ""} onChange={(e) => setScuBought(parseFloat(e.target.value) || 0)} className={inputClass} />
           </div>
           <div>
-            <label className={labelClass}>SCU vendido</label>
+            <label className={labelClass}>{t("scuSold")}</label>
             <input type="number" min={0} value={scuSold || ""} onChange={(e) => setScuSold(parseFloat(e.target.value) || 0)} className={inputClass} />
           </div>
           <div>
-            <label className={labelClass}>SCU perdido</label>
+            <label className={labelClass}>{t("scuLost")}</label>
             <input type="number" min={0} value={scuLost || ""} onChange={(e) => setScuLost(parseFloat(e.target.value) || 0)} className={inputClass} />
           </div>
           <div>
-            <label className={labelClass}>Precio compra (UEC/SCU)</label>
+            <label className={labelClass}>{t("buyPrice")}</label>
             <input type="number" min={0} value={buyPrice || ""} onChange={(e) => setBuyPrice(parseFloat(e.target.value) || 0)} className={inputClass} />
           </div>
           <div>
-            <label className={labelClass}>Precio venta (UEC/SCU)</label>
+            <label className={labelClass}>{t("sellPrice")}</label>
             <input type="number" min={0} value={sellPrice || ""} onChange={(e) => setSellPrice(parseFloat(e.target.value) || 0)} className={inputClass} />
           </div>
         </div>
 
         {/* Totals strip */}
         <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
-          <MiniStat label="Investment" value={`${fmt(totals.total_buy)} aUEC`} color="text-zinc-200" />
-          <MiniStat label="Sale" value={`${fmt(totals.total_sell)} aUEC`} color="text-cyan-300" />
-          <MiniStat label="Expenses" value={`${fmt(totals.total_expenses)} aUEC`} color="text-amber-300" />
+          <MiniStat label={t("investment")} value={`${fmt(totals.total_buy)} aUEC`} color="text-zinc-200" />
+          <MiniStat label={t("sale")} value={`${fmt(totals.total_sell)} aUEC`} color="text-cyan-300" />
+          <MiniStat label={t("expenses")} value={`${fmt(totals.total_expenses)} aUEC`} color="text-amber-300" />
           <MiniStat
-            label="Net profit"
+            label={t("netProfit")}
             value={`${fmt(totals.net_profit)} aUEC`}
             color={totals.net_profit >= 0 ? "text-emerald-400" : "text-red-400"}
           />
@@ -1071,18 +1073,18 @@ export default function TradeWorkOrderCalculator() {
       <div className={sectionCard}>
         <div className="flex items-center justify-between mb-3">
           <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">
-            General expenses
+            {t("generalExpenses")}
           </div>
           <button
             onClick={addExpense}
             className="text-[10px] uppercase tracking-widest px-2.5 py-1 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 rounded-sm text-amber-300"
           >
-            + Expense
+            {t("addExpense")}
           </button>
         </div>
 
         {expenses.length === 0 ? (
-          <div className="text-[11px] text-zinc-600">No expenses yet.</div>
+          <div className="text-[11px] text-zinc-600">{t("noExpenses")}</div>
         ) : (
           <div className="space-y-2">
             {expenses.map((e) => {
@@ -1128,15 +1130,15 @@ export default function TradeWorkOrderCalculator() {
                         }
                       }}
                       className={inputClass}
-                      title="Pagado por"
+                      title={t("paidBy")}
                     >
-                      <option value="">— Pagado por —</option>
+                      <option value="">— {t("paidBy")} —</option>
                       {participants.map((p) => (
                         <option key={p.localKey} value={p.localKey}>
-                          {p.display_name || "Unnamed"}
+                          {p.display_name || t("unnamed")}
                         </option>
                       ))}
-                      <option value="__other__">Otro (escribir)…</option>
+                      <option value="__other__">{t("otherWrite")}</option>
                     </select>
                     {selectorValue === "__other__" && (
                       <input
@@ -1145,19 +1147,19 @@ export default function TradeWorkOrderCalculator() {
                           updateExpense(e.localKey, { payer_id: null, payer_name: ev.target.value })
                         }
                         className={`${inputClass} mt-1`}
-                        placeholder="Nombre libre"
+                        placeholder={t("freeName")}
                       />
                     )}
                   </div>
                   <div className="col-span-4">
-                    <input value={e.description} onChange={(ev) => updateExpense(e.localKey, { description: ev.target.value })} className={inputClass} placeholder="Description" />
+                    <input value={e.description} onChange={(ev) => updateExpense(e.localKey, { description: ev.target.value })} className={inputClass} placeholder={t("description")} />
                   </div>
                   <div className="col-span-2">
                     <input type="number" min={0} value={e.amount || ""} onChange={(ev) => updateExpense(e.localKey, { amount: parseFloat(ev.target.value) || 0 })} className={inputClass} placeholder="aUEC" />
                   </div>
                   <div className="col-span-2">
                     <select value={e.expense_type} onChange={(ev) => updateExpense(e.localKey, { expense_type: ev.target.value })} className={inputClass}>
-                      {EXPENSE_TYPES.map((t) => (<option key={t.id} value={t.id}>{t.label}</option>))}
+                      {EXPENSE_TYPES.map((et) => (<option key={et.id} value={et.id}>{t(`expenseType.${et.id}`)}</option>))}
                     </select>
                   </div>
                   <div className="col-span-1 text-right">
@@ -1176,7 +1178,7 @@ export default function TradeWorkOrderCalculator() {
       <div className={sectionCard}>
         <div className="flex items-center justify-between mb-3">
           <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">
-            Party & reparto
+            {t("partyAndSplit")}
           </div>
           <div className="flex items-center gap-2">
             <span
@@ -1187,22 +1189,22 @@ export default function TradeWorkOrderCalculator() {
             <button
               onClick={loadFromParty}
               disabled={loadingParty}
-              title="Add all members from your current party"
+              title={t("loadPartyTooltip")}
               className="text-[10px] uppercase tracking-widest px-2.5 py-1 bg-cyan-500/15 hover:bg-cyan-500/25 disabled:opacity-50 border border-cyan-500/30 rounded-sm text-cyan-300"
             >
-              {loadingParty ? "Loading…" : "⇪ Load Party"}
+              {loadingParty ? t("loading") : t("loadParty")}
             </button>
             <button
               onClick={equalizePct}
               className="text-[10px] uppercase tracking-widest px-2 py-1 bg-zinc-800/60 hover:bg-zinc-700/60 border border-zinc-700/60 rounded-sm text-zinc-300"
             >
-              Equalize
+              {t("equalize")}
             </button>
             <button
               onClick={addParticipant}
               className="text-[10px] uppercase tracking-widest px-2.5 py-1 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 rounded-sm text-amber-300"
             >
-              + Member
+              {t("addMember")}
             </button>
           </div>
         </div>
@@ -1215,7 +1217,7 @@ export default function TradeWorkOrderCalculator() {
 
         {participants.length === 0 ? (
           <div className="text-[11px] text-zinc-600">
-            Solo run (you are the only participant) — add members if this is a party operation.
+            {t("soloRunNote")}
           </div>
         ) : (
           <div className="space-y-2">
@@ -1236,29 +1238,29 @@ export default function TradeWorkOrderCalculator() {
                         ? "bg-amber-500/5 border-amber-500/30 text-amber-300"
                         : "bg-red-500/5 border-red-500/30 text-red-300"
                   }`}
-                  title="The sum of investments should equal the total purchase."
+                  title={t("investmentSumTooltip")}
                 >
                   <span>
-                    Investment covered: {fmt(contrib)} / {fmt(buy)} aUEC
+                    {t("investmentCovered", { contrib: fmt(contrib), buy: fmt(buy) })}
                   </span>
                   <span>
                     {ok
-                      ? "✓ cuadra"
+                      ? t("matches")
                       : under
-                        ? `falta ${fmt(Math.abs(diff))} aUEC`
-                        : `excede ${fmt(diff)} aUEC`}
+                        ? t("short", { amount: fmt(Math.abs(diff)) })
+                        : t("over", { amount: fmt(diff) })}
                   </span>
                 </div>
               );
             })()}
 
             <div className="grid grid-cols-12 gap-2 text-[9px] uppercase tracking-widest text-zinc-600 px-1">
-              <div className="col-span-3">Name</div>
-              <div className="col-span-2">Role</div>
+              <div className="col-span-3">{t("col.name")}</div>
+              <div className="col-span-2">{t("col.role")}</div>
               <div className="col-span-1 text-right">%</div>
-              <div className="col-span-2 text-right">Investment (aUEC)</div>
-              <div className="col-span-3">Investment note</div>
-              <div className="col-span-1 text-right">Payout</div>
+              <div className="col-span-2 text-right">{t("col.investment")}</div>
+              <div className="col-span-3">{t("col.investmentNote")}</div>
+              <div className="col-span-1 text-right">{t("col.payout")}</div>
             </div>
 
             {participants.map((p) => (
@@ -1279,11 +1281,11 @@ export default function TradeWorkOrderCalculator() {
                       {(p.display_name || "?").charAt(0).toUpperCase()}
                     </div>
                   )}
-                  <input value={p.display_name} onChange={(e) => updateParticipant(p.localKey, { display_name: e.target.value })} className={inputClass} placeholder="Nombre" />
+                  <input value={p.display_name} onChange={(e) => updateParticipant(p.localKey, { display_name: e.target.value })} className={inputClass} placeholder={t("name")} />
                 </div>
                 <div className="col-span-2">
                   <select value={p.role} onChange={(e) => updateParticipant(p.localKey, { role: e.target.value })} className={inputClass}>
-                    {ROLES.map((r) => (<option key={r.id} value={r.id}>{r.label}</option>))}
+                    {ROLES.map((r) => (<option key={r.id} value={r.id}>{t(`role.${r.id}`)}</option>))}
                   </select>
                 </div>
                 <div className="col-span-1">
@@ -1293,7 +1295,7 @@ export default function TradeWorkOrderCalculator() {
                   <input type="number" min={0} value={p.contribution_uec || ""} onChange={(e) => updateParticipant(p.localKey, { contribution_uec: parseFloat(e.target.value) || 0 })} className={`${inputClass} text-right`} placeholder="0" />
                 </div>
                 <div className="col-span-3">
-                  <input value={p.contribution_note || ""} onChange={(e) => updateParticipant(p.localKey, { contribution_note: e.target.value })} className={inputClass} placeholder="ej. puso 5M iniciales" />
+                  <input value={p.contribution_note || ""} onChange={(e) => updateParticipant(p.localKey, { contribution_note: e.target.value })} className={inputClass} placeholder={t("contributionNotePlaceholder")} />
                 </div>
                 <div className="col-span-1 text-right font-mono text-xs text-emerald-400">
                   {fmt(payouts[p.localKey] || 0)}
@@ -1307,13 +1309,13 @@ export default function TradeWorkOrderCalculator() {
                       onChange={(e) => updateParticipant(p.localKey, { paid: e.target.checked })}
                       className="accent-emerald-500"
                     />
-                    Pagado
+                    {t("paid")}
                   </label>
                   <button
                     onClick={() => removeParticipant(p.localKey)}
                     className="text-red-400/70 hover:text-red-300 uppercase"
                   >
-                    Quitar
+                    {t("remove")}
                   </button>
                 </div>
               </div>
@@ -1324,13 +1326,13 @@ export default function TradeWorkOrderCalculator() {
 
       {/* ── Notas ── */}
       <div className={sectionCard}>
-        <label className={labelClass}>Notas</label>
+        <label className={labelClass}>{t("notes")}</label>
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={3}
           className={`${inputClass} resize-y`}
-          placeholder="Detalles de la corrida, rutas alternativas, complicaciones…"
+          placeholder={t("notesPlaceholder")}
         />
       </div>
 
@@ -1356,10 +1358,10 @@ export default function TradeWorkOrderCalculator() {
               <div className="flex items-center justify-between p-4 border-b border-zinc-800/60">
                 <div>
                   <div className="text-[9px] uppercase tracking-[0.2em] text-emerald-400">
-                    Reparto final
+                    {t("finalSplit")}
                   </div>
                   <div className="text-lg font-mono text-zinc-100 mt-0.5">
-                    Complete + Split
+                    {t("completeAndSplit")}
                   </div>
                 </div>
                 <button
@@ -1373,17 +1375,17 @@ export default function TradeWorkOrderCalculator() {
               {/* Summary */}
               <div className="grid grid-cols-3 gap-3 p-4 border-b border-zinc-800/60">
                 <MiniStat
-                  label="Total investment"
+                  label={t("totalInvestment")}
                   value={`${fmt(totals.total_buy)} aUEC`}
                   color="text-zinc-200"
                 />
                 <MiniStat
-                  label="Expenses"
+                  label={t("expenses")}
                   value={`${fmt(totals.total_expenses)} aUEC`}
                   color="text-amber-300"
                 />
                 <MiniStat
-                  label="Net profit"
+                  label={t("netProfit")}
                   value={`${fmt(totals.net_profit)} aUEC`}
                   color={totals.net_profit >= 0 ? "text-emerald-400" : "text-red-400"}
                 />
@@ -1392,34 +1394,35 @@ export default function TradeWorkOrderCalculator() {
               {/* Strategy selector */}
               <div className="p-4 border-b border-zinc-800/60">
                 <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500 mb-2">
-                  Estrategia de reparto
+                  {t("splitStrategy")}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {(
                     [
-                      { id: "role_pct", label: "Por % asignado", hint: "Usa los % que ya configuraste" },
-                      { id: "equal", label: "Partes iguales", hint: "Profit dividido en partes iguales" },
-                      { id: "by_aporte", label: "Por aporte", hint: "Profit proporcional a lo que cada uno puso" },
-                    ] as { id: SplitStrategy; label: string; hint: string }[]
+                      { id: "role_pct" },
+                      { id: "equal" },
+                      { id: "by_aporte" },
+                    ] as { id: SplitStrategy }[]
                   ).map((s) => (
                     <button
                       key={s.id}
                       onClick={() => setSplitStrategy(s.id)}
-                      title={s.hint}
+                      title={t(`strategy.${s.id}.hint`)}
                       className={`px-3 py-1.5 text-[10px] uppercase tracking-widest border rounded-sm transition-colors ${
                         splitStrategy === s.id
                           ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300"
                           : "bg-zinc-900/60 border-zinc-700/50 text-zinc-400 hover:text-zinc-200"
                       }`}
                     >
-                      {s.label}
+                      {t(`strategy.${s.id}.label`)}
                     </button>
                   ))}
                 </div>
                 {unassignedPct && (
                   <div className="mt-3 p-2 bg-amber-950/30 border border-amber-800/40 rounded-sm text-[11px] text-amber-300">
-                    ⚠ All percentages are at 0. Switch to "Equal shares" or "By contribution",
-                    or close the modal and click <span className="font-mono">Equalize</span> first.
+                    {t.rich("allPercentZero", {
+                      eq: (chunks) => <span className="font-mono">{chunks}</span>,
+                    })}
                   </div>
                 )}
               </div>
@@ -1427,12 +1430,12 @@ export default function TradeWorkOrderCalculator() {
               {/* Per-participant breakdown */}
               <div className="p-4">
                 <div className="grid grid-cols-12 gap-2 text-[9px] uppercase tracking-widest text-zinc-500 mb-2 px-1">
-                  <div className="col-span-3">Participant</div>
-                  <div className="col-span-2 text-right">Investment</div>
-                  <div className="col-span-2 text-right">Expense refund</div>
+                  <div className="col-span-3">{t("col.participant")}</div>
+                  <div className="col-span-2 text-right">{t("col.investmentShort")}</div>
+                  <div className="col-span-2 text-right">{t("col.expenseRefund")}</div>
                   <div className="col-span-1 text-right">%</div>
-                  <div className="col-span-2 text-right">Profit share</div>
-                  <div className="col-span-2 text-right">Transfer</div>
+                  <div className="col-span-2 text-right">{t("col.profitShare")}</div>
+                  <div className="col-span-2 text-right">{t("col.transfer")}</div>
                 </div>
                 <div className="space-y-1.5">
                   {rows.map((r) => (
@@ -1458,7 +1461,7 @@ export default function TradeWorkOrderCalculator() {
                         <div className="min-w-0">
                           <div className="truncate text-zinc-100">{r.display_name || "—"}</div>
                           <div className="text-[9px] uppercase tracking-widest text-zinc-500">
-                            {r.role}
+                            {ROLES.some((ro) => ro.id === r.role) ? t(`role.${r.role}`) : r.role}
                           </div>
                         </div>
                       </div>
@@ -1493,7 +1496,7 @@ export default function TradeWorkOrderCalculator() {
                 {/* Totals row */}
                 <div className="grid grid-cols-12 gap-2 items-center px-2 py-2 mt-2 border-t border-zinc-800/60 text-xs">
                   <div className="col-span-3 text-[10px] uppercase tracking-widest text-zinc-500">
-                    Totales
+                    {t("totals")}
                   </div>
                   <div className="col-span-2 text-right font-mono text-zinc-400">
                     {fmt(totals.total_contrib)}
@@ -1514,15 +1517,18 @@ export default function TradeWorkOrderCalculator() {
 
                 {/* Helper legend */}
                 <div className="mt-3 text-[10px] text-zinc-500 leading-relaxed">
-                  <span className="text-zinc-400">Transfer</span> = investment + personal expense refund + profit share.
-                  Investors recover their capital first; what remains of net profit is distributed according to the chosen strategy.
+                  {t.rich("transferLegend", {
+                    label: (chunks) => <span className="text-zinc-400">{chunks}</span>,
+                  })}
                 </div>
               </div>
 
               {/* Actions */}
               <div className="flex items-center justify-between gap-3 p-4 border-t border-zinc-800/60">
                 <div className="text-[11px] text-zinc-500">
-                  Upon confirmation, we save a snapshot of the distribution and mark the order as <span className="text-emerald-400">completed</span>.
+                  {t.rich("confirmSnapshot", {
+                    completed: (chunks) => <span className="text-emerald-400">{chunks}</span>,
+                  })}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -1530,14 +1536,14 @@ export default function TradeWorkOrderCalculator() {
                     disabled={saving}
                     className="px-3 py-1.5 text-[10px] uppercase tracking-widest bg-zinc-800/60 hover:bg-zinc-700/60 border border-zinc-700/60 rounded-sm text-zinc-300"
                   >
-                    Cancel
+                    {t("cancel")}
                   </button>
                   <button
                     onClick={applySplitAndComplete}
                     disabled={saving || (unassignedPct)}
                     className="px-4 py-1.5 text-[10px] uppercase tracking-widest bg-emerald-500/25 hover:bg-emerald-500/35 border border-emerald-500/50 rounded-sm text-emerald-200 disabled:opacity-40"
                   >
-                    {saving ? "Saving…" : "Apply and Complete"}
+                    {saving ? t("saving") : t("applyAndComplete")}
                   </button>
                 </div>
               </div>
