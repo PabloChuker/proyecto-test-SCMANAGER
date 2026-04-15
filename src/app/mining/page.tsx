@@ -10,6 +10,7 @@ import WorkOrderCalculator from "./WorkOrderCalculator";
 import WorkOrderDashboard from "./WorkOrderDashboard";
 import RockCalculator from "./RockCalculator";
 import RefineryDataTable from "./RefineryDataTable";
+import { useTranslations } from "next-intl";
 const TABS = [
   { id: "workorder", label: "Work Order", icon: "📈" },
   { id: "dashboard", label: "Dashboard", icon: "📊" },
@@ -20,6 +21,7 @@ const TABS = [
 
 export default function MiningPage() {
   const [activeTab, setActiveTab] = useState("workorder");
+  const t = useTranslations("PageTitles");
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
@@ -31,7 +33,7 @@ export default function MiningPage() {
       </video>
       <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/60 via-zinc-950/80 to-zinc-950/95 pointer-events-none z-0" />
 
-      <Header subtitle="Mining & Industry" />
+      <Header subtitle={t("mining")} />
 
       <div className="flex flex-1 min-h-0">
         <aside className="w-12 sm:w-14 flex-shrink-0 bg-zinc-950/90 border-r border-zinc-800/50 flex flex-col items-center py-3 gap-1 z-20 sticky top-12 h-[calc(100vh-3rem)] overflow-y-auto">

@@ -235,5 +235,55 @@
     "accepted": "已接受",
     "rejected": "已拒绝",
     "empty": "暂无通知"
+  },
+  "PageTitles": {
+    "hangar": "机库管理器",
+    "ships": "舰船数据库",
+    "compare": "舰船对比",
+    "components": "组件",
+    "cargo": "货物网格",
+    "loadout": "配装管理器",
+    "crafting": "制造与加工",
+    "mining": "采矿与工业",
+    "trade": "贸易系统",
+    "activities": "活动管理器",
+    "streamers": "主播",
+    "organization": "组织",
+    "party": "队伍",
+    "friends": "好友"
+  },
+  "Hangar": {
+    "loading": "正在加载机库...",
+    "importButton": "从扩展导入",
+    "tabs": { "fleet": "舰队", "buyback": "回购", "ccu": "CCU 链" },
+    "empty": "你的机库为空。请从扩展导入以开始使用。"
+  },
+  "Ships": {
+    "search": "搜索舰船...",
+    "filters": "筛选",
+    "manufacturer": "制造商",
+    "role": "角色",
+    "size": "尺寸",
+    "clearFilters": "清除筛选",
+    "noResults": "没有匹配你筛选条件的舰船",
+    "loading": "正在加载舰船..."
+  },
+  "Compare": {
+    "selectShip": "选择一艘舰船",
+    "addShip": "添加舰船",
+    "removeShip": "移除",
+    "emptySlot": "空槽位",
+    "noShips": "请选择要对比的舰船"
+  },
+  "Cargo": {
+    "selectShip": "选择一艘舰船",
+    "loading": "正在加载货物网格...",
+    "empty": "该舰船暂无货物数据"
+  },
+  "LoadoutBuilder": {
+    "loading": "正在加载配装...",
+    "saveLoadout": "保存配装",
+    "resetLayout": "重置布局",
+    "exportImage": "导出图片"
   }
 }

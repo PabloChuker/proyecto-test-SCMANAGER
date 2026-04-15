@@ -5,8 +5,10 @@ import Link from "next/link";
 import Header from "@/app/assets/header/Header";
 import { SIDEBAR_ITEMS } from "@/app/assets/header/navigation";
 import ActivityManager from "./ActivityManager";
+import { useTranslations } from "next-intl";
 
 export default function ActivitiesPage() {
+  const t = useTranslations("PageTitles");
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       <video
@@ -20,7 +22,7 @@ export default function ActivitiesPage() {
       </video>
       <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/60 via-zinc-950/80 to-zinc-950/95 pointer-events-none z-0" />
 
-      <Header subtitle="Activity Manager" />
+      <Header subtitle={t("activities")} />
 
       <div className="flex flex-1 min-h-0">
         {/* Sidebar */}

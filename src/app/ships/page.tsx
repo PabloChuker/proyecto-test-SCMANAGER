@@ -28,19 +28,21 @@ import Link from "next/link";
 import { ShipsGrid } from "./ShipsGrid";
 import Header from "@/app/assets/header/Header";
 import { PageVideoBackground } from "@/components/shared/PageVideoBackground";
+import { getTranslations } from "next-intl/server";
 
 export const metadata = {
   title: "Ship Database — SC LABS",
   description: "Base de datos completa de naves de Star Citizen. Filtrá por fabricante, rol y comparativas.",
 };
 
-export default function ShipsPage() {
+export default async function ShipsPage() {
+  const t = await getTranslations("PageTitles");
   return (
     <main className="relative min-h-screen text-zinc-100">
       <PageVideoBackground src="/videos/comparador.mp4" />
 
       <div className="relative z-10">
-        <Header subtitle="Ship Database" />
+        <Header subtitle={t("ships")} />
 
         {/* ── Contenido ── */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

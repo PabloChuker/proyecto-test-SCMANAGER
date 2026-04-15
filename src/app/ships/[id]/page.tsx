@@ -7,9 +7,11 @@ import Link from "next/link";
 import Header from "@/app/assets/header/Header";
 import ShipSpecSheet from "@/components/ships/ShipSpecSheet";
 import { PageVideoBackground } from "@/components/shared/PageVideoBackground";
+import { useTranslations } from "next-intl";
 function ShipDetailContent() {
   const params = useParams();
   const id = params.id as string;
+  const t = useTranslations("PageTitles");
 
   // Quick access: add ship when loaded via the global function exposed by ShipQuickAccess (in layout)
   const handleShipLoaded = useCallback((name: string, reference: string, manufacturer: string | null) => {
@@ -40,7 +42,7 @@ function ShipDetailContent() {
       <PageVideoBackground src="/videos/comparador.mp4" />
 
       <div className="relative z-10">
-        <Header subtitle="Ship Database" />
+        <Header subtitle={t("ships")} />
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
           {/* Navigation */}

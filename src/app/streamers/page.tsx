@@ -11,6 +11,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import Header from "@/app/assets/header/Header";
+import { useTranslations } from "next-intl";
 
 interface ToolCard {
   href: string;
@@ -80,6 +81,7 @@ const TOOLS: ToolCard[] = [
 ];
 
 export default function StreamersHubPage() {
+  const t = useTranslations("PageTitles");
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       {/* Background */}
@@ -94,7 +96,7 @@ export default function StreamersHubPage() {
       </video>
       <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/70 via-zinc-950/85 to-zinc-950/95 pointer-events-none z-0" />
 
-      <Header subtitle="Streamers" />
+      <Header subtitle={t("streamers")} />
 
       <div className="relative z-10 max-w-5xl mx-auto w-full px-4 sm:px-6 py-10 sm:py-14">
         {/* Hero */}

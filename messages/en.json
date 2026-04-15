@@ -235,5 +235,55 @@
     "accepted": "Accepted",
     "rejected": "Rejected",
     "empty": "No notifications"
+  },
+  "PageTitles": {
+    "hangar": "Hangar Manager",
+    "ships": "Ship Database",
+    "compare": "Ship Comparator",
+    "components": "Components",
+    "cargo": "Cargo Grid",
+    "loadout": "Loadout Manager",
+    "crafting": "Crafting & Fabrication",
+    "mining": "Mining & Industry",
+    "trade": "Trade System",
+    "activities": "Activity Manager",
+    "streamers": "Streamers",
+    "organization": "Organization",
+    "party": "Party",
+    "friends": "Friends"
+  },
+  "Hangar": {
+    "loading": "Loading hangar...",
+    "importButton": "Import from extension",
+    "tabs": { "fleet": "Fleet", "buyback": "Buyback", "ccu": "CCU Chains" },
+    "empty": "Your hangar is empty. Import from the extension to get started."
+  },
+  "Ships": {
+    "search": "Search ships...",
+    "filters": "Filters",
+    "manufacturer": "Manufacturer",
+    "role": "Role",
+    "size": "Size",
+    "clearFilters": "Clear filters",
+    "noResults": "No ships match your filters",
+    "loading": "Loading ships..."
+  },
+  "Compare": {
+    "selectShip": "Select a ship",
+    "addShip": "Add ship",
+    "removeShip": "Remove",
+    "emptySlot": "Empty slot",
+    "noShips": "Select ships to compare"
+  },
+  "Cargo": {
+    "selectShip": "Select a ship",
+    "loading": "Loading cargo grid...",
+    "empty": "No cargo data available for this ship"
+  },
+  "LoadoutBuilder": {
+    "loading": "Loading loadout...",
+    "saveLoadout": "Save Loadout",
+    "resetLayout": "Reset Layout",
+    "exportImage": "Export Image"
   }
 }

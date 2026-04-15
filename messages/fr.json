@@ -235,5 +235,55 @@
     "accepted": "Accepté",
     "rejected": "Refusé",
     "empty": "Aucune notification"
+  },
+  "PageTitles": {
+    "hangar": "Gestionnaire de Hangar",
+    "ships": "Base de Données de Vaisseaux",
+    "compare": "Comparateur de Vaisseaux",
+    "components": "Composants",
+    "cargo": "Grille de Cargaison",
+    "loadout": "Gestionnaire de Loadout",
+    "crafting": "Artisanat & Fabrication",
+    "mining": "Minage & Industrie",
+    "trade": "Système de Commerce",
+    "activities": "Gestionnaire d'Activités",
+    "streamers": "Streamers",
+    "organization": "Organisation",
+    "party": "Groupe",
+    "friends": "Amis"
+  },
+  "Hangar": {
+    "loading": "Chargement du hangar...",
+    "importButton": "Importer depuis l'extension",
+    "tabs": { "fleet": "Flotte", "buyback": "Rachat", "ccu": "Chaînes CCU" },
+    "empty": "Ton hangar est vide. Importe depuis l'extension pour commencer."
+  },
+  "Ships": {
+    "search": "Rechercher des vaisseaux...",
+    "filters": "Filtres",
+    "manufacturer": "Fabricant",
+    "role": "Rôle",
+    "size": "Taille",
+    "clearFilters": "Effacer les filtres",
+    "noResults": "Aucun vaisseau ne correspond à tes filtres",
+    "loading": "Chargement des vaisseaux..."
+  },
+  "Compare": {
+    "selectShip": "Sélectionne un vaisseau",
+    "addShip": "Ajouter un vaisseau",
+    "removeShip": "Retirer",
+    "emptySlot": "Emplacement vide",
+    "noShips": "Sélectionne des vaisseaux à comparer"
+  },
+  "Cargo": {
+    "selectShip": "Sélectionne un vaisseau",
+    "loading": "Chargement de la grille de cargaison...",
+    "empty": "Aucune donnée de cargaison disponible pour ce vaisseau"
+  },
+  "LoadoutBuilder": {
+    "loading": "Chargement du loadout...",
+    "saveLoadout": "Enregistrer le loadout",
+    "resetLayout": "Réinitialiser la disposition",
+    "exportImage": "Exporter l'image"
   }
 }

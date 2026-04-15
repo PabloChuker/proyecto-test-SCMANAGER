@@ -9,19 +9,21 @@ import { ShipComparator } from "@/components/compare/ShipComparator";
 import Link from "next/link";
 import Header from "@/app/assets/header/Header";
 import { PageVideoBackground } from "@/components/shared/PageVideoBackground";
+import { getTranslations } from "next-intl/server";
 
 export const metadata = {
   title: "Ship Comparator — SC LABS",
   description: "Compare up to 3 Star Citizen ships side-by-side. Speed, acceleration, shields, hull, combat, dimensions, emissions, fuel, and 40+ metrics.",
 };
 
-export default function ComparePage() {
+export default async function ComparePage() {
+  const t = await getTranslations("PageTitles");
   return (
     <main className="relative min-h-screen text-zinc-100">
       <PageVideoBackground />
 
       <div className="relative z-10">
-        <Header subtitle="Ship Comparator" />
+        <Header subtitle={t("compare")} />
 
         {/* Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">

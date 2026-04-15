@@ -235,5 +235,55 @@
     "accepted": "Akzeptiert",
     "rejected": "Abgelehnt",
     "empty": "Keine Benachrichtigungen"
+  },
+  "PageTitles": {
+    "hangar": "Hangar-Manager",
+    "ships": "Schiffsdatenbank",
+    "compare": "Schiffsvergleich",
+    "components": "Komponenten",
+    "cargo": "Frachtraster",
+    "loadout": "Loadout-Manager",
+    "crafting": "Herstellung & Fertigung",
+    "mining": "Bergbau & Industrie",
+    "trade": "Handelssystem",
+    "activities": "Aktivitätsmanager",
+    "streamers": "Streamer",
+    "organization": "Organisation",
+    "party": "Gruppe",
+    "friends": "Freunde"
+  },
+  "Hangar": {
+    "loading": "Hangar wird geladen...",
+    "importButton": "Aus Erweiterung importieren",
+    "tabs": { "fleet": "Flotte", "buyback": "Rückkauf", "ccu": "CCU-Ketten" },
+    "empty": "Dein Hangar ist leer. Importiere aus der Erweiterung, um zu starten."
+  },
+  "Ships": {
+    "search": "Schiffe suchen...",
+    "filters": "Filter",
+    "manufacturer": "Hersteller",
+    "role": "Rolle",
+    "size": "Größe",
+    "clearFilters": "Filter zurücksetzen",
+    "noResults": "Keine Schiffe entsprechen deinen Filtern",
+    "loading": "Schiffe werden geladen..."
+  },
+  "Compare": {
+    "selectShip": "Schiff auswählen",
+    "addShip": "Schiff hinzufügen",
+    "removeShip": "Entfernen",
+    "emptySlot": "Leerer Slot",
+    "noShips": "Schiffe zum Vergleichen auswählen"
+  },
+  "Cargo": {
+    "selectShip": "Schiff auswählen",
+    "loading": "Frachtraster wird geladen...",
+    "empty": "Keine Frachtdaten für dieses Schiff verfügbar"
+  },
+  "LoadoutBuilder": {
+    "loading": "Loadout wird geladen...",
+    "saveLoadout": "Loadout speichern",
+    "resetLayout": "Layout zurücksetzen",
+    "exportImage": "Bild exportieren"
   }
 }

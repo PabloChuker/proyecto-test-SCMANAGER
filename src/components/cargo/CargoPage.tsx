@@ -9,6 +9,7 @@ import { useEffect, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import Header from "@/app/assets/header/Header";
 import { PageVideoBackground } from "@/components/shared/PageVideoBackground";
+import { useTranslations } from "next-intl";
 
 const CargoGrid3D = dynamic(
   () => import("@/components/cargo/CargoGrid3D").then((m) => ({ default: m.CargoGrid3D })),
@@ -44,6 +45,7 @@ interface ShipData {
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export function CargoPage() {
+  const t = useTranslations("PageTitles");
   const [ships, setShips]           = useState<ShipData[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
@@ -87,7 +89,7 @@ export function CargoPage() {
       <PageVideoBackground src="/videos/comparador.mp4" opacity="0.12" />
 
       <div className="relative z-10 flex flex-col h-full">
-        <Header subtitle="Cargo Grid" />
+        <Header subtitle={t("cargo")} />
 
         <div className="flex flex-1 overflow-hidden">
 

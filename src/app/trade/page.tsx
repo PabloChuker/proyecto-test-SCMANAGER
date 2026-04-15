@@ -9,6 +9,7 @@ import TradeWorkOrders from "@/components/trade/TradeWorkOrders";
 import TradeDashboard from "@/components/trade/TradeDashboard";
 import { PageVideoBackground } from "@/components/shared/PageVideoBackground";
 import { useTradeWorkOrderStore } from "@/store/useTradeWorkOrderStore";
+import { useTranslations } from "next-intl";
 
 type Tab = "routes" | "commodities" | "terminals" | "workorders" | "dashboard";
 
@@ -23,6 +24,7 @@ const TABS: { id: Tab; label: string }[] = [
 export default function TradePage() {
   const [activeTab, setActiveTab] = useState<Tab>("routes");
   const requestTabSwitch = useTradeWorkOrderStore((s) => s.requestTabSwitch);
+  const t = useTranslations("PageTitles");
 
   // When TradeRoutes fires "Send to WO", switch to the Work Orders tab
   useEffect(() => {
@@ -36,7 +38,7 @@ export default function TradePage() {
       <PageVideoBackground />
 
       <div className="relative z-10 flex flex-col min-h-screen">
-        <Header subtitle="Trade System" />
+        <Header subtitle={t("trade")} />
 
         {/* ── Contenido ── */}
         <div className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">

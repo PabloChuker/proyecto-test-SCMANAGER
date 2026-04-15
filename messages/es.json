@@ -235,5 +235,55 @@
     "accepted": "Aceptado",
     "rejected": "Rechazado",
     "empty": "Sin notificaciones"
+  },
+  "PageTitles": {
+    "hangar": "Gestor de Hangar",
+    "ships": "Base de Datos de Naves",
+    "compare": "Comparador de Naves",
+    "components": "Componentes",
+    "cargo": "Grilla de Carga",
+    "loadout": "Gestor de Loadouts",
+    "crafting": "Crafteo y Fabricacion",
+    "mining": "Mineria e Industria",
+    "trade": "Sistema de Comercio",
+    "activities": "Gestor de Actividades",
+    "streamers": "Streamers",
+    "organization": "Organizacion",
+    "party": "Party",
+    "friends": "Amigos"
+  },
+  "Hangar": {
+    "loading": "Cargando hangar...",
+    "importButton": "Importar desde extension",
+    "tabs": { "fleet": "Flota", "buyback": "Buyback", "ccu": "Cadenas CCU" },
+    "empty": "Tu hangar esta vacio. Importa desde la extension para empezar."
+  },
+  "Ships": {
+    "search": "Buscar naves...",
+    "filters": "Filtros",
+    "manufacturer": "Fabricante",
+    "role": "Rol",
+    "size": "Tamano",
+    "clearFilters": "Limpiar filtros",
+    "noResults": "Ninguna nave coincide con tus filtros",
+    "loading": "Cargando naves..."
+  },
+  "Compare": {
+    "selectShip": "Selecciona una nave",
+    "addShip": "Agregar nave",
+    "removeShip": "Quitar",
+    "emptySlot": "Slot vacio",
+    "noShips": "Selecciona naves para comparar"
+  },
+  "Cargo": {
+    "selectShip": "Selecciona una nave",
+    "loading": "Cargando grilla de carga...",
+    "empty": "No hay datos de carga disponibles para esta nave"
+  },
+  "LoadoutBuilder": {
+    "loading": "Cargando loadout...",
+    "saveLoadout": "Guardar Loadout",
+    "resetLayout": "Reiniciar Layout",
+    "exportImage": "Exportar Imagen"
   }
 }

@@ -9,6 +9,7 @@ import { SIDEBAR_ITEMS } from "@/app/assets/header/navigation";
 import { useAuth, type Profile } from "@/contexts/AuthContext";
 import { createClient } from "@/lib/supabase/client";
 import { sendNotification } from "@/lib/notifications";
+import { useTranslations } from "next-intl";
 
 interface Friendship {
   id: string;
@@ -28,6 +29,7 @@ export default function FriendsPage() {
   const { user, profile, loading } = useAuth();
   const router = useRouter();
   const supabase = createClient();
+  const t = useTranslations("PageTitles");
 
   const [friends, setFriends] = useState<FriendDisplay[]>([]);
   const [pending, setPending] = useState<FriendDisplay[]>([]);
@@ -219,7 +221,7 @@ export default function FriendsPage() {
       </video>
       <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/60 via-zinc-950/80 to-zinc-950/95 pointer-events-none z-0" />
 
-      <Header subtitle="Friends" />
+      <Header subtitle={t("friends")} />
 
       <div className="flex flex-1 min-h-0">
         <aside className="w-12 sm:w-14 flex-shrink-0 bg-zinc-950/90 border-r border-zinc-800/50 flex flex-col items-center py-3 gap-1 z-20 sticky top-12 h-[calc(100vh-3rem)] overflow-y-auto">
