@@ -15,9 +15,11 @@
 
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, memo } from "react";
+import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 import { useLoadoutStore } from "@/store/useLoadoutStore";
+import { useShallow } from "zustand/react/shallow";
 import type { ResolvedHardpoint, ResolvedChild, EquippedItem } from "@/store/useLoadoutStore";
 import { useAuth } from "@/contexts/AuthContext";
 import { createClient } from "@/lib/supabase/client";
@@ -26,7 +28,17 @@ import { ComponentPicker } from "./ComponentPicker";
 import { PowerManagementPanel } from "./PowerManagementPanel";
 import { ShipSelector } from "./ShipSelector";
 import { fmtStat, fmtDps } from "./loadout-utils";
-import { ShipFlightDynamicsSingle } from "@/components/shared/flight-dynamics";
+const ShipFlightDynamicsSingle = dynamic(
+  () => import("@/components/shared/flight-dynamics").then(m => ({ default: m.ShipFlightDynamicsSingle })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex items-center justify-center h-full">
+        <div className="w-3 h-3 border-2 border-zinc-800 border-t-yellow-500 rounded-full animate-spin" />
+      </div>
+    ),
+  },
+);
 import { shipGlbCandidates } from "@/lib/shipGlb";
 import { useDpsGridLayout } from "@/lib/loadout-grid/useLoadoutGridLayout";
 import { DpsGridCanvas } from "@/components/domain/loadout/LoadoutGridCanvas";
@@ -388,31 +400,31 @@ function renderWidget(
   wId: WidgetId,
   ctx: any,
 ): React.ReactNode {
-  const { weaponHps, missileHps, useful, store, setPickerHp, si, shipInfo, stats, flightMode, setFlightMode, fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount } = ctx;
+  const { weaponHps, missileHps, useful, setPickerHp, si, shipInfo, stats, flightMode, setFlightMode, fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount } = ctx;
   const W = (children: React.ReactNode, opts?: { icon?: string; badge?: string | number }) => (
     <WidgetShell id={wId} label={WIDGET_LABELS[wId]} icon={opts?.icon} badge={opts?.badge}>{children}</WidgetShell>
   );
 
   switch (wId) {
     case "weapons":
-      return weaponHps.length > 0 ? W(<HpGroup hps={weaponHps} store={store} onClickHp={setPickerHp} />, { icon: "/icons/weapons.png", badge: weaponHps.length }) : null;
+      return weaponHps.length > 0 ? W(<HpGroup hps={weaponHps} onClickHp={setPickerHp} />, { icon: "/icons/weapons.png", badge: weaponHps.length }) : null;
     case "missiles":
-      return missileHps.length > 0 ? W(<HpGroup hps={missileHps} store={store} onClickHp={setPickerHp} />, { icon: "/icons/missile.png", badge: missileHps.length }) : null;
+      return missileHps.length > 0 ? W(<HpGroup hps={missileHps} onClickHp={setPickerHp} />, { icon: "/icons/missile.png", badge: missileHps.length }) : null;
     case "strafe-profile":
       return W(<StrafeProfileTabs shipData={si} />);
     case "turning-profile":
       return W(<div className="bg-zinc-900/80 border border-zinc-800/60 p-3"><div className="flex justify-center"><TurningProfileRadar shipData={si} /></div></div>);
     case "shields": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "SHIELD");
-      return hps.length > 0 ? W(<HpGroup hps={hps} store={store} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.SHIELD.icon, badge: hps.length }) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.SHIELD.icon, badge: hps.length }) : null;
     }
     case "powerplants": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "POWER_PLANT");
-      return hps.length > 0 ? W(<HpGroup hps={hps} store={store} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.POWER_PLANT.icon, badge: hps.length }) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.POWER_PLANT.icon, badge: hps.length }) : null;
     }
     case "coolers": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "COOLER");
-      return hps.length > 0 ? W(<HpGroup hps={hps} store={store} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.COOLER.icon, badge: hps.length }) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.COOLER.icon, badge: hps.length }) : null;
     }
     case "maneuver-radar":
       return W(<GForceProfileTabs shipData={shipInfo} />);
@@ -430,15 +442,15 @@ function renderWidget(
       );
     case "quantum": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "QUANTUM_DRIVE");
-      return hps.length > 0 ? W(<HpGroup hps={hps} store={store} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.QUANTUM_DRIVE.icon, badge: hps.length }) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.QUANTUM_DRIVE.icon, badge: hps.length }) : null;
     }
     case "radar": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "RADAR");
-      return hps.length > 0 ? W(<HpGroup hps={hps} store={store} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.RADAR.icon, badge: hps.length }) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.RADAR.icon, badge: hps.length }) : null;
     }
     case "utility": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "UTILITY" || hp.resolvedCategory === "MINING");
-      return hps.length > 0 ? W(<HpGroup hps={hps} store={store} onClickHp={setPickerHp} />, { icon: "/icons/tractor_beam.png", badge: hps.length }) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: "/icons/tractor_beam.png", badge: hps.length }) : null;
     }
     case "combat-summary":
       return W(
@@ -556,8 +568,30 @@ function renderWidget(
 
 export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }) {
   const searchParams = useSearchParams();
-  const store = useLoadoutStore();
-  const { shipInfo, isLoading, error, loadShip, getStats, getEffectiveItem, hasChanges, hardpoints, equipItem, clearSlot, resetAll, overrides, encodeBuild, toggleComponent, isComponentOn, flightMode, setFlightMode } = store;
+
+  // ── Zustand: granular selectors — each field triggers a re-render only when
+  // it actually changes, instead of re-rendering on every store mutation.
+  const { shipInfo, isLoading, error, hardpoints, overrides, flightMode } = useLoadoutStore(
+    useShallow(s => ({
+      shipInfo: s.shipInfo,
+      isLoading: s.isLoading,
+      error: s.error,
+      hardpoints: s.hardpoints,
+      overrides: s.overrides,
+      flightMode: s.flightMode,
+    }))
+  );
+  // Actions are stable references in Zustand — individual selectors never trigger re-renders.
+  const loadShip      = useLoadoutStore(s => s.loadShip);
+  const getStats      = useLoadoutStore(s => s.getStats);
+  const getEffectiveItem = useLoadoutStore(s => s.getEffectiveItem);
+  const equipItem     = useLoadoutStore(s => s.equipItem);
+  const clearSlot     = useLoadoutStore(s => s.clearSlot);
+  const resetAll      = useLoadoutStore(s => s.resetAll);
+  const encodeBuild   = useLoadoutStore(s => s.encodeBuild);
+  const toggleComponent = useLoadoutStore(s => s.toggleComponent);
+  const isComponentOn = useLoadoutStore(s => s.isComponentOn);
+  const setFlightMode = useLoadoutStore(s => s.setFlightMode);
 
   const [pickerHp, setPickerHp] = useState<ResolvedHardpoint | null>(null);
   // Share
@@ -791,7 +825,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 
   // Contexto compartido para renderWidget (evita pasar 15 props por llamada).
   const ctx = {
-    weaponHps, missileHps, useful, store, setPickerHp,
+    weaponHps, missileHps, useful, setPickerHp,
     si, shipInfo, stats, flightMode, setFlightMode,
     fmtNum, fmtDec, fmtMass, cmDecoyCount, cmNoiseCount,
   };
@@ -933,9 +967,16 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 // Sub-components
 // =============================================================================
 
-function HpGroup({ hps, store, onClickHp }: { hps: ResolvedHardpoint[]; store: ReturnType<typeof useLoadoutStore>; onClickHp: (hp: ResolvedHardpoint) => void }) {
+function HpGroup({ hps, onClickHp }: { hps: ResolvedHardpoint[]; onClickHp: (hp: ResolvedHardpoint) => void }) {
   if (hps.length === 0) return null;
-  const { getEffectiveItem, overrides, isComponentOn, toggleComponent } = store;
+  const { getEffectiveItem, overrides, isComponentOn, toggleComponent } = useLoadoutStore(
+    useShallow(s => ({
+      getEffectiveItem: s.getEffectiveItem,
+      overrides: s.overrides,
+      isComponentOn: s.isComponentOn,
+      toggleComponent: s.toggleComponent,
+    }))
+  );
   // Convert a ResolvedChild into a synthetic ResolvedHardpoint so the picker can open for it
   const handleClickChild = useCallback((child: ResolvedChild) => {
     const synthetic: ResolvedHardpoint = {
@@ -1005,7 +1046,7 @@ function ModeBtn({ label, active, c, onClick }: { label: string; active: boolean
 // Inline SVG Radar Charts
 // =============================================================================
 
-function RadarChartInline({ axes, size = 180, color = "#f59e0b", fillOpacity = 0.12, gridLevels = 4 }: {
+const RadarChartInline = memo(function RadarChartInline({ axes, size = 180, color = "#f59e0b", fillOpacity = 0.12, gridLevels = 4 }: {
   axes: { label: string; value: number; max: number }[];
   size?: number; color?: string; fillOpacity?: number; gridLevels?: number;
 }) {
@@ -1035,10 +1076,10 @@ function RadarChartInline({ axes, size = 180, color = "#f59e0b", fillOpacity = 0
       })}
     </svg>
   );
-}
+});
 
 /** Dual-layer radar: SCM (base) + Afterburner overlay */
-function DualRadarChart({ axes, size = 220, gridLevels = 5 }: {
+const DualRadarChart = memo(function DualRadarChart({ axes, size = 220, gridLevels = 5 }: {
   axes: { label: string; scm: number; boost: number; max: number }[];
   size?: number; gridLevels?: number;
 }) {
@@ -1091,10 +1132,10 @@ function DualRadarChart({ axes, size = 220, gridLevels = 5 }: {
       <text x={45} y={size - 10} className="fill-zinc-500" style={{ fontSize: "6px", fontFamily: "monospace" }}>AFB</text>
     </svg>
   );
-}
+});
 
 /** 3D Strafe Profile — isometric octahedron showing movement accelerations (m/s²) with SCM + AFB */
-function StrafeProfile3D({ shipData }: { shipData: any }) {
+const StrafeProfile3D = memo(function StrafeProfile3D({ shipData }: { shipData: any }) {
   const fwd = shipData.accelForward ?? 0;
   const bwd = shipData.accelBackward ?? 0;
   const up = shipData.accelUp ?? 0;
@@ -1193,10 +1234,10 @@ function StrafeProfile3D({ shipData }: { shipData: any }) {
       {afbPts.map((p, i) => <circle key={`av-${i}`} cx={p.px} cy={p.py} r={1.5} fill={afbColor} opacity={0.5} />)}
     </svg>
   );
-}
+});
 
 /** Strafe Profile — Hex radar (6-axis) for acceleration */
-function StrafeProfileRadar({ shipData }: { shipData: any }) {
+const StrafeProfileRadar = memo(function StrafeProfileRadar({ shipData }: { shipData: any }) {
   const fwd = shipData.accelForward ?? 0;
   const bwd = shipData.accelBackward ?? 0;
   const up = shipData.accelUp ?? 0;
@@ -1321,7 +1362,7 @@ function StrafeProfileRadar({ shipData }: { shipData: any }) {
       <text x={56} y={size - 11} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#71717a" }}>AFB</text>
     </svg>
   );
-}
+});
 
 /** Strafe Profile — Tab wrapper for 3D/Radar toggle */
 function StrafeProfileTabs({ shipData }: { shipData: any }) {
@@ -1344,7 +1385,7 @@ function StrafeProfileTabs({ shipData }: { shipData: any }) {
 }
 
 /** Turning Profiles — 3-axis radar chart for Pitch / Yaw / Roll with SCM + AFB */
-function TurningProfileRadar({ shipData }: { shipData: any }) {
+const TurningProfileRadar = memo(function TurningProfileRadar({ shipData }: { shipData: any }) {
   const pitch = shipData.pitchRate ?? 0;
   const yaw = shipData.yawRate ?? 0;
   const roll = shipData.rollRate ?? 0;
@@ -1445,9 +1486,9 @@ function TurningProfileRadar({ shipData }: { shipData: any }) {
       <text x={49} y={size - 10} className="fill-zinc-500" style={{ fontSize: "6px", fontFamily: "monospace" }}>AFB</text>
     </svg>
   );
-}
+});
 
-function GForce3DChart({ shipData }: { shipData: any }) {
+const GForce3DChart = memo(function GForce3DChart({ shipData }: { shipData: any }) {
   const G = 9.81;
   const fwdG = shipData.accelForwardG ?? (shipData.accelForward ?? 0) / G;
   const bwdG = shipData.accelBackwardG ?? (shipData.accelBackward ?? 0) / G;
@@ -1544,10 +1585,10 @@ function GForce3DChart({ shipData }: { shipData: any }) {
       {afbPts.map((p, i) => <circle key={`av-${i}`} cx={p.px} cy={p.py} r={1.5} fill={afbColor} opacity={0.5} />)}
     </svg>
   );
-}
+});
 
 /** G-Force Profile — Hex radar (6-axis) for G-forces */
-function GForceRadar({ shipData }: { shipData: any }) {
+const GForceRadar = memo(function GForceRadar({ shipData }: { shipData: any }) {
   const fwdG = shipData.accelForwardG ?? 0;
   const bwdG = shipData.accelBackwardG ?? 0;
   const upG = shipData.accelUpG ?? 0;
@@ -1678,7 +1719,7 @@ function GForceRadar({ shipData }: { shipData: any }) {
       <text x={56} y={size - 11} style={{ fontSize: "7px", fontFamily: "monospace", fill: "#71717a" }}>AFB</text>
     </svg>
   );
-}
+});
 
 /** G-Force Profile — Tab wrapper for 3D/Radar toggle */
 function GForceProfileTabs({ shipData }: { shipData: any }) {
