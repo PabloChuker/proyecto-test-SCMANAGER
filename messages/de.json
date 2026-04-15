@@ -52,6 +52,37 @@
       "industry": "Industrie",
       "social": "Sozial",
       "hangar": "Hangar"
-    }
+    },
+    "menu": {
+      "profile": "Profil",
+      "social": "Sozial",
+      "party": "Gruppe",
+      "streamers": "Streamer",
+      "myAccount": "Mein Konto",
+      "logout": "Abmelden"
+    },
+    "login": "Anmelden",
+    "profileFallback": "Profil"
+  },
+  "Landing": {
+    "panels": {
+      "loadout": "Loadout-Manager",
+      "compare": "Schiffsvergleich",
+      "mining": "Bergbau & Industrie",
+      "hangar": "Hangar-Manager"
+    },
+    "clickToEnter": "Zum Betreten klicken",
+    "comingSoon": "Bald verfügbar"
+  },
+  "Notifications": {
+    "title": "Benachrichtigungen",
+    "tooltip": "Benachrichtigungen",
+    "markAllRead": "Als gelesen markieren",
+    "clearAll": "Leeren",
+    "accept": "Akzeptieren",
+    "decline": "Ablehnen",
+    "accepted": "Akzeptiert",
+    "rejected": "Abgelehnt",
+    "empty": "Keine Benachrichtigungen"
   }
 }

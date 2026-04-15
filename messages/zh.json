@@ -52,6 +52,37 @@
       "industry": "工业",
       "social": "社交",
       "hangar": "机库"
-    }
+    },
+    "menu": {
+      "profile": "个人资料",
+      "social": "社交",
+      "party": "队伍",
+      "streamers": "主播",
+      "myAccount": "我的账户",
+      "logout": "登出"
+    },
+    "login": "登录",
+    "profileFallback": "个人资料"
+  },
+  "Landing": {
+    "panels": {
+      "loadout": "配装管理器",
+      "compare": "舰船对比",
+      "mining": "采矿与工业",
+      "hangar": "机库管理器"
+    },
+    "clickToEnter": "点击进入",
+    "comingSoon": "即将推出"
+  },
+  "Notifications": {
+    "title": "通知",
+    "tooltip": "通知",
+    "markAllRead": "标记已读",
+    "clearAll": "清空",
+    "accept": "接受",
+    "decline": "拒绝",
+    "accepted": "已接受",
+    "rejected": "已拒绝",
+    "empty": "暂无通知"
   }
 }

@@ -3,38 +3,40 @@
 import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 const PANELS = [
   {
     id: "loadout",
-    label: "Loadout Manager",
+    labelKey: "loadout",
     video: "/videos/loadout_new.mp4",
     href: "/loadout",
   },
   {
     id: "compare",
-    label: "Ship Comparator",
+    labelKey: "compare",
     video: "/videos/ships.mp4",
     href: "/compare",
   },
   {
     id: "mining",
-    label: "Mining & Industry",
+    labelKey: "mining",
     video: "/videos/industria.mp4",
     href: "/mining",
   },
   {
     id: "crafting",
-    label: "Hangar Manager",
+    labelKey: "hangar",
     video: "/videos/hangar.webm",
     href: "/hangar",
   },
-];
+] as const;
 
 export default function Home() {
   const [phase, setPhase] = useState<"logo" | "reveal" | "ready">("logo");
   const [hoveredPanel, setHoveredPanel] = useState<string | null>(null);
   const router = useRouter();
+  const t = useTranslations("Landing");
 
   useEffect(() => {
     const t1 = setTimeout(() => setPhase("reveal"), 2700);
@@ -168,7 +170,7 @@ export default function Home() {
                         : "rgba(255,255,255,0.4)",
                     }}
                   >
-                    {panel.label}
+                    {t(`panels.${panel.labelKey}`)}
                   </span>
 
                   {/* Línea decorativa */}
@@ -190,7 +192,7 @@ export default function Home() {
                       color: "rgba(255,255,255,0.5)",
                     }}
                   >
-                    {panel.href !== "#" ? "Click to enter" : "Coming soon"}
+                    {panel.href !== "#" ? t("clickToEnter") : t("comingSoon")}
                   </span>
                 </div>
               </div>

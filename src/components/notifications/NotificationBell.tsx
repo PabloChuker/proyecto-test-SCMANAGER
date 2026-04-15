@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -43,6 +44,7 @@ export default function NotificationBell() {
   const { user, refreshProfile } = useAuth();
   const supabase = createClient();
   const router = useRouter();
+  const t = useTranslations("Notifications");
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
@@ -265,7 +267,7 @@ export default function NotificationBell() {
       <button
         onClick={() => setOpen((v) => !v)}
         className="relative flex items-center justify-center w-8 h-8 rounded hover:bg-zinc-800/50 transition-colors"
-        title="Notificaciones"
+        title={t("tooltip")}
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-zinc-500 hover:text-zinc-300 transition-colors">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -283,18 +285,18 @@ export default function NotificationBell() {
           {/* Header */}
           <div className="flex items-center justify-between px-3 py-2 border-b border-zinc-800/50">
             <span className="text-xs text-zinc-400 uppercase tracking-wider font-medium">
-              Notificaciones
+              {t("title")}
               {unreadCount > 0 && <span className="ml-1 text-amber-400">({unreadCount})</span>}
             </span>
             <div className="flex items-center gap-2">
               {unreadCount > 0 && (
                 <button onClick={markAllRead} className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors">
-                  Marcar leidas
+                  {t("markAllRead")}
                 </button>
               )}
               {notifications.length > 0 && (
                 <button onClick={clearAll} className="text-[10px] text-zinc-600 hover:text-red-400 transition-colors">
-                  Limpiar
+                  {t("clearAll")}
                 </button>
               )}
             </div>
@@ -303,7 +305,7 @@ export default function NotificationBell() {
           {/* List */}
           <div className="flex-1 overflow-y-auto">
             {notifications.length === 0 ? (
-              <div className="text-center text-zinc-600 py-8 text-xs">No notifications</div>
+              <div className="text-center text-zinc-600 py-8 text-xs">{t("empty")}</div>
             ) : (
               notifications.map((n) => {
                 const icon = TYPE_ICONS[n.type] ?? "🔔";
@@ -353,7 +355,7 @@ export default function NotificationBell() {
                                   : "bg-emerald-600/80 hover:bg-emerald-600 active:scale-95 text-zinc-950"
                               }`}
                             >
-                              {isActing ? "..." : "Aceptar"}
+                              {isActing ? "..." : t("accept")}
                             </button>
                             <button
                               onClick={(e) => { e.stopPropagation(); handleReject(n); }}
@@ -364,7 +366,7 @@ export default function NotificationBell() {
                                   : "bg-zinc-700 hover:bg-red-600/80 hover:text-zinc-100 active:scale-95 text-zinc-300"
                               }`}
                             >
-                              {isActing ? "..." : "Decline"}
+                              {isActing ? "..." : t("decline")}
                             </button>
                           </div>
                         )}
@@ -377,7 +379,7 @@ export default function NotificationBell() {
                                 ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                                 : "bg-zinc-700/50 text-zinc-500 border border-zinc-700/30"
                             }`}>
-                              {actionTaken === "accepted" ? "Aceptado ✓" : "Rechazado"}
+                              {actionTaken === "accepted" ? `${t("accepted")} ✓` : t("rejected")}
                             </span>
                           </div>
                         )}

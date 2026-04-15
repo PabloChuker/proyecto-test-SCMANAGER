@@ -52,6 +52,37 @@
       "industry": "Industria",
       "social": "Social",
       "hangar": "Hangar"
-    }
+    },
+    "menu": {
+      "profile": "Perfil",
+      "social": "Social",
+      "party": "Party",
+      "streamers": "Streamers",
+      "myAccount": "Mi Cuenta",
+      "logout": "Cerrar Sesión"
+    },
+    "login": "Ingresar",
+    "profileFallback": "Perfil"
+  },
+  "Landing": {
+    "panels": {
+      "loadout": "Gestor de Loadouts",
+      "compare": "Comparador de Naves",
+      "mining": "Minería e Industria",
+      "hangar": "Gestor de Hangar"
+    },
+    "clickToEnter": "Click para entrar",
+    "comingSoon": "Próximamente"
+  },
+  "Notifications": {
+    "title": "Notificaciones",
+    "tooltip": "Notificaciones",
+    "markAllRead": "Marcar leídas",
+    "clearAll": "Limpiar",
+    "accept": "Aceptar",
+    "decline": "Rechazar",
+    "accepted": "Aceptado",
+    "rejected": "Rechazado",
+    "empty": "Sin notificaciones"
   }
 }

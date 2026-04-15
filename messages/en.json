@@ -52,6 +52,37 @@
       "industry": "Industry",
       "social": "Social",
       "hangar": "Hangar"
-    }
+    },
+    "menu": {
+      "profile": "Profile",
+      "social": "Social",
+      "party": "Party",
+      "streamers": "Streamers",
+      "myAccount": "My Account",
+      "logout": "Log Out"
+    },
+    "login": "Login",
+    "profileFallback": "Profile"
+  },
+  "Landing": {
+    "panels": {
+      "loadout": "Loadout Manager",
+      "compare": "Ship Comparator",
+      "mining": "Mining & Industry",
+      "hangar": "Hangar Manager"
+    },
+    "clickToEnter": "Click to enter",
+    "comingSoon": "Coming soon"
+  },
+  "Notifications": {
+    "title": "Notifications",
+    "tooltip": "Notifications",
+    "markAllRead": "Mark read",
+    "clearAll": "Clear",
+    "accept": "Accept",
+    "decline": "Decline",
+    "accepted": "Accepted",
+    "rejected": "Rejected",
+    "empty": "No notifications"
   }
 }

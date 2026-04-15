@@ -52,6 +52,37 @@
       "industry": "Industrie",
       "social": "Social",
       "hangar": "Hangar"
-    }
+    },
+    "menu": {
+      "profile": "Profil",
+      "social": "Social",
+      "party": "Groupe",
+      "streamers": "Streamers",
+      "myAccount": "Mon compte",
+      "logout": "Déconnexion"
+    },
+    "login": "Connexion",
+    "profileFallback": "Profil"
+  },
+  "Landing": {
+    "panels": {
+      "loadout": "Gestionnaire de Loadout",
+      "compare": "Comparateur de Vaisseaux",
+      "mining": "Minage & Industrie",
+      "hangar": "Gestionnaire de Hangar"
+    },
+    "clickToEnter": "Cliquer pour entrer",
+    "comingSoon": "Bientôt disponible"
+  },
+  "Notifications": {
+    "title": "Notifications",
+    "tooltip": "Notifications",
+    "markAllRead": "Marquer comme lues",
+    "clearAll": "Effacer",
+    "accept": "Accepter",
+    "decline": "Refuser",
+    "accepted": "Accepté",
+    "rejected": "Refusé",
+    "empty": "Aucune notification"
   }
 }
