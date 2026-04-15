@@ -74,6 +74,25 @@
     "clickToEnter": "点击进入",
     "comingSoon": "即将推出"
   },
+  "Login": {
+    "subtitle": "登录",
+    "loading": "加载中...",
+    "tagline": "星际公民情报平台",
+    "heading": "登录",
+    "description": "使用 Discord 登录以访问个人资料、好友和队伍",
+    "error": "认证错误，请重试。",
+    "signInWithDiscord": "使用 Discord 登录",
+    "legal": "登录即表示你同意我们使用你的 Discord 资料在平台上识别你的身份。"
+  },
+  "MyAccount": {
+    "subtitle": "我的账户",
+    "loading": "加载中...",
+    "tabs": {
+      "inventory": "库存",
+      "wishlist": "心愿单",
+      "loadouts": "配装"
+    }
+  },
   "Notifications": {
     "title": "通知",
     "tooltip": "通知",

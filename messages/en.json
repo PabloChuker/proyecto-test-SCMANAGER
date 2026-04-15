@@ -74,6 +74,25 @@
     "clickToEnter": "Click to enter",
     "comingSoon": "Coming soon"
   },
+  "Login": {
+    "subtitle": "Login",
+    "loading": "Loading...",
+    "tagline": "Star Citizen Intelligence Platform",
+    "heading": "Sign In",
+    "description": "Connect with Discord to access your profile, friends and party",
+    "error": "Authentication error. Please try again.",
+    "signInWithDiscord": "Sign in with Discord",
+    "legal": "By signing in you agree to let us use your Discord profile to identify you on the platform."
+  },
+  "MyAccount": {
+    "subtitle": "My Account",
+    "loading": "Loading...",
+    "tabs": {
+      "inventory": "Inventory",
+      "wishlist": "Wishlist",
+      "loadouts": "Loadouts"
+    }
+  },
   "Notifications": {
     "title": "Notifications",
     "tooltip": "Notifications",

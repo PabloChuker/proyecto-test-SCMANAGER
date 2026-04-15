@@ -74,6 +74,25 @@
     "clickToEnter": "Cliquer pour entrer",
     "comingSoon": "Bientôt disponible"
   },
+  "Login": {
+    "subtitle": "Connexion",
+    "loading": "Chargement...",
+    "tagline": "Plateforme d'intelligence Star Citizen",
+    "heading": "Se connecter",
+    "description": "Connecte-toi avec Discord pour accéder à ton profil, tes amis et ton groupe",
+    "error": "Erreur d'authentification. Veuillez réessayer.",
+    "signInWithDiscord": "Se connecter avec Discord",
+    "legal": "En te connectant, tu acceptes que nous utilisions ton profil Discord pour t'identifier sur la plateforme."
+  },
+  "MyAccount": {
+    "subtitle": "Mon compte",
+    "loading": "Chargement...",
+    "tabs": {
+      "inventory": "Inventaire",
+      "wishlist": "Liste de souhaits",
+      "loadouts": "Loadouts"
+    }
+  },
   "Notifications": {
     "title": "Notifications",
     "tooltip": "Notifications",

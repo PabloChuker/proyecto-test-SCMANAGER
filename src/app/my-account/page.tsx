@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import Image from "next/image";
 import Link from "next/link";
 import Header from "@/app/assets/header/Header";
@@ -18,6 +19,7 @@ export default function MyAccountPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("inventory");
+  const t = useTranslations("MyAccount");
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -26,15 +28,15 @@ export default function MyAccountPage() {
   if (loading || !user) {
     return (
       <main className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
-        <div className="text-zinc-500 animate-pulse">Cargando...</div>
+        <div className="text-zinc-500 animate-pulse">{t("loading")}</div>
       </main>
     );
   }
 
   const tabs: { key: Tab; label: string; icon: string }[] = [
-    { key: "inventory", label: "Inventory", icon: "📦" },
-    { key: "wishlist", label: "Wishlist", icon: "⭐" },
-    { key: "loadouts", label: "Loadouts", icon: "🔧" },
+    { key: "inventory", label: t("tabs.inventory"), icon: "📦" },
+    { key: "wishlist", label: t("tabs.wishlist"), icon: "⭐" },
+    { key: "loadouts", label: t("tabs.loadouts"), icon: "🔧" },
   ];
 
   return (
@@ -43,7 +45,7 @@ export default function MyAccountPage() {
         <source src="/videos/mineria.mp4" type="video/mp4" />
       </video>
       <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/60 via-zinc-950/80 to-zinc-950/95 pointer-events-none z-0" />
-      <Header subtitle="Mi Cuenta" />
+      <Header subtitle={t("subtitle")} />
 
       <div className="flex flex-1 min-h-0">
         <aside className="w-12 sm:w-14 flex-shrink-0 bg-zinc-950/90 border-r border-zinc-800/50 flex flex-col items-center py-3 gap-1 z-20 sticky top-12 h-[calc(100vh-3rem)] overflow-y-auto">

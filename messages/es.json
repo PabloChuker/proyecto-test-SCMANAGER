@@ -74,6 +74,25 @@
     "clickToEnter": "Click para entrar",
     "comingSoon": "Próximamente"
   },
+  "Login": {
+    "subtitle": "Iniciar Sesion",
+    "loading": "Cargando...",
+    "tagline": "Plataforma de Inteligencia de Star Citizen",
+    "heading": "Iniciar Sesion",
+    "description": "Conecta con Discord para acceder a tu perfil, amigos y party",
+    "error": "Error al autenticar. Intenta nuevamente.",
+    "signInWithDiscord": "Iniciar con Discord",
+    "legal": "Al iniciar sesion aceptas que usemos tu perfil de Discord para identificarte en la plataforma."
+  },
+  "MyAccount": {
+    "subtitle": "Mi Cuenta",
+    "loading": "Cargando...",
+    "tabs": {
+      "inventory": "Inventario",
+      "wishlist": "Lista de deseos",
+      "loadouts": "Loadouts"
+    }
+  },
   "Notifications": {
     "title": "Notificaciones",
     "tooltip": "Notificaciones",
