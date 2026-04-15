@@ -38,13 +38,10 @@ type WidgetId =
   | "parts"
   | "quality-effects"
   | "total-materials"
-  | "how-to-obtain"
   | "queue"
-  | "quality-slider"
   | "quality-stats"
   | "summary"
-  | "shopping-list"
-  | "recommendations";
+  | "shopping-list";
 
 const ALL_WIDGETS: WidgetId[] = [
   "categories",
@@ -52,22 +49,19 @@ const ALL_WIDGETS: WidgetId[] = [
   "parts",
   "quality-effects",
   "total-materials",
-  "how-to-obtain",
   "queue",
-  "quality-slider",
   "quality-stats",
   "summary",
   "shopping-list",
-  "recommendations",
 ];
 
 const DEFAULT_COLUMNS: WidgetId[][] = [
   ["categories"],
-  ["blueprint-header", "parts", "quality-effects", "total-materials", "how-to-obtain"],
-  ["queue", "quality-slider", "quality-stats", "summary", "shopping-list", "recommendations"],
+  ["blueprint-header", "parts", "quality-effects", "total-materials"],
+  ["queue", "summary", "shopping-list"],
 ];
 
-const STORAGE_KEY = "al-filo-workbench-cols";
+const STORAGE_KEY = "al-filo-workbench-cols-v5";
 
 function loadColumns(): WidgetId[][] {
   try {
@@ -169,13 +163,10 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   "parts": "Desglose de partes",
   "quality-effects": "Efectos de calidad",
   "total-materials": "Coste total de materiales",
-  "how-to-obtain": "Cómo obtener",
   "queue": "Cola de fabricación",
-  "quality-slider": "Calidad del material",
   "quality-stats": "Impacto de calidad",
   "summary": "Resumen",
   "shopping-list": "Lista de compras",
-  "recommendations": "Recomendaciones",
 };
 
 /* ═══════════════════════════════════════════════════════
@@ -192,22 +183,35 @@ const MOCK_BLUEPRINTS: Blueprint[] = [
         groupKey: "shell", groupName: "Outer Shell", requiredCount: 1,
         materials: [
           { resourceUuid: "m1", resourceName: "Titanium", resourceKey: "Ore_Titanium", description: "", refinedName: null, boxSizes: [1, 2], quantityScu: 0.048, minQuality: 0 },
-          { resourceUuid: "m2", resourceName: "Copper", resourceKey: "Ore_Copper", description: "", refinedName: null, boxSizes: [1], quantityScu: 0.012, minQuality: 0 },
         ],
-        modifiers: [],
+        modifiers: [
+          { propertyKey: "damage_mitigation", qualityMin: 0, qualityMax: 1000, atMinQuality: -0.10, atMaxQuality: -0.01 },
+        ],
+      },
+      {
+        groupKey: "padding", groupName: "Impact Padding", requiredCount: 1,
+        materials: [
+          { resourceUuid: "m10", resourceName: "Hephaestanite", resourceKey: "Ore_Hephaestanite", description: "", refinedName: null, boxSizes: [1], quantityScu: 0.022, minQuality: 200 },
+        ],
+        modifiers: [
+          { propertyKey: "temperature_resistance", qualityMin: 0, qualityMax: 1000, atMinQuality: -0.15, atMaxQuality: -0.02 },
+        ],
       },
       {
         groupKey: "visor", groupName: "Visor Assembly", requiredCount: 1,
         materials: [
-          { resourceUuid: "m3", resourceName: "Silicon", resourceKey: "Ore_Silicon", description: "", refinedName: null, boxSizes: [1], quantityScu: 0.008, minQuality: 250 },
           { resourceUuid: "m4", resourceName: "Gold", resourceKey: "Ore_Gold", description: "", refinedName: null, boxSizes: [1], quantityScu: 0.003, minQuality: 0 },
         ],
-        modifiers: [{ propertyKey: "armor_visibility_range", qualityMin: 0, qualityMax: 1000, atMinQuality: 80, atMaxQuality: 120 }],
+        modifiers: [
+          { propertyKey: "visibility_range", qualityMin: 0, qualityMax: 1000, atMinQuality: -0.12, atMaxQuality: 0.0 },
+          { propertyKey: "hud_accuracy", qualityMin: 0, qualityMax: 1000, atMinQuality: -0.08, atMaxQuality: 0.02 },
+        ],
       },
     ],
     qualityEffects: {
-      armor_damage_reduction: { atMinQuality: 12, atMaxQuality: 22 },
-      armor_temperature_resistance: { atMinQuality: 40, atMaxQuality: 85 },
+      damage_mitigation: { atMinQuality: -0.10, atMaxQuality: -0.01 },
+      temperature_resistance: { atMinQuality: -0.15, atMaxQuality: -0.02 },
+      visibility_range: { atMinQuality: -0.12, atMaxQuality: 0.0 },
     },
     rewardPools: [],
   },
@@ -221,14 +225,35 @@ const MOCK_BLUEPRINTS: Blueprint[] = [
         groupKey: "plate", groupName: "Chest Plate", requiredCount: 1,
         materials: [
           { resourceUuid: "m1", resourceName: "Titanium", resourceKey: "Ore_Titanium", description: "", refinedName: null, boxSizes: [1, 2], quantityScu: 0.120, minQuality: 0 },
+        ],
+        modifiers: [
+          { propertyKey: "damage_mitigation", qualityMin: 0, qualityMax: 1000, atMinQuality: -0.15, atMaxQuality: -0.02 },
+          { propertyKey: "movement_penalty", qualityMin: 0, qualityMax: 1000, atMinQuality: -0.08, atMaxQuality: -0.01 },
+        ],
+      },
+      {
+        groupKey: "weave", groupName: "Ballistic Weave", requiredCount: 1,
+        materials: [
           { resourceUuid: "m5", resourceName: "Laranite", resourceKey: "Ore_Laranite", description: "", refinedName: null, boxSizes: [1], quantityScu: 0.035, minQuality: 500 },
         ],
-        modifiers: [],
+        modifiers: [
+          { propertyKey: "damage_mitigation", qualityMin: 0, qualityMax: 1000, atMinQuality: -0.05, atMaxQuality: -0.01 },
+        ],
+      },
+      {
+        groupKey: "liner", groupName: "Thermal Liner", requiredCount: 1,
+        materials: [
+          { resourceUuid: "m11", resourceName: "Stileron", resourceKey: "Stileron", description: "", refinedName: null, boxSizes: [1], quantityScu: 0.028, minQuality: 0 },
+        ],
+        modifiers: [
+          { propertyKey: "temperature_resistance", qualityMin: 0, qualityMax: 1000, atMinQuality: -0.20, atMaxQuality: -0.04 },
+        ],
       },
     ],
     qualityEffects: {
-      armor_damage_reduction: { atMinQuality: 28, atMaxQuality: 52 },
-      armor_movement_penalty: { atMinQuality: -15, atMaxQuality: -5 },
+      damage_mitigation: { atMinQuality: -0.20, atMaxQuality: -0.03 },
+      movement_penalty: { atMinQuality: -0.08, atMaxQuality: -0.01 },
+      temperature_resistance: { atMinQuality: -0.20, atMaxQuality: -0.04 },
     },
     rewardPools: [{ poolUuid: "rp-1", poolKey: "BP_MISSIONREWARD_CrimeStatClear_Tier3" }],
   },
@@ -239,26 +264,39 @@ const MOCK_BLUEPRINTS: Blueprint[] = [
     tierIndex: 1, craftTimeSeconds: 480, isDefault: false,
     parts: [
       {
-        groupKey: "receiver", groupName: "Receiver", requiredCount: 1,
+        groupKey: "receiver", groupName: "Receiver Core", requiredCount: 1,
         materials: [
           { resourceUuid: "m1", resourceName: "Titanium", resourceKey: "Ore_Titanium", description: "", refinedName: null, boxSizes: [1, 2], quantityScu: 0.090, minQuality: 0 },
-          { resourceUuid: "m7", resourceName: "Steel", resourceKey: "Steel", description: "", refinedName: null, boxSizes: [1], quantityScu: 0.045, minQuality: 0 },
         ],
-        modifiers: [],
+        modifiers: [
+          { propertyKey: "weapon_damage", qualityMin: 0, qualityMax: 1000, atMinQuality: -0.08, atMaxQuality: 0.05 },
+          { propertyKey: "weapon_spread", qualityMin: 0, qualityMax: 1000, atMinQuality: 0.12, atMaxQuality: 0.02 },
+        ],
       },
       {
         groupKey: "barrel", groupName: "Barrel Assembly", requiredCount: 1,
         materials: [
-          { resourceUuid: "m1", resourceName: "Titanium", resourceKey: "Ore_Titanium", description: "", refinedName: null, boxSizes: [1, 2], quantityScu: 0.030, minQuality: 200 },
+          { resourceUuid: "m7", resourceName: "Steel", resourceKey: "Steel", description: "", refinedName: null, boxSizes: [1], quantityScu: 0.045, minQuality: 0 },
+        ],
+        modifiers: [
+          { propertyKey: "bullet_velocity", qualityMin: 0, qualityMax: 1000, atMinQuality: -0.12, atMaxQuality: 0.05 },
+        ],
+      },
+      {
+        groupKey: "mechanism", groupName: "Firing Mechanism", requiredCount: 1,
+        materials: [
           { resourceUuid: "m2", resourceName: "Copper", resourceKey: "Ore_Copper", description: "", refinedName: null, boxSizes: [1], quantityScu: 0.015, minQuality: 0 },
         ],
-        modifiers: [{ propertyKey: "weapon_bullet_speed", qualityMin: 0, qualityMax: 1000, atMinQuality: 720, atMaxQuality: 900 }],
+        modifiers: [
+          { propertyKey: "weapon_range", qualityMin: 0, qualityMax: 1000, atMinQuality: -0.10, atMaxQuality: 0.08 },
+        ],
       },
     ],
     qualityEffects: {
-      weapon_damage: { atMinQuality: 18, atMaxQuality: 32 },
-      weapon_range: { atMinQuality: 55, atMaxQuality: 90 },
-      weapon_spread: { atMinQuality: 3.2, atMaxQuality: 1.1 },
+      weapon_damage: { atMinQuality: -0.08, atMaxQuality: 0.05 },
+      weapon_spread: { atMinQuality: 0.12, atMaxQuality: 0.02 },
+      bullet_velocity: { atMinQuality: -0.12, atMaxQuality: 0.05 },
+      weapon_range: { atMinQuality: -0.10, atMaxQuality: 0.08 },
     },
     rewardPools: [],
   },
@@ -272,12 +310,25 @@ const MOCK_BLUEPRINTS: Blueprint[] = [
         groupKey: "plates", groupName: "Leg Plates", requiredCount: 2,
         materials: [
           { resourceUuid: "m1", resourceName: "Titanium", resourceKey: "Ore_Titanium", description: "", refinedName: null, boxSizes: [1, 2], quantityScu: 0.036, minQuality: 0 },
+        ],
+        modifiers: [
+          { propertyKey: "damage_mitigation", qualityMin: 0, qualityMax: 1000, atMinQuality: -0.07, atMaxQuality: -0.01 },
+        ],
+      },
+      {
+        groupKey: "joint", groupName: "Flex Joint", requiredCount: 2,
+        materials: [
           { resourceUuid: "m6", resourceName: "Polymer", resourceKey: "Polymer", description: "", refinedName: null, boxSizes: [1], quantityScu: 0.024, minQuality: 0 },
         ],
-        modifiers: [],
+        modifiers: [
+          { propertyKey: "movement_speed", qualityMin: 0, qualityMax: 1000, atMinQuality: -0.05, atMaxQuality: -0.01 },
+        ],
       },
     ],
-    qualityEffects: { armor_damage_reduction: { atMinQuality: 8, atMaxQuality: 16 } },
+    qualityEffects: {
+      damage_mitigation: { atMinQuality: -0.07, atMaxQuality: -0.01 },
+      movement_speed: { atMinQuality: -0.05, atMaxQuality: -0.01 },
+    },
     rewardPools: [],
   },
 ];
@@ -303,7 +354,7 @@ export default function BlueprintWorkbench() {
   // ── Shared state ──────────────────────────────────────
   const [selectedBlueprintId, setSelectedBlueprintId] = useState<string | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
-  const [qualityLevel, setQualityLevel] = useState(500);
+  const [partQualities, setPartQualities] = useState<Record<string, number>>({});
   const [queue, setQueue] = useState<CraftQueueItem[]>([]);
   const [addQty, setAddQty] = useState(1);
 
@@ -420,17 +471,29 @@ export default function BlueprintWorkbench() {
   );
   const totalItems = queue.reduce((s, q) => s + q.quantity, 0);
 
-  // ── Quality ───────────────────────────────────────────
-  const qualityPct = (qualityLevel / 1000) * 100;
-  const modifiedStats = useMemo(() => {
-    if (!selectedBlueprint) return {};
-    const out: Record<string, { base: number; modified: number; bonus: number }> = {};
-    Object.entries(selectedBlueprint.qualityEffects).forEach(([stat, effect]) => {
-      const bonus = ((effect.atMaxQuality - effect.atMinQuality) * qualityPct) / 100;
-      out[stat] = { base: effect.atMinQuality, modified: effect.atMinQuality + bonus, bonus };
+  // ── Per-part quality helpers ───────────────────────────
+  const getModValueAtQuality = useCallback((mod: import("./types").ModifierEntry, quality: number): number => {
+    if (mod.qualityMax === mod.qualityMin) return mod.atMinQuality;
+    const t = Math.max(0, Math.min(1, (quality - mod.qualityMin) / (mod.qualityMax - mod.qualityMin)));
+    return mod.atMinQuality + t * (mod.atMaxQuality - mod.atMinQuality);
+  }, []);
+
+  // Aggregate per-stat contributions from ALL parts at their current quality
+  const combinedModifiers = useMemo(() => {
+    if (!selectedBlueprint) return {} as Record<string, { current: number; atMin: number; atMax: number }>;
+    const result: Record<string, { current: number; atMin: number; atMax: number }> = {};
+    selectedBlueprint.parts.forEach((part) => {
+      const quality = partQualities[part.groupKey] ?? 0;
+      part.modifiers.forEach((mod) => {
+        const current = getModValueAtQuality(mod, quality);
+        if (!result[mod.propertyKey]) result[mod.propertyKey] = { current: 0, atMin: 0, atMax: 0 };
+        result[mod.propertyKey].current += current;
+        result[mod.propertyKey].atMin += mod.atMinQuality;
+        result[mod.propertyKey].atMax += mod.atMaxQuality;
+      });
     });
-    return out;
-  }, [selectedBlueprint, qualityPct]);
+    return result;
+  }, [selectedBlueprint, partQualities, getModValueAtQuality]);
 
   const getQC = (q: number) => q < 250 ? "text-red-400" : q < 500 ? "text-orange-400" : q < 750 ? "text-yellow-400" : "text-emerald-400";
   const getQL = (q: number) => q < 250 ? tc("poor") : q < 500 ? tc("substandard") : q < 750 ? tc("standard") : q < 900 ? tc("high") : tc("excellent");
@@ -571,6 +634,24 @@ export default function BlueprintWorkbench() {
                   </div>
                 )}
               </div>
+              {/* Reward pools / acquisition info — moved here from "how-to-obtain" widget */}
+              {(selectedBlueprint.rewardPools.length > 0 || selectedBlueprint.isDefault) && (
+                <div className="mt-3 pt-3 border-t border-zinc-800/40">
+                  <div className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">{tb("howToObtain")}</div>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedBlueprint.isDefault && (
+                      <span className="text-[10px] px-3 py-1 bg-emerald-500/10 text-emerald-400 rounded-full border border-emerald-500/20 font-medium">
+                        {tb("defaultInfo")}
+                      </span>
+                    )}
+                    {selectedBlueprint.rewardPools.map((pool) => (
+                      <span key={pool.poolUuid} className="text-[10px] px-3 py-1 bg-violet-500/10 text-violet-300 rounded-full border border-violet-500/20 font-medium">
+                        {formatPoolKey(pool.poolKey)}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </SortableWidget>
         );
@@ -582,78 +663,133 @@ export default function BlueprintWorkbench() {
           <SortableWidget key={wId} id={wId}
             header={
               <div className="px-5 py-3.5 border-b border-zinc-800/60 bg-zinc-950/30 flex items-center">
-                <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex-1">{tb("partsBreakdown")}</h3>
+                <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex-1">Calidad de Materiales</h3>
                 <span className="text-[9px] text-zinc-700">⠿⠿</span>
               </div>
             }
           >
-            <div className="p-5 space-y-3">
-              {selectedBlueprint.parts.map((part) => (
-                <div key={part.groupKey} className="border border-zinc-800/50 rounded-xl p-4 bg-zinc-950/30 border-l-2 border-l-cyan-500/40">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-mono text-xs font-bold text-cyan-400 tracking-wide">{part.groupName}</h4>
-                    {part.requiredCount > 1 && (
-                      <span className="text-[9px] font-bold text-amber-400/70 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
-                        {tb("requiredCount", { count: part.requiredCount })}
-                      </span>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mb-2">
-                    {part.materials.map((mat) => (
-                      <div key={mat.resourceUuid} className="bg-zinc-900/60 rounded-lg p-2.5 border border-zinc-700/30 hover:border-amber-500/20 transition-colors">
-                        <div className="text-xs text-zinc-400 mb-1 leading-snug">{mat.resourceName}</div>
-                        <div className="font-mono text-sm font-bold text-amber-400">
-                          {mat.quantityScu.toFixed(3)}<span className="text-amber-500/50 font-normal text-xs ml-1">SCU</span>
-                        </div>
-                        {mat.minQuality > 0 && <div className="text-[9px] text-zinc-600 mt-0.5">{tb("minQ", { value: mat.minQuality })}</div>}
+            {/* SC Crafter-style: one card per part, side by side */}
+            <div className="p-4 grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(selectedBlueprint.parts.length, 3)}, 1fr)` }}>
+              {selectedBlueprint.parts.map((part) => {
+                const q = partQualities[part.groupKey] ?? 0;
+                return (
+                  <div key={part.groupKey} className="border border-zinc-700/40 rounded-xl p-4 bg-zinc-950/30 flex flex-col gap-3">
+
+                    {/* Part name */}
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <span className="text-zinc-500">⬡</span>
+                        <h4 className="font-bold text-sm text-zinc-100">{part.groupName}</h4>
                       </div>
-                    ))}
-                  </div>
-                  {part.modifiers.length > 0 && (
-                    <div className="pt-2.5 border-t border-zinc-800/40">
-                      <div className="text-[9px] text-zinc-600 uppercase tracking-wider mb-1.5">{tb("modifiers")}</div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {part.modifiers.map((mod) => (
-                          <span key={mod.propertyKey} className="text-[9px] px-2 py-0.5 bg-cyan-500/8 text-cyan-400 rounded-full border border-cyan-500/20">
-                            {formatModKey(mod.propertyKey)}: {mod.atMinQuality} → {mod.atMaxQuality}
-                          </span>
+                      <div className="text-[10px] text-zinc-500">Required: {part.requiredCount}</div>
+                    </div>
+
+                    {/* All materials as a list */}
+                    <div>
+                      <div className="grid grid-cols-2 text-[9px] text-zinc-500 uppercase tracking-widest mb-1.5 px-0.5">
+                        <span>Resource</span><span className="text-right">SCU</span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {part.materials.map((mat, idx) => (
+                          <div key={mat.resourceUuid} className="grid grid-cols-2 items-baseline">
+                            <span className={`text-sm font-bold ${idx === 0 ? "text-emerald-400" : "text-cyan-400"}`}>
+                              {mat.resourceName}
+                            </span>
+                            <div className="text-right">
+                              <span className="font-mono text-base font-bold text-zinc-100">{mat.quantityScu.toFixed(4)}</span>
+                              {mat.minQuality > 0 && (
+                                <div className="text-[8px] text-amber-500/60">{tb("minQ", { value: mat.minQuality })}</div>
+                              )}
+                            </div>
+                          </div>
                         ))}
                       </div>
                     </div>
-                  )}
-                </div>
-              ))}
+
+                    {/* Quality slider — only for parts that have modifiers */}
+                    {part.modifiers.length > 0 && (
+                      <div className="border-t border-zinc-800/40 pt-3 flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[9px] text-zinc-500 uppercase tracking-widest">Quality Adjustment</span>
+                          <span className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-zinc-800 ${getQC(q)}`}>{q}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setPartQualities((prev) => ({ ...prev, [part.groupKey]: Math.max(0, q - 1) }))}
+                            className="w-7 h-7 flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 hover:text-white text-base font-bold transition-colors flex-shrink-0"
+                          >−</button>
+                          <input
+                            type="range" min="0" max="1000" value={q}
+                            onChange={(e) => setPartQualities((prev) => ({ ...prev, [part.groupKey]: Number(e.target.value) }))}
+                            className="flex-1 h-1.5 rounded-lg appearance-none cursor-pointer"
+                            style={{ background: "linear-gradient(to right, rgb(160,35,35) 0%, rgb(160,110,10) 50%, rgb(22,120,55) 100%)" }}
+                          />
+                          <button
+                            onClick={() => setPartQualities((prev) => ({ ...prev, [part.groupKey]: Math.min(1000, q + 1) }))}
+                            className="w-7 h-7 flex items-center justify-center bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-300 hover:text-white text-base font-bold transition-colors flex-shrink-0"
+                          >+</button>
+                        </div>
+                        {/* Live modifier preview per part */}
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-0.5">
+                          {part.modifiers.map((mod) => {
+                            const val = getModValueAtQuality(mod, q);
+                            const pct = (val * 100).toFixed(2);
+                            const isPos = val >= 0;
+                            return (
+                              <div key={mod.propertyKey} className="text-[9px] flex items-center gap-1">
+                                <span className="text-zinc-500">{formatModKey(mod.propertyKey)}</span>
+                                <span className={`font-mono font-bold ${isPos ? "text-emerald-400" : "text-red-400"}`}>
+                                  {isPos ? "+" : ""}{pct}%
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </SortableWidget>
         );
 
-      /* ── Quality Effects (range) ── */
+      /* ── Final Combined Modifiers ── */
       case "quality-effects":
-        if (!selectedBlueprint || Object.keys(selectedBlueprint.qualityEffects).length === 0) return null;
+        if (!selectedBlueprint || Object.keys(combinedModifiers).length === 0) return null;
         return (
           <SortableWidget key={wId} id={wId}
             header={
               <div className="px-5 py-3.5 border-b border-zinc-800/60 bg-zinc-950/30 flex items-center">
-                <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex-1">{tb("qualityEffects")}</h3>
+                <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex-1">Final Combined Modifiers</h3>
                 <span className="text-[9px] text-zinc-700">⠿⠿</span>
               </div>
             }
           >
-            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {Object.entries(selectedBlueprint.qualityEffects).map(([stat, effect]) => {
-                const isIncrease = effect.atMaxQuality >= effect.atMinQuality;
+            <div className="p-4 space-y-2">
+              {Object.entries(combinedModifiers).map(([stat, { current, atMin, atMax }]) => {
+                const isNeg = current < 0;
+                const currentPct = (current * 100).toFixed(2);
+                const minPct = (atMin * 100).toFixed(2);
+                const maxPct = (atMax * 100).toFixed(2);
+                const range = atMax - atMin;
+                const progress = range !== 0 ? Math.max(0, Math.min(100, ((current - atMin) / range) * 100)) : 0;
                 return (
-                  <div key={stat} className="border border-zinc-800/40 rounded-xl p-4 bg-zinc-950/20">
-                    <div className="text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-3">{formatModKey(stat)}</div>
-                    <div className="flex justify-between items-baseline mb-2">
-                      <div><span className="text-[9px] text-zinc-600 uppercase">Q0 </span><span className="font-mono text-sm text-zinc-300">{effect.atMinQuality}</span></div>
-                      <span className="text-zinc-700 text-xs">→</span>
-                      <div><span className="text-[9px] text-zinc-600 uppercase">Q1000 </span><span className={`font-mono text-sm font-bold ${isIncrease ? "text-emerald-400" : "text-red-400"}`}>{effect.atMaxQuality}</span></div>
+                  <div key={stat} className="border border-zinc-800/40 rounded-xl p-3 bg-zinc-950/20">
+                    <div className="flex justify-between items-center mb-1.5">
+                      <span className="text-xs font-semibold text-zinc-300">{formatModKey(stat)}</span>
+                      <span className={`font-mono text-sm font-bold ${isNeg ? "text-red-400" : "text-emerald-400"}`}>
+                        {current >= 0 ? "+" : ""}{currentPct}%
+                      </span>
                     </div>
-                    <div className="w-full bg-zinc-800/60 rounded-full h-1.5">
+                    <div className="flex justify-between text-[9px] text-zinc-600 mb-1.5">
+                      <span>Q0: {Number(minPct) >= 0 ? "+" : ""}{minPct}%</span>
+                      <span>Q1000: {Number(maxPct) >= 0 ? "+" : ""}{maxPct}%</span>
+                    </div>
+                    <div className="h-1 bg-zinc-800/60 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full ${isIncrease ? "bg-gradient-to-r from-[#4a6741] to-orange-500" : "bg-gradient-to-r from-red-700 to-orange-600"}`}
-                        style={{ width: `${Math.min(100, Math.abs(effect.atMaxQuality - effect.atMinQuality) / Math.max(Math.abs(effect.atMinQuality), 1) * 100)}%` }}
+                        className={`h-full rounded-full transition-all duration-200 ${isNeg ? "bg-gradient-to-r from-red-700 to-orange-500" : "bg-gradient-to-r from-[#4a6741] to-emerald-400"}`}
+                        style={{ width: `${progress}%` }}
                       />
                     </div>
                   </div>
@@ -684,33 +820,6 @@ export default function BlueprintWorkbench() {
                     <div className="font-mono text-sm font-bold text-amber-400">{scu.toFixed(3)}<span className="text-amber-500/50 font-normal text-xs ml-1">SCU</span></div>
                   </div>
                 ))}
-            </div>
-          </SortableWidget>
-        );
-
-      /* ── How to Obtain ── */
-      case "how-to-obtain":
-        if (!selectedBlueprint || (selectedBlueprint.rewardPools.length === 0 && !selectedBlueprint.isDefault)) return null;
-        return (
-          <SortableWidget key={wId} id={wId}
-            header={
-              <div className="px-5 py-3.5 border-b border-zinc-800/60 bg-zinc-950/30 flex items-center">
-                <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex-1">{tb("howToObtain")}</h3>
-                <span className="text-[9px] text-zinc-700">⠿⠿</span>
-              </div>
-            }
-          >
-            <div className="p-5">
-              {selectedBlueprint.rewardPools.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {selectedBlueprint.rewardPools.map((pool) => (
-                    <span key={pool.poolUuid} className="text-xs px-3 py-1.5 bg-violet-500/10 text-violet-300 rounded-full border border-violet-500/25 font-medium">
-                      {formatPoolKey(pool.poolKey)}
-                    </span>
-                  ))}
-                </div>
-              )}
-              {selectedBlueprint.isDefault && <p className="text-xs text-emerald-400 font-medium">{tb("defaultInfo")}</p>}
             </div>
           </SortableWidget>
         );
@@ -769,38 +878,9 @@ export default function BlueprintWorkbench() {
           </SortableWidget>
         );
 
-      /* ── Quality Slider ── */
-      case "quality-slider":
-        return (
-          <SortableWidget key={wId} id={wId}
-            header={
-              <div className="px-4 py-3 border-b border-zinc-800/60 bg-zinc-950/30 flex items-center">
-                <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex-1">{tc("widgetQuality")}</h3>
-                <span className="text-[9px] text-zinc-700">⠿⠿</span>
-              </div>
-            }
-          >
-            <div className="p-3 space-y-2.5">
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-zinc-500">{tc("qualityLevel")}</span>
-                <div>
-                  <span className={`font-mono text-base ${getQC(qualityLevel)}`}>{qualityLevel}</span>
-                  <span className={`ml-2 text-xs font-semibold ${getQC(qualityLevel)}`}>{getQL(qualityLevel)}</span>
-                </div>
-              </div>
-              <input type="range" min="0" max="1000" value={qualityLevel} onChange={(e) => setQualityLevel(Number(e.target.value))}
-                className="w-full h-2 rounded-lg appearance-none cursor-pointer"
-                style={{ background: "linear-gradient(to right, rgb(239,68,68) 0%, rgb(234,179,8) 50%, rgb(34,197,94) 100%)" }} />
-              <div className="flex justify-between text-[9px] text-zinc-600">
-                <span>{tc("poorZero")}</span><span>{tc("standardFiveHundred")}</span><span>{tc("excellentThousand")}</span>
-              </div>
-            </div>
-          </SortableWidget>
-        );
-
-      /* ── Quality Stats ── */
+      /* ── Quality Stats (combined impact) ── */
       case "quality-stats":
-        if (!selectedBlueprint || Object.keys(modifiedStats).length === 0) return null;
+        if (!selectedBlueprint || Object.keys(combinedModifiers).length === 0) return null;
         return (
           <SortableWidget key={wId} id={wId}
             header={
@@ -811,26 +891,22 @@ export default function BlueprintWorkbench() {
             }
           >
             <div className="p-3 space-y-2">
-              <p className="text-[9px] text-zinc-500">
-                {tc("effectsForPrefix")} <span className={`font-mono font-semibold ${getQC(qualityLevel)}`}>Q{qualityLevel}</span>
-              </p>
-              {Object.entries(modifiedStats).map(([stat, values]) => {
-                const pct = values.base !== 0 ? ((values.bonus / Math.abs(values.base)) * 100).toFixed(1) : "0";
-                const isPos = values.bonus >= 0;
+              {Object.entries(combinedModifiers).map(([stat, { current, atMin, atMax }]) => {
+                const isPos = current >= 0;
+                const currentPct = (current * 100).toFixed(2);
+                const range = atMax - atMin;
+                const progress = range !== 0 ? Math.max(0, Math.min(100, ((current - atMin) / range) * 100)) : 0;
                 return (
                   <div key={stat} className="border border-zinc-800/40 rounded-lg p-2.5 space-y-1.5">
                     <div className="flex justify-between items-baseline">
                       <span className="text-[10px] font-semibold text-zinc-300">{formatModKey(stat)}</span>
-                      <span className={`text-[9px] font-mono ${isPos ? "text-emerald-400" : "text-red-400"}`}>{isPos ? "+" : ""}{pct}%</span>
-                    </div>
-                    <div className="flex justify-between text-[9px]">
-                      <span className="text-zinc-600 font-mono">{values.base.toFixed(1)}</span>
-                      <span className="text-zinc-700">→</span>
-                      <span className={`font-mono font-semibold ${isPos ? "text-emerald-400" : "text-red-400"}`}>{values.modified.toFixed(1)}</span>
+                      <span className={`text-[9px] font-mono font-bold ${isPos ? "text-emerald-400" : "text-red-400"}`}>
+                        {isPos ? "+" : ""}{currentPct}%
+                      </span>
                     </div>
                     <div className="h-1 bg-zinc-800/60 rounded-full overflow-hidden">
                       <div className={`h-full rounded-full transition-all duration-200 ${isPos ? "bg-gradient-to-r from-cyan-600 to-emerald-500" : "bg-red-500"}`}
-                        style={{ width: `${Math.min(100, (qualityLevel / 1000) * 100)}%` }} />
+                        style={{ width: `${progress}%` }} />
                     </div>
                   </div>
                 );
@@ -891,34 +967,6 @@ export default function BlueprintWorkbench() {
           </SortableWidget>
         );
 
-      /* ── Recommendations ── */
-      case "recommendations":
-        return (
-          <SortableWidget key={wId} id={wId}
-            header={
-              <div className="px-4 py-3 border-b border-zinc-800/60 bg-zinc-950/30 flex items-center">
-                <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-widest flex-1">{tc("widgetRecommendations")}</h3>
-                <span className="text-[9px] text-zinc-700">⠿⠿</span>
-              </div>
-            }
-          >
-            <div className="p-3 space-y-2">
-              <div className="border border-red-800/40 bg-red-900/10 rounded-lg p-2.5">
-                <div className="text-[10px] font-semibold text-red-400 mb-0.5">{tc("recPoorTitle")}</div>
-                <p className="text-[9px] text-red-300/80 leading-relaxed">{tc("recPoorDesc")}</p>
-              </div>
-              <div className="border border-amber-800/40 bg-amber-900/10 rounded-lg p-2.5">
-                <div className="text-[10px] font-semibold text-amber-400 mb-0.5">{tc("recStandardTitle")}</div>
-                <p className="text-[9px] text-amber-300/80 leading-relaxed">{tc("recStandardDesc")}</p>
-              </div>
-              <div className="border border-emerald-800/40 bg-emerald-900/10 rounded-lg p-2.5">
-                <div className="text-[10px] font-semibold text-emerald-400 mb-0.5">{tc("recExcellentTitle")}</div>
-                <p className="text-[9px] text-emerald-300/80 leading-relaxed">{tc("recExcellentDesc")}</p>
-              </div>
-            </div>
-          </SortableWidget>
-        );
-
       default:
         return null;
     }
@@ -946,7 +994,46 @@ export default function BlueprintWorkbench() {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+      {/* Quality tier legend — fixed above workbench */}
+      <div className="flex flex-wrap gap-2 mb-4 px-1">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-950/40 border border-red-500/25">
+          <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+          <div>
+            <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider">Deficiente</span>
+            <span className="text-[9px] text-red-500/60 ml-1.5">0 – 250</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-orange-950/40 border border-orange-500/25">
+          <div className="w-2 h-2 rounded-full bg-orange-500 flex-shrink-0" />
+          <div>
+            <span className="text-[10px] font-bold text-orange-400 uppercase tracking-wider">Subestándar</span>
+            <span className="text-[9px] text-orange-500/60 ml-1.5">251 – 499</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-yellow-950/40 border border-yellow-500/25">
+          <div className="w-2 h-2 rounded-full bg-yellow-500 flex-shrink-0" />
+          <div>
+            <span className="text-[10px] font-bold text-yellow-400 uppercase tracking-wider">Estándar</span>
+            <span className="text-[9px] text-yellow-500/60 ml-1.5">500 – 749</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-950/40 border border-emerald-500/25">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
+          <div>
+            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Alto</span>
+            <span className="text-[9px] text-emerald-500/60 ml-1.5">750 – 899</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-cyan-950/40 border border-cyan-500/25">
+          <div className="w-2 h-2 rounded-full bg-cyan-400 flex-shrink-0" />
+          <div>
+            <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Excelente</span>
+            <span className="text-[9px] text-cyan-500/60 ml-1.5">900 – 1000</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 items-start" style={{ gridTemplateColumns: "1fr 1.4fr 0.75fr" }}>
         {columns.map((colWidgets, colIdx) => (
           <SortableContext key={colIdx} items={colWidgets} strategy={verticalListSortingStrategy}>
             <div className="space-y-3 min-h-20">
