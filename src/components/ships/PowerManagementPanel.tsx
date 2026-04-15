@@ -83,7 +83,8 @@ export function PowerManagementPanel({
   flightMode: FlightMode;
   onModeChange: (m: FlightMode) => void;
 }) {
-  const { setInstancePower, toggleComponent } = useLoadoutStore();
+  const setInstancePower = useLoadoutStore(s => s.setInstancePower);
+  const toggleComponent  = useLoadoutStore(s => s.toggleComponent);
   const pn = stats.powerNetwork;
 
   // Build ordered columns (skip power plants — they generate, not consume)

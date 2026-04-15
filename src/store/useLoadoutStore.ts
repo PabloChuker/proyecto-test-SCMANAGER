@@ -659,6 +659,59 @@ const ZERO_ALLOC: Record<PowerCategory, number> = { weapons: 0, thrusters: 0, sh
 const EMPTY_NET: PowerNetworkState = { totalOutput: 0, totalAllocated: 0, totalMinDraw: 0, consumptionPercent: 0, freePoints: 0, isOverloaded: false, categories: (() => { const c = {} as any; for (const k of POWER_CATEGORIES) c[k] = emptyCat(); return c; })(), activeCategories: [], instances: [] };
 const EMPTY_STATS: ComputedStats = { totalDps: 0, totalAlpha: 0, shieldHp: 0, shieldRegen: 0, powerOutput: 0, powerDraw: 0, powerBalance: 0, coolingRate: 0, thermalOutput: 0, thermalBalance: 0, emSignature: 0, irSignature: 0, effectiveSpeed: null, effectiveSpeedLabel: "SCM", powerNetwork: EMPTY_NET, summary: { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0, activeComponents: 0, totalComponents: 0 } };
 
+// =============================================================================
+// Module-level performance helpers
+// =============================================================================
+
+// ── Round 4-A: getStats() memoization cache ───────────────────────────────────
+// computeStats() is O(hardpoints) and called by every widget on every render.
+// We cache the last result by a stable key so consecutive calls within the same
+// React batch (CombatSummary + LoadoutDetail + PowerPanel all firing at once)
+// pay the cost exactly once.
+let _statsCache: { key: string; result: ComputedStats } | null = null;
+
+function makeStatsKey(
+  shipId: string | null,
+  flightMode: FlightMode,
+  overrides: Map<string, EquippedItem | null>,
+  componentStates: Record<string, boolean>,
+  instancePower: Record<string, number>,
+  shipPowerGen: number,
+): string {
+  const ovr = [...overrides.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}:${v?.reference ?? "∅"}`)
+    .join(",");
+  const off = Object.entries(componentStates)
+    .filter(([, v]) => v === false)
+    .map(([k]) => k)
+    .sort()
+    .join(",");
+  const pw = Object.entries(instancePower)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}:${v}`)
+    .join(",");
+  return `${shipId ?? ""}|${flightMode}|${ovr}|${off}|${pw}|${shipPowerGen}`;
+}
+
+// ── Round 4-B: Debounced autoAllocatePower ────────────────────────────────────
+// Replaces the per-action setTimeout(..., 0) scatter with a single 50ms
+// trailing debounce so rapid equip/toggle/mode changes coalesce into one
+// allocation pass instead of N cascading passes.
+let _autoAllocTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleAutoAlloc(get: () => LoadoutState) {
+  if (_autoAllocTimer) clearTimeout(_autoAllocTimer);
+  _autoAllocTimer = setTimeout(() => {
+    _autoAllocTimer = null;
+    get().autoAllocatePower();
+  }, 50);
+}
+
+// ── Round 4-E: loadShip() request deduplication ───────────────────────────────
+// Prevents duplicate in-flight fetches when the same ship is loaded twice
+// (e.g. hot-reload, StrictMode double-invoke, or rapid navigation).
+const _loadingShips = new Map<string, Promise<void>>();
+
 interface LoadoutState {
   shipId: string | null; shipInfo: ShipInfo | null;
   hardpoints: ResolvedHardpoint[]; overrides: Map<string, EquippedItem | null>;
@@ -701,9 +754,12 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
 
   getStats: () => {
     const s = get();
-    return s.hardpoints.length === 0
-      ? EMPTY_STATS
-      : computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, s.instancePower, s.shipInfo, s.shipPowerGen, s.flightControllerPower);
+    if (s.hardpoints.length === 0) return EMPTY_STATS;
+    const key = makeStatsKey(s.shipId, s.flightMode, s.overrides, s.componentStates, s.instancePower, s.shipPowerGen);
+    if (_statsCache && _statsCache.key === key) return _statsCache.result;
+    const result = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, s.instancePower, s.shipInfo, s.shipPowerGen, s.flightControllerPower);
+    _statsCache = { key, result };
+    return result;
   },
   getEffectiveItem: (hpId) => { const { hardpoints, overrides } = get(); if (overrides.has(hpId)) return overrides.get(hpId) ?? null; const top = hardpoints.find(h => h.id === hpId); if (top) return top.defaultItem ?? null; for (const h of hardpoints) { const ch = h.children.find(c => c.id === hpId); if (ch) return ch.equippedItem ?? null; } return null; },
   isComponentOn: (hpName) => get().componentStates[hpName] !== false,
@@ -712,6 +768,10 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   getSystemHardpoints: () => get().hardpoints.filter(hp => SYSTEM_CATS.has(hp.resolvedCategory)),
 
   loadShip: async (id, buildParam) => {
+    const dedupKey = id + "|" + (buildParam ?? "");
+    const inflight = _loadingShips.get(dedupKey);
+    if (inflight) return inflight;
+    const p = (async () => {
     set({ isLoading: true, error: null });
     try {
       const res = await fetch("/api/ships/" + encodeURIComponent(id));
@@ -838,17 +898,20 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
         allocatedPower: { ...ZERO_ALLOC },
         isLoading: false, error: null,
       });
-      setTimeout(() => get().autoAllocatePower(), 0);
+      scheduleAutoAlloc(get);
     } catch (err) {
       set({ isLoading: false, error: err instanceof Error ? err.message : "Unknown error" });
     }
+    })().finally(() => _loadingShips.delete(dedupKey));
+    _loadingShips.set(dedupKey, p);
+    return p;
   },
 
-  equipItem: (hpId, item) => { set(s => { const n = new Map(s.overrides); n.set(hpId, item); return { overrides: n }; }); setTimeout(() => get().autoAllocatePower(), 0); },
-  clearSlot: (hpId) => { set(s => { const n = new Map(s.overrides); n.set(hpId, null); return { overrides: n }; }); setTimeout(() => get().autoAllocatePower(), 0); },
-  toggleComponent: (hpName) => { set(s => ({ componentStates: { ...s.componentStates, [hpName]: s.componentStates[hpName] === false } })); setTimeout(() => get().autoAllocatePower(), 0); },
-  resetAll: () => { const fresh: Record<string, boolean> = {}; for (const hp of get().hardpoints) { fresh[hp.hardpointName] = true; for (const ch of hp.children) fresh[ch.hardpointName] = true; } set({ overrides: new Map(), componentStates: fresh, flightMode: "SCM" as FlightMode, instancePower: {}, allocatedPower: { ...ZERO_ALLOC } }); setTimeout(() => get().autoAllocatePower(), 0); },
-  setFlightMode: (mode) => { set({ flightMode: mode }); setTimeout(() => get().autoAllocatePower(), 0); },
+  equipItem: (hpId, item) => { set(s => { const n = new Map(s.overrides); n.set(hpId, item); return { overrides: n }; }); scheduleAutoAlloc(get); },
+  clearSlot: (hpId) => { set(s => { const n = new Map(s.overrides); n.set(hpId, null); return { overrides: n }; }); scheduleAutoAlloc(get); },
+  toggleComponent: (hpName) => { set(s => ({ componentStates: { ...s.componentStates, [hpName]: s.componentStates[hpName] === false } })); scheduleAutoAlloc(get); },
+  resetAll: () => { const fresh: Record<string, boolean> = {}; for (const hp of get().hardpoints) { fresh[hp.hardpointName] = true; for (const ch of hp.children) fresh[ch.hardpointName] = true; } set({ overrides: new Map(), componentStates: fresh, flightMode: "SCM" as FlightMode, instancePower: {}, allocatedPower: { ...ZERO_ALLOC } }); scheduleAutoAlloc(get); },
+  setFlightMode: (mode) => { set({ flightMode: mode }); scheduleAutoAlloc(get); },
 
   setInstancePower: (hardpointName, pips) => {
     const s = get();
