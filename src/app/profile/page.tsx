@@ -723,4 +723,14 @@ export default function ProfilePage() {
                   <div className="h-[3px] bg-gradient-to-r from-lime-600 to-amber-600 flex-shrink-0" />
                   {activeSection === "config" && id === "config" && <ConfigPanel onClose={() => setActiveSection(null)} />}
                   {activeSection === "subs"   && id === "subs"   && <SubsPanel onClose={() => setActiveSection(null)} />}
-                  {activeSection === "org"    && id === "org"    && <OrgInfoPanel orgName={orgName} onClose={() => setActiveSection(null)} /
+                  {activeSection === "org"    && id === "org"    && <OrgInfoPanel orgName={orgName} onClose={() => setActiveSection(null)} />}
+                </div>
+              ))}
+            </div>
+          )}
+
+        </div>
+      </div>
+    </main>
+  );
+}
