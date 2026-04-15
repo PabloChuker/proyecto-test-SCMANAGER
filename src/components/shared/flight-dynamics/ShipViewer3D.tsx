@@ -44,16 +44,36 @@ export interface ShipViewer3DProps {
 //   Y (verde) — ala  → ala     → Pitch gira sobre este eje
 //   Z (azul)  — panza → arriba → Yaw gira sobre este eje
 const AXIS_LINE_COLORS: Record<Exclude<RotationAxis, "free">, number> = {
-  pitch: 0x22c55e, // verde — eje Y (ala→ala)
-  yaw:   0x3b82f6, // azul  — eje Z (panza→arriba)
-  roll:  0xef4444, // rojo  — eje X (cola→nariz)
+  pitch: 0x22c55e,
+  yaw:   0x3b82f6,
+  roll:  0xef4444,
 };
 
-// ─── Cache de GLB por URL ────────────────────────────────────────────────────
+// ─── Cache de GLB por URL (LRU, máx 20 entradas) ────────────────────────────
 // Guardamos la Promise<THREE.Group> una sola vez por URL. Los consumers que
 // hagan .then() sobre la misma entrada recibirán el mismo Group y deben
 // clonarlo antes de meterlo en su escena (no se puede compartir Object3D).
-const glbCache = new Map<string, Promise<THREE.Group>>();
+// El LRU evita que el cache crezca sin límite cuando el usuario navega muchas
+// naves distintas: descarta la entrada menos usada recientemente.
+class LRUCache<K, V> {
+  private readonly max: number;
+  private readonly map: Map<K, V>;
+  constructor(max: number) { this.max = max; this.map = new Map(); }
+  get(key: K): V | undefined {
+    if (!this.map.has(key)) return undefined;
+    const v = this.map.get(key)!;
+    this.map.delete(key);
+    this.map.set(key, v);
+    return v;
+  }
+  set(key: K, value: V): void {
+    if (this.map.has(key)) this.map.delete(key);
+    else if (this.map.size >= this.max) this.map.delete(this.map.keys().next().value!);
+    this.map.set(key, value);
+  }
+  has(key: K): boolean { return this.map.has(key); }
+}
+const glbCache = new LRUCache<string, Promise<THREE.Group>>(20);
 
 async function loadGlb(url: string): Promise<THREE.Group> {
   let entry = glbCache.get(url);
@@ -64,24 +84,16 @@ async function loadGlb(url: string): Promise<THREE.Group> {
       const gltf = await loader.loadAsync(url);
       const root = gltf.scene;
 
-      // Normalizar: centrar y escalar para que el bounding box quepa en ±0.9
       const box = new THREE.Box3().setFromObject(root);
       const size = new THREE.Vector3();
       const center = new THREE.Vector3();
       box.getSize(size);
       box.getCenter(center);
 
-      // IMPORTANTE: no podemos setear position y scale en el mismo nodo,
-      // porque la matriz local se computa como T(position) * S(scale), y
-      // una traslación por -center seguida de escala deja el modelo en
-      // `center * (scale - 1)` — o sea, descentrado del eje de rotación.
-      // Solución: centrar en el nodo interno (position = -center) y
-      // escalar en un Group envolvente. Resultado: S_outer * T_inner * v
-      // = scale * (v - center), centrado correctamente en el origen.
       root.position.sub(center);
 
       const maxDim = Math.max(size.x, size.y, size.z) || 1;
-      const targetSize = 2.4; // antes 1.8 — naves más grandes dentro del viewer
+      const targetSize = 2.4;
       const scale = targetSize / maxDim;
 
       const holder = new THREE.Group();
@@ -96,8 +108,6 @@ async function loadGlb(url: string): Promise<THREE.Group> {
 }
 
 function cloneGlbForScene(source: THREE.Group): THREE.Group {
-  // Clon profundo: geometría compartida, materiales clonados para evitar
-  // que un dispose en una instancia rompa las otras.
   const cloned = source.clone(true);
   cloned.traverse((obj) => {
     if (obj instanceof THREE.Mesh) {
@@ -114,7 +124,6 @@ function cloneGlbForScene(source: THREE.Group): THREE.Group {
 function disposeClonedGlb(group: THREE.Group): void {
   group.traverse((obj) => {
     if (obj instanceof THREE.Mesh) {
-      // Geometría NO se dispone: es compartida con el source cacheado.
       if (Array.isArray(obj.material)) {
         obj.material.forEach((m) => m.dispose());
       } else if (obj.material) {
@@ -142,11 +151,9 @@ export function ShipViewer3D({
     const W = container.clientWidth  || 200;
     const H = container.clientHeight || 200;
 
-    // ─── Escena ───────────────────────────────────────────────────────────
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x09090b); // zinc-950
+    scene.background = new THREE.Color(0x09090b);
 
-    // Cámara: fov más cerrado + cámara más cerca ⇒ la nave ocupa más frame
     const camera = new THREE.PerspectiveCamera(36, W / H, 0.1, 80);
     camera.position.set(1.7, 0.95, 2.1);
     camera.lookAt(0, 0, 0);
@@ -155,39 +162,35 @@ export function ShipViewer3D({
     renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-    // ─── Luces ────────────────────────────────────────────────────────────
     scene.add(new THREE.AmbientLight(0xffffff, 0.45));
 
     const keyLight = new THREE.DirectionalLight(0xffffff, 1.8);
     keyLight.position.set(2, 3, 2);
     scene.add(keyLight);
 
-    const rimLight = new THREE.DirectionalLight(0x22d3ee, 0.50); // cyan rim
+    const rimLight = new THREE.DirectionalLight(0x22d3ee, 0.50);
     rimLight.position.set(-2, 0.5, -1.5);
     scene.add(rimLight);
 
-    const fillLight = new THREE.DirectionalLight(0x818cf8, 0.18); // indigo fill
+    const fillLight = new THREE.DirectionalLight(0x818cf8, 0.18);
     fillLight.position.set(0, -2, 1);
     scene.add(fillLight);
 
-    // ─── Grid de suelo ────────────────────────────────────────────────────
     const grid = new THREE.GridHelper(7, 14, 0x27272a, 0x18181b);
     grid.position.y = -0.55;
     scene.add(grid);
 
-    // ─── Nave: arrancamos con la procedural, luego swap al GLB si carga ──
     let shipGroup: THREE.Group = buildShipGeometry(shipColor);
     let shipIsGlb = false;
     scene.add(shipGroup);
 
     let cancelled = false;
-    // glbUrl may be a single string or an ordered candidate list (sister-ship
-    // fallback chain). Try each in order until one loads.
     const glbCandidates: string[] = Array.isArray(glbUrl)
       ? glbUrl.filter((u): u is string => !!u)
       : glbUrl
         ? [glbUrl]
         : [];
+
     if (glbCandidates.length > 0) {
       (async () => {
         for (let i = 0; i < glbCandidates.length; i++) {
@@ -200,31 +203,22 @@ export function ShipViewer3D({
             shipGroup = cloneGlbForScene(source);
             shipIsGlb = true;
             scene.add(shipGroup);
-            return; // success
+            return;
           } catch (err) {
             if (cancelled) return;
             const isLast = i === glbCandidates.length - 1;
             if (isLast) {
-              console.warn(
-                "[ShipViewer3D] All GLB candidates failed, keeping procedural:",
-                glbCandidates,
-                err,
-              );
+              console.warn("[ShipViewer3D] All GLB candidates failed, keeping procedural:", glbCandidates, err);
             } else {
-              console.info(
-                "[ShipViewer3D] GLB failed, trying sister fallback:",
-                url,
-              );
+              console.info("[ShipViewer3D] GLB failed, trying sister fallback:", url);
             }
           }
         }
       })();
     }
 
-    // ─── Línea del eje de rotación ─────────────────────────────────────────
     let axisLine: THREE.Line | null = null;
     if (rotationAxis !== "free") {
-      // pitch → eje Y (ala→ala), yaw → eje Z (panza→arriba), roll → eje X (cola→nariz)
       const pts =
         rotationAxis === "pitch"
           ? [new THREE.Vector3(-1.6, 0, 0), new THREE.Vector3(1.6, 0, 0)]
@@ -242,7 +236,6 @@ export function ShipViewer3D({
       scene.add(axisLine);
     }
 
-    // ─── OrbitControls (solo en modo "free") ──────────────────────────────
     let controls: { update(): void; dispose(): void } | null = null;
     let ctrlReady = false;
 
@@ -259,7 +252,6 @@ export function ShipViewer3D({
       });
     }
 
-    // ─── Loop de animación ────────────────────────────────────────────────
     let lastMs = performance.now();
     let rafId  = 0;
     let loopRunning = false;
@@ -267,7 +259,7 @@ export function ShipViewer3D({
     const loop = () => {
       rafId = requestAnimationFrame(loop);
       const now = performance.now();
-      const dt  = Math.min((now - lastMs) / 1000, 0.1); // cap a 100 ms
+      const dt  = Math.min((now - lastMs) / 1000, 0.1);
       lastMs = now;
 
       if (animate && rotationAxis !== "free") {
@@ -295,9 +287,6 @@ export function ShipViewer3D({
       rafId = 0;
     };
 
-    // Page Visibility API: pausar el RAF cuando el tab está en background.
-    // Evita que múltiples instancias Three.js acumulen GPU time y crasheen
-    // el renderer cuando el usuario tiene varios tabs abiertos.
     const onVisibilityChange = () => {
       if (document.hidden) {
         stopLoop();
@@ -307,10 +296,8 @@ export function ShipViewer3D({
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
 
-    // Arrancar solo si el tab está visible
     if (!document.hidden) startLoop();
 
-    // ─── Resize observer ──────────────────────────────────────────────────
     const ro = new ResizeObserver(() => {
       const w = container.clientWidth;
       const h = container.clientHeight;
@@ -321,7 +308,6 @@ export function ShipViewer3D({
     });
     ro.observe(container);
 
-    // ─── Cleanup ──────────────────────────────────────────────────────────
     return () => {
       cancelled = true;
       stopLoop();
