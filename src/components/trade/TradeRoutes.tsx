@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslations } from "next-intl";
 import {
   useTradeWorkOrderStore,
   type TradeRoutePrefill,
@@ -35,6 +36,7 @@ interface FilterData {
 type SortField = "profit" | "roi" | "profit_per_scu";
 
 export default function TradeRoutes() {
+  const tr = useTranslations("Trade.routes");
   // Filter state
   const [vehicle, setVehicle] = useState("");
   const [cargoScu, setCargoScu] = useState(100);
@@ -244,10 +246,10 @@ export default function TradeRoutes() {
           onClick={() => setShowFilters(!showFilters)}
           className="text-[10px] uppercase tracking-widest text-zinc-400 hover:text-cyan-400 transition-colors flex items-center gap-1.5"
         >
-          <span>{showFilters ? "▼" : "▶"}</span> Advanced Filters
+          <span>{showFilters ? "▼" : "▶"}</span> {tr("advancedFilters")}
         </button>
         <div className="text-[10px] font-mono text-zinc-600">
-          {data ? `${data.total} rutas · ${data.cargoScu} SCU` : ""}
+          {data ? tr("totalCount", { count: data.total, scu: data.cargoScu }) : ""}
         </div>
       </div>
 
@@ -261,11 +263,11 @@ export default function TradeRoutes() {
               className="col-span-2 sm:col-span-1 lg:col-span-2 relative"
               ref={vehicleRef}
             >
-              <label className={labelClass}>Vehicle</label>
+              <label className={labelClass}>{tr("vehicle")}</label>
               <div className="relative">
                 <input
                   type="text"
-                  placeholder={vehicle || "— Search ship —"}
+                  placeholder={vehicle || tr("searchShip")}
                   value={
                     vehicleOpen
                       ? vehicleSearch
@@ -293,7 +295,7 @@ export default function TradeRoutes() {
                       setPage(1);
                     }}
                     className="absolute right-1.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 text-xs leading-none"
-                    title="Limpiar"
+                    title={tr("clear")}
                   >
                     ✕
                   </button>
@@ -316,7 +318,7 @@ export default function TradeRoutes() {
                     }}
                     className="w-full text-left px-2.5 py-1.5 text-xs text-zinc-400 hover:bg-zinc-800/70 hover:text-zinc-200 transition-colors"
                   >
-                    — Cualquiera —
+                    {tr("any")}
                   </button>
                   {filteredVehicles.length > 0 ? (
                     filteredVehicles.map((v) => (
@@ -338,7 +340,7 @@ export default function TradeRoutes() {
                     ))
                   ) : (
                     <div className="px-2.5 py-3 text-xs text-zinc-600 text-center">
-                      Sin resultados
+                      {tr("noResults")}
                     </div>
                   )}
                 </div>
@@ -358,11 +360,11 @@ export default function TradeRoutes() {
               />
             </div>
             <div>
-              <label className={labelClass}>Inversión Max (UEC)</label>
+              <label className={labelClass}>{tr("maxInvestment")}</label>
               <input
                 type="number"
                 min={0}
-                placeholder="No limit"
+                placeholder={tr("noLimit")}
                 value={maxInvestment}
                 onChange={(e) => {
                   setMaxInvestment(e.target.value);
@@ -372,7 +374,7 @@ export default function TradeRoutes() {
               />
             </div>
             <div>
-              <label className={labelClass}>Commodity</label>
+              <label className={labelClass}>{tr("commodity")}</label>
               <select
                 value={commodity}
                 onChange={(e) => {
@@ -381,7 +383,7 @@ export default function TradeRoutes() {
                 }}
                 className={selectClass}
               >
-                <option value="">— Todas —</option>
+                <option value="">{tr("allF")}</option>
                 {filters?.commodities.map((c) => (
                   <option key={c.abbr} value={c.abbr}>
                     {c.name}
@@ -391,7 +393,7 @@ export default function TradeRoutes() {
               </select>
             </div>
             <div>
-              <label className={labelClass}>Profit Mínimo</label>
+              <label className={labelClass}>{tr("minProfit")}</label>
               <input
                 type="number"
                 min={0}
@@ -411,11 +413,11 @@ export default function TradeRoutes() {
             {/* Origin */}
             <div className="space-y-2">
               <div className="text-[9px] uppercase tracking-widest text-cyan-500/70 font-medium">
-                Origen
+                {tr("origin")}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className={labelClass}>Sistema</label>
+                  <label className={labelClass}>{tr("system")}</label>
                   <select
                     value={systemStart}
                     onChange={(e) => {
@@ -425,7 +427,7 @@ export default function TradeRoutes() {
                     }}
                     className={selectClass}
                   >
-                    <option value="">— All —</option>
+                    <option value="">{tr("allM")}</option>
                     {filters?.systems.map((s) => (
                       <option key={s} value={s}>
                         {s}
@@ -434,7 +436,7 @@ export default function TradeRoutes() {
                   </select>
                 </div>
                 <div>
-                  <label className={labelClass}>Terminal</label>
+                  <label className={labelClass}>{tr("terminal")}</label>
                   <select
                     value={stationStart}
                     onChange={(e) => {
@@ -443,7 +445,7 @@ export default function TradeRoutes() {
                     }}
                     className={selectClass}
                   >
-                    <option value="">— All —</option>
+                    <option value="">{tr("allM")}</option>
                     {stationsStart.map((s) => (
                       <option key={s.name} value={s.name}>
                         {s.name}
@@ -457,11 +459,11 @@ export default function TradeRoutes() {
             {/* Destination */}
             <div className="space-y-2">
               <div className="text-[9px] uppercase tracking-widest text-amber-500/70 font-medium">
-                Destino
+                {tr("destination")}
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className={labelClass}>Sistema</label>
+                  <label className={labelClass}>{tr("system")}</label>
                   <select
                     value={systemEnd}
                     onChange={(e) => {
@@ -471,7 +473,7 @@ export default function TradeRoutes() {
                     }}
                     className={selectClass}
                   >
-                    <option value="">— All —</option>
+                    <option value="">{tr("allM")}</option>
                     {filters?.systems.map((s) => (
                       <option key={s} value={s}>
                         {s}
@@ -480,7 +482,7 @@ export default function TradeRoutes() {
                   </select>
                 </div>
                 <div>
-                  <label className={labelClass}>Terminal</label>
+                  <label className={labelClass}>{tr("terminal")}</label>
                   <select
                     value={stationEnd}
                     onChange={(e) => {
@@ -489,7 +491,7 @@ export default function TradeRoutes() {
                     }}
                     className={selectClass}
                   >
-                    <option value="">— All —</option>
+                    <option value="">{tr("allM")}</option>
                     {stationsEnd.map((s) => (
                       <option key={s.name} value={s.name}>
                         {s.name}
@@ -507,7 +509,7 @@ export default function TradeRoutes() {
               onClick={resetAll}
               className="px-3 py-1.5 bg-zinc-800/40 hover:bg-zinc-700/40 border border-zinc-700/60 rounded-sm text-[9px] uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors"
             >
-              Reset Filters
+              {tr("resetFilters")}
             </button>
           </div>
         </div>
@@ -539,13 +541,13 @@ export default function TradeRoutes() {
               <thead>
                 <tr className="border-b border-zinc-800/60 bg-zinc-950/80 text-zinc-500">
                   <th className="px-3 py-2.5 text-left font-mono font-medium">
-                    Commodity
+                    {tr("commodity")}
                   </th>
                   <th className="px-3 py-2.5 text-left font-mono font-medium">
-                    Comprar en
+                    {tr("buyAt")}
                   </th>
                   <th className="px-3 py-2.5 text-left font-mono font-medium">
-                    Vender en
+                    {tr("sellAt")}
                   </th>
                   <th
                     className="px-3 py-2.5 text-right font-mono font-medium cursor-pointer hover:text-zinc-200 transition-colors select-none"
@@ -557,7 +559,7 @@ export default function TradeRoutes() {
                     className="px-3 py-2.5 text-right font-mono font-medium cursor-pointer hover:text-zinc-200 transition-colors select-none"
                     onClick={() => handleSort("profit")}
                   >
-                    Profit{arrow("profit")}
+                    {tr("profit")}{arrow("profit")}
                   </th>
                   <th
                     className="px-3 py-2.5 text-right font-mono font-medium cursor-pointer hover:text-zinc-200 transition-colors select-none"
@@ -566,7 +568,7 @@ export default function TradeRoutes() {
                     ROI%{arrow("roi")}
                   </th>
                   <th className="px-3 py-2.5 text-right font-mono font-medium">
-                    Inversión
+                    {tr("investment")}
                   </th>
                   <th className="px-3 py-2.5 text-center font-mono font-medium">
                     WO
@@ -631,7 +633,7 @@ export default function TradeRoutes() {
                       <button
                         onClick={() => setWoModalRoute(r)}
                         className="px-2 py-1 text-[10px] font-mono uppercase tracking-wider bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-sm transition-colors"
-                        title="Enviar a Work Order"
+                        title={tr("sendToWorkOrder")}
                       >
                         → WO
                       </button>
@@ -646,7 +648,7 @@ export default function TradeRoutes() {
           {data.totalPages > 1 && (
             <div className="flex items-center justify-between">
               <div className="text-[10px] font-mono text-zinc-600">
-                Página {data.page} de {data.totalPages}
+                {tr("pageOf", { page: data.page, total: data.totalPages })}
               </div>
               <div className="flex gap-1.5">
                 <button
@@ -654,7 +656,7 @@ export default function TradeRoutes() {
                   disabled={page === 1}
                   className="px-2.5 py-1 text-[10px] bg-zinc-800/40 hover:bg-zinc-700/40 disabled:opacity-30 border border-zinc-700/60 rounded-sm transition-colors"
                 >
-                  ← Prev
+                  ← {tr("prev")}
                 </button>
                 {Array.from({ length: Math.min(7, data.totalPages) }).map(
                   (_, i) => {
@@ -679,7 +681,7 @@ export default function TradeRoutes() {
                   disabled={page === data.totalPages}
                   className="px-2.5 py-1 text-[10px] bg-zinc-800/40 hover:bg-zinc-700/40 disabled:opacity-30 border border-zinc-700/60 rounded-sm transition-colors"
                 >
-                  Next →
+                  {tr("next")} →
                 </button>
               </div>
             </div>
@@ -689,10 +691,10 @@ export default function TradeRoutes() {
         !loading && (
           <div className="py-16 text-center">
             <div className="text-zinc-600 text-sm">
-              No se encontraron rutas comerciales con estos filtros.
+              {tr("noRoutes")}
             </div>
             <div className="text-zinc-700 text-xs mt-1">
-              Intentá cambiar los filtros o ampliar el rango.
+              {tr("noRoutesHint")}
             </div>
           </div>
         )
@@ -711,7 +713,7 @@ export default function TradeRoutes() {
             <div className="flex items-start justify-between mb-4">
               <div>
                 <div className="text-[10px] font-mono uppercase tracking-widest text-amber-400">
-                  Enviar a Work Order
+                  {tr("sendToWorkOrder")}
                 </div>
                 <div className="mt-1 text-lg font-mono text-zinc-100">
                   {woModalRoute.commodity.name}
@@ -739,7 +741,7 @@ export default function TradeRoutes() {
               </div>
               <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-sm p-3">
                 <div className="text-[9px] font-mono uppercase text-zinc-500">
-                  Inversión
+                  {tr("investment")}
                 </div>
                 <div className="text-sm font-mono text-cyan-400">
                   {fmtN(woModalRoute.investment)}
@@ -747,7 +749,7 @@ export default function TradeRoutes() {
               </div>
               <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-sm p-3">
                 <div className="text-[9px] font-mono uppercase text-zinc-500">
-                  Profit est.
+                  {tr("estProfit")}
                 </div>
                 <div
                   className={`text-sm font-mono font-semibold ${pColor(woModalRoute.totalProfit)}`}
@@ -762,13 +764,13 @@ export default function TradeRoutes() {
                 onClick={() => openInFullEditor(woModalRoute)}
                 className="w-full px-4 py-2.5 text-xs font-mono uppercase tracking-widest bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/50 rounded-sm transition-colors"
               >
-                Abrir en editor completo
+                {tr("openInEditor")}
               </button>
               <button
                 onClick={() => setWoModalRoute(null)}
                 className="w-full px-4 py-2 text-xs font-mono uppercase tracking-widest text-zinc-500 hover:text-zinc-300 transition-colors"
               >
-                Cancel
+                {tr("cancel")}
               </button>
             </div>
           </div>
