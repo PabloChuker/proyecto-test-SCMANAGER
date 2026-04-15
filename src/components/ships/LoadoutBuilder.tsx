@@ -34,6 +34,22 @@ import { DpsGridCanvas } from "@/components/domain/loadout/LoadoutGridCanvas";
 const WEAPON_GROUPS = new Set(["WEAPON", "TURRET"]);
 const MISSILE_GROUPS = new Set(["MISSILE_RACK"]);
 
+// ── Wishlist entry type (used by Send to Wishlist modal) ──────────────────
+interface WishlistEntry {
+  reference: string;
+  name: string;
+  localizedName?: string;
+  type: string;
+  size: number | null;
+  selected: boolean;
+  forShip: boolean;
+}
+const WISH_TYPE_ICONS: Record<string, string> = {
+  WEAPON: "🔫", TURRET: "🔫", MISSILE: "🚀", MISSILE_RACK: "🚀",
+  SHIELD: "🛡", POWER_PLANT: "⚡", COOLER: "❄",
+  QUANTUM_DRIVE: "🌀", RADAR: "📡", UTILITY: "🔧", MINING: "⛏",
+};
+
 // ÔöÇÔöÇ Ship thumbnail URL helper ÔöÇÔöÇ
 // Strips manufacturer prefix from ship name, converts to URL-safe slug
 const MANUFACTURERS = [
@@ -544,11 +560,20 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const { shipInfo, isLoading, error, loadShip, getStats, getEffectiveItem, hasChanges, hardpoints, equipItem, clearSlot, resetAll, overrides, encodeBuild, toggleComponent, isComponentOn, flightMode, setFlightMode } = store;
 
   const [pickerHp, setPickerHp] = useState<ResolvedHardpoint | null>(null);
+  // Share
   const [copied, setCopied] = useState(false);
+  // Save Loadout modal
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveModal, setSaveModal] = useState(false);
   const [saveName, setSaveName] = useState("");
+  // Save Layout flash feedback
+  const [layoutSaved, setLayoutSaved] = useState(false);
+  // Send to Wishlist modal
+  const [wishlistModal, setWishlistModal] = useState(false);
+  const [wishlistItems, setWishlistItems] = useState<WishlistEntry[]>([]);
+  const [wishlistSending, setWishlistSending] = useState(false);
+  const [wishlistSent, setWishlistSent] = useState(false);
   const mountedRef = useRef(false);
   const overrideCountRef = useRef(0);
 
@@ -624,14 +649,69 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     columnPlan2Col: COLUMN_PLAN_2COL,
   });
 
-  const handleResetLayout = gridLayout.resetLayout;
-
   const { user } = useAuth();
   const supabaseClient = createClient();
 
   const handleSelect = useCallback((item: EquippedItem) => { if (!pickerHp) return; equipItem(pickerHp.id, item); setPickerHp(null); }, [pickerHp, equipItem]);
   const handleClear = useCallback(() => { if (!pickerHp) return; clearSlot(pickerHp.id); setPickerHp(null); }, [pickerHp, clearSlot]);
-  const handleCopyLink = useCallback(() => { navigator.clipboard.writeText(window.location.href).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); }, []);
+
+  // ── SHARE: build URL with ship reference + current build code ──────────────
+  const handleShare = useCallback(() => {
+    const url = new URL(window.location.href);
+    if (shipInfo?.reference) url.searchParams.set("ship", shipInfo.reference);
+    const buildCode = encodeBuild();
+    if (buildCode) url.searchParams.set("build", buildCode);
+    else url.searchParams.delete("build");
+    navigator.clipboard.writeText(url.toString()).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [shipInfo, encodeBuild]);
+
+  // ── SAVE LAYOUT: snapshot the current card positions ──────────────────────
+  const handleSaveLayout = useCallback(() => {
+    gridLayout.saveLayout();
+    setLayoutSaved(true);
+    setTimeout(() => setLayoutSaved(false), 2000);
+  }, [gridLayout]);
+
+  // ── SEND TO WISHLIST: open modal with all equipped items ──────────────────
+  const SKIP_WISH_TYPES = new Set(["FLIGHT_CONTROLLER", "SELF_DESTRUCT", "AVIONICS_MANAGER"]);
+  const handleWishlistOpen = useCallback(() => {
+    const seen = new Set<string>();
+    const items: WishlistEntry[] = [];
+    for (const hp of hardpoints) {
+      const item = getEffectiveItem(hp.id);
+      if (item && !SKIP_WISH_TYPES.has(item.type) && !seen.has(item.reference)) {
+        seen.add(item.reference);
+        items.push({ reference: item.reference, name: item.localizedName || item.name, type: item.type, size: item.size, selected: true, forShip: true });
+      }
+      for (const child of hp.children) {
+        const chItem = getEffectiveItem(child.id);
+        if (chItem && !SKIP_WISH_TYPES.has(chItem.type) && !seen.has(chItem.reference)) {
+          seen.add(chItem.reference);
+          items.push({ reference: chItem.reference, name: chItem.localizedName || chItem.name, type: chItem.type, size: chItem.size, selected: true, forShip: true });
+        }
+      }
+    }
+    setWishlistItems(items);
+    setWishlistSent(false);
+    setWishlistModal(true);
+  }, [hardpoints, getEffectiveItem]);
+
+  const handleWishlistSubmit = useCallback(async () => {
+    if (!user) return;
+    const toAdd = wishlistItems.filter(i => i.selected);
+    if (!toAdd.length) return;
+    setWishlistSending(true);
+    await supabaseClient.from("user_wishlist").upsert(
+      toAdd.map(i => ({ user_id: user.id, item_reference: i.reference, item_name: i.name, item_type: i.type, item_size: i.size, priority: 2 })),
+      { onConflict: "user_id,item_reference" }
+    );
+    setWishlistSending(false);
+    setWishlistSent(true);
+    setTimeout(() => { setWishlistModal(false); setWishlistSent(false); }, 1500);
+  }, [user, wishlistItems, supabaseClient]);
 
   const handleSaveLoadout = useCallback(async () => {
     if (!user || !shipInfo || !saveName.trim()) return;
@@ -709,11 +789,30 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
       {/* ── Top Bar ── */}
       <div className="flex items-center justify-end px-2.5 py-1.5 bg-zinc-900/80 border border-zinc-800/60">
         <div className="flex items-center gap-1.5">
-          <button onClick={handleCopyLink} className={copied ? "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border bg-green-950/30 text-green-500 border-green-800/50" : "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-yellow-500 hover:border-yellow-800/50 transition-colors"}>{copied ? "COPIED" : "SHARE"}</button>
-          <button className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-purple-400 hover:border-purple-800/50 transition-colors">SEND TO WISHLIST</button>
-          <button onClick={() => { setSaveName(shipInfo?.name ? `${shipInfo.name} Build` : "Mi Build"); setSaveModal(true); }} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-emerald-500 hover:border-emerald-800/50 transition-colors">SAVE LAYOUT</button>
-          <button onClick={resetAll} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-orange-500 hover:border-orange-800/50 transition-colors" title="Reset all component changes to default">RESET LOADOUT</button>
-          <button onClick={handleResetLayout} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-600 border-zinc-800 hover:text-cyan-500 hover:border-cyan-800/50 transition-colors" title="Reset panel layout to default">RESET LAYOUT</button>
+          {/* SHARE — copies a URL with ship + build code */}
+          <button onClick={handleShare} className={copied ? "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border bg-green-950/30 text-green-500 border-green-800/50" : "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-yellow-500 hover:border-yellow-800/50 transition-colors"} title="Copy shareable link with this loadout">
+            {copied ? "✓ COPIED" : "SHARE"}
+          </button>
+          {/* SEND TO WISHLIST — opens item-selection modal */}
+          <button onClick={handleWishlistOpen} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-purple-400 hover:border-purple-800/50 transition-colors" title="Add loadout items to your wishlist">
+            SEND TO WISHLIST
+          </button>
+          {/* SAVE LAYOUT — snapshots current panel positions */}
+          <button onClick={handleSaveLayout} className={layoutSaved ? "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border bg-cyan-950/30 text-cyan-400 border-cyan-800/50" : "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-cyan-400 hover:border-cyan-800/50 transition-colors"} title="Save current panel arrangement as default">
+            {layoutSaved ? "✓ SAVED" : "SAVE LAYOUT"}
+          </button>
+          {/* SAVE LOADOUT — saves build to my-account loadouts */}
+          <button onClick={() => { setSaveName(shipInfo?.name ? `${shipInfo.name} Build` : "My Build"); setSaveModal(true); }} className={saved ? "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border bg-emerald-950/30 text-emerald-400 border-emerald-800/50" : "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-emerald-500 hover:border-emerald-800/50 transition-colors"} title="Save this loadout to your account">
+            {saved ? "✓ SAVED" : "SAVE LOADOUT"}
+          </button>
+          {/* RESET LOADOUT — reverts all component changes to ship defaults */}
+          <button onClick={resetAll} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-orange-500 hover:border-orange-800/50 transition-colors" title="Revert all component changes to ship defaults">
+            RESET LOADOUT
+          </button>
+          {/* RESET LAYOUT — restores saved panel layout (or default if none saved) */}
+          <button onClick={gridLayout.resetLayout} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-600 border-zinc-800 hover:text-zinc-400 hover:border-zinc-600/50 transition-colors" title="Restore to saved layout (or default)">
+            RESET LAYOUT
+          </button>
         </div>
       </div>
 
@@ -729,34 +828,87 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 
       {pickerHp && <ComponentPicker hardpoint={pickerHp} currentItemId={getEffectiveItem(pickerHp.id)?.id ?? null} onSelect={handleSelect} onClear={handleClear} onClose={() => setPickerHp(null)} />}
 
-      {/* Save Loadout Modal */}
+      {/* ── Save Loadout Modal ── */}
       {saveModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setSaveModal(false)}>
           <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4 w-80 space-y-3" onClick={(e) => e.stopPropagation()}>
-            <h3 className="text-sm text-zinc-200 font-medium">Guardar Loadout</h3>
+            <h3 className="text-xs font-mono font-bold tracking-widest uppercase text-zinc-300">Save Loadout</h3>
             <input
               type="text"
               value={saveName}
               onChange={(e) => setSaveName(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSaveLoadout()}
-              placeholder="Nombre del loadout..."
+              placeholder="Loadout name..."
               className="w-full bg-zinc-800 border border-zinc-700 rounded px-3 py-2 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-amber-500 focus:outline-none"
               autoFocus
             />
             <div className="text-xs text-zinc-500">
-              {shipInfo?.name} • {overrides.size} componentes modificados
+              {shipInfo?.name} • {overrides.size} component{overrides.size !== 1 ? "s" : ""} modified
             </div>
             <div className="flex gap-2">
-              <button
-                onClick={handleSaveLoadout}
-                disabled={saving || !saveName.trim()}
-                className="flex-1 py-1.5 bg-emerald-600/80 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-950 text-sm font-medium rounded transition-colors"
-              >
+              <button onClick={handleSaveLoadout} disabled={saving || !saveName.trim()} className="flex-1 py-1.5 bg-emerald-600/80 hover:bg-emerald-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-zinc-950 text-sm font-medium rounded transition-colors">
                 {saving ? "Saving..." : "Save"}
               </button>
-              <button onClick={() => setSaveModal(false)} className="px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-sm rounded transition-colors">
-                Cancel
+              <button onClick={() => setSaveModal(false)} className="px-4 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-sm rounded transition-colors">Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Send to Wishlist Modal ── */}
+      {wishlistModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center" onClick={() => setWishlistModal(false)}>
+          <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-4 w-[420px] max-h-[80vh] flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-mono font-bold tracking-widest uppercase text-zinc-300">Send to Wishlist</span>
+              <span className="text-[10px] text-zinc-500 font-mono">{shipInfo?.name}</span>
+            </div>
+
+            {/* Select all + for-ship toggles header */}
+            <div className="flex items-center justify-between text-[9px] font-mono uppercase tracking-wider text-zinc-500 border-b border-zinc-800 pb-1.5">
+              <button onClick={() => setWishlistItems(p => p.map(i => ({ ...i, selected: !p.every(x => x.selected) })))} className="hover:text-zinc-300 transition-colors">
+                {wishlistItems.every(i => i.selected) ? "Deselect all" : "Select all"}
               </button>
+              <span className="text-zinc-600">For this ship</span>
+            </div>
+
+            {/* Items list */}
+            <div className="flex-1 overflow-y-auto space-y-1 min-h-0 pr-1">
+              {wishlistItems.length === 0 ? (
+                <p className="text-xs text-zinc-500 text-center py-4">No equipped items found</p>
+              ) : wishlistItems.map((item, idx) => (
+                <div key={item.reference} className="flex items-center gap-2 h-7 px-1 rounded hover:bg-zinc-800/40 transition-colors">
+                  {/* Select checkbox */}
+                  <button onClick={() => setWishlistItems(p => p.map((x, i) => i === idx ? { ...x, selected: !x.selected } : x))} className={"w-4 h-4 flex-shrink-0 border rounded-[3px] flex items-center justify-center transition-colors " + (item.selected ? "bg-purple-600/80 border-purple-500" : "bg-zinc-800 border-zinc-600")}>
+                    {item.selected && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                  </button>
+                  {/* Type icon */}
+                  <span className="text-[10px] flex-shrink-0">{WISH_TYPE_ICONS[item.type] ?? "📦"}</span>
+                  {/* Name + size */}
+                  <span className={"text-[11px] flex-1 truncate " + (item.selected ? "text-zinc-200" : "text-zinc-600")}>{item.name}</span>
+                  {item.size != null && item.size > 0 && <span className="text-[9px] font-mono text-zinc-600 flex-shrink-0">S{item.size}</span>}
+                  {/* For-ship toggle */}
+                  <button onClick={() => setWishlistItems(p => p.map((x, i) => i === idx ? { ...x, forShip: !x.forShip } : x))} className={"text-[8px] font-mono uppercase px-1.5 py-0.5 rounded border transition-colors flex-shrink-0 " + (item.forShip ? "text-amber-400 border-amber-800/60 bg-amber-950/30" : "text-zinc-600 border-zinc-700 hover:text-zinc-400")} title={item.forShip ? "For this ship" : "General"}>
+                    {item.forShip ? shipInfo?.name?.split(" ").slice(-1)[0] ?? "SHIP" : "GENERAL"}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center gap-2 pt-1 border-t border-zinc-800">
+              <span className="text-[10px] text-zinc-500 flex-1 font-mono">{wishlistItems.filter(i => i.selected).length} item{wishlistItems.filter(i => i.selected).length !== 1 ? "s" : ""} selected</span>
+              {wishlistSent ? (
+                <span className="text-[10px] font-mono text-emerald-400">✓ Added to wishlist</span>
+              ) : (
+                <>
+                  <button onClick={() => setWishlistModal(false)} className="px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 text-xs rounded transition-colors">Cancel</button>
+                  <button onClick={handleWishlistSubmit} disabled={wishlistSending || !wishlistItems.some(i => i.selected) || !user} className="px-3 py-1.5 bg-purple-600/80 hover:bg-purple-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-white text-xs font-medium rounded transition-colors" title={!user ? "Sign in to use wishlist" : ""}>
+                    {wishlistSending ? "Sending..." : !user ? "Sign in required" : "Add to Wishlist"}
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

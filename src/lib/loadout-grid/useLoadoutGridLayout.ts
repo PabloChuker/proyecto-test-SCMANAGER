@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import type { WidgetId, ColumnKey, ColumnOrder, CardWidth } from "./loadoutGridTypes";
-import { LAYOUT_STORAGE_KEY } from "./loadoutGridTypes";
+import { LAYOUT_STORAGE_KEY, LAYOUT_CHECKPOINT_KEY } from "./loadoutGridTypes";
 import { getUnit } from "./loadoutGridGeometry";
 
 // ── Tipos de plan de columnas ─────────────────────────────────────────────────
@@ -75,7 +75,9 @@ export interface UseDpsGridLayoutResult {
   unit: number;
   /** Mueve una tarjeta a una columna en un índice. */
   moveCard: (id: WidgetId, toColumn: ColumnKey, toIndex: number) => void;
-  /** Resetea al layout default. */
+  /** Guarda el layout actual como punto de restauración ("Save Layout"). */
+  saveLayout: () => void;
+  /** Resetea al layout guardado (checkpoint) o al default si no hay ninguno. */
   resetLayout: () => void;
   /** True mientras el layout no se ha montado (evita flash). */
   layoutMounted: boolean;
@@ -160,14 +162,32 @@ export function useDpsGridLayout(opts: UseDpsGridLayoutOptions): UseDpsGridLayou
     [defaultOrder],
   );
 
-  const resetLayout = useCallback(() => {
-    setSavedOrder(null);
+  // Save the current columnOrder as the user's explicit restore point
+  const saveLayout = useCallback(() => {
     try {
-      localStorage.removeItem(LAYOUT_STORAGE_KEY);
+      localStorage.setItem(LAYOUT_CHECKPOINT_KEY, JSON.stringify(columnOrder));
     } catch {}
+  }, [columnOrder]);
+
+  // Restore to the saved checkpoint (if any), otherwise back to hardcoded default
+  const resetLayout = useCallback(() => {
+    try {
+      const checkpoint = localStorage.getItem(LAYOUT_CHECKPOINT_KEY);
+      if (checkpoint) {
+        const parsed = JSON.parse(checkpoint) as ColumnOrder;
+        setSavedOrder(parsed);
+        persistOrder(parsed);
+      } else {
+        setSavedOrder(null);
+        localStorage.removeItem(LAYOUT_STORAGE_KEY);
+      }
+    } catch {
+      setSavedOrder(null);
+      try { localStorage.removeItem(LAYOUT_STORAGE_KEY); } catch {}
+    }
   }, []);
 
   const unit = getUnit(containerWidth);
 
-  return { columnOrder, unit, moveCard, resetLayout, layoutMounted };
+  return { columnOrder, unit, moveCard, saveLayout, resetLayout, layoutMounted };
 }
