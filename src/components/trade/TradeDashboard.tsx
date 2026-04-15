@@ -14,6 +14,7 @@
 // =============================================================================
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   useTradeWorkOrderStore,
@@ -72,6 +73,7 @@ function bucketKey(iso: string, bucket: Bucket): string {
 
 // ── component ───────────────────────────────────────────────────────────────
 export default function TradeDashboard() {
+  const td = useTranslations("Trade.dashboard");
   const { user } = useAuth();
   const openEdit = useTradeWorkOrderStore((s) => s.openEdit);
 
@@ -95,7 +97,7 @@ export default function TradeDashboard() {
       const res = await fetch("/api/trade/work-orders");
       if (!res.ok) {
         if (res.status === 401) {
-          setError("You need to be logged in to view the dashboard.");
+          setError("__need_login__");
           setOrders([]);
           return;
         }
@@ -104,7 +106,7 @@ export default function TradeDashboard() {
       const json = await res.json();
       setOrders(json.data || []);
     } catch (e: any) {
-      setError(e.message || "Could not load the dashboard.");
+      setError(e.message || "__load_failed__");
     } finally {
       setLoading(false);
     }
@@ -286,7 +288,11 @@ export default function TradeDashboard() {
   if (error) {
     return (
       <div className="bg-red-500/10 border border-red-500/30 rounded-sm p-4 text-red-300 text-sm">
-        {error}
+        {error === "__need_login__"
+          ? td("errorNeedLogin")
+          : error === "__load_failed__"
+            ? td("errorLoadFailed")
+            : error}
       </div>
     );
   }
@@ -297,18 +303,18 @@ export default function TradeDashboard() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
-            Trade System
+            {td("tradeSystem")}
           </div>
-          <div className="text-xl font-mono text-amber-400">Dashboard</div>
+          <div className="text-xl font-mono text-amber-400">{td("dashboard")}</div>
         </div>
 
         <div className="flex items-center gap-2">
           <div className="flex rounded-sm overflow-hidden border border-zinc-800/60">
             {(
               [
-                { id: "me", label: "Yo" },
-                { id: "party", label: "Party" },
-                { id: "all", label: "Todos" },
+                { id: "me", label: td("scopeMe") },
+                { id: "party", label: td("scopeParty") },
+                { id: "all", label: td("scopeAll") },
               ] as { id: Scope; label: string }[]
             ).map((s) => (
               <button
@@ -327,35 +333,35 @@ export default function TradeDashboard() {
           <button
             onClick={load}
             className="text-[10px] uppercase tracking-widest px-3 py-1.5 bg-zinc-800/60 hover:bg-zinc-700/60 border border-zinc-700/60 rounded-sm text-zinc-300"
-            title="Refrescar"
+            title={td("refreshTitle")}
           >
-            ↻ Refresh
+            ↻ {td("refresh")}
           </button>
         </div>
       </div>
 
       {/* ── KPIs ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Kpi label="Profit lifetime" value={`${fmt(kpis.lifetimeProfit)} aUEC`} color="text-emerald-400" />
-        <Kpi label="Runs completadas" value={fmt(kpis.totalRuns)} color="text-zinc-200" sub={`${kpis.activeCount} activas`} />
-        <Kpi label="SCU transportado" value={fmt(kpis.totalScu)} color="text-cyan-400" />
-        <Kpi label="Margen promedio" value={`${kpis.marginPct.toFixed(1)}%`} color="text-amber-300" sub={`Gastos ${fmt(kpis.totalExpenses)}`} />
+        <Kpi label={td("kpiLifetime")} value={`${fmt(kpis.lifetimeProfit)} aUEC`} color="text-emerald-400" />
+        <Kpi label={td("kpiRuns")} value={fmt(kpis.totalRuns)} color="text-zinc-200" sub={td("kpiActive", { count: kpis.activeCount })} />
+        <Kpi label={td("kpiScu")} value={fmt(kpis.totalScu)} color="text-cyan-400" />
+        <Kpi label={td("kpiMargin")} value={`${kpis.marginPct.toFixed(1)}%`} color="text-amber-300" sub={td("kpiExpenses", { value: fmt(kpis.totalExpenses) })} />
       </div>
 
       {/* Solo vs Party breakdown */}
       <div className="grid grid-cols-2 gap-3">
         <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-sm p-3">
-          <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500 mb-1">Solo</div>
+          <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500 mb-1">{td("solo")}</div>
           <div className="flex items-baseline gap-3">
             <div className="text-lg font-mono text-emerald-300">{fmt(kpis.soloProfit)} aUEC</div>
-            <div className="text-[11px] text-zinc-500">{kpis.soloRuns} runs</div>
+            <div className="text-[11px] text-zinc-500">{td("runsCount", { count: kpis.soloRuns })}</div>
           </div>
         </div>
         <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-sm p-3">
-          <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500 mb-1">Party</div>
+          <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500 mb-1">{td("party")}</div>
           <div className="flex items-baseline gap-3">
             <div className="text-lg font-mono text-emerald-300">{fmt(kpis.partyProfit)} aUEC</div>
-            <div className="text-[11px] text-zinc-500">{kpis.partyRuns} runs</div>
+            <div className="text-[11px] text-zinc-500">{td("runsCount", { count: kpis.partyRuns })}</div>
           </div>
         </div>
       </div>
@@ -364,18 +370,18 @@ export default function TradeDashboard() {
       <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-sm p-4">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">Pendientes de pago</div>
+            <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">{td("pendingPayouts")}</div>
             <div className="text-[11px] text-zinc-400 mt-0.5">
-              Participantes sin marcar como <span className="text-emerald-400">Pagado</span> en runs completadas
+              {td("pendingHintBefore")} <span className="text-emerald-400">{td("pendingHintPaid")}</span> {td("pendingHintAfter")}
             </div>
           </div>
           <div className="text-right">
-            <div className="text-[9px] uppercase tracking-widest text-zinc-500">Total por transferir</div>
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500">{td("totalToTransfer")}</div>
             <div className="text-lg font-mono text-amber-300">{fmt(pendingTotal)} aUEC</div>
           </div>
         </div>
         {pendingPayouts.length === 0 ? (
-          <div className="text-[11px] text-zinc-600">Nada pendiente — todo al día.</div>
+          <div className="text-[11px] text-zinc-600">{td("allCaughtUp")}</div>
         ) : (
           <div className="space-y-1.5">
             {pendingPayouts.slice(0, 10).map(({ wo, participant }) => (
@@ -416,7 +422,7 @@ export default function TradeDashboard() {
             ))}
             {pendingPayouts.length > 10 && (
               <div className="text-[10px] text-zinc-600 pt-1">
-                +{pendingPayouts.length - 10} más…
+                +{td("more", { count: pendingPayouts.length - 10 })}
               </div>
             )}
           </div>
@@ -427,10 +433,10 @@ export default function TradeDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-sm p-4">
           <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500 mb-3">
-            Top rutas (por profit)
+            {td("topRoutes")}
           </div>
           {topRoutes.length === 0 ? (
-            <div className="text-[11px] text-zinc-600">Sin runs completadas aún.</div>
+            <div className="text-[11px] text-zinc-600">{td("noCompletedRuns")}</div>
           ) : (
             <div className="space-y-1.5">
               {topRoutes.map((r, i) => (
@@ -439,7 +445,7 @@ export default function TradeDashboard() {
                     <div className="truncate text-zinc-200">{r.buy}</div>
                     <div className="truncate text-zinc-500 text-[10px]">→ {r.sell}</div>
                   </div>
-                  <div className="col-span-2 text-right font-mono text-zinc-400 text-[10px]">{r.runs} runs</div>
+                  <div className="col-span-2 text-right font-mono text-zinc-400 text-[10px]">{td("runsCount", { count: r.runs })}</div>
                   <div className="col-span-3 text-right font-mono text-emerald-300">{fmt(r.profit)}</div>
                 </div>
               ))}
@@ -449,10 +455,10 @@ export default function TradeDashboard() {
 
         <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-sm p-4">
           <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500 mb-3">
-            Top commodities (por profit)
+            {td("topCommodities")}
           </div>
           {topCommodities.length === 0 ? (
-            <div className="text-[11px] text-zinc-600">Sin runs completadas aún.</div>
+            <div className="text-[11px] text-zinc-600">{td("noCompletedRuns")}</div>
           ) : (
             <div className="space-y-1.5">
               {topCommodities.map((c, i) => (
@@ -475,13 +481,13 @@ export default function TradeDashboard() {
       {/* ── Profit over time chart ── */}
       <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-sm p-4">
         <div className="flex items-center justify-between mb-3">
-          <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">Profit over time</div>
+          <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">{td("profitOverTime")}</div>
           <div className="flex rounded-sm overflow-hidden border border-zinc-800/60">
             {(
               [
-                { id: "day", label: "Day" },
-                { id: "week", label: "Week" },
-                { id: "month", label: "Month" },
+                { id: "day", label: td("bucketDay") },
+                { id: "week", label: td("bucketWeek") },
+                { id: "month", label: td("bucketMonth") },
               ] as { id: Bucket; label: string }[]
             ).map((b) => (
               <button
@@ -504,29 +510,29 @@ export default function TradeDashboard() {
       {/* ── Recent WOs with filters ── */}
       <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-sm p-4">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-          <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">Historial</div>
+          <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">{td("history")}</div>
           <div className="flex flex-wrap items-center gap-2">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
               className="bg-zinc-950/60 border border-zinc-800/60 text-[11px] text-zinc-200 rounded-sm px-2 py-1 focus:outline-none focus:border-amber-500/40"
             >
-              <option value="">All statuses</option>
-              <option value="draft">Draft</option>
-              <option value="in_progress">In progress</option>
-              <option value="completed">Completed</option>
-              <option value="archived">Archived</option>
+              <option value="">{td("allStatuses")}</option>
+              <option value="draft">{td("statusDraft")}</option>
+              <option value="in_progress">{td("statusInProgress")}</option>
+              <option value="completed">{td("statusCompleted")}</option>
+              <option value="archived">{td("statusArchived")}</option>
             </select>
             <select
               value={partyFilter}
               onChange={(e) => setPartyFilter(e.target.value)}
               className="bg-zinc-950/60 border border-zinc-800/60 text-[11px] text-zinc-200 rounded-sm px-2 py-1 focus:outline-none focus:border-amber-500/40"
             >
-              <option value="">All parties</option>
-              <option value="solo">Solo (sin party)</option>
+              <option value="">{td("allParties")}</option>
+              <option value="solo">{td("soloNoParty")}</option>
               {partyOptions.map((pid) => (
                 <option key={pid} value={pid}>
-                  Party {pid.slice(0, 8)}…
+                  {td("partyLabel", { slice: pid.slice(0, 8) })}
                 </option>
               ))}
             </select>
@@ -535,14 +541,14 @@ export default function TradeDashboard() {
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
               className="bg-zinc-950/60 border border-zinc-800/60 text-[11px] text-zinc-200 rounded-sm px-2 py-1 focus:outline-none focus:border-amber-500/40"
-              title="Desde"
+              title={td("from")}
             />
             <input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
               className="bg-zinc-950/60 border border-zinc-800/60 text-[11px] text-zinc-200 rounded-sm px-2 py-1 focus:outline-none focus:border-amber-500/40"
-              title="Hasta"
+              title={td("to")}
             />
             {(statusFilter || partyFilter || dateFrom || dateTo) && (
               <button
@@ -554,7 +560,7 @@ export default function TradeDashboard() {
                 }}
                 className="text-[10px] uppercase tracking-widest text-zinc-400 hover:text-zinc-200 px-2 py-1"
               >
-                Limpiar
+                {td("clear")}
               </button>
             )}
           </div>
@@ -563,18 +569,18 @@ export default function TradeDashboard() {
         {filtered.length === 0 ? (
           <div className="text-[11px] text-zinc-600">
             {scoped.length === 0
-              ? "No work orders in this scope yet."
-              : "No results with these filters."}
+              ? td("noWorkOrdersScope")
+              : td("noResultsFilters")}
           </div>
         ) : (
           <div className="space-y-1">
             <div className="grid grid-cols-12 gap-2 text-[9px] uppercase tracking-widest text-zinc-600 px-2">
-              <div className="col-span-4">Title</div>
-              <div className="col-span-2">Commodity</div>
-              <div className="col-span-2">Date</div>
-              <div className="col-span-1">Status</div>
+              <div className="col-span-4">{td("colTitle")}</div>
+              <div className="col-span-2">{td("colCommodity")}</div>
+              <div className="col-span-2">{td("colDate")}</div>
+              <div className="col-span-1">{td("colStatus")}</div>
               <div className="col-span-1 text-right">SCU</div>
-              <div className="col-span-2 text-right">Net</div>
+              <div className="col-span-2 text-right">{td("colNet")}</div>
             </div>
             {filtered.slice(0, 20).map((o) => (
               <button
@@ -586,7 +592,7 @@ export default function TradeDashboard() {
                   <div className="truncate text-zinc-100">{o.title}</div>
                   <div className="text-[10px] text-zinc-500 truncate">
                     {(o.buy_system || "—")} → {(o.sell_system || "—")}
-                    {o.party_id ? " · party" : " · solo"}
+                    {o.party_id ? ` · ${td("partyShort")}` : ` · ${td("soloShort")}`}
                   </div>
                 </div>
                 <div className="col-span-2 truncate text-zinc-300">{o.commodity_name || "—"}</div>
@@ -612,7 +618,7 @@ export default function TradeDashboard() {
             ))}
             {filtered.length > 20 && (
               <div className="text-[10px] text-zinc-600 pt-2">
-                Mostrando 20 de {filtered.length}. Afiná los filtros para ver más.
+                {td("showingSomeOf", { total: filtered.length })}
               </div>
             )}
           </div>
@@ -645,10 +651,11 @@ function Kpi({
 
 // ── Simple SVG bar chart (no external chart lib needed) ──
 function TimelineChart({ points }: { points: { label: string; profit: number }[] }) {
+  const td = useTranslations("Trade.dashboard");
   if (points.length === 0) {
     return (
       <div className="text-[11px] text-zinc-600 py-8 text-center">
-        Sin datos para graficar en este rango.
+        {td("noChartData")}
       </div>
     );
   }
