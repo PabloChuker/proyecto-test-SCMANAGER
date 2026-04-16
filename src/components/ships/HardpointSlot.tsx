@@ -39,7 +39,8 @@ function isTurretOrRack(item: EquippedItem | null): boolean {
 
 /** Compute ammo info for a weapon item given current pip allocation.
  *  Energy weapons: rounds = requestedAmmoLoad × (pips/maxPips) / regenCostPerBullet
- *  Ballistic weapons: fixed ammoCapacity (no pip dependency) */
+ *  Ballistic weapons: fixed ammoCapacity (no pip dependency).
+ *  When allocPips is 0 but maxPips > 0, defaults to full power (all pips). */
 function getAmmoInfo(
   cs: Record<string, any> | undefined,
   allocPips: number,
@@ -51,7 +52,9 @@ function getAmmoInfo(
   const reqAmmo = cs.requestedAmmoLoad;
   const costPerBullet = cs.regenCostPerBullet;
   if (reqAmmo > 0 && costPerBullet > 0 && maxPips > 0) {
-    const pipRatio = allocPips / maxPips;
+    // If no pips allocated yet (auto-alloc pending), assume full power
+    const effectivePips = allocPips > 0 ? allocPips : maxPips;
+    const pipRatio = effectivePips / maxPips;
     const rounds = Math.round(reqAmmo * pipRatio / costPerBullet);
     return { rounds, label: "RND" };
   }
