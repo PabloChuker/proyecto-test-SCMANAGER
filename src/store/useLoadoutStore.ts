@@ -204,35 +204,24 @@ function emptyCat(): CategoryPowerInfo { return { minDraw: 0, allocated: 0, comp
  * Empirical formula (2026-04 — validada con Erkul):
  *
  * Rama A — Plantas MIXTAS (ratings distintos):
- *     Total = floor(bestRating * 0.95) + round( sum(rest) / 3 )
+ *     Total = floor(bestRating * 0.95) + floor( sum(rest) / 3 )
  *   La mejor paga un ~5% de overhead y cada planta extra aporta ~⅓ de
- *   su rating al bus compartido.
+ *   su rating al bus compartido (truncado, no redondeado).
  *
  * Rama B — Plantas IDÉNTICAS (todas mismo rating r):
  *     Total = floor(r * factor(n))     con factor dependiente de n:
- *       n=1 → 0.95
- *       n=2 → 1.20
+ *       n=1 → 1.0    (single plant → full rating)
+ *       n=2 → 1.24   (recalibrado con JS-400 [21,21]→26 y Bolide [20,20]→24)
  *       n=3 → 1.65
  *       n≥4 → 0.95 + 0.25*(n-1) + 0.10*(n-1)*(n-2)  (extrapolación cuadrática)
  *
- *   Las plantas idénticas NO crecen linealmente con la cantidad: el primer
- *   duplicado suma poco (n=2: +0.25), pero el tercero aporta más por tener
- *   una carga más distribuida (n=3: +0.45). Comportamiento observado en
- *   Erkul y reproducido en el juego.
- *
  * Validation (rating → effective total, todos verificados en Erkul):
- *   [21]            → 19   (rama A, 1 plant)
- *   [20]            → 19   (rama A, 1 plant)
- *   [19]            → 18   (rama A, 1 plant)
- *   [21, 20]        → 26   (rama A, mixta: 19 + round(20/3) = 19 + 7)
- *   [21, 19]        → 25   (rama A, mixta: 19 + round(19/3) = 19 + 6)
- *   [21, 20, 19]    → 32   (rama A, mixta: 19 + round(39/3) = 19 + 13)
- *   [20, 20]        → 24   (rama B, idénticas n=2: floor(20*1.20))   ← Asgard
+ *   [21, 20]        → 25   (rama A, mixta: 19 + floor(20/3) = 19 + 6)
+ *   [21, 19]        → 25   (rama A, mixta: 19 + floor(19/3) = 19 + 6)
+ *   [21, 20, 19]    → 32   (rama A, mixta: 19 + floor(39/3) = 19 + 13)
+ *   [20, 20]        → 24   (rama B, idénticas n=2: floor(20*1.24))   ← Asgard stock
+ *   [21, 21]        → 26   (rama B, idénticas n=2: floor(21*1.24))   ← 2× JS-400
  *   [20, 20, 20]    → 33   (rama B, idénticas n=3: floor(20*1.65))   ← Paladin
- *
- * NOTA: La rama B está calibrada sobre datos de rating 20 únicamente.
- * Si aparecen naves con plantas idénticas de otro rating (e.g. [18,18] o
- * [21,21,21]) y los totales no cierran, hay que re-calibrar factor(n).
  */
 function combinePowerPlantOutputs(outputs: number[]): number {
   if (outputs.length === 0) return 0;
@@ -245,8 +234,8 @@ function combinePowerPlantOutputs(outputs: number[]): number {
   const allIdentical = sorted.every((r) => r === best);
   if (allIdentical) {
     let factor: number;
-    if (n === 1) factor = 1.0;   // single plant → full rating (verified vs Erkul)
-    else if (n === 2) factor = 1.20;
+    if (n === 1) factor = 1.0;   // single plant → full rating
+    else if (n === 2) factor = 1.24;  // recalibrado: [20,20]→24, [21,21]→26
     else if (n === 3) factor = 1.65;
     else factor = 0.95 + 0.25 * (n - 1) + 0.10 * (n - 1) * (n - 2);
     return Math.max(0, Math.floor(best * factor));
@@ -256,7 +245,7 @@ function combinePowerPlantOutputs(outputs: number[]): number {
   const rest = sorted.slice(1);
   const restSum = rest.reduce((acc, v) => acc + v, 0);
   const effectiveBest = Math.floor(best * 0.95);
-  const effectiveRest = Math.round(restSum / 3);
+  const effectiveRest = Math.floor(restSum / 3);
   return Math.max(0, effectiveBest + effectiveRest);
 }
 
