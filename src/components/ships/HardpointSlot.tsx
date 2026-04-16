@@ -62,12 +62,18 @@ export const HardpointSlot = memo(function HardpointSlot({ hp, item, isOverridde
   );
 });
 
+/** Format ammo count like the game: 4440, 1.2k, etc. */
+function fmtAmmo(n: number): string {
+  if (n >= 10000) return (n / 1000).toFixed(0) + "k";
+  if (n >= 1000) return (n / 1000).toFixed(1) + "k";
+  return Math.round(n).toString();
+}
+
 /** Compute ammo info for weapon items based on power allocation */
 function getAmmoInfo(stats: Record<string, any> | null, powerRatio?: number): { v: string; l: string; color: string } | null {
   if (!stats) return null;
   const weaponCap = stats.weaponCapacity ?? 0;
   const ammoCap = stats.ammoCapacity ?? 0;
-  const rpm = stats.fireRate ?? 0;
   const alphaPhys = stats.alphaPhysical ?? 0;
   const alphaEnergy = stats.alphaEnergy ?? 0;
 
@@ -78,32 +84,25 @@ function getAmmoInfo(stats: Record<string, any> | null, powerRatio?: number): { 
   if (isEnergy) {
     // Energy weapon: weaponCapacity = capacitor pool (burst shots)
     // With power allocation, capacitor recharges → more sustained fire
-    // At ratio=1 (max pips): effectively infinite sustained fire
-    // At ratio=0: only burst capacity
+    // At ratio=1 (max pips): effectively infinite (∞)
+    // At partial pips: burst pool extended by recharge factor
+    // At ratio=0: only the base capacitor pool
     if (weaponCap <= 0) return null;
     const ratio = powerRatio ?? 0;
-    if (rpm <= 0) return { v: String(weaponCap), l: "CAP", color: "#60a5fa" };
-    const burstTime = weaponCap / (rpm / 60);
     if (ratio >= 0.9) {
-      return { v: "∞", l: "SUS", color: "#22c55e" };
+      return { v: "∞", l: "", color: "#22c55e" };
     } else if (ratio > 0) {
-      // Approximate sustained fire time: burst time extended by recharge
-      // More pips = longer effective fire time
       const sustainFactor = 1 / (1 - ratio);
-      const sustainTime = Math.min(999, burstTime * sustainFactor);
-      return { v: sustainTime >= 100 ? Math.round(sustainTime) + "s" : sustainTime.toFixed(0) + "s", l: "SUS", color: "#60a5fa" };
+      const effectivePool = Math.round(Math.min(99999, weaponCap * sustainFactor));
+      return { v: fmtAmmo(effectivePool), l: "", color: "#60a5fa" };
     } else {
-      return { v: burstTime.toFixed(0) + "s", l: "BST", color: "#f59e0b" };
+      return { v: fmtAmmo(weaponCap), l: "", color: "#f59e0b" };
     }
   } else {
-    // Ballistic weapon: ammoCapacity or weaponCapacity = fixed ammo
+    // Ballistic weapon: fixed ammo count (doesn't change with pips)
     const totalAmmo = ammoCap > 0 ? ammoCap : weaponCap;
     if (totalAmmo <= 0) return null;
-    if (rpm > 0) {
-      const fireTime = totalAmmo / (rpm / 60);
-      return { v: fireTime >= 100 ? Math.round(fireTime) + "s" : fireTime.toFixed(0) + "s", l: "AMO", color: "#a3a3a3" };
-    }
-    return { v: String(totalAmmo), l: "RDS", color: "#a3a3a3" };
+    return { v: fmtAmmo(totalAmmo), l: "", color: "#a3a3a3" };
   }
 }
 
