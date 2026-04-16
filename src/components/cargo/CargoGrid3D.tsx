@@ -331,14 +331,45 @@ export function CargoGrid3D({ grids }: { grids: CargoGridData[] }) {
       ctrlReady = true;
     });
 
-    // Loop
+    // Loop — with visibility + intersection gating to save GPU/CPU
     let rafId = 0;
-    const animate = () => {
-      rafId = requestAnimationFrame(animate);
+    let loopRunning = false;
+    let isVisible   = !document.hidden;
+    let isInView    = false;
+
+    const loop = () => {
+      rafId = requestAnimationFrame(loop);
       if (ctrlReady) controlsRef.current?.update();
       renderer.render(scene, camera);
     };
-    animate();
+
+    const startLoop = () => {
+      if (loopRunning) return;
+      loopRunning = true;
+      loop();
+    };
+
+    const stopLoop = () => {
+      loopRunning = false;
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    };
+
+    const syncLoop = () => {
+      if (isVisible && isInView) startLoop();
+      else stopLoop();
+    };
+
+    const onVisChange = () => { isVisible = !document.hidden; syncLoop(); };
+    document.addEventListener("visibilitychange", onVisChange);
+
+    const io = new IntersectionObserver(
+      ([entry]) => { isInView = entry.isIntersecting; syncLoop(); },
+      { threshold: 0 },
+    );
+    io.observe(container);
+
+    syncLoop();
     animRef.current = rafId;
 
     // Raycaster
@@ -397,7 +428,9 @@ export function CargoGrid3D({ grids }: { grids: CargoGridData[] }) {
     ro.observe(container);
 
     return () => {
-      cancelAnimationFrame(rafId);
+      stopLoop();
+      document.removeEventListener("visibilitychange", onVisChange);
+      io.disconnect();
       canvas.removeEventListener("mousedown", onDown);
       canvas.removeEventListener("mousemove", onMove);
       canvas.removeEventListener("mouseup",   onUp);

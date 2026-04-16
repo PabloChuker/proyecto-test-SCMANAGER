@@ -255,6 +255,8 @@ export function ShipViewer3D({
     let lastMs = performance.now();
     let rafId  = 0;
     let loopRunning = false;
+    let isVisible   = !document.hidden; // tab visibility
+    let isInView    = false;            // viewport intersection
 
     const loop = () => {
       rafId = requestAnimationFrame(loop);
@@ -287,16 +289,26 @@ export function ShipViewer3D({
       rafId = 0;
     };
 
+    /** Only run RAF when BOTH the tab is visible AND the canvas is in viewport */
+    const syncLoop = () => {
+      if (isVisible && isInView) startLoop();
+      else stopLoop();
+    };
+
     const onVisibilityChange = () => {
-      if (document.hidden) {
-        stopLoop();
-      } else {
-        startLoop();
-      }
+      isVisible = !document.hidden;
+      syncLoop();
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
 
-    if (!document.hidden) startLoop();
+    // IntersectionObserver: pause RAF when scrolled out of viewport
+    const io = new IntersectionObserver(
+      ([entry]) => { isInView = entry.isIntersecting; syncLoop(); },
+      { threshold: 0 },
+    );
+    io.observe(container);
+
+    syncLoop();
 
     const ro = new ResizeObserver(() => {
       const w = container.clientWidth;
@@ -312,6 +324,7 @@ export function ShipViewer3D({
       cancelled = true;
       stopLoop();
       document.removeEventListener("visibilitychange", onVisibilityChange);
+      io.disconnect();
       ro.disconnect();
       controls?.dispose();
 
