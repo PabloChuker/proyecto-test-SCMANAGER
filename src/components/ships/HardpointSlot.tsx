@@ -1,7 +1,9 @@
 // =============================================================================
-// AL FILO — HardpointSlot v11 (Recursive Children from API)
-// Renders child weapons/missiles below turrets/racks with indent
-// Ammo display removed — needs real capacitor data from SC Unpacked (TODO)
+// AL FILO — HardpointSlot v12 (Recursive Children + Ammo Display)
+// Renders child weapons/missiles below turrets/racks with indent.
+// Ammo formula (energy weapons):
+//   rounds = requestedAmmoLoad × (allocPips / maxPips) / regenCostPerBullet
+// Ballistic weapons: fixed ammoCapacity (no pip dependency).
 // =============================================================================
 
 "use client";
@@ -23,6 +25,9 @@ interface HardpointSlotProps {
   toggleComponent?: (name: string) => void;
   onClickChild?: (child: ResolvedChild) => void;
   getEffectiveItem?: (id: string) => EquippedItem | null;
+  // Weapon ammo props (energy capacitor system)
+  weaponAllocatedPips?: number;
+  weaponMaxPips?: number;
 }
 
 /** Check if an item is a turret/gimbal (has children) vs a direct weapon */
@@ -32,17 +37,54 @@ function isTurretOrRack(item: EquippedItem | null): boolean {
   return /turret|gimbal|varipuck|rack/i.test(n);
 }
 
-export const HardpointSlot = memo(function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onTogglePower, childSlots, isComponentOn, toggleComponent, onClickChild, getEffectiveItem }: HardpointSlotProps) {
+/** Compute ammo info for a weapon item given current pip allocation.
+ *  Energy weapons: rounds = requestedAmmoLoad × (pips/maxPips) / regenCostPerBullet
+ *  Ballistic weapons: fixed ammoCapacity (no pip dependency) */
+function getAmmoInfo(
+  cs: Record<string, any> | undefined,
+  allocPips: number,
+  maxPips: number,
+): { rounds: number; label: string } | null {
+  if (!cs) return null;
+
+  // Energy weapon (capacitor-based)
+  const reqAmmo = cs.requestedAmmoLoad;
+  const costPerBullet = cs.regenCostPerBullet;
+  if (reqAmmo > 0 && costPerBullet > 0 && maxPips > 0) {
+    const pipRatio = allocPips / maxPips;
+    const rounds = Math.round(reqAmmo * pipRatio / costPerBullet);
+    return { rounds, label: "RND" };
+  }
+
+  // Ballistic weapon (fixed magazine)
+  const ballistic = cs.ammoCapacity ?? cs.maxAmmoCount;
+  if (ballistic != null && ballistic > 0) {
+    return { rounds: Math.round(ballistic), label: "MAG" };
+  }
+
+  return null;
+}
+
+/** Format large round counts: 1234 → "1.2k" */
+function fmtAmmo(n: number): string {
+  if (n >= 10000) return (n / 1000).toFixed(1) + "k";
+  if (n >= 1000) return (n / 1000).toFixed(1) + "k";
+  return String(n);
+}
+
+export const HardpointSlot = memo(function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onTogglePower, childSlots, isComponentOn, toggleComponent, onClickChild, getEffectiveItem, weaponAllocatedPips, weaponMaxPips }: HardpointSlotProps) {
   const catColor = CAT_COLORS[hp.resolvedCategory] || "#52525b";
   const stat = item && isOn ? getKeyStat(hp.resolvedCategory, item.componentStats) : null;
   const displaySize = hp.maxSize > 0 ? hp.maxSize : (item?.size ?? 0);
   const parentIsTurret = (hp.resolvedCategory === "TURRET" || hp.resolvedCategory === "MISSILE_RACK")
     && (!isOverridden || isTurretOrRack(item));
   const hasChildren = parentIsTurret && childSlots && childSlots.length > 0;
+  const isWeapon = hp.resolvedCategory === "WEAPON" || hp.resolvedCategory === "TURRET";
+  const ammo = isWeapon && item && isOn ? getAmmoInfo(item.componentStats, weaponAllocatedPips ?? 0, weaponMaxPips ?? 0) : null;
 
   return (
     <>
-      <Row catColor={catColor} size={displaySize} item={item} stat={stat} isOn={isOn} isOverridden={isOverridden} onClick={onClick} onTogglePower={onTogglePower} hasChildren={hasChildren} depth={0} />
+      <Row catColor={catColor} size={displaySize} item={item} stat={stat} isOn={isOn} isOverridden={isOverridden} onClick={onClick} onTogglePower={onTogglePower} hasChildren={hasChildren} depth={0} ammo={ammo} />
       {hasChildren && isOn && childSlots!.map(ch => {
         const chOn = isComponentOn ? isComponentOn(ch.hardpointName) : true;
         const chColor = CAT_COLORS[ch.category] || catColor;
@@ -52,18 +94,21 @@ export const HardpointSlot = memo(function HardpointSlot({ hp, item, isOverridde
         const chOverridden = effectiveItem && ch.equippedItem
           ? effectiveItem.id !== ch.equippedItem.id
           : (effectiveItem !== ch.equippedItem);
+        const chIsWeapon = (ch.category || "WEAPON") === "WEAPON";
+        const chAmmo = chIsWeapon && effectiveItem && chOn ? getAmmoInfo(effectiveItem.componentStats, weaponAllocatedPips ?? 0, weaponMaxPips ?? 0) : null;
         return (
-          <Row key={ch.id} catColor={chColor} size={chSize} item={effectiveItem} stat={chStat} isOn={chOn} isOverridden={chOverridden} onClick={() => onClickChild?.(ch)} onTogglePower={() => toggleComponent?.(ch.hardpointName)} hasChildren={false} depth={1} />
+          <Row key={ch.id} catColor={chColor} size={chSize} item={effectiveItem} stat={chStat} isOn={chOn} isOverridden={chOverridden} onClick={() => onClickChild?.(ch)} onTogglePower={() => toggleComponent?.(ch.hardpointName)} hasChildren={false} depth={1} ammo={chAmmo} />
         );
       })}
     </>
   );
 });
 
-const Row = memo(function Row({ catColor, size, item, stat, isOn, isOverridden, onClick, onTogglePower, hasChildren, depth }: {
+const Row = memo(function Row({ catColor, size, item, stat, isOn, isOverridden, onClick, onTogglePower, hasChildren, depth, ammo }: {
   catColor: string; size: number; item: EquippedItem | null;
   stat: { v: string; l: string } | null; isOn: boolean; isOverridden: boolean;
   onClick: () => void; onTogglePower: () => void; hasChildren?: boolean; depth: number;
+  ammo?: { rounds: number; label: string } | null;
 }) {
   const indent = depth > 0;
   return (
@@ -97,6 +142,12 @@ const Row = memo(function Row({ catColor, size, item, stat, isOn, isOverridden, 
           <div className="flex items-baseline gap-0.5 flex-shrink-0 ml-0.5">
             <span className="text-[9px] font-mono font-medium text-emerald-400">{item.componentStats.penetrationDistance.toFixed(1)}</span>
             <span className="text-[7px] text-zinc-600 uppercase">PEN</span>
+          </div>
+        )}
+        {ammo && isOn && (
+          <div className="flex items-baseline gap-0.5 flex-shrink-0 ml-0.5">
+            <span className="text-[9px] font-mono font-medium text-amber-400">{fmtAmmo(ammo.rounds)}</span>
+            <span className="text-[7px] text-zinc-600 uppercase">{ammo.label}</span>
           </div>
         )}
         {!indent && <svg className="w-2.5 h-2.5 text-zinc-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>}

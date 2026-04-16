@@ -367,14 +367,14 @@ function renderWidget(
   wId: WidgetId,
   ctx: any,
 ): React.ReactNode {
-  const { weaponHps, missileHps, useful, setPickerHp, stats, flightMode, setFlightMode } = ctx;
+  const { weaponHps, missileHps, useful, setPickerHp, stats, flightMode, setFlightMode, weaponAllocatedPips, weaponMaxPips } = ctx;
   const W = (children: React.ReactNode, opts?: { icon?: string; badge?: string | number }) => (
     <WidgetShell id={wId} label={WIDGET_LABELS[wId]} icon={opts?.icon} badge={opts?.badge}>{children}</WidgetShell>
   );
 
   switch (wId) {
     case "weapons":
-      return weaponHps.length > 0 ? W(<HpGroup hps={weaponHps} onClickHp={setPickerHp} />, { icon: "/icons/weapons.png", badge: weaponHps.length }) : null;
+      return weaponHps.length > 0 ? W(<HpGroup hps={weaponHps} onClickHp={setPickerHp} weaponAllocatedPips={weaponAllocatedPips} weaponMaxPips={weaponMaxPips} />, { icon: "/icons/weapons.png", badge: weaponHps.length }) : null;
     case "missiles":
       return missileHps.length > 0 ? W(<HpGroup hps={missileHps} onClickHp={setPickerHp} />, { icon: "/icons/missile.png", badge: missileHps.length }) : null;
     case "strafe-profile":
@@ -685,9 +685,17 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   // Contexto compartido para renderWidget.
   // Los widgets de charts/stats/ship-card leen del store directamente
   // (ver widgets/*) — ctx sólo se usa para los HP-groups y power-grid.
+  // Extract weapon allocated pips from the power network instances
+  const weaponInstance = stats.powerNetwork.instances.find(
+    (inst: any) => inst.hardpointName === "__weapons_combined__"
+  );
+  const weaponAllocatedPips = weaponInstance?.allocatedPips ?? 0;
+  const weaponMaxPips = stats.weaponMaxPips ?? 0;
+
   const ctx = {
     weaponHps, missileHps, useful, setPickerHp,
     stats, flightMode, setFlightMode,
+    weaponAllocatedPips, weaponMaxPips,
   };
 
   return (
@@ -827,7 +835,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 // Sub-components
 // =============================================================================
 
-function HpGroup({ hps, onClickHp }: { hps: ResolvedHardpoint[]; onClickHp: (hp: ResolvedHardpoint) => void }) {
+function HpGroup({ hps, onClickHp, weaponAllocatedPips, weaponMaxPips }: { hps: ResolvedHardpoint[]; onClickHp: (hp: ResolvedHardpoint) => void; weaponAllocatedPips?: number; weaponMaxPips?: number }) {
   if (hps.length === 0) return null;
   const { getEffectiveItem, overrides, isComponentOn, toggleComponent } = useLoadoutStore(
     useShallow(s => ({
@@ -855,7 +863,7 @@ function HpGroup({ hps, onClickHp }: { hps: ResolvedHardpoint[]; onClickHp: (hp:
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60">
       {hps.map(hp => (
-        <HardpointSlot key={hp.id} hp={hp} item={getEffectiveItem(hp.id)} isOverridden={overrides.has(hp.id)} isOn={isComponentOn(hp.hardpointName)} onClick={() => onClickHp(hp)} onTogglePower={() => toggleComponent(hp.hardpointName)} childSlots={hp.children} isComponentOn={isComponentOn} toggleComponent={toggleComponent} onClickChild={handleClickChild} getEffectiveItem={getEffectiveItem} />
+        <HardpointSlot key={hp.id} hp={hp} item={getEffectiveItem(hp.id)} isOverridden={overrides.has(hp.id)} isOn={isComponentOn(hp.hardpointName)} onClick={() => onClickHp(hp)} onTogglePower={() => toggleComponent(hp.hardpointName)} childSlots={hp.children} isComponentOn={isComponentOn} toggleComponent={toggleComponent} onClickChild={handleClickChild} getEffectiveItem={getEffectiveItem} weaponAllocatedPips={weaponAllocatedPips} weaponMaxPips={weaponMaxPips} />
       ))}
     </div>
   );
