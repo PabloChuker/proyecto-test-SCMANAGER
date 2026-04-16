@@ -268,6 +268,7 @@ function computeStats(
   shipPowerGen: number,  // from ship-power-data.json
   flightControllerPower: any | null,  // from power-network-lookup (Controller_Flight_*)
   pools: Record<string, number> | null,  // pool pip counts from ship_power_reference
+  usedGroupedScm: Record<string, number> | null,  // per-category pip usage from game data
 ): ComputedStats {
   let totalDps = 0, totalAlpha = 0, shieldHp = 0, shieldRegen = 0;
   let powerOutput = 0, coolingRate = 0, thermalOutput = 0, emSig = 0, irSig = 0;
@@ -306,6 +307,7 @@ function computeStats(
   let weaponIrMax = 0;
   let weaponCount = 0;
   let weaponActiveCount = 0;
+  let weaponTotalIndividualPips = 0;  // sum of each weapon's totalPips
   const WEAPON_POWER_ID = "__weapons_combined__";
 
   // ── Shields: accumulate into a single combined power column ──
@@ -318,6 +320,7 @@ function computeStats(
   let shieldGenCoolant = 0;
   let shieldCount = 0;
   let shieldActiveCount = 0;
+  let shieldTotalIndividualPips = 0;  // sum of each shield's totalPips
   let shieldFirstHpName: string | null = null;
   const SHIELD_POWER_ID = "__shields_combined__";
 
@@ -353,7 +356,10 @@ function computeStats(
 
       if (pn?.pips && pn.pips > 0) {
         // PRIMARY: powerNetwork pips from game datamining (RegisterRange)
-        totalPips = Math.min(8, pn.pips);
+        // But if pMax implies more pips (e.g. radar: pips=1, pMax=5), use the larger
+        const pnPMax = pn.pMax ?? 0;
+        const impliedPips = pnPMax > 0 ? Math.ceil(pnPMax) : 0;
+        totalPips = Math.min(8, Math.max(pn.pips, impliedPips));
         powerMin = dbMin > 0 ? dbMin : (pn.pMin ?? 0);
         powerMax = dbMax > 0 ? dbMax : (pn.pMax ?? 0);
       } else if (dbMax > 0) {
@@ -394,6 +400,7 @@ function computeStats(
           weaponPowerMax += powerMax;
           weaponEmMax += pn?.em ?? pickNum(s, "emSignature");
           weaponIrMax += pn?.ir ?? pickNum(s, "irSignature");
+          weaponTotalIndividualPips += totalPips;
           weaponCount++;
           if (isOn) weaponActiveCount++;
         }
@@ -407,6 +414,7 @@ function computeStats(
           shieldIrMax += pn?.ir ?? pickNum(s, "irSignature");
           shieldGenPower += pn?.genP ?? 0;
           shieldGenCoolant += pn?.genC ?? 0;
+          shieldTotalIndividualPips += totalPips;
           shieldCount++;
           if (isOn) shieldActiveCount++;
           // Remember the first shield hardpointName so the merged column
@@ -493,6 +501,11 @@ function computeStats(
           weaponPowerMax += childPn.pMax;
           weaponEmMax += childPn.em ?? pickNum(childS, "emSignature");
           weaponIrMax += childPn.ir ?? 0;
+          // Derive child weapon pips same way as parent
+          const childPips = childPn.pips && childPn.pips > 0
+            ? Math.min(8, Math.max(childPn.pips, Math.ceil(childPn.pMax)))
+            : Math.min(8, Math.max(1, Math.ceil(childPn.pMax)));
+          weaponTotalIndividualPips += childPips;
           weaponCount++;
           if (childOn) weaponActiveCount++;
         }
@@ -509,12 +522,19 @@ function computeStats(
   // ── Push synthetic thrusters column (from FlightController power data) ──
   // Thrusters are not regular hardpoints, so we inject a single column based on
   // the ship's Controller_Flight_* entry in power-network-lookup.json.
+  // Fallback: if flightControllerPower is null, use usedGroupedScm.FlightController.
   const THRUSTERS_POWER_ID = "__thrusters_combined__";
+  const ugScmThr = usedGroupedScm?.FlightController ?? 0;
   if (flightControllerPower && (flightControllerPower.pMax ?? 0) > 0) {
     const thrPMin = Number(flightControllerPower.pMin ?? 0);
     const thrPMax = Number(flightControllerPower.pMax ?? 0);
     const thrPoolPips = pools?.FlightController ?? 0;
-    const thrustPips = thrPoolPips > 0 ? Math.min(8, thrPoolPips) : Math.min(8, Math.max(1, Math.ceil(thrPMax)));
+    // Use the best available pip count
+    const thrustPips = Math.min(8, Math.max(
+      ugScmThr,
+      thrPoolPips > 0 ? thrPoolPips : 0,
+      Math.max(1, Math.ceil(thrPMax)),
+    ));
     const thrustAllocPips = instancePower[THRUSTERS_POWER_ID] ?? 0;
 
     cats.thrusters.componentCount += 1;
@@ -539,13 +559,47 @@ function computeStats(
       irMax: Number(flightControllerPower.ir ?? 0),
       isOn: true,
     });
+  } else if (ugScmThr > 0) {
+    // No flightController data in JSON, but usedGroupedScm tells us the pip count
+    const thrustPips = Math.min(8, ugScmThr);
+    const thrustAllocPips = instancePower[THRUSTERS_POWER_ID] ?? 0;
+
+    cats.thrusters.componentCount += 1;
+    cats.thrusters.activeCount += 1;
+    cats.thrusters.minDraw += 1;  // conservative minimum
+    cats.thrusters.allocated += thrustAllocPips;
+
+    instances.push({
+      hardpointId: THRUSTERS_POWER_ID,
+      hardpointName: THRUSTERS_POWER_ID,
+      componentName: "Thrusters",
+      category: "thrusters",
+      type: "FlightController",
+      totalPips: thrustPips,
+      allocatedPips: Math.min(thrustAllocPips, thrustPips),
+      ranges: [{ start: 0, modifier: 1, range: thrustPips }],
+      powerMin: 1,
+      powerMax: ugScmThr,  // use pip count as approximate power draw
+      genPower: 0,
+      genCoolant: 0,
+      emMax: 0,
+      irMax: 0,
+      isOn: true,
+    });
   }
 
   // ── Push single combined weapons column ──
   if (weaponCount > 0) {
     const weaponAllocPips = instancePower[WEAPON_POWER_ID] ?? 0;
+    // Best pip source priority: usedGroupedScm > sum of individual pips > pools > ceil(pMax)
+    const ugScmWpn = usedGroupedScm?.WeaponGun ?? 0;
     const wpnPoolPips = pools?.WeaponGun ?? 0;
-    const combinedPips = wpnPoolPips > 0 ? Math.min(8, wpnPoolPips) : Math.min(8, Math.max(1, Math.ceil(weaponPowerMax)));
+    const combinedPips = Math.min(8, Math.max(
+      ugScmWpn,
+      weaponTotalIndividualPips,
+      wpnPoolPips,
+      Math.max(1, Math.ceil(weaponPowerMax)),
+    ));
     // Override the per-weapon allocated counts with the single combined allocation
     cats.weapons.allocated = weaponAllocPips;
     instances.push({
@@ -557,7 +611,7 @@ function computeStats(
       totalPips: combinedPips,
       allocatedPips: Math.min(weaponAllocPips, combinedPips),
       ranges: [{ start: 0, modifier: 1, range: combinedPips }],
-      powerMin: 0,  // pools use discrete allocation levels, no forced minimum
+      powerMin: weaponPowerMin,  // sum of individual weapon minimums (energy weapons draw at idle)
       powerMax: weaponPowerMax,
       genPower: 0,
       genCoolant: 0,
@@ -573,10 +627,20 @@ function computeStats(
   // generators into one visual column matching the weapons treatment.
   if (shieldCount > 0) {
     const shieldAllocPips = instancePower[SHIELD_POWER_ID] ?? 0;
+    // Best pip source priority: usedGroupedScm > sum of individual pips > pools > ceil(pMax)
+    const ugScmShld = usedGroupedScm?.Shield ?? 0;
     const shldPoolPips = pools?.Shield ?? 0;
-    const combinedShieldPips = shldPoolPips > 0 ? Math.min(8, shldPoolPips) : Math.min(8, Math.max(1, Math.ceil(shieldPowerMax)));
+    const combinedShieldPips = Math.min(8, Math.max(
+      ugScmShld,
+      shieldTotalIndividualPips,
+      shldPoolPips,
+      Math.max(1, Math.ceil(shieldPowerMax)),
+    ));
     // Override the per-shield allocated counts with the single combined allocation
     cats.shields.allocated = shieldAllocPips;
+    // Shield minimum = sum of individual shield pMin values (each shield needs minimum power)
+    // For Asgard: 4 shields × pMin=1 = 4 minimum pips
+    const shieldMinPips = Math.min(combinedShieldPips, Math.max(1, Math.ceil(shieldPowerMin)));
     instances.push({
       hardpointId: SHIELD_POWER_ID,
       hardpointName: SHIELD_POWER_ID,
@@ -586,7 +650,7 @@ function computeStats(
       totalPips: combinedShieldPips,
       allocatedPips: Math.min(shieldAllocPips, combinedShieldPips),
       ranges: [{ start: 0, modifier: 1, range: combinedShieldPips }],
-      powerMin: 0,  // pools use discrete allocation levels, no forced minimum
+      powerMin: shieldPowerMin,  // sum of individual shield minimums (e.g. 4 shields × pMin=1 = 4)
       powerMax: shieldPowerMax,
       genPower: shieldGenPower,
       genCoolant: shieldGenCoolant,
@@ -745,6 +809,8 @@ interface LoadoutState {
   flightControllerPower: any | null;
   /** Pool pip counts from ship_power_reference (e.g. { WeaponGun: 4, Shield: 2 }) */
   powerPools: Record<string, number> | null;
+  /** Per-category pip usage from ship_power_reference (e.g. { Shield: 8, Radar: 5 }) */
+  usedGroupedScm: Record<string, number> | null;
   // Legacy: keep for backward compat but internally maps to instancePower
   allocatedPower: Record<PowerCategory, number>;
   isLoading: boolean; error: string | null;
@@ -773,6 +839,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   shipId: null, shipInfo: null, hardpoints: [], overrides: new Map(),
   componentStates: {}, flightMode: "SCM" as FlightMode,
   instancePower: {}, shipPowerGen: 0, flightControllerPower: null, powerPools: null,
+  usedGroupedScm: null,
   allocatedPower: { ...ZERO_ALLOC }, isLoading: false, error: null,
 
   getStats: () => {
@@ -780,7 +847,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
     if (s.hardpoints.length === 0) return EMPTY_STATS;
     const key = makeStatsKey(s.shipId, s.flightMode, s.overrides, s.componentStates, s.instancePower, s.shipPowerGen);
     if (_statsCache && _statsCache.key === key) return _statsCache.result;
-    const result = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, s.instancePower, s.shipInfo, s.shipPowerGen, s.flightControllerPower, s.powerPools);
+    const result = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, s.instancePower, s.shipInfo, s.shipPowerGen, s.flightControllerPower, s.powerPools, s.usedGroupedScm);
     _statsCache = { key, result };
     return result;
   },
@@ -807,6 +874,10 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
       const shipPowerGen = shipPower?.gen ?? 0;
       const flightControllerPower = json.flightController ?? null;
       const powerPools: Record<string, number> | null = shipPower?.pools ?? null;
+      // Per-category pip usage from game data (most reliable pip source)
+      const rawGrouped = shipPower?.usedGroupedScm;
+      const usedGroupedScm: Record<string, number> | null =
+        rawGrouped && typeof rawGrouped === "object" ? rawGrouped : null;
 
       const shipInfo: ShipInfo = {
         id: data.id ?? "", reference: data.reference ?? "", name: data.name ?? "",
@@ -919,6 +990,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
         shipId: id, shipInfo, hardpoints: resolved, overrides: restored,
         componentStates: states, flightMode: "SCM",
         instancePower: {}, shipPowerGen, flightControllerPower, powerPools,
+        usedGroupedScm,
         allocatedPower: { ...ZERO_ALLOC },
         isLoading: false, error: null,
       });
@@ -960,7 +1032,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   autoAllocatePower: () => {
     const s = get();
     // Compute stats with zero allocation to get instance list
-    const probe = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, {}, s.shipInfo, s.shipPowerGen, s.flightControllerPower, s.powerPools);
+    const probe = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, {}, s.shipInfo, s.shipPowerGen, s.flightControllerPower, s.powerPools, s.usedGroupedScm);
     const total = probe.powerNetwork.totalOutput;
     const newAlloc: Record<string, number> = {};
     let rem = total;
