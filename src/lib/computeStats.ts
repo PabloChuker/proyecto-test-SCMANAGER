@@ -103,6 +103,8 @@ export function recomputeStats(
         totalAlphaDamage += nn(cs.alphaDamage);
         totalPowerDraw += nn(cs.powerDraw);
         totalThermalOutput += nn(cs.thermalOutput);
+        totalEmSignature += nn(cs.emSignature);
+        totalIrSignature += nn(cs.irSignature);
       }
     }
   }

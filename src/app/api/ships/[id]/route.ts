@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+// Fallback: static JSON for data not yet in DB (flight controllers, etc.)
 import powerNetworkLookup from "@/data/power-network-lookup.json";
 import shipPowerData from "@/data/ship-power-data.json";
 
@@ -47,6 +48,41 @@ const spLookup = shipPowerData as Record<string, any>;
 function getPowerNetworkInfo(className: string | null): any | null {
   if (!className) return null;
   return pnLookup[className] ?? null;
+}
+
+/** Build powerNetwork object from DB columns (new power model).
+ *  Falls back to JSON lookup if DB columns are empty. */
+function buildPowerNetwork(row: any, componentType: string): any | null {
+  const className = row.class_name;
+  // If we have power model data in DB columns, use them
+  const pMin = numOrNull(row.power_consumption_min);
+  const pMax = numOrNull(row.power_consumption_max);
+  const cMin = numOrNull(row.coolant_consumption_min);
+  const cMax = numOrNull(row.coolant_consumption_max);
+  const pips = numOrNull(row.pips);
+  const ranges = row.power_ranges ?? null; // already jsonb
+  const emMax = numOrNull(row.em_max);
+  const irMax = numOrNull(row.ir_max);
+
+  // For power plants: generation fields
+  const genP = componentType === "PowerPlant" ? numOrNull(row.power_generation) : null;
+  const genC = componentType === "Cooler" ? numOrNull(row.cooling_generation) : null;
+
+  // If we have at least SOME DB power data, build from DB
+  if (pMin !== null || pMax !== null || pips !== null || genP !== null || genC !== null) {
+    return {
+      type: componentType,
+      pMin, pMax, cMin, cMax,
+      genP, genC,
+      pips,
+      ranges: Array.isArray(ranges) ? ranges : null,
+      em: emMax,
+      ir: irMax,
+    };
+  }
+
+  // Fallback to static JSON
+  return getPowerNetworkInfo(className);
 }
 
 // ─── Hardpoint type → store category mapping ────────────────────────────────
@@ -134,8 +170,14 @@ function buildWeaponItem(row: any): any {
       emSignature: numOrNull(row.emission_em_max),
       penetrationDistance: numOrNull(row.penetration_distance),
       maxPenetrationThickness: numOrNull(row.max_penetration_thickness),
+      // Power model fields from DB
+      powerDraw: numOrNull(row.power_consumption_max),
+      powerDrawMin: numOrNull(row.power_consumption_min),
+      powerDrawMax: numOrNull(row.power_consumption_max),
+      irSignature: numOrNull(row.ir_max),
+      isEnergyWeapon: row.is_energy_weapon ?? null,
     },
-    powerNetwork: getPowerNetworkInfo(row.class_name),
+    powerNetwork: buildPowerNetwork(row, "WeaponGun"),
   };
 }
 
@@ -176,8 +218,9 @@ function buildShieldItem(row: any): any {
       energyAbsorptionMax: numOrNull(row.energy_absorption_max),
       distortionAbsorptionMin: numOrNull(row.distortion_absorption_min),
       distortionAbsorptionMax: numOrNull(row.distortion_absorption_max),
+      irSignature: numOrNull(row.ir_max),
     },
-    powerNetwork: getPowerNetworkInfo(row.class_name),
+    powerNetwork: buildPowerNetwork(row, "Shield"),
   };
 }
 
@@ -207,11 +250,14 @@ function buildPowerPlantItem(row: any): any {
     manufacturer: row.manufacturer_id ?? null,
     componentStats: {
       powerOutput: powerGen,
-      powerDraw: 0,
+      powerDraw: numOrNull(row.power_consumption_max) ?? 0,
+      powerDrawMin: numOrNull(row.power_consumption_min),
+      powerDrawMax: numOrNull(row.power_consumption_max),
       emSignature: emSig,
+      irSignature: numOrNull(row.ir_max),
       health: numOrNull(row.health),
     },
-    powerNetwork: getPowerNetworkInfo(row.class_name),
+    powerNetwork: buildPowerNetwork(row, "PowerPlant"),
   };
 }
 
@@ -235,7 +281,7 @@ function buildCoolerItem(row: any): any {
       irSignature: numOrNull(row.ir_max),
       health: numOrNull(row.health),
     },
-    powerNetwork: getPowerNetworkInfo(row.class_name),
+    powerNetwork: buildPowerNetwork(row, "Cooler"),
   };
 }
 
@@ -255,8 +301,14 @@ function buildQuantumItem(row: any): any {
       fuelRate: numOrNull(row.fuel_rate),
       cooldownTime: numOrNull(row.cooldown_time),
       spoolUpTime: numOrNull(row.spool_up_time),
+      powerDraw: numOrNull(row.power_consumption_max),
+      powerDrawMin: numOrNull(row.power_consumption_min),
+      powerDrawMax: numOrNull(row.power_consumption_max),
+      emSignature: numOrNull(row.em_max),
+      irSignature: numOrNull(row.ir_max),
+      health: numOrNull(row.health),
     },
-    powerNetwork: getPowerNetworkInfo(row.class_name),
+    powerNetwork: buildPowerNetwork(row, "QuantumDrive"),
   };
 }
 
@@ -445,13 +497,19 @@ export async function GET(
     const ship = shipRows[0];
 
     // ── 2. Load satellite data in parallel ──
-    const [flightStats, fuelStats] = await Promise.all([
+    const [flightStats, fuelStats, powerRef, poolRows] = await Promise.all([
       sql.unsafe(`SELECT * FROM ship_flight_stats WHERE ship_id::text = $1 LIMIT 1`, [String(ship.id)])
         .then((rows: any[]) => rows[0] ?? null)
         .catch((e: unknown) => { console.warn("[ships/[id]] Could not load flight stats:", e); return null; }),
       sql.unsafe(`SELECT * FROM ship_fuel WHERE ship_id::text = $1 LIMIT 1`, [String(ship.id)])
         .then((rows: any[]) => rows[0] ?? null)
         .catch((e: unknown) => { console.warn("[ships/[id]] Could not load fuel stats:", e); return null; }),
+      sql.unsafe(`SELECT * FROM ship_power_reference WHERE ship_id = $1 LIMIT 1`, [String(ship.id)])
+        .then((rows: any[]) => rows[0] ?? null)
+        .catch((e: unknown) => { console.warn("[ships/[id]] Could not load power reference:", e); return null; }),
+      sql.unsafe(`SELECT item_type, max_size FROM ship_pools WHERE ship_id = $1`, [String(ship.id)])
+        .then((rows: any[]) => rows ?? [])
+        .catch((e: unknown) => { console.warn("[ships/[id]] Could not load ship pools:", e); return []; }),
     ]);
 
     // ── 3. Get hardpoints from NEW schema (match by ship reference) ──
@@ -700,11 +758,55 @@ export async function GET(
       },
     };
 
-    // Ship-level power data from sc-unpacked
+    // Ship-level power data: prefer DB (ship_power_reference), fallback to static JSON
     const shipClassName = ship.reference || ship.class_name || "";
-    const shipPower = spLookup[shipClassName] ?? null;
 
-    // Flight controller (thrusters) power data — looked up by Controller_Flight_{className}
+    // Build pools map from DB
+    const poolsMap: Record<string, number> = {};
+    for (const p of poolRows as any[]) {
+      poolsMap[p.item_type] = numOrNull(p.max_size) ?? 0;
+    }
+
+    // shipPower: DB-backed power snapshot
+    const shipPower = powerRef ? {
+      // Core power model
+      gen: numOrNull(powerRef.power_generation_segments),
+      usedScm: numOrNull(powerRef.power_used_scm),
+      usedNav: numOrNull(powerRef.power_used_nav),
+      usedGroupedScm: powerRef.power_used_grouped_scm ?? null,
+      usedGroupedNav: powerRef.power_used_grouped_nav ?? null,
+      // Cooling model
+      coolingGen: numOrNull(powerRef.cooling_generation_segments),
+      coolingUsedScm: numOrNull(powerRef.cooling_used_scm),
+      coolingUsedNav: numOrNull(powerRef.cooling_used_nav),
+      coolingUsedPctScm: numOrNull(powerRef.cooling_used_pct_scm),
+      coolingUsedPctNav: numOrNull(powerRef.cooling_used_pct_nav),
+      coolingUsedGroupedScm: powerRef.cooling_used_grouped_scm ?? null,
+      coolingUsedGroupedNav: powerRef.cooling_used_grouped_nav ?? null,
+      // Emission model
+      emShields: numOrNull(powerRef.em_shields),
+      emQuantum: numOrNull(powerRef.em_quantum),
+      irShields: numOrNull(powerRef.ir_shields),
+      irQuantum: numOrNull(powerRef.ir_quantum),
+      emPerSegment: numOrNull(powerRef.em_per_segment),
+      emGroupsScm: powerRef.em_groups_scm ?? null,
+      emGroupsNav: powerRef.em_groups_nav ?? null,
+      // Ship totals
+      totalShieldHp: numOrNull(powerRef.total_shield_hp),
+      totalShieldRegen: numOrNull(powerRef.total_shield_regen),
+      distortionPool: numOrNull(powerRef.distortion_pool),
+      fuelHydrogen: numOrNull(powerRef.fuel_capacity_hydrogen),
+      fuelQuantum: numOrNull(powerRef.fuel_capacity_quantum),
+      qtRangeKm: numOrNull(powerRef.qt_range_km),
+      qtSpeedMs: numOrNull(powerRef.qt_speed_ms),
+      qtSpoolTimeS: numOrNull(powerRef.qt_spool_time_s),
+      // Multi-PP model
+      multiPpRatio: numOrNull(powerRef.multi_pp_ratio),
+      // Pools
+      pools: Object.keys(poolsMap).length > 0 ? poolsMap : undefined,
+    } : (spLookup[shipClassName] ?? null); // fallback to static JSON
+
+    // Flight controller (thrusters) power data — still from JSON lookup for now
     const flightController =
       pnLookup[`Controller_Flight_${shipClassName}`] ?? null;
 
