@@ -341,6 +341,7 @@ function buildStats(row: any, type: string): Record<string, any> | null {
       s.effectiveRange = numOrNull(row.effective_range);
       s.ammoSpeed = numOrNull(row.ammo_speed);
       s.ammoCapacity = numOrNull(row.ammo_capacity);
+      s.weaponCapacity = numOrNull(row.weapon_capacity);
       s.fireMode = row.fire_mode ?? null;
       s.heatPerShot = numOrNull(row.heat_per_shot);
       s.emSignature = numOrNull(row.emission_em_max);

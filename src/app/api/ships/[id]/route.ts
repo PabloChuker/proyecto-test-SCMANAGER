@@ -170,12 +170,13 @@ function buildWeaponItem(row: any): any {
       emSignature: numOrNull(row.emission_em_max),
       penetrationDistance: numOrNull(row.penetration_distance),
       maxPenetrationThickness: numOrNull(row.max_penetration_thickness),
+      // Ammo / capacitor
+      weaponCapacity: numOrNull(row.weapon_capacity),
       // Power model fields from DB
       powerDraw: numOrNull(row.power_consumption_max),
       powerDrawMin: numOrNull(row.power_consumption_min),
       powerDrawMax: numOrNull(row.power_consumption_max),
       irSignature: numOrNull(row.ir_max),
-      isEnergyWeapon: row.is_energy_weapon ?? null,
     },
     powerNetwork: buildPowerNetwork(row, "WeaponGun"),
   };

@@ -22,6 +22,8 @@ interface HardpointSlotProps {
   toggleComponent?: (name: string) => void;
   onClickChild?: (child: ResolvedChild) => void;
   getEffectiveItem?: (id: string) => EquippedItem | null;
+  /** Weapon power ratio (0..1) from combined weapons pip allocation */
+  weaponPowerRatio?: number;
 }
 
 /** Check if an item is a turret/gimbal (has children) vs a direct weapon */
@@ -31,17 +33,18 @@ function isTurretOrRack(item: EquippedItem | null): boolean {
   return /turret|gimbal|varipuck|rack/i.test(n);
 }
 
-export const HardpointSlot = memo(function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onTogglePower, childSlots, isComponentOn, toggleComponent, onClickChild, getEffectiveItem }: HardpointSlotProps) {
+export const HardpointSlot = memo(function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onTogglePower, childSlots, isComponentOn, toggleComponent, onClickChild, getEffectiveItem, weaponPowerRatio }: HardpointSlotProps) {
   const catColor = CAT_COLORS[hp.resolvedCategory] || "#52525b";
   const stat = item && isOn ? getKeyStat(hp.resolvedCategory, item.componentStats) : null;
   const displaySize = hp.maxSize > 0 ? hp.maxSize : (item?.size ?? 0);
   const parentIsTurret = (hp.resolvedCategory === "TURRET" || hp.resolvedCategory === "MISSILE_RACK")
     && (!isOverridden || isTurretOrRack(item));
   const hasChildren = parentIsTurret && childSlots && childSlots.length > 0;
+  const isWeaponCat = hp.resolvedCategory === "WEAPON" || hp.resolvedCategory === "TURRET";
 
   return (
     <>
-      <Row catColor={catColor} size={displaySize} item={item} stat={stat} isOn={isOn} isOverridden={isOverridden} onClick={onClick} onTogglePower={onTogglePower} hasChildren={hasChildren} depth={0} />
+      <Row catColor={catColor} size={displaySize} item={item} stat={stat} isOn={isOn} isOverridden={isOverridden} onClick={onClick} onTogglePower={onTogglePower} hasChildren={hasChildren} depth={0} weaponPowerRatio={isWeaponCat ? weaponPowerRatio : undefined} />
       {hasChildren && isOn && childSlots!.map(ch => {
         const chOn = isComponentOn ? isComponentOn(ch.hardpointName) : true;
         const chColor = CAT_COLORS[ch.category] || catColor;
@@ -52,19 +55,66 @@ export const HardpointSlot = memo(function HardpointSlot({ hp, item, isOverridde
           ? effectiveItem.id !== ch.equippedItem.id
           : (effectiveItem !== ch.equippedItem);
         return (
-          <Row key={ch.id} catColor={chColor} size={chSize} item={effectiveItem} stat={chStat} isOn={chOn} isOverridden={chOverridden} onClick={() => onClickChild?.(ch)} onTogglePower={() => toggleComponent?.(ch.hardpointName)} hasChildren={false} depth={1} />
+          <Row key={ch.id} catColor={chColor} size={chSize} item={effectiveItem} stat={chStat} isOn={chOn} isOverridden={chOverridden} onClick={() => onClickChild?.(ch)} onTogglePower={() => toggleComponent?.(ch.hardpointName)} hasChildren={false} depth={1} weaponPowerRatio={weaponPowerRatio} />
         );
       })}
     </>
   );
 });
 
-const Row = memo(function Row({ catColor, size, item, stat, isOn, isOverridden, onClick, onTogglePower, hasChildren, depth }: {
+/** Compute ammo info for weapon items based on power allocation */
+function getAmmoInfo(stats: Record<string, any> | null, powerRatio?: number): { v: string; l: string; color: string } | null {
+  if (!stats) return null;
+  const weaponCap = stats.weaponCapacity ?? 0;
+  const ammoCap = stats.ammoCapacity ?? 0;
+  const rpm = stats.fireRate ?? 0;
+  const alphaPhys = stats.alphaPhysical ?? 0;
+  const alphaEnergy = stats.alphaEnergy ?? 0;
+
+  if (weaponCap <= 0 && ammoCap <= 0) return null;
+
+  const isEnergy = alphaEnergy > 0 && alphaPhys === 0;
+
+  if (isEnergy) {
+    // Energy weapon: weaponCapacity = capacitor pool (burst shots)
+    // With power allocation, capacitor recharges → more sustained fire
+    // At ratio=1 (max pips): effectively infinite sustained fire
+    // At ratio=0: only burst capacity
+    if (weaponCap <= 0) return null;
+    const ratio = powerRatio ?? 0;
+    if (rpm <= 0) return { v: String(weaponCap), l: "CAP", color: "#60a5fa" };
+    const burstTime = weaponCap / (rpm / 60);
+    if (ratio >= 0.9) {
+      return { v: "∞", l: "SUS", color: "#22c55e" };
+    } else if (ratio > 0) {
+      // Approximate sustained fire time: burst time extended by recharge
+      // More pips = longer effective fire time
+      const sustainFactor = 1 / (1 - ratio);
+      const sustainTime = Math.min(999, burstTime * sustainFactor);
+      return { v: sustainTime >= 100 ? Math.round(sustainTime) + "s" : sustainTime.toFixed(0) + "s", l: "SUS", color: "#60a5fa" };
+    } else {
+      return { v: burstTime.toFixed(0) + "s", l: "BST", color: "#f59e0b" };
+    }
+  } else {
+    // Ballistic weapon: ammoCapacity or weaponCapacity = fixed ammo
+    const totalAmmo = ammoCap > 0 ? ammoCap : weaponCap;
+    if (totalAmmo <= 0) return null;
+    if (rpm > 0) {
+      const fireTime = totalAmmo / (rpm / 60);
+      return { v: fireTime >= 100 ? Math.round(fireTime) + "s" : fireTime.toFixed(0) + "s", l: "AMO", color: "#a3a3a3" };
+    }
+    return { v: String(totalAmmo), l: "RDS", color: "#a3a3a3" };
+  }
+}
+
+const Row = memo(function Row({ catColor, size, item, stat, isOn, isOverridden, onClick, onTogglePower, hasChildren, depth, weaponPowerRatio }: {
   catColor: string; size: number; item: EquippedItem | null;
   stat: { v: string; l: string } | null; isOn: boolean; isOverridden: boolean;
   onClick: () => void; onTogglePower: () => void; hasChildren?: boolean; depth: number;
+  weaponPowerRatio?: number;
 }) {
   const indent = depth > 0;
+  const ammo = item && isOn ? getAmmoInfo(item.componentStats, weaponPowerRatio) : null;
   return (
     <div className={"flex items-center h-8 border-b border-zinc-800/50 last:border-b-0 transition-opacity duration-150 " + (isOn ? "" : "opacity-30") + (indent ? " ml-5 border-l-2 border-l-zinc-700/40" : "")}>
       <button onClick={(e) => { e.stopPropagation(); onTogglePower(); }} className={"w-6 h-full flex items-center justify-center flex-shrink-0 transition-colors " + (isOn ? "text-yellow-500/70 hover:text-yellow-400" : "text-zinc-700 hover:text-yellow-600")}>
@@ -85,6 +135,12 @@ const Row = memo(function Row({ catColor, size, item, stat, isOn, isOverridden, 
           </>
         ) : (
           <span className="text-[10px] text-zinc-700 italic flex-1">— empty —</span>
+        )}
+        {ammo && (
+          <div className="flex items-baseline gap-0.5 flex-shrink-0">
+            <span className="text-[9px] font-mono font-medium" style={{ color: ammo.color }}>{ammo.v}</span>
+            <span className="text-[7px] text-zinc-600 uppercase">{ammo.l}</span>
+          </div>
         )}
         {stat && (
           <div className="flex items-baseline gap-0.5 flex-shrink-0">
