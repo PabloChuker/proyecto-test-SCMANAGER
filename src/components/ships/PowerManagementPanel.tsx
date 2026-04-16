@@ -59,8 +59,8 @@ function ComponentIcon({ cat, color }: { cat: PowerCategory; color: string }) {
     <img
       src={src}
       alt={cat}
-      width={20}
-      height={20}
+      width={24}
+      height={24}
       style={{ display: "block", opacity: color === "#3f3f46" ? 0.35 : 1 }}
     />
   );
@@ -97,11 +97,6 @@ export function PowerManagementPanel({
 
   const totalOutput = pn.totalOutput;
   const totalAllocated = pn.totalAllocated;
-  // Use actual pip-based draw (reflects equipped component differences)
-  const actualDraw = pn.totalActualDraw ?? pn.totalMinDraw;
-  const consumptionPct = totalOutput > 0
-    ? Math.round((actualDraw / totalOutput) * 100)
-    : 0;
 
   // Click handler — toggle pip allocation
   const handleCellClick = (inst: ComponentPowerInstance, row: number) => {
@@ -160,26 +155,7 @@ export function PowerManagementPanel({
             <span className="text-[11px] font-mono text-zinc-600">/ {totalOutput}</span>
           </div>
 
-          {/* Consumption bar */}
-          <div className="flex items-center gap-2">
-            <span className="text-[11px]" style={{ color: "#22c55e" }}>⚙</span>
-            <span className="text-[9px] font-mono text-zinc-500 tracking-widest uppercase">Consumption</span>
-            <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden ml-1">
-              <div
-                className="h-full rounded-full transition-all duration-300"
-                style={{
-                  width: Math.min(100, consumptionPct) + "%",
-                  backgroundColor: consumptionPct > 100 ? "#ef4444" : "#22c55e",
-                }}
-              />
-            </div>
-            <span
-              className="text-[11px] font-mono font-bold tabular-nums"
-              style={{ color: consumptionPct > 100 ? "#ef4444" : "#22c55e" }}
-            >
-              {consumptionPct}%
-            </span>
-          </div>
+          {/* Consumption bar removed — users don't need it */}
         </div>
 
         {/* ── POWER GRID ── */}
@@ -228,7 +204,7 @@ export function PowerManagementPanel({
                         key="min-merged"
                         onClick={() => handleMinCellClick(inst, minPips)}
                         style={{
-                          width: 20,
+                          width: 24,
                           height: mergedHeight,
                           backgroundColor: bg,
                           border: `1px solid ${borderC}`,
@@ -280,7 +256,7 @@ export function PowerManagementPanel({
                       key={currentRow}
                       onClick={() => handleCellClick(inst, currentRow)}
                       style={{
-                        width: 20,
+                        width: 24,
                         height: 14,
                         backgroundColor: bg,
                         border: `1px solid ${borderC}`,
@@ -312,31 +288,22 @@ export function PowerManagementPanel({
               })}
             </div>
 
-            {/* Icons row: one icon per column, aligned */}
+            {/* Icons row: one icon per column, aligned — no percentages */}
             <div className="flex" style={{ gap: "2px", justifyContent: "center" }}>
               {columns.map((inst, colIdx) => {
                 const prevCat = colIdx > 0 ? columns[colIdx - 1].category : null;
                 const showSep = prevCat !== null && prevCat !== inst.category;
                 const color = catColor(inst.category);
-                const pct = inst.totalPips > 0
-                  ? Math.round((inst.allocatedPips / inst.totalPips) * 100)
-                  : 0;
 
                 return (
                   <React.Fragment key={inst.hardpointName + "-icon"}>
                     {showSep && <div style={{ width: "4px" }} />}
                     <div
-                      className="flex flex-col items-center"
-                      style={{ width: 20 }}
+                      className="flex items-center justify-center"
+                      style={{ width: 24 }}
                       title={`${inst.componentName} — ${inst.allocatedPips}/${inst.totalPips} pips\nDraw: ${(inst.powerMin + (inst.powerMax - inst.powerMin) * (inst.totalPips > 0 ? inst.allocatedPips / inst.totalPips : 0)).toFixed(1)} / ${inst.powerMax} pwr`}
                     >
                       <ComponentIcon cat={inst.category} color={inst.isOn ? color : "#3f3f46"} />
-                      <span
-                        className="text-[7px] font-mono font-bold tabular-nums"
-                        style={{ color: pct >= 100 ? color : "#52525b", marginTop: 1 }}
-                      >
-                        {pct}%
-                      </span>
                     </div>
                   </React.Fragment>
                 );
