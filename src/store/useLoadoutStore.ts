@@ -243,7 +243,7 @@ function combinePowerPlantOutputs(outputs: number[]): number {
   const allIdentical = sorted.every((r) => r === best);
   if (allIdentical) {
     let factor: number;
-    if (n === 1) factor = 0.95;
+    if (n === 1) factor = 1.0;   // single plant → full rating (verified vs Erkul)
     else if (n === 2) factor = 1.20;
     else if (n === 3) factor = 1.65;
     else factor = 0.95 + 0.25 * (n - 1) + 0.10 * (n - 1) * (n - 2);
