@@ -97,8 +97,10 @@ export function PowerManagementPanel({
 
   const totalOutput = pn.totalOutput;
   const totalAllocated = pn.totalAllocated;
+  // Use actual pip-based draw (reflects equipped component differences)
+  const actualDraw = pn.totalActualDraw ?? pn.totalMinDraw;
   const consumptionPct = totalOutput > 0
-    ? Math.round((pn.totalMinDraw / totalOutput) * 100)
+    ? Math.round((actualDraw / totalOutput) * 100)
     : 0;
 
   // Click handler — toggle pip allocation
@@ -183,7 +185,7 @@ export function PowerManagementPanel({
         {/* ── POWER GRID ── */}
         {columns.length > 0 && (
           <div className="space-y-1">
-            {/* Grid: 6 rows × N columns, bottom-to-top fill */}
+            {/* Grid: 8 rows × N columns, bottom-to-top fill */}
             <div className="flex" style={{ gap: "2px", justifyContent: "center" }}>
               {columns.map((inst, colIdx) => {
                 const color = catColor(inst.category);
@@ -326,7 +328,7 @@ export function PowerManagementPanel({
                     <div
                       className="flex flex-col items-center"
                       style={{ width: 20 }}
-                      title={`${inst.componentName} — ${inst.allocatedPips}/${inst.totalPips} pips (min: ${Math.ceil(inst.powerMin)}, max: ${inst.powerMax})`}
+                      title={`${inst.componentName} — ${inst.allocatedPips}/${inst.totalPips} pips\nDraw: ${(inst.powerMin + (inst.powerMax - inst.powerMin) * (inst.totalPips > 0 ? inst.allocatedPips / inst.totalPips : 0)).toFixed(1)} / ${inst.powerMax} pwr`}
                     >
                       <ComponentIcon cat={inst.category} color={inst.isOn ? color : "#3f3f46"} />
                       <span

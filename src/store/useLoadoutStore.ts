@@ -106,6 +106,8 @@ export interface ComponentPowerInstance {
 export interface CategoryPowerInfo { minDraw: number; allocated: number; componentCount: number; activeCount: number; }
 export interface PowerNetworkState {
   totalOutput: number; totalAllocated: number; totalMinDraw: number;
+  /** Actual power draw interpolated from pip allocation (reflects component differences) */
+  totalActualDraw: number;
   consumptionPercent: number; freePoints: number; isOverloaded: boolean;
   categories: Record<PowerCategory, CategoryPowerInfo>;
   activeCategories: PowerCategory[];
@@ -379,7 +381,9 @@ function computeStats(
       cats[pCat].componentCount++;
       if (isOn) {
         cats[pCat].activeCount++;
-        cats[pCat].minDraw += powerMin > 0 ? powerMin : (pn?.pMin ?? pickNum(s, "powerDraw", "powerBase"));
+        // Use the derived powerMin directly — 0 is valid (e.g. energy weapons at idle).
+        // Only fallback to pn/componentStats if no pip derivation happened (totalPips==0).
+        cats[pCat].minDraw += totalPips > 0 ? powerMin : (pn?.pMin ?? pickNum(s, "powerDraw", "powerBase"));
       }
       cats[pCat].allocated += allocPips;
 
@@ -612,7 +616,20 @@ function computeStats(
     totalAllocated += cats[c].allocated;
     totalMinDraw += Math.ceil(cats[c].minDraw);
   }
-  const consumptionPercent = totalPO > 0 ? Math.round((totalMinDraw / totalPO) * 100) : 0;
+
+  // Compute actual power draw per instance based on pip allocation.
+  // At 0 pips → powerMin, at max pips → powerMax. Linear interpolation.
+  // This makes energy weapons draw more at high allocation vs ballistic at constant low draw.
+  let totalActualDraw = 0;
+  for (const inst of instances) {
+    if (!inst.isOn || inst.totalPips === 0) continue;
+    const ratio = inst.allocatedPips / inst.totalPips;
+    totalActualDraw += inst.powerMin + (inst.powerMax - inst.powerMin) * ratio;
+  }
+  totalActualDraw = Math.round(totalActualDraw * 100) / 100;
+
+  // Consumption % based on actual pip-based draw (not just idle min draw)
+  const consumptionPercent = totalPO > 0 ? Math.round((totalActualDraw / totalPO) * 100) : 0;
   const activeCategories = POWER_CATEGORIES.filter(c => cats[c].componentCount > 0);
 
   if (flightMode === "NAV") {
@@ -650,7 +667,7 @@ function computeStats(
     powerOutput: r(totalPO), powerDraw: r(totalMinDraw), powerBalance: r(totalPO - totalMinDraw),
     coolingRate: r(coolingRate), thermalOutput: r(thermalOutput), thermalBalance: r(coolingRate - thermalOutput),
     emSignature: r(emSig), irSignature: r(irSig), effectiveSpeed, effectiveSpeedLabel,
-    powerNetwork: { totalOutput: totalPO, totalAllocated, totalMinDraw: Math.round(totalMinDraw), consumptionPercent, freePoints: totalPO - totalAllocated, isOverloaded: consumptionPercent > 100, categories: cats, activeCategories, instances },
+    powerNetwork: { totalOutput: totalPO, totalAllocated, totalMinDraw: Math.round(totalMinDraw), totalActualDraw, consumptionPercent, freePoints: totalPO - totalAllocated, isOverloaded: consumptionPercent > 100, categories: cats, activeCategories, instances },
     summary,
   };
 }
@@ -660,7 +677,7 @@ function computeStats(
 // =============================================================================
 
 const ZERO_ALLOC: Record<PowerCategory, number> = { weapons: 0, thrusters: 0, shields: 0, quantum: 0, radar: 0, coolers: 0, lifesupport: 0 };
-const EMPTY_NET: PowerNetworkState = { totalOutput: 0, totalAllocated: 0, totalMinDraw: 0, consumptionPercent: 0, freePoints: 0, isOverloaded: false, categories: (() => { const c = {} as any; for (const k of POWER_CATEGORIES) c[k] = emptyCat(); return c; })(), activeCategories: [], instances: [] };
+const EMPTY_NET: PowerNetworkState = { totalOutput: 0, totalAllocated: 0, totalMinDraw: 0, totalActualDraw: 0, consumptionPercent: 0, freePoints: 0, isOverloaded: false, categories: (() => { const c = {} as any; for (const k of POWER_CATEGORIES) c[k] = emptyCat(); return c; })(), activeCategories: [], instances: [] };
 const EMPTY_STATS: ComputedStats = { totalDps: 0, totalAlpha: 0, shieldHp: 0, shieldRegen: 0, powerOutput: 0, powerDraw: 0, powerBalance: 0, coolingRate: 0, thermalOutput: 0, thermalBalance: 0, emSignature: 0, irSignature: 0, effectiveSpeed: null, effectiveSpeedLabel: "SCM", powerNetwork: EMPTY_NET, summary: { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0, activeComponents: 0, totalComponents: 0 } };
 
 // =============================================================================

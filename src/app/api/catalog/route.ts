@@ -344,6 +344,10 @@ function buildStats(row: any, type: string): Record<string, any> | null {
       s.fireMode = row.fire_mode ?? null;
       s.heatPerShot = numOrNull(row.heat_per_shot);
       s.emSignature = numOrNull(row.emission_em_max);
+      // Power consumption (ballistic ≈ 0, energy > 0) — from migration 043
+      s.powerDraw = numOrNull(row.power_consumption_max) ?? numOrNull(row.power_consumption);
+      s.powerDrawMin = numOrNull(row.power_consumption_min);
+      s.powerDrawMax = numOrNull(row.power_consumption_max);
 
       // Compute DPS from alpha if table DPS columns are all 0
       if (s.dps === 0 && s.alphaDamage > 0 && s.fireRate > 0) {
@@ -399,6 +403,11 @@ function buildStats(row: any, type: string): Record<string, any> | null {
       s.fuelRate = numOrNull(row.fuel_rate);
       s.cooldownTime = numOrNull(row.cooldown_time);
       s.spoolUpTime = numOrNull(row.spool_up_time);
+      // Power consumption — from migration 042
+      s.powerDraw = numOrNull(row.power_consumption_max) ?? numOrNull(row.power_consumption);
+      s.powerDrawMin = numOrNull(row.power_consumption_min);
+      s.powerDrawMax = numOrNull(row.power_consumption_max);
+      s.emSignature = numOrNull(row.em_max);
       break;
     }
 
