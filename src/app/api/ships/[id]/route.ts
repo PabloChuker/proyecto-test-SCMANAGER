@@ -172,6 +172,10 @@ function buildWeaponItem(row: any): any {
       maxPenetrationThickness: numOrNull(row.max_penetration_thickness),
       // Ammo / capacitor
       weaponCapacity: numOrNull(row.weapon_capacity),
+      requestedAmmoLoad: numOrNull(row.requested_ammo_load),
+      regenCostPerBullet: numOrNull(row.regen_cost_per_bullet),
+      maxAmmoLoad: numOrNull(row.max_ammo_load),
+      maxRegenPerSec: numOrNull(row.max_regen_per_sec),
       // Power model fields from DB
       powerDraw: numOrNull(row.power_consumption_max),
       powerDrawMin: numOrNull(row.power_consumption_min),
