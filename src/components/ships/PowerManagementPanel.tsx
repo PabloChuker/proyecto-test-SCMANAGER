@@ -1,10 +1,10 @@
 // =============================================================================
-// AL FILO — PowerManagementPanel v14 (Erkul-faithful, DB min/max power)
+// AL FILO — PowerManagementPanel v15 (Erkul-faithful, pool-aware)
 //
-// Uses power_consumption_min / power_consumption_max from DB as ground truth.
+// Uses powerNetwork.pips + ship_power_reference pools as ground truth.
 // - 1 column per component INSTANCE (except power plants which generate power)
-// - Max 6 cells per column (game mechanic)
-// - Cells: filled = allocated, empty = available, dark = locked (beyond max)
+// - Max 8 cells per column (game mechanic)
+// - Cells: green/orange = allocated, grey = available, black = locked (beyond max)
 // - Orange for weapons, Green for systems
 // - OUTPUT x/y bar, CONSUMPTION % bar
 // - SCM / NAV toggle (NAV disables shields)
@@ -23,7 +23,7 @@ import type {
 } from "@/store/useLoadoutStore";
 
 // ── Constants ──
-const ROWS = 6;
+const ROWS = 8;
 
 // Category display ordering (weapons first, then systems in Erkul order)
 const CATEGORY_ORDER: PowerCategory[] = [
@@ -38,13 +38,9 @@ function catColor(cat: PowerCategory): string {
   return isOrangeCat(cat) ? "#f59e0b" : "#22c55e";
 }
 
-// Dimmer versions for available (unfilled) cells
-function catColorDim(cat: PowerCategory): string {
-  return isOrangeCat(cat) ? "rgba(245,158,11,0.15)" : "rgba(34,197,94,0.15)";
-}
-function catBorderDim(cat: PowerCategory): string {
-  return isOrangeCat(cat) ? "rgba(245,158,11,0.3)" : "rgba(34,197,94,0.3)";
-}
+// Available (unfilled) cells — neutral grey regardless of category
+const AVAILABLE_BG = "#3f3f46";     // zinc-700
+const AVAILABLE_BORDER = "#52525b"; // zinc-600
 
 // ── PNG Icons per component type (from /icons/ folder) ──
 const CAT_ICON_MAP: Record<PowerCategory, string> = {
@@ -191,8 +187,6 @@ export function PowerManagementPanel({
             <div className="flex" style={{ gap: "2px", justifyContent: "center" }}>
               {columns.map((inst, colIdx) => {
                 const color = catColor(inst.category);
-                const dimBg = catColorDim(inst.category);
-                const dimBorder = catBorderDim(inst.category);
                 const prevCat = colIdx > 0 ? columns[colIdx - 1].category : null;
                 const showSep = prevCat !== null && prevCat !== inst.category;
 
@@ -224,7 +218,7 @@ export function PowerManagementPanel({
                     } else if (allMinAllocated || someMinAllocated) {
                       bg = color; borderC = color;
                     } else {
-                      bg = dimBg; borderC = dimBorder;
+                      bg = AVAILABLE_BG; borderC = AVAILABLE_BORDER;
                     }
 
                     cells.push(
@@ -276,7 +270,7 @@ export function PowerManagementPanel({
                   } else if (allocated) {
                     bg = color; borderC = color;
                   } else {
-                    bg = dimBg; borderC = dimBorder;
+                    bg = AVAILABLE_BG; borderC = AVAILABLE_BORDER;
                   }
 
                   cells.push(
