@@ -374,10 +374,10 @@ function renderWidget(
 
   switch (wId) {
     case "weapons": {
-      // Compute weapon power ratio from combined weapons instance
+      // Pass allocated weapon pips so each slot can compute ammo = weaponCapacity × pips
       const wpnInst = stats?.powerNetwork?.instances?.find((i: any) => i.hardpointName === "__weapons_combined__");
-      const wpnRatio = wpnInst && wpnInst.totalPips > 0 ? wpnInst.allocatedPips / wpnInst.totalPips : 0;
-      return weaponHps.length > 0 ? W(<HpGroup hps={weaponHps} onClickHp={setPickerHp} weaponPowerRatio={wpnRatio} />, { icon: "/icons/weapons.png", badge: weaponHps.length }) : null;
+      const wpnPips = wpnInst ? (wpnInst.allocatedPips ?? 0) : 0;
+      return weaponHps.length > 0 ? W(<HpGroup hps={weaponHps} onClickHp={setPickerHp} weaponAllocatedPips={wpnPips} />, { icon: "/icons/weapons.png", badge: weaponHps.length }) : null;
     }
     case "missiles":
       return missileHps.length > 0 ? W(<HpGroup hps={missileHps} onClickHp={setPickerHp} />, { icon: "/icons/missile.png", badge: missileHps.length }) : null;
@@ -831,7 +831,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 // Sub-components
 // =============================================================================
 
-function HpGroup({ hps, onClickHp, weaponPowerRatio }: { hps: ResolvedHardpoint[]; onClickHp: (hp: ResolvedHardpoint) => void; weaponPowerRatio?: number }) {
+function HpGroup({ hps, onClickHp, weaponAllocatedPips }: { hps: ResolvedHardpoint[]; onClickHp: (hp: ResolvedHardpoint) => void; weaponAllocatedPips?: number }) {
   if (hps.length === 0) return null;
   const { getEffectiveItem, overrides, isComponentOn, toggleComponent } = useLoadoutStore(
     useShallow(s => ({
@@ -859,7 +859,7 @@ function HpGroup({ hps, onClickHp, weaponPowerRatio }: { hps: ResolvedHardpoint[
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60">
       {hps.map(hp => (
-        <HardpointSlot key={hp.id} hp={hp} item={getEffectiveItem(hp.id)} isOverridden={overrides.has(hp.id)} isOn={isComponentOn(hp.hardpointName)} onClick={() => onClickHp(hp)} onTogglePower={() => toggleComponent(hp.hardpointName)} childSlots={hp.children} isComponentOn={isComponentOn} toggleComponent={toggleComponent} onClickChild={handleClickChild} getEffectiveItem={getEffectiveItem} weaponPowerRatio={weaponPowerRatio} />
+        <HardpointSlot key={hp.id} hp={hp} item={getEffectiveItem(hp.id)} isOverridden={overrides.has(hp.id)} isOn={isComponentOn(hp.hardpointName)} onClick={() => onClickHp(hp)} onTogglePower={() => toggleComponent(hp.hardpointName)} childSlots={hp.children} isComponentOn={isComponentOn} toggleComponent={toggleComponent} onClickChild={handleClickChild} getEffectiveItem={getEffectiveItem} weaponAllocatedPips={weaponAllocatedPips} />
       ))}
     </div>
   );
