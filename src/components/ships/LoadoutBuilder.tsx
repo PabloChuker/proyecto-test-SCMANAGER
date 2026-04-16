@@ -432,7 +432,10 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 
   // ── Zustand: granular selectors — each field triggers a re-render only when
   // it actually changes, instead of re-rendering on every store mutation.
-  const { shipInfo, isLoading, error, hardpoints, overrides, flightMode } = useLoadoutStore(
+  // instancePower + componentStates included so Zustand triggers a re-render
+  // when the user adjusts power pips or toggles components on/off.
+  const { shipInfo, isLoading, error, hardpoints, overrides, flightMode,
+    instancePower: _ip, componentStates: _cs } = useLoadoutStore(
     useShallow(s => ({
       shipInfo: s.shipInfo,
       isLoading: s.isLoading,
@@ -440,8 +443,12 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
       hardpoints: s.hardpoints,
       overrides: s.overrides,
       flightMode: s.flightMode,
+      instancePower: s.instancePower,
+      componentStates: s.componentStates,
     }))
   );
+  // Suppress unused-var lint — these exist solely to trigger re-renders
+  void _ip; void _cs;
   // Actions are stable references in Zustand — individual selectors never trigger re-renders.
   const loadShip      = useLoadoutStore(s => s.loadShip);
   const getStats      = useLoadoutStore(s => s.getStats);
