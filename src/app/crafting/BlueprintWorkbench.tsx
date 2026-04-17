@@ -354,6 +354,8 @@ export default function BlueprintWorkbench() {
   // ── Shared state ──────────────────────────────────────
   const [selectedBlueprintId, setSelectedBlueprintId] = useState<string | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [expandedSubCategories, setExpandedSubCategories] = useState<Set<string>>(new Set());
+  const [categorySearch, setCategorySearch] = useState("");
   const [partQualities, setPartQualities] = useState<Record<string, number>>({});
   const [queue, setQueue] = useState<CraftQueueItem[]>([]);
   const [addQty, setAddQty] = useState(1);
@@ -364,8 +366,7 @@ export default function BlueprintWorkbench() {
 
   useMemo(() => {
     if (blueprints.length > 0 && !selectedBlueprintId) setSelectedBlueprintId(blueprints[0].uuid);
-    if (categories.length > 0 && expandedCategories.size === 0)
-      setExpandedCategories(new Set(categories.map((c) => c.id)));
+    // Categories and subcategories start collapsed — user expands manually
   }, [blueprints, categories]);
 
   const selectedBlueprint = useMemo(
@@ -433,6 +434,11 @@ export default function BlueprintWorkbench() {
     const next = new Set(expandedCategories);
     if (next.has(catId)) next.delete(catId); else next.add(catId);
     setExpandedCategories(next);
+  };
+  const toggleSubCategory = (key: string) => {
+    const next = new Set(expandedSubCategories);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    setExpandedSubCategories(next);
   };
 
   // ── Queue helpers ─────────────────────────────────────
@@ -512,7 +518,21 @@ export default function BlueprintWorkbench() {
     switch (wId) {
 
       /* ── Categories ── */
-      case "categories":
+      case "categories": {
+        const q = categorySearch.toLowerCase();
+        const filteredCategories = categories.map((cat) => {
+          if (!q) return cat;
+          const filteredSubs = cat.subCategories.map((sub) => {
+            const subBps = blueprints.filter(
+              (b) => b.outputType === cat.id && b.outputSubtype === sub.id &&
+              b.outputName.toLowerCase().includes(q)
+            );
+            return subBps.length > 0 ? { ...sub, _bps: subBps } : null;
+          }).filter(Boolean) as (typeof cat.subCategories[0] & { _bps?: typeof blueprints })[];
+          if (filteredSubs.length > 0 || cat.name.toLowerCase().includes(q)) return { ...cat, subCategories: filteredSubs };
+          return null;
+        }).filter(Boolean) as typeof categories;
+
         return (
           <SortableWidget key={wId} id={wId}
             header={
@@ -522,14 +542,45 @@ export default function BlueprintWorkbench() {
               </div>
             }
           >
-            <div className="p-3 space-y-1 max-h-[60vh] overflow-y-auto">
-              {categories.map((category) => (
+            {/* Search bar */}
+            <div className="px-3 pt-3 pb-2">
+              <div className="relative">
+                <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-600 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+                </svg>
+                <input
+                  type="text"
+                  value={categorySearch}
+                  onChange={(e) => {
+                    setCategorySearch(e.target.value);
+                    if (e.target.value) {
+                      setExpandedCategories(new Set(categories.map((c) => c.id)));
+                      setExpandedSubCategories(new Set(
+                        categories.flatMap((c) => c.subCategories.map((s) => `${c.id}::${s.id}`))
+                      ));
+                    }
+                  }}
+                  placeholder="Buscar plano..."
+                  className="w-full pl-7 pr-2 py-1.5 bg-zinc-800/60 border border-zinc-700/40 rounded-md text-zinc-200 text-[11px] placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/50 transition-colors"
+                />
+                {categorySearch && (
+                  <button
+                    onClick={() => setCategorySearch("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 text-[10px]"
+                  >✕</button>
+                )}
+              </div>
+            </div>
+
+            {/* Tree */}
+            <div className="px-2 pb-3 space-y-0.5 max-h-[60vh] overflow-y-auto">
+              {filteredCategories.map((category) => (
                 <div key={category.id}>
                   <button
                     onClick={() => toggleCategory(category.id)}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-zinc-200 hover:bg-zinc-800/60 transition-colors group"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-zinc-200 hover:bg-zinc-800/60 transition-colors group"
                   >
-                    <span className="text-amber-500/70 group-hover:text-amber-400 text-[10px]">
+                    <span className="text-amber-500/70 group-hover:text-amber-400 text-[9px] w-2.5 flex-shrink-0">
                       {expandedCategories.has(category.id) ? "▼" : "▶"}
                     </span>
                     <span className="flex-1 text-left text-xs">{category.name}</span>
@@ -538,30 +589,45 @@ export default function BlueprintWorkbench() {
                     </span>
                   </button>
                   {expandedCategories.has(category.id) && (
-                    <div className="ml-3 mt-0.5 border-l border-zinc-800/60 pl-3 space-y-1.5">
+                    <div className="ml-2 border-l border-zinc-800/60 pl-2.5 space-y-0.5 mt-0.5">
                       {category.subCategories.map((subCat) => {
-                        const subBps = blueprints.filter((b) => b.outputType === category.id && b.outputSubtype === subCat.id);
+                        const subKey = `${category.id}::${subCat.id}`;
+                        const subBps = (subCat as any)._bps ?? blueprints.filter(
+                          (b) => b.outputType === category.id && b.outputSubtype === subCat.id
+                        );
+                        const isSubExpanded = expandedSubCategories.has(subKey);
                         return (
                           <div key={subCat.id}>
-                            <div className="text-[9px] text-cyan-500/60 px-2 py-0.5 font-bold uppercase tracking-widest">
-                              {subCat.name}<span className="ml-1 text-zinc-700 font-normal">({subCat.count})</span>
-                            </div>
-                            <div className="space-y-0.5 max-h-36 overflow-y-auto">
-                              {subBps.map((bp) => (
-                                <button
-                                  key={bp.uuid}
-                                  onClick={() => setSelectedBlueprintId(bp.uuid)}
-                                  className={`w-full text-left px-2.5 py-1.5 rounded-lg text-xs transition-all duration-150 ${
-                                    selectedBlueprintId === bp.uuid
-                                      ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
-                                      : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 border border-transparent"
-                                  }`}
-                                >
-                                  <span className="truncate block leading-snug">{bp.outputName}</span>
-                                  {bp.isDefault && <span className="text-[8px] text-emerald-400 font-bold">{tb("default")}</span>}
-                                </button>
-                              ))}
-                            </div>
+                            <button
+                              onClick={() => toggleSubCategory(subKey)}
+                              className="w-full flex items-center gap-1.5 px-2 py-1 rounded hover:bg-zinc-800/40 transition-colors group"
+                            >
+                              <span className="text-cyan-500/50 group-hover:text-cyan-400/70 text-[8px] w-2 flex-shrink-0">
+                                {isSubExpanded ? "▼" : "▶"}
+                              </span>
+                              <span className="text-[9px] text-cyan-500/70 font-bold uppercase tracking-widest flex-1 text-left">
+                                {subCat.name}
+                              </span>
+                              <span className="text-zinc-600 text-[9px] font-normal">({subCat.count})</span>
+                            </button>
+                            {isSubExpanded && (
+                              <div className="ml-3.5 border-l border-zinc-800/40 pl-2.5 space-y-0.5 mt-0.5 mb-1">
+                                {subBps.map((bp: typeof blueprints[0]) => (
+                                  <button
+                                    key={bp.uuid}
+                                    onClick={() => setSelectedBlueprintId(bp.uuid)}
+                                    className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all duration-150 ${
+                                      selectedBlueprintId === bp.uuid
+                                        ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
+                                        : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 border border-transparent"
+                                    }`}
+                                  >
+                                    <span className="truncate block leading-snug">{bp.outputName}</span>
+                                    {bp.isDefault && <span className="text-[8px] text-emerald-400 font-bold">{tb("default")}</span>}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -572,6 +638,7 @@ export default function BlueprintWorkbench() {
             </div>
           </SortableWidget>
         );
+      }
 
       /* ── Blueprint Header ── */
       case "blueprint-header":
