@@ -1084,15 +1084,43 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   equipItem: (hpId, item) => { set(s => { const n = new Map(s.overrides); n.set(hpId, item); return { overrides: n }; }); },
   clearSlot: (hpId) => { set(s => { const n = new Map(s.overrides); n.set(hpId, null); return { overrides: n }; }); },
   toggleComponent: (hpName) => {
-    // When turning OFF, also zero the pip allocation so the pips are visibly freed.
-    // When turning ON, leave pips at whatever they were (user-controlled).
-    set(s => {
-      const wasOn = s.componentStates[hpName] !== false;
-      const nextStates = { ...s.componentStates, [hpName]: !wasOn };
-      const nextPower = wasOn
-        ? { ...s.instancePower, [hpName]: 0 }  // turning OFF → release pips
-        : s.instancePower;                      // turning ON → keep prior allocation
-      return { componentStates: nextStates, instancePower: nextPower };
+    // OFF → zero this component's pips (so the pool visibly frees them).
+    // ON  → restore a sensible default (min pips) from free pool, without touching other components.
+    const s = get();
+    const wasOn = s.componentStates[hpName] !== false;
+    const nextStates = { ...s.componentStates, [hpName]: !wasOn };
+
+    if (wasOn) {
+      // Turning OFF: release pips
+      set({
+        componentStates: nextStates,
+        instancePower: { ...s.instancePower, [hpName]: 0 },
+      });
+      return;
+    }
+
+    // Turning ON: figure out min pips this component needs and take them from the free pool
+    const st = s.getStats();
+    const inst = st.powerNetwork.instances.find(i => i.hardpointName === hpName);
+    if (!inst || inst.totalPips === 0) {
+      set({ componentStates: nextStates });
+      return;
+    }
+
+    // Minimum pips: use first non-zero range start, fallback to 1
+    let minPips = 1;
+    for (const r of inst.ranges) {
+      if (r.range > 0) {
+        minPips = Math.max(1, r.start > 0 ? r.start : 1);
+        break;
+      }
+    }
+    // Clamp to what the component can hold and what's free in the pool
+    const grant = Math.min(minPips, inst.totalPips, Math.max(0, st.powerNetwork.freePoints));
+
+    set({
+      componentStates: nextStates,
+      instancePower: { ...s.instancePower, [hpName]: grant },
     });
   },
   resetAll: () => { const fresh: Record<string, boolean> = {}; for (const hp of get().hardpoints) { fresh[hp.hardpointName] = true; for (const ch of hp.children) fresh[ch.hardpointName] = true; } set({ overrides: new Map(), componentStates: fresh, flightMode: "SCM" as FlightMode, instancePower: {}, allocatedPower: { ...ZERO_ALLOC } }); scheduleAutoAlloc(get); },
