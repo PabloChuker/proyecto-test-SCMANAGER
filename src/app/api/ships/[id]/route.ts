@@ -103,6 +103,17 @@ const HP_TYPE_TO_CATEGORY: Record<string, string> = {
   LifeSupportGenerator: "LIFE_SUPPORT",
   TurretBase: "TURRET",
   Turret: "TURRET",
+  // Industrial (Pablo, 2026-04-17): naves mineras / salvage necesitan que estos
+  // hpTypes se promuevan a MINING / SALVAGE para no quedar filtrados como OTHER.
+  MiningLaser: "MINING",
+  MiningModifier: "MINING",
+  SalvageLaser: "SALVAGE",
+  SalvageModifier: "SALVAGE",
+  SalvageHead: "SALVAGE",
+  Tool: "UTILITY",
+  TractorBeam: "UTILITY",
+  Cargo: "UTILITY",
+  EMP: "UTILITY",
 };
 
 function hpCategory(hpType: string, hpName: string): string {
@@ -112,6 +123,11 @@ function hpCategory(hpType: string, hpName: string): string {
   if (baseType !== hpType && HP_TYPE_TO_CATEGORY[baseType]) return HP_TYPE_TO_CATEGORY[baseType];
   // Fallback: infer from name
   const n = hpName.toLowerCase();
+  // Industrial primero (gana a "weapon"/"gun" porque un mining laser puede
+  // venir con hpName tipo `hardpoint_mining_weapon_arm_right`).
+  if (n.includes("salvage") || n.includes("scraper")) return "SALVAGE";
+  if (n.includes("mining")) return "MINING";
+  if (n.includes("tractor") || n.includes("cargo_beam")) return "UTILITY";
   if (n.includes("turret")) return "TURRET";
   if (n.includes("weapon") || n.includes("gun")) return "WEAPON";
   if (n.includes("missile")) return "MISSILE_RACK";
@@ -604,10 +620,12 @@ export async function GET(
         const category = hpCategory(hp.hardpoint_type, hp.hardpoint_name);
 
         // Skip non-useful hardpoints (thrusters, armor, fuel, etc. - info only)
-        // Keep: WEAPON, TURRET, MISSILE_RACK, SHIELD, POWER_PLANT, COOLER, QUANTUM_DRIVE, RADAR, COUNTERMEASURE
+        // Keep: combat + industrial (MINING/SALVAGE/UTILITY) + ship systems.
+        // Los widgets mining/salvage del LoadoutBuilder necesitan que estos pasen.
         const USEFUL = new Set([
           "WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT",
           "COOLER", "QUANTUM_DRIVE", "RADAR", "COUNTERMEASURE", "LIFE_SUPPORT",
+          "MINING", "SALVAGE", "UTILITY",
         ]);
         if (!USEFUL.has(category)) return null;
 

@@ -179,9 +179,22 @@ const NAME_PATTERNS: [RegExp, string][] = [
 ];
 const USEFUL = new Set(["WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "SALVAGE", "UTILITY", "RADAR", "COUNTERMEASURE", "LIFE_SUPPORT"]);
 
+// Patrones industriales que DEBEN ganarle a una categoría genérica "WEAPON"
+// devuelta por la API. Ej: Mole/Prospector/Golem traen los brazos mineros con
+// hpType "Weapon" → sin este chequeo quedan como WEAPON y nunca entran al
+// widget MINING. Idem Reclaimer/Fortune/Salvation con SALVAGE.
+const INDUSTRIAL_OVERRIDE: [RegExp, string][] = [
+  [/salvage|scraper|reclaim/i, "SALVAGE"],
+  [/mining/i, "MINING"],
+];
+
 function inferCategory(category: string, item: EquippedItem | null, hpName: string): string {
   // Detect turrets by item name even when category is WEAPON
   if (category === "WEAPON" && item?.name && /turret/i.test(item.name)) return "TURRET";
+  // Override industrial: si el nombre del hardpoint o del ítem grita "mining"/"salvage",
+  // pisa la categoría que venga (WEAPON, OTHER, TURRET, etc).
+  const probe = `${hpName} ${item?.name ?? ""} ${item?.type ?? ""}`;
+  for (const [re, cat] of INDUSTRIAL_OVERRIDE) { if (re.test(probe)) return cat; }
   if (category !== "OTHER" && USEFUL.has(category)) return category;
   if (item?.type) { const m = TYPE_TO_CAT[item.type]; if (m) return m; }
   for (const [re, cat] of NAME_PATTERNS) { if (re.test(hpName)) return cat; }
