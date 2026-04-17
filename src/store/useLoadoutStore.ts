@@ -736,12 +736,21 @@ function computeStats(
   let effectiveSpeed: number | null; let effectiveSpeedLabel: string;
   if (flightMode === "NAV") { effectiveSpeed = shipInfo?.afterburnerSpeed ?? null; effectiveSpeedLabel = "NAV"; } else { effectiveSpeed = shipInfo?.scmSpeed ?? null; effectiveSpeedLabel = "SCM"; }
 
-  // ── Signature scaling with pip allocation (F2.1) ──────────────────────────
+  // ── Signature scaling with pip allocation (F2.1 + F2.5) ───────────────────
   // In Star Citizen, EM/IR emissions scale linearly with power allocation
   // from 0 at idle up to em_max at full pips. The loop above accumulated
-  // "max potential" emissions; we rebuild from instances[] with pip ratios,
-  // then add the ship's intrinsic base signature (from ship_resistances) and
-  // apply any stealth-variant multiplier (Ghost, Stalker, etc.).
+  // "max potential" emissions; we rebuild from instances[] with pip ratios.
+  //
+  // F2.5 (2026-04-17): Do NOT add ship_resistances.baseEmSignature on top.
+  // In the scunpacked data BaseEmSignature == em_shields total (sum of all
+  // component emissions at full pips) — they are the same aggregate value,
+  // not a separate hull baseline. Previously we summed instance emissions
+  // AND added baseEm, which double-counted and produced EM ~2-3x higher
+  // than Erkul. We keep sigMult (stealth variant multiplier like Ghost/
+  // Stalker/Renegade) applied to the scaled component sum. If the ship has
+  // no component instances (edge case, e.g. empty hardpoints), we fall
+  // back to baseEm/baseIr so a bare-hull ship still shows its intrinsic
+  // signature.
   let emSigScaled = 0, irSigScaled = 0;
   for (const inst of instances) {
     if (!inst.isOn) continue;
@@ -763,14 +772,14 @@ function computeStats(
     emSigScaled += pn?.em ?? pickNum(item.componentStats, "emSignature");
     irSigScaled += pn?.ir ?? pickNum(item.componentStats, "irSignature");
   }
-  // Ship's intrinsic base signature (from hull, chassis, etc.) + stealth multiplier
   const _res = shipInfo?.resistances;
   const baseEm = _res?.baseEmSignature ?? 0;
   const baseIr = _res?.baseIrSignature ?? 0;
   const emMult = _res?.sigMultElectromagnetic ?? 1;
   const irMult = _res?.sigMultInfrared ?? 1;
-  emSig = (emSigScaled + baseEm) * emMult;
-  irSig = (irSigScaled + baseIr) * irMult;
+  // Use scaled component sum; fall back to baseEm/baseIr only for bare hulls.
+  emSig = (emSigScaled > 0 ? emSigScaled : baseEm) * emMult;
+  irSig = (irSigScaled > 0 ? irSigScaled : baseIr) * irMult;
 
   // ── Shield regen + cooling scaling with pip allocation (F2.4) ─────────────
   // In Star Citizen, shield regen and cooling rate scale with power allocation.
