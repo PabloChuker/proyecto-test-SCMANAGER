@@ -241,7 +241,7 @@ export default function StreamerCardsPage() {
               <div className="text-[10px] tracking-[0.18em] uppercase font-mono text-amber-500 mb-2">
                 ➋ Orientación
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   onClick={() => setVariant("horizontal")}
                   className={`py-2 text-[10px] tracking-widest uppercase font-mono rounded transition-colors border ${
@@ -250,7 +250,7 @@ export default function StreamerCardsPage() {
                       : "bg-zinc-900/60 border-zinc-800 text-zinc-500 hover:text-zinc-300"
                   }`}
                 >
-                  ▭ Horizontal
+                  ▭ Horiz.
                 </button>
                 <button
                   onClick={() => setVariant("vertical")}
@@ -260,7 +260,17 @@ export default function StreamerCardsPage() {
                       : "bg-zinc-900/60 border-zinc-800 text-zinc-500 hover:text-zinc-300"
                   }`}
                 >
-                  ▯ Vertical
+                  ▯ Vert.
+                </button>
+                <button
+                  onClick={() => setVariant("banner")}
+                  className={`py-2 text-[10px] tracking-widest uppercase font-mono rounded transition-colors border ${
+                    variant === "banner"
+                      ? "bg-amber-500/15 border-amber-500/40 text-amber-300"
+                      : "bg-zinc-900/60 border-zinc-800 text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  ⬛ Banner
                 </button>
               </div>
             </div>
@@ -333,6 +343,8 @@ export default function StreamerCardsPage() {
                 Pegá la URL en una fuente &quot;Browser&quot; de OBS.
                 {variant === "horizontal"
                   ? " Dimensiones sugeridas: 1800 × 440."
+                  : variant === "banner"
+                  ? " Dimensiones sugeridas: 1800 × 560."
                   : " Dimensiones sugeridas: 760 × 1380."}
               </p>
             </div>
@@ -358,15 +370,23 @@ export default function StreamerCardsPage() {
               ) : (
                 <div
                   style={{
-                    width: variant === "horizontal" ? 1800 * 0.5 : 760 * 0.46,
-                    height: variant === "horizontal" ? 440 * 0.5 : 1380 * 0.46,
+                    width:
+                      variant === "vertical"
+                        ? 760 * 0.46
+                        : 1800 * 0.5,
+                    height:
+                      variant === "vertical"
+                        ? 1380 * 0.46
+                        : variant === "banner"
+                        ? 560 * 0.5
+                        : 440 * 0.5,
                     position: "relative",
                   }}
                 >
                   <div
                     style={{
                       transform:
-                        variant === "horizontal" ? "scale(0.5)" : "scale(0.46)",
+                        variant === "vertical" ? "scale(0.46)" : "scale(0.5)",
                       transformOrigin: "top left",
                     }}
                   >
@@ -382,7 +402,12 @@ export default function StreamerCardsPage() {
 
             <p className="mt-3 text-[10px] text-zinc-600 font-mono tracking-wider text-center">
               Vista previa escalada. PNG exportado a resolución real
-              {variant === "horizontal" ? " 3600 × 880" : " 1520 × 2760"} (2×).
+              {variant === "vertical"
+                ? " 1520 × 2760"
+                : variant === "banner"
+                ? " 3600 × 1120"
+                : " 3600 × 880"}{" "}
+              (2×).
             </p>
           </section>
         </div>
