@@ -478,15 +478,8 @@ export default function ShipInfoCard({
   const h2Str = h2 != null ? `${num(h2)}` : MISSING;
   const qtStr = qt != null ? `${num(qt, 2)}` : MISSING;
 
-  // ═════════════════════════════════════════════════════════════════════
-  // HORIZONTAL — formato alargado, título arriba, 4 cols de data + img
-  // ═════════════════════════════════════════════════════════════════════
-  if (variant === "horizontal") {
-    const W = 1800;
-    const H = 440;
-    const HEADER_H = 80;
-    const FOOTER_H = 28;
-    const typo = TYPO_H;
+  if (variant === "__old_horizontal_deleted__") {
+    const W = 0; const H = 0; const HEADER_H = 0; const FOOTER_H = 0; const typo = TYPO_H;
 
     return (
       <div
@@ -892,10 +885,10 @@ export default function ShipInfoCard({
   }
 
   // ═════════════════════════════════════════════════════════════════════
-  // BANNER v2 — cinematic dossier: huge name + glowing ship + KPI strip
+  // HORIZONTAL — cinematic dossier: huge name + glowing ship + KPI strip
   // 1800 × 560
   // ═════════════════════════════════════════════════════════════════════
-  if (variant === "banner") {
+  if (variant === "horizontal") {
     const W = 1800;
     const H = 560;
     const ACCENT_H = 4;
