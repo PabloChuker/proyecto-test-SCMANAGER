@@ -1078,9 +1078,23 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
     return p;
   },
 
-  equipItem: (hpId, item) => { set(s => { const n = new Map(s.overrides); n.set(hpId, item); return { overrides: n }; }); scheduleAutoAlloc(get); },
-  clearSlot: (hpId) => { set(s => { const n = new Map(s.overrides); n.set(hpId, null); return { overrides: n }; }); scheduleAutoAlloc(get); },
-  toggleComponent: (hpName) => { set(s => ({ componentStates: { ...s.componentStates, [hpName]: s.componentStates[hpName] === false } })); scheduleAutoAlloc(get); },
+  // Equipping/clearing/toggling preserves user pip allocations — no auto-rebalance.
+  // Auto-alloc only runs on initial ship load, explicit resetAll, and flight-mode change.
+  // (Previous behavior overwrote manual pip changes whenever the user toggled anything.)
+  equipItem: (hpId, item) => { set(s => { const n = new Map(s.overrides); n.set(hpId, item); return { overrides: n }; }); },
+  clearSlot: (hpId) => { set(s => { const n = new Map(s.overrides); n.set(hpId, null); return { overrides: n }; }); },
+  toggleComponent: (hpName) => {
+    // When turning OFF, also zero the pip allocation so the pips are visibly freed.
+    // When turning ON, leave pips at whatever they were (user-controlled).
+    set(s => {
+      const wasOn = s.componentStates[hpName] !== false;
+      const nextStates = { ...s.componentStates, [hpName]: !wasOn };
+      const nextPower = wasOn
+        ? { ...s.instancePower, [hpName]: 0 }  // turning OFF → release pips
+        : s.instancePower;                      // turning ON → keep prior allocation
+      return { componentStates: nextStates, instancePower: nextPower };
+    });
+  },
   resetAll: () => { const fresh: Record<string, boolean> = {}; for (const hp of get().hardpoints) { fresh[hp.hardpointName] = true; for (const ch of hp.children) fresh[ch.hardpointName] = true; } set({ overrides: new Map(), componentStates: fresh, flightMode: "SCM" as FlightMode, instancePower: {}, allocatedPower: { ...ZERO_ALLOC } }); scheduleAutoAlloc(get); },
   setFlightMode: (mode) => { set({ flightMode: mode }); scheduleAutoAlloc(get); },
 
