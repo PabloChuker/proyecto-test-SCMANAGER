@@ -558,6 +558,9 @@ export default function BlueprintWorkbench() {
                       setExpandedSubCategories(new Set(
                         categories.flatMap((c) => c.subCategories.map((s) => `${c.id}::${s.id}`))
                       ));
+                    } else {
+                      setExpandedCategories(new Set());
+                      setExpandedSubCategories(new Set());
                     }
                   }}
                   placeholder="Buscar plano..."
@@ -565,7 +568,7 @@ export default function BlueprintWorkbench() {
                 />
                 {categorySearch && (
                   <button
-                    onClick={() => setCategorySearch("")}
+                    onClick={() => { setCategorySearch(""); setExpandedCategories(new Set()); setExpandedSubCategories(new Set()); }}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 text-[10px]"
                   >✕</button>
                 )}
