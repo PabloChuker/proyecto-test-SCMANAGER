@@ -34,7 +34,6 @@ import { TurningProfileContent }  from "./widgets/TurningProfileWidget";
 import { ManeuverRadarContent }   from "./widgets/ManeuverRadarWidget";
 import { FlightDynamics3dContent } from "./widgets/FlightDynamics3dWidget";
 import { ShipCardContent }        from "./widgets/ShipCardWidget";
-import { CombatSummaryContent }   from "./widgets/CombatSummaryWidget";
 import { LoadoutDetailContent }   from "./widgets/LoadoutDetailWidget";
 // Three.js (ShipFlightDynamicsSingle + shipGlbCandidates) moved to FlightDynamics3dWidget.tsx
 import { useDpsGridLayout } from "@/lib/loadout-grid/useLoadoutGridLayout";
@@ -74,7 +73,7 @@ const CAT_CONFIG: Record<string, { label: string; icon: string; accent: string }
 type WidgetId =
   | "weapons" | "missiles" | "strafe-profile" | "turning-profile"
   | "shields" | "powerplants" | "coolers" | "maneuver-radar"
-  | "quantum" | "radar" | "utility" | "combat-summary"
+  | "quantum" | "radar" | "utility"
   | "power-grid"
   | "ship-selector" | "ship-card" | "loadout-detail"
   | "flight-dynamics-3d";
@@ -115,7 +114,7 @@ type CardWidth = 1 | 2;
 const WIDGET_WIDTH: Record<WidgetId, CardWidth> = {
   weapons: 1, missiles: 1, "strafe-profile": 1, "turning-profile": 1,
   shields: 1, powerplants: 1, coolers: 1, "maneuver-radar": 1,
-  quantum: 1, radar: 1, utility: 1, "combat-summary": 1,
+  quantum: 1, radar: 1, utility: 1,
   "power-grid": 1,
   "ship-selector": 2,           // search → 2-col
   "ship-card": 2,               // ship card → 2-col
@@ -126,7 +125,7 @@ const WIDGET_WIDTH: Record<WidgetId, CardWidth> = {
 const WIDGET_LABELS: Record<WidgetId, string> = {
   weapons: "WEAPONS", missiles: "MISSILES & BOMBS", "strafe-profile": "STRAFE PROFILE", "turning-profile": "TURNING PROFILE",
   shields: "SHIELDS", powerplants: "POWER PLANTS", coolers: "COOLERS", "maneuver-radar": "G-FORCES",
-  quantum: "QT DRIVES", radar: "RADAR", utility: "UTILITY", "combat-summary": "COMBAT",
+  quantum: "QT DRIVES", radar: "RADAR", utility: "UTILITY",
   "power-grid": "POWER GRID",
   "ship-selector": "SEARCH", "ship-card": "SHIP CARD", "loadout-detail": "LOADOUT DETAIL",
   "flight-dynamics-3d": "FLIGHT DYNAMICS 3D",
@@ -135,7 +134,7 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
 const ALL_WIDGET_IDS: WidgetId[] = [
   "weapons", "missiles", "strafe-profile", "turning-profile",
   "shields", "powerplants", "coolers", "maneuver-radar",
-  "quantum", "radar", "utility", "combat-summary",
+  "quantum", "radar", "utility",
   "power-grid",
   "ship-selector", "ship-card", "loadout-detail",
   "flight-dynamics-3d",
@@ -208,14 +207,13 @@ function getWidgetBlocks(
     case "quantum":            return hpBlocks(counts.quantum);
     case "radar":              return hpBlocks(counts.radar);
     case "utility":            return hpBlocks(counts.utility);
-    case "combat-summary":     return 3;
     case "power-grid":         return 4;
     case "strafe-profile":     return 4;
     case "turning-profile":    return 4;
     case "maneuver-radar":     return 4;
     case "ship-selector":      return 2;
     case "ship-card":          return 5;
-    case "loadout-detail":         return 4;
+    case "loadout-detail":         return 7;
     case "flight-dynamics-3d": return 5;
   }
 }
@@ -227,11 +225,11 @@ function getWidgetBlocks(
 // saltan sin rebalanceo para conservar la identidad visual de cada columna.
 const COLUMN_PLAN_1COL: WidgetId[][] = [
   // Col 0 — OFFENSE
-  ["weapons", "missiles", "combat-summary", "strafe-profile"],
+  ["weapons", "missiles", "strafe-profile"],
   // Col 1 — DEFENSE & POWER
   ["shields", "powerplants", "coolers", "turning-profile"],
   // Col 2 — NAV & SENSORS + flight stats
-  ["quantum", "radar", "utility", "power-grid", "maneuver-radar", "loadout-detail"],
+  ["loadout-detail", "quantum", "radar", "utility", "power-grid", "maneuver-radar"],
 ];
 
 // Sidebar 2-col (cols 3-4). Widgets hero de ship info apilados vertical.
@@ -274,11 +272,12 @@ function buildDefaultPositions(
   return result;
 }
 
-// ─── localStorage (v9: search/ship-card/flight-3d 2-col + sidebar) ──────────
-// Bump porque los widgets ship-selector / ship-card / flight-dynamics-3d
-// volvieron a ancho 2 y ahora viven en cols 3-4 como sidebar. Las posiciones
-// persistidas de v8 (todo 1-col) ya no encajan en el nuevo esquema.
-const LAYOUT_STORAGE_KEY = "al-filo-layout-v9";
+// ─── localStorage (v10: combat-summary merged into loadout-detail) ──────────
+// Bump porque se eliminó el widget `combat-summary` y su contenido (resistencias
+// de escudo, deflexion, damage multipliers) se unificó dentro de `loadout-detail`.
+// loadout-detail pasó de 4 a 7 bloques. Las posiciones persistidas de v9
+// contendrían el id borrado y mostrarían huecos.
+const LAYOUT_STORAGE_KEY = "al-filo-layout-v10";
 
 type SavedPos = { i: string; col: number; row: number };
 
@@ -409,8 +408,6 @@ function renderWidget(
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "UTILITY" || hp.resolvedCategory === "MINING");
       return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: "/icons/tractor_beam.png", badge: hps.length }) : null;
     }
-    case "combat-summary":
-      return W(<CombatSummaryContent />);
     case "power-grid":
       return W(<PowerManagementPanel stats={stats} flightMode={flightMode} onModeChange={setFlightMode} />);
     case "ship-selector":
