@@ -310,39 +310,37 @@ function computeStats(
     totalAlpha += alpha;
     if (dps <= 0 || fireRate <= 0) return;
     const rps = fireRate / 60;
-    // Heat duty-cycle (sustained-DPS heat-limited): armas balísticas tipo Panther CF-337
-    // heatPerSec = heatPerShot × rps. Si heatPerSec > cooling → overheats.
+    // Heat duty-cycle (sustained-DPS heat-limited): armas balísticas tipo Mantis GT-220.
+    // Modelo Erkul-match: el cooling *no* actúa durante el fuego — el arma acumula
+    // heatPerShot × rps y overheatea cuando llega a overheatTemperature; después
+    // espera overheatFixTime y reinicia. coolingPerSecond no entra en la fórmula
+    // porque el juego aplica cooling solo entre disparos (muy marginal) o durante
+    // el fix state, lo cual ya está representado por overheatFixTime.
     const heatPerShot = pickNum(s, "heatPerShot");
     const overheatTemp = pickNum(s, "overheatTemperature");
-    const coolingPerSec = pickNum(s, "coolingPerSecond");
     const overheatFixTime = pickNum(s, "overheatFixTime");
     let heatDuty = 1;
     if (heatPerShot > 0 && overheatTemp > 0 && overheatFixTime > 0) {
       const heatPerSec = heatPerShot * rps;
-      const netHeat = heatPerSec - coolingPerSec;
-      if (netHeat > 0) {
-        const tToOverheat = overheatTemp / netHeat;
+      if (heatPerSec > 0) {
+        const tToOverheat = overheatTemp / heatPerSec;
         heatDuty = tToOverheat / (tToOverheat + overheatFixTime);
       }
     }
-    // Capacitor duty-cycle (energy weapons tipo Panther/Omnisky): modelo energético real.
-    // weaponCapacity  = capacidad total del capacitor (energy units)
-    // regenCostPerBullet = costo de cada disparo (energy units)
-    // maxRegenPerSec  = regen del capacitor por segundo (energy units/s)
-    // drainPerSec = rps × regenCostPerBullet; netDrain = drain − regen.
-    // Ballistic weapons tienen regenCostPerBullet null → se skipea y heat handle el throttle.
-    const weaponCapacity = pickNum(s, "weaponCapacity");
-    const regenCostPerBullet = pickNum(s, "regenCostPerBullet");
+    // Capacitor duty-cycle (energy weapons tipo Panther/Omnisky): modelo "reserve magazine".
+    // Erkul-match: maxRegenPerSec es la tasa de refill del reserve, NO energy/s del capacitor.
+    // fire_time = maxAmmoLoad / rps         (tiempo en agotar el reserve completo)
+    // reload_time = maxAmmoLoad / maxRegenPerSec   (tiempo en rellenar el reserve)
+    // Ej Panther: 75/12.5 = 6s fire, 75/15 = 5s reload, duty = 6/11 = 0.545,
+    //   sustained = 545.6 × 0.545 = 297 dps (≈ Erkul 291). ✅
+    // Ballistic weapons no tienen maxAmmoLoad/maxRegenPerSec → se skipea; heat handle el throttle.
+    const reserveRounds = pickNum(s, "maxAmmoLoad");
     const regenPerSec = pickNum(s, "maxRegenPerSec");
     let capDuty = 1;
-    if (weaponCapacity > 0 && regenCostPerBullet > 0 && regenPerSec > 0) {
-      const drainPerSec = rps * regenCostPerBullet;
-      const netDrain = drainPerSec - regenPerSec;
-      if (netDrain > 0) {
-        const fireTime = weaponCapacity / netDrain;
-        const reloadTime = weaponCapacity / regenPerSec;
-        capDuty = fireTime / (fireTime + reloadTime);
-      }
+    if (reserveRounds > 0 && regenPerSec > 0) {
+      const fireTime = reserveRounds / rps;
+      const reloadTime = reserveRounds / regenPerSec;
+      capDuty = fireTime / (fireTime + reloadTime);
     }
     const duty = Math.max(0, Math.min(1, Math.min(heatDuty, capDuty)));
     totalSustainedDps += dps * duty;
