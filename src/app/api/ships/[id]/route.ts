@@ -502,7 +502,7 @@ export async function GET(
     const ship = shipRows[0];
 
     // ── 2. Load satellite data in parallel ──
-    const [flightStats, fuelStats, powerRef, poolRows] = await Promise.all([
+    const [flightStats, fuelStats, powerRef, poolRows, resistances] = await Promise.all([
       sql.unsafe(`SELECT * FROM ship_flight_stats WHERE ship_id::text = $1 LIMIT 1`, [String(ship.id)])
         .then((rows: any[]) => rows[0] ?? null)
         .catch((e: unknown) => { console.warn("[ships/[id]] Could not load flight stats:", e); return null; }),
@@ -515,6 +515,9 @@ export async function GET(
       sql.unsafe(`SELECT item_type, max_size FROM ship_pools WHERE ship_id = $1`, [String(ship.id)])
         .then((rows: any[]) => rows ?? [])
         .catch((e: unknown) => { console.warn("[ships/[id]] Could not load ship pools:", e); return []; }),
+      sql.unsafe(`SELECT * FROM ship_resistances WHERE ship_id::text = $1 LIMIT 1`, [String(ship.id)])
+        .then((rows: any[]) => rows[0] ?? null)
+        .catch((e: unknown) => { console.warn("[ships/[id]] Could not load ship resistances:", e); return null; }),
     ]);
 
     // ── 3. Get hardpoints from NEW schema (match by ship reference) ──
@@ -760,6 +763,39 @@ export async function GET(
         deflectionPhysical: numOrNull(ship.deflection_physical),
         deflectionEnergy: numOrNull(ship.deflection_energy),
         deflectionDistortion: numOrNull(ship.deflection_distortion),
+        // Hull / armor resistances (full ship_resistances row)
+        resistances: resistances ? {
+          armorHp: numOrNull(resistances.armor_hp),
+          // Damage multipliers: < 1 = resistance (e.g. 0.75 = 25% reduction)
+          dmgMultPhysical: numOrNull(resistances.dmg_mult_physical),
+          dmgMultEnergy: numOrNull(resistances.dmg_mult_energy),
+          dmgMultDistortion: numOrNull(resistances.dmg_mult_distortion),
+          dmgMultThermal: numOrNull(resistances.dmg_mult_thermal),
+          dmgMultBiochemical: numOrNull(resistances.dmg_mult_biochemical),
+          dmgMultStun: numOrNull(resistances.dmg_mult_stun),
+          // Signature multipliers (stealth variants: Ghost, Stalker, etc.)
+          sigMultCrossSection: numOrNull(resistances.sig_mult_cross_section),
+          sigMultInfrared: numOrNull(resistances.sig_mult_infrared),
+          sigMultElectromagnetic: numOrNull(resistances.sig_mult_electromagnetic),
+          // Penetration resistances
+          penResistBase: numOrNull(resistances.pen_resist_base),
+          penResistPhysical: numOrNull(resistances.pen_resist_physical),
+          penResistEnergy: numOrNull(resistances.pen_resist_energy),
+          penResistDistortion: numOrNull(resistances.pen_resist_distortion),
+          // Base signatures (pre-loadout)
+          baseEmSignature: numOrNull(resistances.base_em_signature),
+          baseIrSignature: numOrNull(resistances.base_ir_signature),
+          baseCsSignature: numOrNull(resistances.base_cs_signature),
+          // Cross-section dimensions
+          crossSectionX: numOrNull(resistances.cross_section_x),
+          crossSectionY: numOrNull(resistances.cross_section_y),
+          crossSectionZ: numOrNull(resistances.cross_section_z),
+          // Total signatures by mode (shields on vs quantum)
+          emTotalShields: numOrNull(resistances.em_total_shields),
+          emTotalQuantum: numOrNull(resistances.em_total_quantum),
+          irTotalShields: numOrNull(resistances.ir_total_shields),
+          irTotalQuantum: numOrNull(resistances.ir_total_quantum),
+        } : null,
       },
     };
 

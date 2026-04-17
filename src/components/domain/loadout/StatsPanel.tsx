@@ -117,6 +117,67 @@ export function StatsPanel() {
         <FlightStat label="SCM" value={shipInfo.scmSpeed} unit="m/s" />
         <FlightStat label="NAV" value={shipInfo.afterburnerSpeed} unit="m/s" />
       </div>
+
+      {/* ── Hull Resistances (Erkul-style damage multipliers) ── */}
+      {shipInfo.resistances && (
+        <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
+          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-2 flex items-center justify-between">
+            <span>Hull &amp; Resistances</span>
+            {shipInfo.resistances.armorHp != null && (
+              <span className="text-zinc-300 font-bold">
+                ARMOR HP: <span className="text-amber-400">{fmt(shipInfo.resistances.armorHp)}</span>
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            <ResistanceStat
+              label="PHYSICAL"
+              mult={shipInfo.resistances.dmgMultPhysical}
+              color="#84cc16"
+            />
+            <ResistanceStat
+              label="ENERGY"
+              mult={shipInfo.resistances.dmgMultEnergy}
+              color="#06b6d4"
+            />
+            <ResistanceStat
+              label="DISTORTION"
+              mult={shipInfo.resistances.dmgMultDistortion}
+              color="#a855f7"
+            />
+          </div>
+          {(shipInfo.resistances.crossSectionX != null ||
+            shipInfo.resistances.baseEmSignature != null) && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2 pt-2 border-t border-zinc-800/60">
+              {shipInfo.resistances.baseEmSignature != null && (
+                <MiniStat label="BASE EM" value={fmt(shipInfo.resistances.baseEmSignature)} color="#a855f7" />
+              )}
+              {shipInfo.resistances.baseIrSignature != null && (
+                <MiniStat label="BASE IR" value={fmt(shipInfo.resistances.baseIrSignature)} color="#f97316" />
+              )}
+              {shipInfo.resistances.crossSectionX != null &&
+               shipInfo.resistances.crossSectionY != null &&
+               shipInfo.resistances.crossSectionZ != null && (
+                <MiniStat
+                  label="CROSS-SECTION"
+                  value={
+                    `${Math.round(shipInfo.resistances.crossSectionX / 1000)}/${Math.round(shipInfo.resistances.crossSectionY / 1000)}/${Math.round(shipInfo.resistances.crossSectionZ / 1000)}k`
+                  }
+                  color="#94a3b8"
+                />
+              )}
+              {shipInfo.resistances.sigMultElectromagnetic != null &&
+                shipInfo.resistances.sigMultElectromagnetic !== 1 && (
+                <MiniStat
+                  label="SIG MULT"
+                  value={`×${shipInfo.resistances.sigMultElectromagnetic.toFixed(2)}`}
+                  color={shipInfo.resistances.sigMultElectromagnetic < 1 ? "#22c55e" : "#ef4444"}
+                />
+              )}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -179,6 +240,44 @@ function FlightStat({ label, value, unit }: { label: string; value: number | nul
         {value != null && value > 0 ? Math.round(value) : "—"}
         <span className="text-[9px] text-zinc-600 font-normal"> {unit}</span>
       </div>
+    </div>
+  );
+}
+
+/** Damage multiplier. 1.0 = neutral, <1 = resistance, >1 = weakness.
+ *  Displayed as "% reduction" (e.g. mult=0.75 → "25%") for readability. */
+function ResistanceStat({ label, mult, color }: { label: string; mult: number | null; color: string }) {
+  if (mult == null) {
+    return (
+      <div className="bg-zinc-950/60 border border-zinc-800/40 p-2">
+        <div className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</div>
+        <div className="text-sm font-mono text-zinc-600 mt-0.5">—</div>
+      </div>
+    );
+  }
+  const reductionPct = Math.round((1 - mult) * 100);
+  const isResist = reductionPct > 0;
+  const isWeak = reductionPct < 0;
+  const displayColor = isResist ? color : isWeak ? "#ef4444" : "#52525b";
+  const sign = isWeak ? "+" : "";
+  return (
+    <div className="bg-zinc-950/60 border border-zinc-800/40 p-2">
+      <div className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</div>
+      <div className="text-sm font-mono font-bold tabular-nums mt-0.5" style={{ color: displayColor }}>
+        {reductionPct === 0 ? "0%" : `${sign}${Math.abs(reductionPct)}%`}
+        <span className="text-[8px] text-zinc-600 font-normal ml-1">
+          (×{mult.toFixed(2)})
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <div className="bg-zinc-950/60 border border-zinc-800/40 p-2">
+      <div className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</div>
+      <div className="text-xs font-mono font-bold tabular-nums mt-0.5" style={{ color }}>{value}</div>
     </div>
   );
 }

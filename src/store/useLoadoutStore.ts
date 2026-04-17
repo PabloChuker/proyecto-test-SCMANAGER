@@ -69,6 +69,28 @@ export interface ShipInfo {
   mass: number | null; hydrogenCapacity: number | null; quantumFuelCapacity: number | null;
   shieldHpTotal: number | null; powerGeneration: number | null; hullHp: number | null;
   deflectionPhysical: number | null; deflectionEnergy: number | null; deflectionDistortion: number | null;
+  /** Hull / armor resistances + base signatures (from ship_resistances table) */
+  resistances: ShipResistances | null;
+}
+
+/** Hull resistances, damage multipliers, and base signatures.
+ *  Source: ship_resistances table (populated from scunpacked raw ship data).
+ *  - dmgMult*: damage multiplier (< 1 means resistance, e.g. 0.75 = 25% reduction)
+ *  - sigMult*: signature multiplier applied to emissions (stealth variants = lower)
+ *  - base*Signature: baseline ship emissions before loadout
+ *  - crossSection*: physical dimensions affecting detectability
+ *  - *Total*: computed total emissions in different flight modes
+ */
+export interface ShipResistances {
+  armorHp: number | null;
+  dmgMultPhysical: number | null; dmgMultEnergy: number | null; dmgMultDistortion: number | null;
+  dmgMultThermal: number | null; dmgMultBiochemical: number | null; dmgMultStun: number | null;
+  sigMultCrossSection: number | null; sigMultInfrared: number | null; sigMultElectromagnetic: number | null;
+  penResistBase: number | null; penResistPhysical: number | null; penResistEnergy: number | null; penResistDistortion: number | null;
+  baseEmSignature: number | null; baseIrSignature: number | null; baseCsSignature: number | null;
+  crossSectionX: number | null; crossSectionY: number | null; crossSectionZ: number | null;
+  emTotalShields: number | null; emTotalQuantum: number | null;
+  irTotalShields: number | null; irTotalQuantum: number | null;
 }
 
 export type FlightMode = "SCM" | "NAV";
@@ -714,6 +736,42 @@ function computeStats(
   let effectiveSpeed: number | null; let effectiveSpeedLabel: string;
   if (flightMode === "NAV") { effectiveSpeed = shipInfo?.afterburnerSpeed ?? null; effectiveSpeedLabel = "NAV"; } else { effectiveSpeed = shipInfo?.scmSpeed ?? null; effectiveSpeedLabel = "SCM"; }
 
+  // ── Signature scaling with pip allocation (F2.1) ──────────────────────────
+  // In Star Citizen, EM/IR emissions scale linearly with power allocation
+  // from 0 at idle up to em_max at full pips. The loop above accumulated
+  // "max potential" emissions; we rebuild from instances[] with pip ratios,
+  // then add the ship's intrinsic base signature (from ship_resistances) and
+  // apply any stealth-variant multiplier (Ghost, Stalker, etc.).
+  let emSigScaled = 0, irSigScaled = 0;
+  for (const inst of instances) {
+    if (!inst.isOn) continue;
+    const ratio = inst.totalPips > 0
+      ? Math.min(1, Math.max(0, inst.allocatedPips / inst.totalPips))
+      : 1;
+    emSigScaled += (inst.emMax ?? 0) * ratio;
+    irSigScaled += (inst.irMax ?? 0) * ratio;
+  }
+  // Power plants don't appear in instances[] (no pip slider). Re-add them
+  // at full emission when ON — they always run.
+  for (const hp of hardpoints) {
+    if (hp.resolvedCategory !== "POWER_PLANT") continue;
+    const item = overrides.has(hp.id) ? (overrides.get(hp.id) ?? null) : hp.defaultItem;
+    if (!item) continue;
+    const isOn = componentStates[hp.hardpointName] !== false;
+    if (!isOn) continue;
+    const pn = item.powerNetwork;
+    emSigScaled += pn?.em ?? pickNum(item.componentStats, "emSignature");
+    irSigScaled += pn?.ir ?? pickNum(item.componentStats, "irSignature");
+  }
+  // Ship's intrinsic base signature (from hull, chassis, etc.) + stealth multiplier
+  const _res = shipInfo?.resistances;
+  const baseEm = _res?.baseEmSignature ?? 0;
+  const baseIr = _res?.baseIrSignature ?? 0;
+  const emMult = _res?.sigMultElectromagnetic ?? 1;
+  const irMult = _res?.sigMultInfrared ?? 1;
+  emSig = (emSigScaled + baseEm) * emMult;
+  irSig = (irSigScaled + baseIr) * irMult;
+
   summary.activeComponents = activeComponents; summary.totalComponents = totalComponents;
   const r = (v: number) => Math.round(v * 100) / 100;
   return {
@@ -901,6 +959,32 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
         deflectionPhysical: toNumOrNull(sd?.deflectionPhysical),
         deflectionEnergy: toNumOrNull(sd?.deflectionEnergy),
         deflectionDistortion: toNumOrNull(sd?.deflectionDistortion),
+        resistances: sd?.resistances ? {
+          armorHp: toNumOrNull(sd.resistances.armorHp),
+          dmgMultPhysical: toNumOrNull(sd.resistances.dmgMultPhysical),
+          dmgMultEnergy: toNumOrNull(sd.resistances.dmgMultEnergy),
+          dmgMultDistortion: toNumOrNull(sd.resistances.dmgMultDistortion),
+          dmgMultThermal: toNumOrNull(sd.resistances.dmgMultThermal),
+          dmgMultBiochemical: toNumOrNull(sd.resistances.dmgMultBiochemical),
+          dmgMultStun: toNumOrNull(sd.resistances.dmgMultStun),
+          sigMultCrossSection: toNumOrNull(sd.resistances.sigMultCrossSection),
+          sigMultInfrared: toNumOrNull(sd.resistances.sigMultInfrared),
+          sigMultElectromagnetic: toNumOrNull(sd.resistances.sigMultElectromagnetic),
+          penResistBase: toNumOrNull(sd.resistances.penResistBase),
+          penResistPhysical: toNumOrNull(sd.resistances.penResistPhysical),
+          penResistEnergy: toNumOrNull(sd.resistances.penResistEnergy),
+          penResistDistortion: toNumOrNull(sd.resistances.penResistDistortion),
+          baseEmSignature: toNumOrNull(sd.resistances.baseEmSignature),
+          baseIrSignature: toNumOrNull(sd.resistances.baseIrSignature),
+          baseCsSignature: toNumOrNull(sd.resistances.baseCsSignature),
+          crossSectionX: toNumOrNull(sd.resistances.crossSectionX),
+          crossSectionY: toNumOrNull(sd.resistances.crossSectionY),
+          crossSectionZ: toNumOrNull(sd.resistances.crossSectionZ),
+          emTotalShields: toNumOrNull(sd.resistances.emTotalShields),
+          emTotalQuantum: toNumOrNull(sd.resistances.emTotalQuantum),
+          irTotalShields: toNumOrNull(sd.resistances.irTotalShields),
+          irTotalQuantum: toNumOrNull(sd.resistances.irTotalQuantum),
+        } : null,
       };
 
       // Parse flatHardpoints with children

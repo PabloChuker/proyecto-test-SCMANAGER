@@ -31,11 +31,24 @@ export function PowerStatusGrid({ stats }: PowerStatusGridProps) {
   const coolers = hardpoints.filter(hp => hp.resolvedCategory === "COOLER");
   const quantumDrives = hardpoints.filter(hp => hp.resolvedCategory === "QUANTUM_DRIVE");
 
-  const powerPct = stats.powerOutput > 0
-    ? Math.round((stats.powerDraw / stats.powerOutput) * 100)
-    : 0;
-  const powerColor = stats.powerBalance >= 0 ? "#22c55e" : "#ef4444";
-  const isOverloaded = stats.powerBalance < 0;
+  // Use the network's interpolated consumption (accounts for per-component pip allocation)
+  // Falls back to raw draw/output if network data is missing.
+  const pNet = stats.powerNetwork;
+  const actualDraw = pNet?.totalActualDraw ?? stats.powerDraw;
+  const totalOutput = pNet?.totalOutput ?? stats.powerOutput;
+  const consumptionPct = pNet?.consumptionPercent ?? (
+    totalOutput > 0 ? Math.round((actualDraw / totalOutput) * 100) : 0
+  );
+  const powerPct = Math.min(150, consumptionPct); // cap bar visual at 150%
+  const isOverloaded = pNet?.isOverloaded ?? (stats.powerBalance < 0);
+  // Color ramps with consumption: green < 70%, amber 70-90%, red > 90% or overloaded
+  const powerColor = isOverloaded || consumptionPct > 100
+    ? "#ef4444"
+    : consumptionPct > 90
+      ? "#f97316"
+      : consumptionPct > 70
+        ? "#eab308"
+        : "#22c55e";
 
   const thermalPct = stats.coolingRate > 0
     ? Math.round((stats.thermalOutput / stats.coolingRate) * 100)
@@ -129,13 +142,21 @@ export function PowerStatusGrid({ stats }: PowerStatusGridProps) {
                 <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <span className="text-[9px] font-mono text-zinc-500 tracking-wider">PWR</span>
+              {/* Explicit consumption % — what Erkul shows as a headline number */}
+              <span
+                className="text-[10px] font-mono font-bold tabular-nums ml-1"
+                style={{ color: powerColor }}
+                title="Power consumption: actual draw (interpolated from pip allocation) ÷ total output"
+              >
+                {consumptionPct}%
+              </span>
             </div>
             <div className="flex items-baseline gap-0.5">
-              <span className="text-lg font-mono font-bold tabular-nums" style={{ color: powerColor }}>
-                {stats.powerBalance >= 0 ? "+" : ""}{fmt(stats.powerBalance)}
+              <span className="text-[10px] font-mono tabular-nums text-zinc-500">
+                {fmt(actualDraw)}/{fmt(totalOutput)}
               </span>
-              <span className="text-[8px] font-mono text-zinc-600">
-                /{fmt(stats.powerOutput)}
+              <span className="text-lg font-mono font-bold tabular-nums ml-2" style={{ color: powerColor }}>
+                {stats.powerBalance >= 0 ? "+" : ""}{fmt(stats.powerBalance)}
               </span>
               {isOverloaded && (
                 <span className="text-[9px] text-red-500 ml-1">⚠</span>
