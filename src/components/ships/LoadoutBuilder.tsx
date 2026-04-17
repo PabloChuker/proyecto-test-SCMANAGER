@@ -74,9 +74,23 @@ type WidgetId =
   | "weapons" | "missiles" | "strafe-profile" | "turning-profile"
   | "shields" | "powerplants" | "coolers" | "maneuver-radar"
   | "quantum" | "radar" | "utility"
+  | "mining" | "salvage"
   | "power-grid"
   | "ship-selector" | "ship-card" | "loadout-detail"
   | "flight-dynamics-3d";
+
+// ── Industrial ship detection (Pablo, 2026-04-17) ────────────────────────────
+// Solo estas naves muestran los widgets MINING / SALVAGE para no sobrecargar
+// la UI en naves puramente combate. Si a futuro CIG saca más naves industriales
+// se amplían los regex acá.
+const MINING_SHIP_RX  = /mole|moth|prospector|golem/i;
+const SALVAGE_SHIP_RX = /reclaimer|fortune|salvation/i;
+function isMiningShip(name: string | null | undefined): boolean {
+  return !!name && MINING_SHIP_RX.test(name);
+}
+function isSalvageShip(name: string | null | undefined): boolean {
+  return !!name && SALVAGE_SHIP_RX.test(name);
+}
 
 // ─── Geometric grid: UNIT-based positioning (v7) ────────────────────────────
 // Spec (Pablo, 2026-04-11):
@@ -115,6 +129,7 @@ const WIDGET_WIDTH: Record<WidgetId, CardWidth> = {
   weapons: 1, missiles: 1, "strafe-profile": 1, "turning-profile": 1,
   shields: 1, powerplants: 1, coolers: 1, "maneuver-radar": 1,
   quantum: 1, radar: 1, utility: 1,
+  mining: 1, salvage: 1,
   "power-grid": 1,
   "ship-selector": 2,           // search → 2-col
   "ship-card": 2,               // ship card → 2-col
@@ -126,6 +141,7 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   weapons: "WEAPONS", missiles: "MISSILES & BOMBS", "strafe-profile": "STRAFE PROFILE", "turning-profile": "TURNING PROFILE",
   shields: "SHIELDS", powerplants: "POWER PLANTS", coolers: "COOLERS", "maneuver-radar": "G-FORCES",
   quantum: "QT DRIVES", radar: "RADAR", utility: "UTILITY",
+  mining: "MINING LASERS", salvage: "SALVAGE & TRACTOR",
   "power-grid": "POWER GRID",
   "ship-selector": "SEARCH", "ship-card": "SHIP CARD", "loadout-detail": "LOADOUT DETAIL",
   "flight-dynamics-3d": "FLIGHT DYNAMICS 3D",
@@ -135,6 +151,7 @@ const ALL_WIDGET_IDS: WidgetId[] = [
   "weapons", "missiles", "strafe-profile", "turning-profile",
   "shields", "powerplants", "coolers", "maneuver-radar",
   "quantum", "radar", "utility",
+  "mining", "salvage",
   "power-grid",
   "ship-selector", "ship-card", "loadout-detail",
   "flight-dynamics-3d",
@@ -192,6 +209,7 @@ function getWidgetBlocks(
     weapons: number; missiles: number;
     shields: number; powerplants: number; coolers: number;
     quantum: number; radar: number; utility: number;
+    mining: number; salvage: number;
   },
 ): number {
   // Grupo HP: 1 bloque base (header compacto) + 1 bloque por slot.
@@ -207,6 +225,8 @@ function getWidgetBlocks(
     case "quantum":            return hpBlocks(counts.quantum);
     case "radar":              return hpBlocks(counts.radar);
     case "utility":            return hpBlocks(counts.utility);
+    case "mining":             return hpBlocks(counts.mining);
+    case "salvage":            return hpBlocks(counts.salvage);
     case "power-grid":         return 4;
     case "strafe-profile":     return 4;
     case "turning-profile":    return 4;
@@ -224,8 +244,10 @@ function getWidgetBlocks(
 // Cada zona ordena sus widgets en la lista del plan; widgets ocultos se
 // saltan sin rebalanceo para conservar la identidad visual de cada columna.
 const COLUMN_PLAN_1COL: WidgetId[][] = [
-  // Col 0 — OFFENSE
-  ["weapons", "missiles", "strafe-profile"],
+  // Col 0 — OFFENSE + INDUSTRY (mining/salvage viven acá: son las "armas"
+  // de una nave industrial, y cuando aparecen reemplazan visualmente al rol
+  // de combate de esa columna).
+  ["weapons", "mining", "salvage", "missiles", "strafe-profile"],
   // Col 1 — DEFENSE & POWER
   ["shields", "powerplants", "coolers", "turning-profile"],
   // Col 2 — NAV & SENSORS + flight stats
@@ -272,12 +294,12 @@ function buildDefaultPositions(
   return result;
 }
 
-// ─── localStorage (v10: combat-summary merged into loadout-detail) ──────────
-// Bump porque se eliminó el widget `combat-summary` y su contenido (resistencias
-// de escudo, deflexion, damage multipliers) se unificó dentro de `loadout-detail`.
-// loadout-detail pasó de 4 a 7 bloques. Las posiciones persistidas de v9
-// contendrían el id borrado y mostrarían huecos.
-const LAYOUT_STORAGE_KEY = "al-filo-layout-v11";
+// ─── localStorage (v12: add mining / salvage widgets for industrial ships) ──
+// Bump porque se agregaron widgets condicionales `mining` y `salvage` visibles
+// solo en naves industriales (Mole/Moth/Prospector/Golem para mining;
+// Reclaimer/Fortune/Salvation para salvage). Las posiciones guardadas de v11
+// no contemplan estas ids y dejarían los widgets nuevos mal posicionados.
+const LAYOUT_STORAGE_KEY = "al-filo-layout-v12";
 
 type SavedPos = { i: string; col: number; row: number };
 
@@ -405,7 +427,21 @@ function renderWidget(
       return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.RADAR.icon, badge: hps.length }) : null;
     }
     case "utility": {
-      const hps = useful.filter((hp: any) => hp.resolvedCategory === "UTILITY" || hp.resolvedCategory === "MINING");
+      // Puramente UTILITY (tractor beam, EMP, etc). MINING y SALVAGE tienen
+      // widgets propios que aparecen solo en naves industriales.
+      const hps = useful.filter((hp: any) => hp.resolvedCategory === "UTILITY");
+      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: "/icons/tractor_beam.png", badge: hps.length }) : null;
+    }
+    case "mining": {
+      // Solo naves mineras: ARGO Mole/Moth, MISC Prospector, Drake Golem.
+      // Muestra láser minero + accesorios (módulos minería).
+      const hps = useful.filter((hp: any) => hp.resolvedCategory === "MINING");
+      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: "/icons/mining_lasers.png", badge: hps.length }) : null;
+    }
+    case "salvage": {
+      // Solo naves salvage: Aegis Reclaimer, MISC Fortune, RSI Salvation.
+      // Incluye láser de salvage + tractor beam + cargo accessories asociados.
+      const hps = useful.filter((hp: any) => hp.resolvedCategory === "SALVAGE");
       return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: "/icons/tractor_beam.png", badge: hps.length }) : null;
     }
     case "power-grid":
@@ -511,7 +547,14 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const coolerCount = useful.filter((hp) => hp.resolvedCategory === "COOLER").length;
   const quantumCount = useful.filter((hp) => hp.resolvedCategory === "QUANTUM_DRIVE").length;
   const radarCount = useful.filter((hp) => hp.resolvedCategory === "RADAR").length;
-  const utilityCount = useful.filter((hp) => hp.resolvedCategory === "UTILITY" || hp.resolvedCategory === "MINING").length;
+  // UTILITY puro (tractor beam, EMP, etc) — MINING y SALVAGE tienen widgets propios.
+  const utilityCount = useful.filter((hp) => hp.resolvedCategory === "UTILITY").length;
+  const miningCount  = useful.filter((hp) => hp.resolvedCategory === "MINING").length;
+  const salvageCount = useful.filter((hp) => hp.resolvedCategory === "SALVAGE").length;
+
+  // Detección de rol industrial (gate para mostrar los widgets mining/salvage).
+  const miningShip  = isMiningShip(shipInfo?.name);
+  const salvageShip = isSalvageShip(shipInfo?.name);
 
   const visibleIds = useMemo<Set<WidgetId>>(() => {
     const s = new Set<WidgetId>();
@@ -524,10 +567,13 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
       if (id === "quantum"      && quantumCount === 0) continue;
       if (id === "radar"        && radarCount === 0) continue;
       if (id === "utility"      && utilityCount === 0) continue;
+      // Mining/Salvage: solo en naves industriales Y solo si hay hardpoints.
+      if (id === "mining"       && (!miningShip  || miningCount === 0)) continue;
+      if (id === "salvage"      && (!salvageShip || salvageCount === 0)) continue;
       s.add(id);
     }
     return s;
-  }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
+  }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount, miningCount, salvageCount, miningShip, salvageShip]);
 
   // ─── Bloques verticales por widget (altura fija, deriva de UNIT) ─────────
   const widgetBlocks = useMemo<Record<WidgetId, number>>(() => {
@@ -540,13 +586,15 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
       quantum: quantumCount,
       radar: radarCount,
       utility: utilityCount,
+      mining: miningCount,
+      salvage: salvageCount,
     };
     const out = {} as Record<WidgetId, number>;
     for (const id of ALL_WIDGET_IDS) {
       out[id] = getWidgetBlocks(id, counts);
     }
     return out;
-  }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount]);
+  }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount, miningCount, salvageCount]);
 
   // ─── Layout v12 — useDpsGridLayout + DpsGridCanvas ──────────────────────
   const gridLayout = useDpsGridLayout({

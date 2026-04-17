@@ -11,6 +11,7 @@ export type WidgetId =
   | "weapons" | "missiles" | "strafe-profile" | "turning-profile"
   | "shields" | "powerplants" | "coolers" | "maneuver-radar"
   | "quantum" | "radar" | "utility"
+  | "mining" | "salvage"
   | "power-grid"
   | "ship-selector" | "ship-card" | "loadout-detail"
   | "flight-dynamics-3d";
@@ -44,5 +45,5 @@ export const MAX_UNIT_PX         = 390;
 // Gap vertical entre tarjetas dentro de la misma columna (px fijo)
 export const CARD_GAP_PX         = 4;
 
-export const LAYOUT_STORAGE_KEY      = "al-filo-loadout-layout-v16";
+export const LAYOUT_STORAGE_KEY      = "al-filo-loadout-layout-v17";
 export const LAYOUT_CHECKPOINT_KEY   = "al-filo-loadout-layout-checkpoint-v1";

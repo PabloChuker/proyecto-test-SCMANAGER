@@ -102,7 +102,7 @@ export const POWER_CATEGORIES: PowerCategory[] = ["weapons", "thrusters", "shiel
 const CAT_TO_POWER: Record<string, PowerCategory> = {
   WEAPON: "weapons", TURRET: "weapons", MISSILE_RACK: "weapons",
   SHIELD: "shields", COOLER: "coolers", QUANTUM_DRIVE: "quantum",
-  MINING: "weapons", UTILITY: "weapons", RADAR: "radar",
+  MINING: "weapons", SALVAGE: "weapons", UTILITY: "weapons", RADAR: "radar",
   LIFE_SUPPORT: "lifesupport",
 };
 
@@ -161,7 +161,9 @@ export interface ComputedStats {
 const TYPE_TO_CAT: Record<string, string> = {
   WEAPON: "WEAPON", TURRET: "TURRET", MISSILE: "MISSILE_RACK", MISSILE_RACK: "MISSILE_RACK",
   SHIELD: "SHIELD", POWER_PLANT: "POWER_PLANT", COOLER: "COOLER", QUANTUM_DRIVE: "QUANTUM_DRIVE",
-  MINING_LASER: "MINING", MINING: "MINING", TRACTOR_BEAM: "UTILITY", EMP: "UTILITY",
+  MINING_LASER: "MINING", MINING: "MINING", MINING_MODIFIER: "MINING",
+  SALVAGE: "SALVAGE", SALVAGE_MODIFIER: "SALVAGE", SALVAGE_HEAD: "SALVAGE", SALVAGE_LASER: "SALVAGE",
+  TRACTOR_BEAM: "UTILITY", EMP: "UTILITY",
   RADAR: "RADAR", COUNTERMEASURE: "COUNTERMEASURE",
   LIFE_SUPPORT: "LIFE_SUPPORT", LifeSupportGenerator: "LIFE_SUPPORT",
 };
@@ -169,10 +171,13 @@ const NAME_PATTERNS: [RegExp, string][] = [
   [/turret/i, "TURRET"], [/weapon|gun|cannon|gatling|repeater|scattergun|gimbal/i, "WEAPON"],
   [/missile|rocket|msd-/i, "MISSILE_RACK"], [/shield/i, "SHIELD"],
   [/power_plant|powerplant|power plant/i, "POWER_PLANT"], [/cool/i, "COOLER"],
-  [/quantum|qdrive/i, "QUANTUM_DRIVE"], [/mining/i, "MINING"],
+  [/quantum|qdrive/i, "QUANTUM_DRIVE"],
+  [/salvage|scraper|reclaim/i, "SALVAGE"],
+  [/tractor.?beam|cargo.?beam/i, "UTILITY"],
+  [/mining/i, "MINING"],
   [/radar|scanner/i, "RADAR"], [/life.?support/i, "LIFE_SUPPORT"],
 ];
-const USEFUL = new Set(["WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "UTILITY", "RADAR", "COUNTERMEASURE", "LIFE_SUPPORT"]);
+const USEFUL = new Set(["WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "SALVAGE", "UTILITY", "RADAR", "COUNTERMEASURE", "LIFE_SUPPORT"]);
 
 function inferCategory(category: string, item: EquippedItem | null, hpName: string): string {
   // Detect turrets by item name even when category is WEAPON
@@ -221,7 +226,7 @@ function parseEquipped(eq: any): EquippedItem | null {
 // =============================================================================
 
 const WEAPON_CATS = new Set(["WEAPON", "TURRET", "MISSILE_RACK"]);
-const SYSTEM_CATS = new Set(["SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "UTILITY", "LIFE_SUPPORT"]);
+const SYSTEM_CATS = new Set(["SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "SALVAGE", "UTILITY", "LIFE_SUPPORT"]);
 
 function emptyCat(): CategoryPowerInfo { return { minDraw: 0, allocated: 0, componentCount: 0, activeCount: 0 }; }
 
