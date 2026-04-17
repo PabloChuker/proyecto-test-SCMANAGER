@@ -38,7 +38,10 @@ function isTurretOrRack(item: EquippedItem | null): boolean {
 }
 
 /** Compute ammo info for a weapon item given current pip allocation.
- *  Energy weapons: rounds = requestedAmmoLoad × (pips/maxPips) / regenCostPerBullet
+ *  Energy weapons: rounds = min(requestedAmmoLoad, maxAmmoLoad × regenCostPerBullet) × pipRatio / regenCostPerBullet
+ *    → el cap por maxAmmoLoad replica el límite game-accurate que muestra Erkul.
+ *    Ej Panther: requestedAmmoLoad=18187, cost=48.5, maxAmmoLoad=75.
+ *    Sin cap: 18187/48.5 = 375 (incorrecto). Con cap: min(18187, 3637.5)/48.5 = 75 (match game).
  *  Ballistic weapons: fixed ammoCapacity (no pip dependency).
  *  When allocPips is 0 but maxPips > 0, defaults to full power (all pips). */
 function getAmmoInfo(
@@ -55,7 +58,13 @@ function getAmmoInfo(
     // If no pips allocated yet (auto-alloc pending), assume full power
     const effectivePips = allocPips > 0 ? allocPips : maxPips;
     const pipRatio = effectivePips / maxPips;
-    const rounds = Math.round(reqAmmo * pipRatio / costPerBullet);
+    // Cap requested pool at game-accurate maxAmmoLoad (if present).
+    // maxAmmoLoad está en "rounds" → convertir a "energy units" multiplicando por costPerBullet.
+    const maxAmmoLoad = cs.maxAmmoLoad;
+    const requestedCapped = maxAmmoLoad > 0
+      ? Math.min(reqAmmo, maxAmmoLoad * costPerBullet)
+      : reqAmmo;
+    const rounds = Math.round(requestedCapped * pipRatio / costPerBullet);
     return { rounds, label: "RND" };
   }
 

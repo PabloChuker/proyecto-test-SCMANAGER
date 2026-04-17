@@ -325,17 +325,22 @@ function computeStats(
         heatDuty = tToOverheat / (tToOverheat + overheatFixTime);
       }
     }
-    // Capacitor duty-cycle (sustained-DPS capacitor-limited): armas láser tipo Omnisky IX
-    // Todo en unidades de "balas" (no energía): drain = rps, regen = maxRegenPerSec.
-    const capacityBullets = pickNum(s, "maxAmmoLoad", "weaponCapacity");
-    const regenBulletsPerSec = pickNum(s, "maxRegenPerSec");
+    // Capacitor duty-cycle (energy weapons tipo Panther/Omnisky): modelo energético real.
+    // weaponCapacity  = capacidad total del capacitor (energy units)
+    // regenCostPerBullet = costo de cada disparo (energy units)
+    // maxRegenPerSec  = regen del capacitor por segundo (energy units/s)
+    // drainPerSec = rps × regenCostPerBullet; netDrain = drain − regen.
+    // Ballistic weapons tienen regenCostPerBullet null → se skipea y heat handle el throttle.
+    const weaponCapacity = pickNum(s, "weaponCapacity");
+    const regenCostPerBullet = pickNum(s, "regenCostPerBullet");
+    const regenPerSec = pickNum(s, "maxRegenPerSec");
     let capDuty = 1;
-    if (capacityBullets > 0 && regenBulletsPerSec > 0) {
-      const drainBulletsPerSec = rps;
-      const netDrain = drainBulletsPerSec - regenBulletsPerSec;
+    if (weaponCapacity > 0 && regenCostPerBullet > 0 && regenPerSec > 0) {
+      const drainPerSec = rps * regenCostPerBullet;
+      const netDrain = drainPerSec - regenPerSec;
       if (netDrain > 0) {
-        const fireTime = capacityBullets / netDrain;
-        const reloadTime = capacityBullets / regenBulletsPerSec;
+        const fireTime = weaponCapacity / netDrain;
+        const reloadTime = weaponCapacity / regenPerSec;
         capDuty = fireTime / (fireTime + reloadTime);
       }
     }
