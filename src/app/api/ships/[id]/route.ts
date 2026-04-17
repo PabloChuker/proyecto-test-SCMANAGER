@@ -619,34 +619,22 @@ interface IndustrialArmDef {
   children?: IndustrialChildDef[];
 }
 
-// Helper: N module slots vacíos para un brazo de mining.
-// El picker los llena con módulos del JSON mining-modules.json.
-function mkModuleSlots(
-  hardpointPrefix: string,
-  n: number,
-): IndustrialChildDef[] {
-  const slots: IndustrialChildDef[] = [];
-  for (let i = 1; i <= n; i++) {
-    slots.push({
-      hardpointName: `${hardpointPrefix}_module_${i}`,
-      category: "MINING_MODULE",
-      size: 0,
-    });
-  }
-  return slots;
-}
-
 // Regex ship_reference → lista de brazos a inyectar.
 // Cada regex se evalúa contra `ship.reference` (ej. ARGO_MOLE, ARGO_MOLE_Carbon).
 //
 // Reglas por nave (tomadas del MiningLoadoutCalculator):
-//  - Mole: 3 brazos S2 estrictos, Arbor MH2 default (2 module slots)
-//  - Prospector: 1 brazo S1 ≤ (Arbor MH1 default, 1 module slot)
-//  - Moth: 1 brazo S1 ≤ (Arbor MH1 default, 1 module slot)
-//  - Golem: 1 brazo FIJO con Pitman (no swap del laser, 2 module slots)
+//  - Mole: 3 brazos S2 estrictos, Arbor MH2 default
+//  - Prospector: 1 brazo S1 ≤ (Arbor MH1 default)
+//  - Moth: 1 brazo S1 ≤ (Arbor MH1 default)
+//  - Golem: 1 brazo FIJO con Pitman (no swap del laser)
+//
+// NOTA: los module slots (children MINING_MODULE) NO se inyectan acá. Se
+// generan dinámicamente en el LoadoutBuilder según el `moduleSlots` del laser
+// equipado (viene de mining_lasers.module_slots en el catálogo). Ej: Helix I
+// tiene 2, Arbor MH1 tiene 1, Klein-S1 tiene 0, Impact II tiene 3.
 const INDUSTRIAL_INJECTIONS: Array<{ match: RegExp; arms: IndustrialArmDef[] }> = [
   // ── MINING ──────────────────────────────────────────────────────────────
-  // Mole: 3 brazos laterales S2 estricto. Default Arbor MH2 (2 module slots).
+  // Mole: 3 brazos laterales S2 estricto. Default Arbor MH2.
   {
     match: /^ARGO_MOLE/i,
     arms: [1, 2, 3].map((i) => ({
@@ -656,10 +644,9 @@ const INDUSTRIAL_INJECTIONS: Array<{ match: RegExp; arms: IndustrialArmDef[] }> 
       minSize: 2, // estricto S2
       equippedClass: "Mining_Laser_MPUV_Arm_S2",
       equippedName: "Arbor MH2",
-      children: mkModuleSlots(`hardpoint_mining_arm_${i}`, 2),
     })),
   },
-  // Moth: 1 brazo S1 ≤. Default Arbor MH1 (1 module slot).
+  // Moth: 1 brazo S1 ≤. Default Arbor MH1.
   {
     match: /^ARGO_MOTH/i,
     arms: [{
@@ -668,10 +655,9 @@ const INDUSTRIAL_INJECTIONS: Array<{ match: RegExp; arms: IndustrialArmDef[] }> 
       size: 1,
       equippedClass: "Mining_Laser_MPUV_Arm",
       equippedName: "Arbor MH1",
-      children: mkModuleSlots("hardpoint_mining_arm", 1),
     }],
   },
-  // Prospector: 1 brazo S1 ≤. Default Arbor MH1 (1 module slot).
+  // Prospector: 1 brazo S1 ≤. Default Arbor MH1.
   {
     match: /^MISC_Prospector/i,
     arms: [{
@@ -680,11 +666,10 @@ const INDUSTRIAL_INJECTIONS: Array<{ match: RegExp; arms: IndustrialArmDef[] }> 
       size: 1,
       equippedClass: "Mining_Laser_MPUV_Arm",
       equippedName: "Arbor MH1",
-      children: mkModuleSlots("hardpoint_mining_arm", 1),
     }],
   },
   // Golem: 1 brazo FIJO con Pitman (no se puede cambiar el laser, solo los
-  // módulos). Pitman tiene 2 module slots.
+  // módulos). Pitman tiene 2 module slots (se generan en runtime).
   {
     match: /^DRAK_Golem/i,
     arms: [{
@@ -694,7 +679,6 @@ const INDUSTRIAL_INJECTIONS: Array<{ match: RegExp; arms: IndustrialArmDef[] }> 
       fixed: true,
       equippedClass: "Mining_Laser_DRAK_Golem_S1",
       equippedName: "Pitman",
-      children: mkModuleSlots("hardpoint_mining_arm", 2),
     }],
   },
 
@@ -785,6 +769,7 @@ const INDUSTRIAL_INJECTIONS: Array<{ match: RegExp; arms: IndustrialArmDef[] }> 
 function buildSyntheticIndustrialHardpoints(
   shipReference: string,
   existing: any[],
+  miningLaserStats: Map<string, any> = new Map(),
 ): any[] {
   const out: any[] = [];
   for (const { match, arms } of INDUSTRIAL_INJECTIONS) {
@@ -795,6 +780,14 @@ function buildSyntheticIndustrialHardpoints(
       if (alreadyHas) continue;
       const idBase = `synthetic:${shipReference}:${arm.hardpointName}`;
       const isFixed = arm.fixed ?? false;
+      // Para MINING: buscar stats del laser default en mining_lasers para que
+      // componentStats.moduleSlots esté disponible desde el primer render.
+      // Sin esto, el laser default muestra 0 slots hasta que el user elije
+      // explícitamente un laser del picker.
+      const defaultStats =
+        arm.category === "MINING"
+          ? miningLaserStats.get(arm.equippedClass) ?? null
+          : null;
       const equippedItem = {
         id: `${idBase}:item`,
         reference: arm.equippedClass,
@@ -805,7 +798,7 @@ function buildSyntheticIndustrialHardpoints(
         size: arm.size,
         grade: null,
         manufacturer: null,
-        componentStats: null,
+        componentStats: defaultStats,
       };
       // Children: pueden venir con `defaultItem` (salvage: head pre-poblado con
       // tractor/scraper) o sin él (mining: slots vacíos que el user llena con
@@ -1086,9 +1079,50 @@ export async function GET(
     // (salvage) NO tienen sus brazos en ship_hardpoints porque CIG los modela
     // como geometría fija. Sin esto los widgets Mining/Salvage del
     // LoadoutBuilder aparecen vacíos. Reclaimer ya tiene data real y se skipea.
+    //
+    // Pre-fetch mining_lasers una vez para poblar componentStats del laser
+    // default (crítico: moduleSlots se usa para renderizar los slots de módulos
+    // en el LoadoutBuilder). Solo hace la query si la nave es industrial.
+    const needsIndustrial = /^(ARGO_MOLE|ARGO_MOTH|MISC_Prospector|DRAK_Golem|DRAK_Vulture|MISC_Fortune|RSI_Salvation)/i
+      .test(String(ship.reference ?? ""));
+    let miningLaserStats = new Map<string, any>();
+    if (needsIndustrial) {
+      const lasers: any[] = await sql.unsafe(
+        `SELECT id, name, size, mining_power, resistance, instability,
+                optimal_range, max_range, throttle_rate, throttle_min,
+                heat_output, shatter_damage, module_slots
+           FROM mining_lasers`,
+      ).catch((e: unknown) => { console.warn("[ships/[id]] mining_lasers fetch failed:", e); return []; });
+      for (const l of lasers) {
+        // Mapeo id → className basado en el MiningLoadoutCalculator:
+        //   arbor-mh1 → Mining_Laser_MPUV_Arm
+        //   arbor-mh2 → Mining_Laser_MPUV_Arm_S2
+        //   pitman    → Mining_Laser_DRAK_Golem_S1
+        // Para otros se usa el id directo (el picker los resuelve igualmente).
+        const idToClass: Record<string, string> = {
+          "arbor-mh1": "Mining_Laser_MPUV_Arm",
+          "arbor-mh2": "Mining_Laser_MPUV_Arm_S2",
+          "pitman":    "Mining_Laser_DRAK_Golem_S1",
+        };
+        const className = idToClass[l.id] ?? l.id;
+        miningLaserStats.set(className, {
+          miningPower: l.mining_power,
+          resistance: l.resistance,
+          instability: l.instability,
+          optimalRange: l.optimal_range,
+          maxRange: l.max_range,
+          throttleRate: l.throttle_rate,
+          throttleMin: l.throttle_min,
+          heatOutput: l.heat_output,
+          shatterDamage: l.shatter_damage,
+          moduleSlots: l.module_slots,
+        });
+      }
+    }
     const syntheticIndustrial = buildSyntheticIndustrialHardpoints(
       String(ship.reference ?? ""),
       flatHardpointsFromDb as any[],
+      miningLaserStats,
     );
     const flatHardpoints = [...flatHardpointsFromDb, ...syntheticIndustrial];
 

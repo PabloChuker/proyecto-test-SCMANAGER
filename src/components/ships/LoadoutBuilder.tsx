@@ -84,7 +84,7 @@ type WidgetId =
 // la UI en naves puramente combate. Si a futuro CIG saca más naves industriales
 // se amplían los regex acá.
 const MINING_SHIP_RX  = /mole|moth|prospector|golem/i;
-const SALVAGE_SHIP_RX = /reclaimer|fortune|salvation/i;
+const SALVAGE_SHIP_RX = /reclaimer|fortune|salvation|vulture/i;
 function isMiningShip(name: string | null | undefined): boolean {
   return !!name && MINING_SHIP_RX.test(name);
 }
@@ -905,10 +905,38 @@ function HpGroup({ hps, onClickHp, weaponAllocatedPips, weaponMaxPips }: { hps: 
     };
     onClickHp(synthetic);
   }, [onClickHp]);
+  // Para brazos MINING: generar module slots dinámicos según el `moduleSlots`
+  // del laser equipado. Ej: Helix I=2, Arbor MH1=1, Klein-S1=0, Impact II=3.
+  // Los IDs de los slots son estables (parentId:module:i), así cambiar de laser
+  // preserva los módulos en los slots que siguen existiendo.
+  const resolveChildSlots = useCallback(
+    (hp: ResolvedHardpoint): ResolvedChild[] => {
+      if (hp.resolvedCategory !== "MINING") return hp.children;
+      const laser = getEffectiveItem(hp.id);
+      const n = Number(laser?.componentStats?.moduleSlots ?? 0);
+      if (!n || n <= 0) return [];
+      const slots: ResolvedChild[] = [];
+      for (let i = 1; i <= n; i++) {
+        const childId = `${hp.id}:module:${i}`;
+        slots.push({
+          id: childId,
+          hardpointName: `${hp.hardpointName}_module_${i}`,
+          category: "MINING_MODULE",
+          minSize: 0,
+          maxSize: 0,
+          isFixed: false,
+          equippedItem: null,
+        });
+      }
+      return slots;
+    },
+    [getEffectiveItem],
+  );
+
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60">
       {hps.map(hp => (
-        <HardpointSlot key={hp.id} hp={hp} item={getEffectiveItem(hp.id)} isOverridden={overrides.has(hp.id)} isOn={isComponentOn(hp.hardpointName)} onClick={() => onClickHp(hp)} onTogglePower={() => toggleComponent(hp.hardpointName)} childSlots={hp.children} isComponentOn={isComponentOn} toggleComponent={toggleComponent} onClickChild={handleClickChild} getEffectiveItem={getEffectiveItem} weaponAllocatedPips={weaponAllocatedPips} weaponMaxPips={weaponMaxPips} />
+        <HardpointSlot key={hp.id} hp={hp} item={getEffectiveItem(hp.id)} isOverridden={overrides.has(hp.id)} isOn={isComponentOn(hp.hardpointName)} onClick={() => onClickHp(hp)} onTogglePower={() => toggleComponent(hp.hardpointName)} childSlots={resolveChildSlots(hp)} isComponentOn={isComponentOn} toggleComponent={toggleComponent} onClickChild={handleClickChild} getEffectiveItem={getEffectiveItem} weaponAllocatedPips={weaponAllocatedPips} weaponMaxPips={weaponMaxPips} />
       ))}
     </div>
   );
