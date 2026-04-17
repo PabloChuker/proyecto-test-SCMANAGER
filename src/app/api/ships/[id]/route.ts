@@ -117,17 +117,22 @@ const HP_TYPE_TO_CATEGORY: Record<string, string> = {
 };
 
 function hpCategory(hpType: string, hpName: string): string {
+  const n = hpName.toLowerCase();
+
+  // 2026-04-17: industrial name detection gana SIEMPRE sobre HP_TYPE_TO_CATEGORY.
+  // Razón: en el Reclaimer los salvage arms vienen como hpType="Turret", así que
+  // el mapa genérico los mandaba a "TURRET" y nunca aparecían en el widget de
+  // salvage. El nombre (`hardpoint_remote_turret_salvage_*`) es el signal más
+  // fuerte, así que se chequea primero.
+  if (n.includes("salvage") || n.includes("scraper")) return "SALVAGE";
+  if (n.includes("mining")) return "MINING";
+  if (n.includes("tractor") || n.includes("cargo_beam")) return "UTILITY";
+
   if (HP_TYPE_TO_CATEGORY[hpType]) return HP_TYPE_TO_CATEGORY[hpType];
   // Try base type (e.g. "LifeSupportGenerator.UNDEFINED" → "LifeSupportGenerator")
   const baseType = hpType.split(".")[0];
   if (baseType !== hpType && HP_TYPE_TO_CATEGORY[baseType]) return HP_TYPE_TO_CATEGORY[baseType];
-  // Fallback: infer from name
-  const n = hpName.toLowerCase();
-  // Industrial primero (gana a "weapon"/"gun" porque un mining laser puede
-  // venir con hpName tipo `hardpoint_mining_weapon_arm_right`).
-  if (n.includes("salvage") || n.includes("scraper")) return "SALVAGE";
-  if (n.includes("mining")) return "MINING";
-  if (n.includes("tractor") || n.includes("cargo_beam")) return "UTILITY";
+  // Fallback: infer from name (resto de categorías no-industriales)
   if (n.includes("turret")) return "TURRET";
   if (n.includes("weapon") || n.includes("gun")) return "WEAPON";
   if (n.includes("missile")) return "MISSILE_RACK";
@@ -411,6 +416,96 @@ function buildChildren(
           isFixed: false,
           equippedItem: childItem,
         });
+      }
+      continue;
+    }
+
+    // ── Industrial heads (salvage / mining) ────────────────────────────────
+    // Reclaimer et al. meten un SalvageHead como hijo del turret, y dentro
+    // del SalvageHead.Loadout vienen los SalvageModifier (scraper, tractor).
+    // Mole/Prospector: un MiningArm con WeaponMining + MiningModifier como Loadout.
+    // Queremos mostrar head + modificadores como siblings dentro del widget.
+    const entryTypeStr = String(entry.Type || "");
+    const entryItemTypes = String(entry.ItemTypes || "");
+    const isSalvageHead =
+      entryTypeStr.startsWith("SalvageHead") || entryItemTypes.includes("SalvageHead");
+    const isSalvageModifier =
+      entryTypeStr.startsWith("SalvageModifier") || entryItemTypes.includes("SalvageModifier");
+    const isMiningLaser =
+      entryTypeStr.includes("WeaponMining") ||
+      entryTypeStr.startsWith("MiningLaser") ||
+      entryItemTypes.includes("WeaponMining") ||
+      entryItemTypes.includes("MiningLaser");
+    const isMiningModifier =
+      entryTypeStr.startsWith("MiningModifier") || entryItemTypes.includes("MiningModifier");
+
+    if (isSalvageHead || isSalvageModifier || isMiningLaser || isMiningModifier) {
+      const industrialType = isSalvageHead || isSalvageModifier ? "SALVAGE" : "MINING";
+      // Emitir el head/laser como child
+      const headItem = {
+        id: entry.UUID || `child-${idx}`,
+        reference: className,
+        name: entry.Name || className,
+        localizedName: null,
+        className,
+        type: industrialType,
+        size: entry.Size ?? entry.MaxSize ?? null,
+        grade: gradeToLetter(entry.Grade),
+        manufacturer: null,
+        componentStats: null,
+      };
+      results.push({
+        id: entry.UUID || `child-${idx}`,
+        hardpointName: entry.HardpointName || `sub_${idx}`,
+        category: industrialType,
+        minSize: 0,
+        maxSize: entry.MaxSize ?? entry.Size ?? 0,
+        isFixed: false,
+        equippedItem: headItem,
+      });
+
+      // Emitir modificadores nested (scraper/tractor/mining_modifier) también como siblings
+      if (Array.isArray(entry.Loadout) && entry.Loadout.length > 0) {
+        for (let li = 0; li < entry.Loadout.length; li++) {
+          const sub = entry.Loadout[li];
+          const subTypeStr = String(sub.Type || "");
+          const subItemTypes = String(sub.ItemTypes || "");
+          const subIsSalvage =
+            subTypeStr.startsWith("SalvageModifier") ||
+            subItemTypes.includes("SalvageModifier") ||
+            subTypeStr.startsWith("SalvageHead") ||
+            subItemTypes.includes("SalvageHead");
+          const subIsMining =
+            subTypeStr.startsWith("MiningModifier") ||
+            subItemTypes.includes("MiningModifier") ||
+            subTypeStr.includes("WeaponMining") ||
+            subItemTypes.includes("WeaponMining") ||
+            subItemTypes.includes("MiningLaser");
+          if (!subIsSalvage && !subIsMining) continue;
+
+          const subCat = subIsSalvage ? "SALVAGE" : "MINING";
+          const subClass = sub.ClassName || sub.className || "";
+          results.push({
+            id: sub.UUID || `child-${idx}-sub-${li}`,
+            hardpointName: sub.HardpointName || `sub_${idx}_${li}`,
+            category: subCat,
+            minSize: 0,
+            maxSize: sub.MaxSize ?? sub.Size ?? 0,
+            isFixed: false,
+            equippedItem: {
+              id: sub.UUID || `child-${idx}-sub-${li}`,
+              reference: subClass,
+              name: sub.Name || subClass,
+              localizedName: null,
+              className: subClass,
+              type: subCat,
+              size: sub.Size ?? sub.MaxSize ?? null,
+              grade: gradeToLetter(sub.Grade),
+              manufacturer: null,
+              componentStats: null,
+            },
+          });
+        }
       }
       continue;
     }
