@@ -776,9 +776,20 @@ function computeStats(
   // In Star Citizen, shield regen and cooling rate scale with power allocation.
   // Full pips → full value; reduced pips → proportionally reduced.
   // Max shield HP does NOT scale — it's fixed by the shield component.
+  //
+  // IMPORTANT: Shields auto-draw their minimum power (powerMin) from the grid
+  // as long as they're ON, even if the user's allocation slider is below that.
+  // So the effective pip count for regen = max(allocatedPips, ceil(powerMin)).
+  // This prevents shieldRegen from showing 0 on initial load when auto-alloc
+  // gives shields only 1-2 pips even though their min required draw is higher.
   const shieldInstForScale = instances.find(i => i.hardpointId === SHIELD_POWER_ID);
-  if (shieldInstForScale && shieldInstForScale.totalPips > 0) {
-    const shieldRatio = Math.min(1, Math.max(0, shieldInstForScale.allocatedPips / shieldInstForScale.totalPips));
+  if (shieldInstForScale && shieldInstForScale.isOn && shieldInstForScale.totalPips > 0) {
+    const minPips = Math.min(
+      shieldInstForScale.totalPips,
+      Math.max(1, Math.ceil(shieldInstForScale.powerMin)),
+    );
+    const effectivePips = Math.max(minPips, shieldInstForScale.allocatedPips);
+    const shieldRatio = Math.min(1, Math.max(0, effectivePips / shieldInstForScale.totalPips));
     shieldRegen = shieldRegen * shieldRatio;
   } else if (shieldInstForScale && !shieldInstForScale.isOn) {
     shieldRegen = 0;
