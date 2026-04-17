@@ -790,11 +790,14 @@ function buildSyntheticIndustrialHardpoints(
             componentStats: null,
           },
         })) ?? [];
+      // Para MINING usamos minSize=0 (laser.size <= ship.laserSize, igual que
+      // el MiningLoadoutCalculator); para SALVAGE mantenemos igualdad estricta.
+      const minSize = arm.category === "MINING" ? 0 : arm.size;
       out.push({
         id: idBase,
         hardpointName: arm.hardpointName,
         category: arm.category,
-        minSize: arm.size,
+        minSize,
         maxSize: arm.size,
         isFixed: false,
         isManned: false,

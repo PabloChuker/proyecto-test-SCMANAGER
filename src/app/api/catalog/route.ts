@@ -79,6 +79,13 @@ const TYPE_TABLE: Record<string, TableDef> = {
     idCol: "uuid", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
   },
+  // Mining lasers: misma fuente que /api/mining/lasers (MiningLoadoutCalculator).
+  // mining_lasers no tiene class_name → usamos name como fallback para classCol.
+  MINING_LASER: {
+    table: "mining_lasers", type: "MINING_LASER",
+    idCol: "id", nameCol: "name", classCol: "name",
+    sizeCol: "size", gradeCol: null, mfrCol: "manufacturer",
+  },
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -305,7 +312,7 @@ function mapRow(row: any, def: TableDef): any {
     powerStats: type === "POWER_PLANT" ? stats : null,
     coolingStats: type === "COOLER" ? stats : null,
     quantumStats: type === "QUANTUM_DRIVE" ? stats : null,
-    miningStats: null,
+    miningStats: type === "MINING_LASER" ? stats : null,
     missileStats: type === "MISSILE" ? stats : null,
     thrusterStats: null,
     shopInventory: [],
@@ -422,6 +429,21 @@ function buildStats(row: any, type: string): Record<string, any> | null {
       s.alphaDamage = numOrNull(row.damage_total);
       s.trackingSignal = row.tracking_signal_type ?? null;
       s.speed = numOrNull(row.linear_speed);
+      break;
+    }
+
+    case "MINING_LASER": {
+      // mining_lasers columns (mismo schema que usa MiningLoadoutCalculator).
+      s.miningPower = numOrNull(row.mining_power);
+      s.resistance = numOrNull(row.resistance);
+      s.instability = numOrNull(row.instability);
+      s.optimalRange = numOrNull(row.optimal_range);
+      s.maxRange = numOrNull(row.max_range);
+      s.throttleRate = numOrNull(row.throttle_rate);
+      s.throttleMin = numOrNull(row.throttle_min);
+      s.heatOutput = numOrNull(row.heat_output);
+      s.shatterDamage = numOrNull(row.shatter_damage);
+      s.moduleSlots = numOrNull(row.module_slots);
       break;
     }
   }

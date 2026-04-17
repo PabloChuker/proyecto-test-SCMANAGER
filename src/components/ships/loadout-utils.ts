@@ -84,6 +84,12 @@ export function getKeyStat(category: string, stats: Record<string, any> | null |
       const spool = tryNum(stats, "quantumSpoolUp", "spoolUpTime");
       return spool !== null ? { v: spool.toFixed(1) + "s", l: "SPOOL" } : null;
     }
+    case "MINING": {
+      const power = tryNum(stats, "miningPower");
+      if (power !== null) return { v: fmtStat(power), l: "PWR" };
+      const range = tryNum(stats, "optimalRange");
+      return range !== null ? { v: fmtStat(range) + "m", l: "OPT" } : null;
+    }
     default: {
       const pwr = tryNum(stats, "powerDraw");
       return pwr !== null ? { v: fmtStat(pwr), l: "PWR" } : null;
