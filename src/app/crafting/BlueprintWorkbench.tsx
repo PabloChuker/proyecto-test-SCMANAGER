@@ -380,21 +380,17 @@ export default function BlueprintWorkbench() {
     useSensor(KeyboardSensor)
   );
 
-  const findColumn = useCallback((id: WidgetId) => {
-    return columns.findIndex((col) => col.includes(id));
-  }, [columns]);
-
   const handleDragStart = useCallback(({ active }: DragStartEvent) => {
     setActiveId(active.id as WidgetId);
   }, []);
 
+  // All column reads happen inside setColumns(prev=>) to avoid stale closures
   const handleDragOver = useCallback(({ active, over }: DragOverEvent) => {
     if (!over || active.id === over.id) return;
-    const srcCol = columns.findIndex((c) => c.includes(active.id as WidgetId));
-    const dstCol = columns.findIndex((c) => c.includes(over.id as WidgetId));
-    if (srcCol === -1 || dstCol === -1 || srcCol === dstCol) return;
-
     setColumns((prev) => {
+      const srcCol = prev.findIndex((c) => c.includes(active.id as WidgetId));
+      const dstCol = prev.findIndex((c) => c.includes(over.id as WidgetId));
+      if (srcCol === -1 || dstCol === -1 || srcCol === dstCol) return prev;
       const next = prev.map((c) => [...c]);
       const item = active.id as WidgetId;
       next[srcCol] = next[srcCol].filter((w) => w !== item);
@@ -402,24 +398,26 @@ export default function BlueprintWorkbench() {
       next[dstCol].splice(overIdx >= 0 ? overIdx : next[dstCol].length, 0, item);
       return next;
     });
-  }, [columns]);
+  }, []);
 
   const handleDragEnd = useCallback(({ active, over }: DragEndEvent) => {
     setActiveId(null);
-    if (!over || active.id === over.id) return;
-    const colIdx = columns.findIndex((c) => c.includes(active.id as WidgetId));
-    if (colIdx === -1) return;
-
     setColumns((prev) => {
+      if (!over || active.id === over.id) { saveColumns(prev); return prev; }
       const next = prev.map((c) => [...c]);
-      const col = next[colIdx];
-      const oldIdx = col.indexOf(active.id as WidgetId);
-      const newIdx = col.indexOf(over.id as WidgetId);
-      if (oldIdx !== -1 && newIdx !== -1) next[colIdx] = arrayMove(col, oldIdx, newIdx);
+      const srcCol = next.findIndex((c) => c.includes(active.id as WidgetId));
+      const dstCol = next.findIndex((c) => c.includes(over.id as WidgetId));
+      // Same-column reorder
+      if (srcCol !== -1 && srcCol === dstCol) {
+        const oldIdx = next[srcCol].indexOf(active.id as WidgetId);
+        const newIdx = next[srcCol].indexOf(over.id as WidgetId);
+        if (oldIdx !== -1 && newIdx !== -1) next[srcCol] = arrayMove(next[srcCol], oldIdx, newIdx);
+      }
+      // Cross-column: handleDragOver already placed it; just persist
       saveColumns(next);
       return next;
     });
-  }, [columns]);
+  }, []);
 
   const handleDragCancel = useCallback(() => setActiveId(null), []);
 
