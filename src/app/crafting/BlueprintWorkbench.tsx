@@ -576,7 +576,7 @@ export default function BlueprintWorkbench() {
             </div>
 
             {/* Tree */}
-            <div className="px-2 pb-3 space-y-0.5 max-h-[60vh] overflow-y-auto">
+            <div className="px-2 pb-3 space-y-0.5 max-h-[60vh] overflow-y-auto overflow-x-hidden">
               {filteredCategories.map((category) => (
                 <div key={category.id}>
                   <button
@@ -619,7 +619,7 @@ export default function BlueprintWorkbench() {
                                   <button
                                     key={bp.uuid}
                                     onClick={() => setSelectedBlueprintId(bp.uuid)}
-                                    className={`w-full overflow-hidden text-left px-2 py-1.5 rounded-lg text-xs transition-all duration-150 ${
+                                    className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all duration-150 ${
                                       selectedBlueprintId === bp.uuid
                                         ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
                                         : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 border border-transparent"
@@ -1106,7 +1106,7 @@ export default function BlueprintWorkbench() {
       <div className="grid grid-cols-1 gap-4 items-start" style={{ gridTemplateColumns: "1fr 1.4fr 0.75fr" }}>
         {columns.map((colWidgets, colIdx) => (
           <SortableContext key={colIdx} items={colWidgets} strategy={verticalListSortingStrategy}>
-            <div className="space-y-3 min-h-20 min-w-0 overflow-hidden">
+            <div className="space-y-3 min-h-20 min-w-0">
               {colWidgets.map((wId) => renderWidgetContent(wId))}
             </div>
           </SortableContext>
