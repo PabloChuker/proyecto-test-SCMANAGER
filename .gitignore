@@ -34,3 +34,5 @@ ship-items.json
 manufacturers.json
 *.json.tmp
 
+
+thermal_update.sql
