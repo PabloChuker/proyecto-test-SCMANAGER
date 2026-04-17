@@ -319,6 +319,76 @@ function BrandMark({
   );
 }
 
+function DataColumn({
+  title,
+  theme,
+  typo,
+  children,
+}: {
+  title: string;
+  theme: Theme;
+  typo: TypoScale;
+  children: React.ReactNode;
+}) {
+  return (
+    <div style={{ padding: "12px 22px" }}>
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 700,
+          letterSpacing: "0.20em",
+          textTransform: "uppercase",
+          color: theme.accent,
+          marginBottom: 8,
+          paddingBottom: 5,
+          borderBottom: `1px solid ${theme.border}`,
+          lineHeight: 1,
+        }}
+      >
+        {title}
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function MiniStat({
+  label,
+  value,
+  theme,
+  typo,
+}: {
+  label: string;
+  value: string;
+  theme: Theme;
+  typo: TypoScale;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "baseline",
+        fontSize: typo.modifier,
+        padding: "1px 0",
+      }}
+    >
+      <span style={{ color: theme.textMuted }}>{label}</span>
+      <span
+        style={{
+          color: theme.text,
+          fontWeight: 500,
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
 // ── Props ──
 
 interface ShipInfoCardProps {
@@ -816,6 +886,306 @@ export default function ShipInfoCard({
           >
             sclabs.space
           </span>
+        </div>
+      </div>
+    );
+  }
+
+  // ═════════════════════════════════════════════════════════════════════
+  // BANNER v2 — cinematic dossier: huge name + glowing ship + KPI strip
+  // 1800 × 560
+  // ═════════════════════════════════════════════════════════════════════
+  if (variant === "banner") {
+    const W = 1800;
+    const H = 560;
+    const ACCENT_H = 4;
+    const DATA_H = 168;
+    const HERO_H = H - ACCENT_H - DATA_H; // 388px
+    const typo = TYPO_H;
+
+    // Responsive font size so long names don't overflow the left column (~740px)
+    const nameFontSize = Math.max(44, Math.min(100, Math.floor(760 / Math.max(displayName.length, 4))));
+
+    // Hero KPI stats — most impactful numbers front-and-center
+    const kpiStats = [
+      cargo != null        ? { label: "Cargo",     value: num(cargo),           unit: "SCU"  } : null,
+      hullHp != null       ? { label: "Hull HP",   value: num(hullHp),          unit: "HP"   } : null,
+      scmSpeed != null     ? { label: "SCM Speed", value: num(scmSpeed),        unit: "m/s"  } : null,
+      shieldHp != null     ? { label: "Shield",    value: num(shieldHp),        unit: "HP"   } : null,
+    ].filter(Boolean) as { label: string; value: string; unit: string }[];
+
+    return (
+      <div
+        id={captureId}
+        style={{
+          position: "relative",
+          width: W,
+          height: H,
+          backgroundColor: "#000",
+          color: theme.text,
+          border: `1px solid ${theme.accent}55`,
+          fontFamily:
+            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+          overflow: "hidden",
+        }}
+      >
+        {/* ── Background diagonal gradient ── */}
+        <div style={{
+          position:"absolute", top:ACCENT_H, left:0, right:0, height:HERO_H,
+          background:`linear-gradient(135deg, ${theme.accent}18 0%, transparent 40%)`,
+          pointerEvents:"none",
+        }} />
+
+        {/* Thin left accent bar */}
+        <div style={{
+          position:"absolute", top:ACCENT_H, left:0, width:3, height:HERO_H,
+          background:`linear-gradient(to bottom, ${theme.accent}, transparent)`,
+        }} />
+
+        {/* ── Ship image — full-hero, centrada con viñetas en los 4 bordes ── */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageUrl}
+          alt={displayName}
+          crossOrigin="anonymous"
+          style={{
+            position:"absolute",
+            top: ACCENT_H,
+            left: 0,
+            width: W,
+            height: HERO_H,
+            objectFit:"contain",
+            objectPosition:"68% center",
+            filter:`drop-shadow(0 0 60px ${theme.accent}99) drop-shadow(0 0 180px ${theme.accent}55)`,
+          }}
+          onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.08"; }}
+        />
+
+        {/* Ambient glow: radial centrado sobre la nave */}
+        <div style={{
+          position:"absolute", top:ACCENT_H, left:0, right:0, height:HERO_H,
+          background:`radial-gradient(ellipse 48% 78% at 68% 50%, ${theme.accent}28 0%, transparent 68%)`,
+          pointerEvents:"none",
+        }} />
+
+        {/* Viñeta izquierda — opaca, sostiene el texto */}
+        <div style={{
+          position:"absolute", top:ACCENT_H, left:0, width:"54%", height:HERO_H,
+          background:`linear-gradient(to right, #000000 0%, #000000e6 32%, #000000aa 52%, transparent 100%)`,
+          pointerEvents:"none",
+        }} />
+        {/* Viñeta derecha */}
+        <div style={{
+          position:"absolute", top:ACCENT_H, right:0, width:140, height:HERO_H,
+          background:"linear-gradient(to left, #000000e6 0%, transparent 100%)",
+          pointerEvents:"none",
+        }} />
+        {/* Viñeta superior */}
+        <div style={{
+          position:"absolute", top:ACCENT_H, left:0, right:0, height:110,
+          background:"linear-gradient(to bottom, #000000d0 0%, transparent 100%)",
+          pointerEvents:"none", zIndex:2,
+        }} />
+        {/* Viñeta inferior */}
+        <div style={{
+          position:"absolute", top:ACCENT_H + HERO_H - 120, left:0, right:0, height:120,
+          background:"linear-gradient(to top, #000000e6 0%, transparent 100%)",
+          pointerEvents:"none", zIndex:2,
+        }} />
+
+
+        {/* ── Identity block (left) ── */}
+        <div style={{
+          position:"absolute",
+          top: ACCENT_H + 22,
+          left: 24,
+          right:"44%",
+        }}>
+          <BrandMark theme={theme} size={30} labelSize={12} subSize={8} />
+
+          <div style={{ marginTop:22 }}>
+            {/* Manufacturer */}
+            <div style={{
+              fontSize:11, fontWeight:700, letterSpacing:"0.38em",
+              textTransform:"uppercase", color:theme.accent,
+              marginBottom:8, lineHeight:1,
+            }}>
+              {ship.manufacturer ?? "—"}
+            </div>
+
+            {/* Ship name — MASSIVE & BOLD */}
+            <div style={{
+              fontSize: nameFontSize,
+              fontWeight:800,
+              lineHeight:0.88,
+              letterSpacing:"-0.03em",
+              textTransform:"uppercase",
+              color:theme.text,
+              textShadow:`0 0 70px ${theme.accent}55, 0 2px 0 #000`,
+              marginBottom:16,
+            }}>
+              {displayName}
+            </div>
+
+            {/* Tags */}
+            <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+              {(ship.type || specs.role) && (
+                <span style={{
+                  fontSize:11, fontWeight:700,
+                  letterSpacing:"0.16em", textTransform:"uppercase",
+                  color:"#000", backgroundColor:theme.accent,
+                  padding:"4px 12px", lineHeight:1.5,
+                }}>
+                  {[ship.type, specs.role].filter(Boolean).join(" · ")}
+                </span>
+              )}
+              {specs.maxCrew != null && (
+                <span style={{ fontSize:12, color:theme.textMuted }}>
+                  <span style={{ color:theme.text, fontWeight:700 }}>{specs.maxCrew}</span> crew
+                </span>
+              )}
+              {mass != null && (
+                <span style={{ fontSize:12, color:theme.textMuted }}>
+                  <span style={{ color:theme.text, fontWeight:700 }}>{num(mass)}</span> kg
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── KPI stats — bottom of hero, left side ── */}
+        {kpiStats.length > 0 && (
+          <div style={{
+            position:"absolute",
+            bottom: DATA_H,
+            left:0,
+            display:"flex",
+          }}>
+            {kpiStats.map((s, i) => (
+              <div key={i} style={{
+                padding:"10px 26px 10px 20px",
+                borderRight: i < kpiStats.length - 1 ? `1px solid ${theme.border}` : undefined,
+              }}>
+                <div style={{
+                  fontSize:10, letterSpacing:"0.22em", textTransform:"uppercase",
+                  color:theme.textMuted, marginBottom:3, lineHeight:1,
+                }}>
+                  {s.label}
+                </div>
+                <div style={{
+                  fontSize:32, fontWeight:800,
+                  color:theme.accent, lineHeight:1,
+                  fontVariantNumeric:"tabular-nums",
+                }}>
+                  {s.value}
+                </div>
+                <div style={{
+                  fontSize:10, color:theme.textMuted,
+                  letterSpacing:"0.1em", textTransform:"uppercase", marginTop:2,
+                }}>
+                  {s.unit}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+
+        {/* ── Data strip ── */}
+        <div style={{
+          position:"absolute",
+          bottom:0, left:0, right:0, height:DATA_H,
+          backgroundColor: theme.bgPanel,
+          display:"grid",
+          gridTemplateColumns:"1fr 1px 1fr 1px 1fr 1px 1fr 1px 190px",
+        }}>
+          {/* Structure */}
+          <DataColumn title="Structure" theme={theme} typo={typo}>
+            <Row label="Dimensions" value={dimsFlight} theme={theme} typo={typo} />
+            <Row label="Hull HP" value={num(hullHp)} unit="HP" theme={theme} typo={typo} />
+            <div style={{ marginTop:4, display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 10px" }}>
+              <MiniStat label="Physical"   value={deflPhys != null ? `${num(deflPhys)} %` : MISSING} theme={theme} typo={typo} />
+              <MiniStat label="Energy"     value={deflEne  != null ? `${num(deflEne)}  %` : MISSING} theme={theme} typo={typo} />
+              <MiniStat label="Distortion" value={deflDis  != null ? `${num(deflDis)}  %` : MISSING} theme={theme} typo={typo} />
+            </div>
+          </DataColumn>
+          <div style={{ backgroundColor:theme.border }} />
+
+          {/* Combat */}
+          <DataColumn title="Combat" theme={theme} typo={typo}>
+            <Row label="Pilot DPS"       value={pilotDps != null ? num(pilotDps) : MISSING} theme={theme} typo={typo} />
+            <Row label="Crew DPS"        value={MISSING}                                     theme={theme} typo={typo} />
+            <Row label="Shield HP"       value={shieldHp != null ? num(shieldHp) : MISSING}  unit="HP"  theme={theme} typo={typo} />
+            <Row label="Missiles & Bombs" value={MISSING}                                    unit="Dmg" theme={theme} typo={typo} />
+          </DataColumn>
+          <div style={{ backgroundColor:theme.border }} />
+
+          {/* Logistics */}
+          <DataColumn title="Logistics" theme={theme} typo={typo}>
+            <Row label="Cargo Grid"   value={num(cargo)}                                unit="SCU" theme={theme} typo={typo} />
+            <Row label="H₂ Fuel"      value={h2Str}                                    unit="SCU" theme={theme} typo={typo} />
+            <Row label="Quantum Fuel" value={qtStr}                                    unit="SCU" theme={theme} typo={typo} />
+            <Row label="QT Range"     value={qtRangeGm != null ? num(qtRangeGm,2) : MISSING} unit="Gm" theme={theme} typo={typo} />
+          </DataColumn>
+          <div style={{ backgroundColor:theme.border }} />
+
+          {/* Propulsion */}
+          <DataColumn title="Propulsion" theme={theme} typo={typo}>
+            <Row label="SCM / Boost"      value={scmBoostStr}  unit="m/s" theme={theme} typo={typo} />
+            <Row label="Pitch / Yaw / Roll" value={pitchYawRoll} unit="°/s" theme={theme} typo={typo} />
+            <div style={{ marginTop:4, display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 10px" }}>
+              <MiniStat label="Main"   value={`${toG(accelFwd)} G`}                     theme={theme} typo={typo} />
+              <MiniStat label="Retro"  value={`${toG(accelBwd)} G`}                     theme={theme} typo={typo} />
+              <MiniStat label="Up"     value={`${toG(accelUp)} G`}                      theme={theme} typo={typo} />
+              <MiniStat label="Strafe" value={`${toG(accelStr)} G`}                     theme={theme} typo={typo} />
+            </div>
+          </DataColumn>
+          <div style={{ backgroundColor:theme.border }} />
+
+          {/* Brand column */}
+          <div style={{
+            padding:"14px 16px",
+            height:"100%",
+            boxSizing:"border-box",
+            display:"flex", flexDirection:"column",
+            justifyContent:"center",
+            alignItems:"center",
+            textAlign:"center",
+            gap:10,
+            borderLeft: `1px solid ${theme.border}`,
+          }}>
+            <Image
+              src="/sclabs-logo.png"
+              alt="SC LABS"
+              width={52}
+              height={52}
+              style={{ borderRadius:7 }}
+              crossOrigin="anonymous"
+              unoptimized
+            />
+            <div>
+              <div style={{
+                fontSize:15, fontWeight:700,
+                letterSpacing:"0.22em", textTransform:"uppercase",
+                color:theme.text, lineHeight:1,
+              }}>
+                SC LABS
+              </div>
+              <div style={{
+                fontSize:8, letterSpacing:"0.18em", textTransform:"uppercase",
+                color:theme.textMuted, marginTop:4, lineHeight:1.3,
+              }}>
+                Star Citizen<br/>Intelligence
+              </div>
+            </div>
+            <div style={{
+              fontSize:11, fontWeight:700,
+              letterSpacing:"0.18em", textTransform:"uppercase",
+              color:theme.accent,
+            }}>
+              SCLABS.SPACE
+            </div>
+          </div>
         </div>
       </div>
     );
