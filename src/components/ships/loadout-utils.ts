@@ -6,7 +6,8 @@
 export const CAT_COLORS: Record<string, string> = {
   WEAPON: "#ef4444", TURRET: "#f59e0b", MISSILE_RACK: "#f97316",
   SHIELD: "#3b82f6", POWER_PLANT: "#22c55e", COOLER: "#06b6d4",
-  QUANTUM_DRIVE: "#a855f7", MINING: "#f472b6", UTILITY: "#94a3b8",
+  QUANTUM_DRIVE: "#a855f7", MINING: "#f472b6", MINING_MODULE: "#ec4899",
+  SALVAGE: "#14b8a6", UTILITY: "#94a3b8",
   OTHER: "#71717a",
 };
 
@@ -89,6 +90,17 @@ export function getKeyStat(category: string, stats: Record<string, any> | null |
       if (power !== null) return { v: fmtStat(power), l: "PWR" };
       const range = tryNum(stats, "optimalRange");
       return range !== null ? { v: fmtStat(range) + "m", l: "OPT" } : null;
+    }
+    case "MINING_MODULE": {
+      // Los módulos suelen traer laserPower (%) como efecto principal; si no,
+      // showeamos lo que haya.
+      const lp = tryNum(stats, "laserPower");
+      if (lp !== null) return { v: (lp > 0 ? "+" : "") + lp.toFixed(0) + "%", l: "PWR" };
+      const inst = tryNum(stats, "instability");
+      if (inst !== null) return { v: (inst > 0 ? "+" : "") + inst.toFixed(0) + "%", l: "INST" };
+      const res = tryNum(stats, "resistance");
+      if (res !== null) return { v: (res > 0 ? "+" : "") + res.toFixed(0) + "%", l: "RES" };
+      return null;
     }
     default: {
       const pwr = tryNum(stats, "powerDraw");

@@ -594,38 +594,72 @@ function buildChildren(
 // picker, la lógica del store de overrides lo maneja como cualquier otro.
 // El Reclaimer NO está acá porque ya tiene los hardpoints reales en DB.
 
+interface IndustrialChildDef {
+  hardpointName: string;
+  /** Para mining: MINING_MODULE (slot vacío que el user llena). Para salvage: SALVAGE. */
+  category: "SALVAGE" | "MINING_MODULE" | "MINING";
+  size: number;
+  /** Si está, se emite el child con equippedItem pre-poblado (salvage default).
+   *  Si no, el child queda vacío y el picker lo llena (mining modules). */
+  defaultItem?: { className: string; name: string };
+}
+
 interface IndustrialArmDef {
   category: "MINING" | "SALVAGE";
   hardpointName: string;   // nombre único por brazo
   size: number;
-  /** Para mining: className que resuelve contra weapon_mining. Para salvage: placeholder del head. */
+  /** Override del minSize (default = 0 para MINING, = size para SALVAGE). */
+  minSize?: number;
+  /** true → arm fijo (ej. Golem con Pitman soldado). Bloquea el picker. */
+  fixed?: boolean;
+  /** Para mining: className que resuelve contra mining_lasers. Para salvage: placeholder del head. */
   equippedClass: string;
   equippedName: string;
-  /** Sub-items embebidos (ej. salvage modifiers) para renderizar dentro del widget. */
-  children?: Array<{
-    hardpointName: string;
-    className: string;
-    name: string;
-    size: number;
-  }>;
+  /** Sub-items embebidos (module slots para mining, tractor+scraper para salvage). */
+  children?: IndustrialChildDef[];
+}
+
+// Helper: N module slots vacíos para un brazo de mining.
+// El picker los llena con módulos del JSON mining-modules.json.
+function mkModuleSlots(
+  hardpointPrefix: string,
+  n: number,
+): IndustrialChildDef[] {
+  const slots: IndustrialChildDef[] = [];
+  for (let i = 1; i <= n; i++) {
+    slots.push({
+      hardpointName: `${hardpointPrefix}_module_${i}`,
+      category: "MINING_MODULE",
+      size: 0,
+    });
+  }
+  return slots;
 }
 
 // Regex ship_reference → lista de brazos a inyectar.
 // Cada regex se evalúa contra `ship.reference` (ej. ARGO_MOLE, ARGO_MOLE_Carbon).
+//
+// Reglas por nave (tomadas del MiningLoadoutCalculator):
+//  - Mole: 3 brazos S2 estrictos, Arbor MH2 default (2 module slots)
+//  - Prospector: 1 brazo S1 ≤ (Arbor MH1 default, 1 module slot)
+//  - Moth: 1 brazo S1 ≤ (Arbor MH1 default, 1 module slot)
+//  - Golem: 1 brazo FIJO con Pitman (no swap del laser, 2 module slots)
 const INDUSTRIAL_INJECTIONS: Array<{ match: RegExp; arms: IndustrialArmDef[] }> = [
   // ── MINING ──────────────────────────────────────────────────────────────
-  // Mole: 3 brazos laterales con Arbor MH1 (Mining_Laser_MPUV_Arm) por default.
+  // Mole: 3 brazos laterales S2 estricto. Default Arbor MH2 (2 module slots).
   {
     match: /^ARGO_MOLE/i,
     arms: [1, 2, 3].map((i) => ({
       category: "MINING" as const,
       hardpointName: `hardpoint_mining_arm_${i}`,
-      size: 1,
-      equippedClass: "Mining_Laser_MPUV_Arm",
-      equippedName: "Arbor MH1 Mining Laser",
+      size: 2,
+      minSize: 2, // estricto S2
+      equippedClass: "Mining_Laser_MPUV_Arm_S2",
+      equippedName: "Arbor MH2",
+      children: mkModuleSlots(`hardpoint_mining_arm_${i}`, 2),
     })),
   },
-  // Moth: brazo mining central (ARGO MPUV Mining, 1 brazo S1 por default).
+  // Moth: 1 brazo S1 ≤. Default Arbor MH1 (1 module slot).
   {
     match: /^ARGO_MOTH/i,
     arms: [{
@@ -633,10 +667,11 @@ const INDUSTRIAL_INJECTIONS: Array<{ match: RegExp; arms: IndustrialArmDef[] }> 
       hardpointName: "hardpoint_mining_arm",
       size: 1,
       equippedClass: "Mining_Laser_MPUV_Arm",
-      equippedName: "Arbor MH1 Mining Laser",
+      equippedName: "Arbor MH1",
+      children: mkModuleSlots("hardpoint_mining_arm", 1),
     }],
   },
-  // Prospector: 1 brazo frontal con Arbor MH1.
+  // Prospector: 1 brazo S1 ≤. Default Arbor MH1 (1 module slot).
   {
     match: /^MISC_Prospector/i,
     arms: [{
@@ -644,24 +679,27 @@ const INDUSTRIAL_INJECTIONS: Array<{ match: RegExp; arms: IndustrialArmDef[] }> 
       hardpointName: "hardpoint_mining_arm",
       size: 1,
       equippedClass: "Mining_Laser_MPUV_Arm",
-      equippedName: "Arbor MH1 Mining Laser",
+      equippedName: "Arbor MH1",
+      children: mkModuleSlots("hardpoint_mining_arm", 1),
     }],
   },
-  // Golem: 1 brazo trasero con Pitman (custom Drake).
+  // Golem: 1 brazo FIJO con Pitman (no se puede cambiar el laser, solo los
+  // módulos). Pitman tiene 2 module slots.
   {
     match: /^DRAK_Golem/i,
     arms: [{
       category: "MINING",
       hardpointName: "hardpoint_mining_arm",
       size: 1,
+      fixed: true,
       equippedClass: "Mining_Laser_DRAK_Golem_S1",
-      equippedName: "Pitman Mining Laser",
+      equippedName: "Pitman",
+      children: mkModuleSlots("hardpoint_mining_arm", 2),
     }],
   },
 
   // ── SALVAGE ─────────────────────────────────────────────────────────────
-  // Vulture: 1 brazo frontal con Baler + ReadyGrip Tractor + Trawler Scraper
-  // (mismo stack que trae el Reclaimer en su DB).
+  // Vulture: 1 brazo frontal con Baler + ReadyGrip Tractor + Trawler Scraper.
   {
     match: /^DRAK_Vulture/i,
     arms: [{
@@ -673,15 +711,15 @@ const INDUSTRIAL_INJECTIONS: Array<{ match: RegExp; arms: IndustrialArmDef[] }> 
       children: [
         {
           hardpointName: "hardpoint_salvage_subItem01",
-          className: "Salvage_Modifier_Tractor_Small",
-          name: "ReadyGrip Tractor Module",
+          category: "SALVAGE",
           size: 1,
+          defaultItem: { className: "Salvage_Modifier_Tractor_Small", name: "ReadyGrip Tractor Module" },
         },
         {
           hardpointName: "hardpoint_salvage_subItem02",
-          className: "Salvage_Modifier_Scraper_Large",
-          name: "Trawler Scraper Module",
+          category: "SALVAGE",
           size: 1,
+          defaultItem: { className: "Salvage_Modifier_Scraper_Large", name: "Trawler Scraper Module" },
         },
       ],
     }],
@@ -698,21 +736,20 @@ const INDUSTRIAL_INJECTIONS: Array<{ match: RegExp; arms: IndustrialArmDef[] }> 
       children: [
         {
           hardpointName: "hardpoint_salvage_subItem01",
-          className: "Salvage_Modifier_Tractor_Small",
-          name: "ReadyGrip Tractor Module",
+          category: "SALVAGE",
           size: 1,
+          defaultItem: { className: "Salvage_Modifier_Tractor_Small", name: "ReadyGrip Tractor Module" },
         },
         {
           hardpointName: "hardpoint_salvage_subItem02",
-          className: "Salvage_Modifier_Scraper_Large",
-          name: "Trawler Scraper Module",
+          category: "SALVAGE",
           size: 1,
+          defaultItem: { className: "Salvage_Modifier_Scraper_Large", name: "Trawler Scraper Module" },
         },
       ],
     }],
   },
-  // Salvation: nave de salvage grande. 4 brazos salvage por default (estimado
-  // conservador; ajustar cuando haya data oficial).
+  // Salvation: nave de salvage grande. 4 brazos salvage por default.
   {
     match: /^RSI_Salvation/i,
     arms: [1, 2, 3, 4].map((i) => ({
@@ -724,15 +761,15 @@ const INDUSTRIAL_INJECTIONS: Array<{ match: RegExp; arms: IndustrialArmDef[] }> 
       children: [
         {
           hardpointName: `hardpoint_salvage_subItem01_${i}`,
-          className: "Salvage_Modifier_Tractor_Small",
-          name: "ReadyGrip Tractor Module",
+          category: "SALVAGE" as const,
           size: 1,
+          defaultItem: { className: "Salvage_Modifier_Tractor_Small", name: "ReadyGrip Tractor Module" },
         },
         {
           hardpointName: `hardpoint_salvage_subItem02_${i}`,
-          className: "Salvage_Modifier_Scraper_Large",
-          name: "Trawler Scraper Module",
+          category: "SALVAGE" as const,
           size: 1,
+          defaultItem: { className: "Salvage_Modifier_Scraper_Large", name: "Trawler Scraper Module" },
         },
       ],
     })),
@@ -757,6 +794,7 @@ function buildSyntheticIndustrialHardpoints(
       const alreadyHas = existing.some((hp) => hp.category === arm.category);
       if (alreadyHas) continue;
       const idBase = `synthetic:${shipReference}:${arm.hardpointName}`;
+      const isFixed = arm.fixed ?? false;
       const equippedItem = {
         id: `${idBase}:item`,
         reference: arm.equippedClass,
@@ -769,37 +807,52 @@ function buildSyntheticIndustrialHardpoints(
         manufacturer: null,
         componentStats: null,
       };
+      // Children: pueden venir con `defaultItem` (salvage: head pre-poblado con
+      // tractor/scraper) o sin él (mining: slots vacíos que el user llena con
+      // módulos del JSON mining-modules). El picker respeta cada caso.
       const childWeapons =
-        arm.children?.map((ch, ci) => ({
-          id: `${idBase}:child:${ci}`,
-          hardpointName: ch.hardpointName,
-          category: arm.category,
-          minSize: 0,
-          maxSize: ch.size,
-          isFixed: false,
-          equippedItem: {
-            id: `${idBase}:child:${ci}:item`,
-            reference: ch.className,
-            name: ch.name,
-            localizedName: null,
-            className: ch.className,
-            type: arm.category,
-            size: ch.size,
-            grade: null,
-            manufacturer: null,
-            componentStats: null,
-          },
-        })) ?? [];
-      // Para MINING usamos minSize=0 (laser.size <= ship.laserSize, igual que
-      // el MiningLoadoutCalculator); para SALVAGE mantenemos igualdad estricta.
-      const minSize = arm.category === "MINING" ? 0 : arm.size;
+        arm.children?.map((ch, ci) => {
+          const childEquipped = ch.defaultItem
+            ? {
+                id: `${idBase}:child:${ci}:item`,
+                reference: ch.defaultItem.className,
+                name: ch.defaultItem.name,
+                localizedName: null,
+                className: ch.defaultItem.className,
+                type: ch.category,
+                size: ch.size,
+                grade: null,
+                manufacturer: null,
+                componentStats: null,
+              }
+            : null;
+          return {
+            id: `${idBase}:child:${ci}`,
+            hardpointName: ch.hardpointName,
+            category: ch.category,
+            minSize: 0,
+            maxSize: ch.size,
+            isFixed: false,
+            equippedItem: childEquipped,
+            childWeapons: [],
+          };
+        }) ?? [];
+      // Para MINING el default es minSize=0 (laser.size <= arm.size, mismo
+      // criterio que el MiningLoadoutCalculator); para SALVAGE mantenemos
+      // igualdad estricta. `arm.minSize` permite override explícito (Mole: S2).
+      const minSize =
+        arm.minSize !== undefined
+          ? arm.minSize
+          : arm.category === "MINING"
+            ? 0
+            : arm.size;
       out.push({
         id: idBase,
         hardpointName: arm.hardpointName,
         category: arm.category,
         minSize,
         maxSize: arm.size,
-        isFixed: false,
+        isFixed,
         isManned: false,
         isInternal: true,
         equippedItem,

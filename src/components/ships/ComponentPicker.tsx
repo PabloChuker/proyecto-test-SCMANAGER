@@ -9,6 +9,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import type { EquippedItem, ResolvedHardpoint } from "@/store/useLoadoutStore";
 import { CAT_COLORS, fmtPrice, getKeyStat } from "./loadout-utils";
 import powerNetworkLookup from "@/data/power-network-lookup.json";
+import miningModulesJson from "@/data/mining/mining-modules.json";
 import {
   ComponentContextMenu,
   type ComponentContextMenuTarget,
@@ -21,6 +22,36 @@ const CAT_TO_API_TYPE: Record<string, string> = {
   SHIELD: "SHIELD", POWER_PLANT: "POWER_PLANT", COOLER: "COOLER",
   QUANTUM_DRIVE: "QUANTUM_DRIVE", MINING: "MINING_LASER", UTILITY: "TRACTOR_BEAM,EMP,QED",
 };
+
+// Mining modules no viven en la BD: vienen del JSON curado en
+// src/data/mining/mining-modules.json. Cuando el hardpoint es MINING_MODULE
+// (sub-slot dentro del laser minero) bypass-eamos /api/catalog y mapeamos
+// las entries del JSON al shape CatalogItem.
+type MiningModuleJson = {
+  id: string;
+  name: string;
+  category: "active" | "passive" | "gadget";
+  effects: Record<string, number>;
+};
+const MINING_MODULES = miningModulesJson as MiningModuleJson[];
+
+function miningModuleToCatalogItem(m: MiningModuleJson): CatalogItem {
+  // Usamos la 1ra stat no-cero como preview para el stat column.
+  const previewEntry =
+    Object.entries(m.effects).find(([, v]) => v !== 0) ?? ["laserPower", 0];
+  return {
+    id: `mining_module:${m.id}`,
+    reference: m.id,
+    name: m.name,
+    localizedName: m.name,
+    className: m.id,
+    type: "MINING_MODULE",
+    size: null,
+    grade: m.category.charAt(0).toUpperCase(), // A/P/G
+    manufacturer: null,
+    miningStats: { miningPower: previewEntry[1], ...m.effects },
+  };
+}
 
 // Mapeo categoría del hardpoint → item_type usado en user_inventory / user_wishlist.
 // Debe coincidir con TABLE_TO_ITEM_TYPE en src/app/components/page.tsx.
@@ -79,6 +110,19 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+
+    // MINING_MODULE: fuente local (mining-modules.json), sin API call.
+    if (hardpoint.resolvedCategory === "MINING_MODULE") {
+      const q = search.trim().toLowerCase();
+      const items = MINING_MODULES.filter(
+        (m) => !q || m.name.toLowerCase().includes(q) || m.category.includes(q),
+      ).map(miningModuleToCatalogItem);
+      setResults(items);
+      setTotal(items.length);
+      setLoading(false);
+      return;
+    }
+
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
