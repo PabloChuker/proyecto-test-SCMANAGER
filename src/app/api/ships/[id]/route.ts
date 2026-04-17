@@ -176,6 +176,11 @@ function buildWeaponItem(row: any): any {
       regenCostPerBullet: numOrNull(row.regen_cost_per_bullet),
       maxAmmoLoad: numOrNull(row.max_ammo_load),
       maxRegenPerSec: numOrNull(row.max_regen_per_sec),
+      regenCooldown: numOrNull(row.regen_cooldown),
+      // Thermal (sustained-DPS heat-limited)
+      overheatTemperature: numOrNull(row.overheat_temperature),
+      coolingPerSecond: numOrNull(row.cooling_per_second),
+      overheatFixTime: numOrNull(row.overheat_fix_time),
       // Power model fields from DB
       powerDraw: numOrNull(row.power_consumption_max),
       powerDrawMin: numOrNull(row.power_consumption_min),
@@ -927,3 +932,4 @@ export async function GET(
     );
   }
 }
+                                                                                                                                                                                                                                                                                      

@@ -139,6 +139,7 @@ export interface PowerNetworkState {
 
 export interface ComputedStats {
   totalDps: number; totalAlpha: number;
+  burstDps: number; sustainedDps: number;
   shieldHp: number; shieldRegen: number;
   powerOutput: number; powerDraw: number; powerBalance: number;
   coolingRate: number; thermalOutput: number; thermalBalance: number;
@@ -284,7 +285,7 @@ function computeStats(
   emShieldsRef: number | null = null,  // ship_power_reference.em_shields (CIG aggregate)
   irShieldsRef: number | null = null,  // ship_power_reference.ir_shields (CIG aggregate)
 ): ComputedStats {
-  let totalDps = 0, totalAlpha = 0, shieldHp = 0, shieldRegen = 0;
+  let totalDps = 0, totalSustainedDps = 0, totalAlpha = 0, shieldHp = 0, shieldRegen = 0;
   let powerOutput = 0, coolingRate = 0, thermalOutput = 0, emSig = 0, irSig = 0;
   // Individual power plant outputs — accumulated separately so we can apply
   // diminishing returns at the end (Star Citizen in-game behavior: the best
@@ -301,10 +302,45 @@ function computeStats(
 
   const accumDps = (s: ComponentStatsData | null | undefined) => {
     if (!s) return;
+    const alpha = pickNum(s, "alphaDamage", "damage");
+    const fireRate = pickNum(s, "fireRate");
     let dps = pickNum(s, "dps");
-    if (dps === 0) { const a = pickNum(s, "alphaDamage", "damage"), fr = pickNum(s, "fireRate"); if (a > 0 && fr > 0) dps = a * (fr / 60); }
+    if (dps === 0 && alpha > 0 && fireRate > 0) dps = alpha * (fireRate / 60);
     totalDps += dps;
-    totalAlpha += pickNum(s, "alphaDamage", "damage");
+    totalAlpha += alpha;
+    if (dps <= 0 || fireRate <= 0) return;
+    const rps = fireRate / 60;
+    // Heat duty-cycle (sustained-DPS heat-limited): armas balísticas tipo Panther CF-337
+    // heatPerSec = heatPerShot × rps. Si heatPerSec > cooling → overheats.
+    const heatPerShot = pickNum(s, "heatPerShot");
+    const overheatTemp = pickNum(s, "overheatTemperature");
+    const coolingPerSec = pickNum(s, "coolingPerSecond");
+    const overheatFixTime = pickNum(s, "overheatFixTime");
+    let heatDuty = 1;
+    if (heatPerShot > 0 && overheatTemp > 0 && overheatFixTime > 0) {
+      const heatPerSec = heatPerShot * rps;
+      const netHeat = heatPerSec - coolingPerSec;
+      if (netHeat > 0) {
+        const tToOverheat = overheatTemp / netHeat;
+        heatDuty = tToOverheat / (tToOverheat + overheatFixTime);
+      }
+    }
+    // Capacitor duty-cycle (sustained-DPS capacitor-limited): armas láser tipo Omnisky IX
+    // Todo en unidades de "balas" (no energía): drain = rps, regen = maxRegenPerSec.
+    const capacityBullets = pickNum(s, "maxAmmoLoad", "weaponCapacity");
+    const regenBulletsPerSec = pickNum(s, "maxRegenPerSec");
+    let capDuty = 1;
+    if (capacityBullets > 0 && regenBulletsPerSec > 0) {
+      const drainBulletsPerSec = rps;
+      const netDrain = drainBulletsPerSec - regenBulletsPerSec;
+      if (netDrain > 0) {
+        const fireTime = capacityBullets / netDrain;
+        const reloadTime = capacityBullets / regenBulletsPerSec;
+        capDuty = fireTime / (fireTime + reloadTime);
+      }
+    }
+    const duty = Math.max(0, Math.min(1, Math.min(heatDuty, capDuty)));
+    totalSustainedDps += dps * duty;
   };
 
   const accumBase = (s: ComponentStatsData | null | undefined) => {
@@ -711,7 +747,7 @@ function computeStats(
   const activeCategories = POWER_CATEGORIES.filter(c => cats[c].componentCount > 0);
 
   if (flightMode === "NAV") {
-    totalDps = 0; totalAlpha = 0; shieldRegen = 0; shieldHp = 0;
+    totalDps = 0; totalSustainedDps = 0; totalAlpha = 0; shieldRegen = 0; shieldHp = 0;
     // NAV mode turns off shields — free their power allocation
     for (const inst of instances) {
       if (inst.category === "shields") {
@@ -849,7 +885,7 @@ function computeStats(
   summary.activeComponents = activeComponents; summary.totalComponents = totalComponents;
   const r = (v: number) => Math.round(v * 100) / 100;
   return {
-    totalDps: r(totalDps), totalAlpha: r(totalAlpha), shieldHp: r(shieldHp), shieldRegen: r(shieldRegen),
+    totalDps: r(totalDps), burstDps: r(totalDps), sustainedDps: r(totalSustainedDps), totalAlpha: r(totalAlpha), shieldHp: r(shieldHp), shieldRegen: r(shieldRegen),
     powerOutput: r(totalPO), powerDraw: r(totalMinDraw), powerBalance: r(totalPO - totalMinDraw),
     coolingRate: r(coolingRate), thermalOutput: r(thermalOutput), thermalBalance: r(coolingRate - thermalOutput),
     emSignature: r(emSig), irSignature: r(irSig), effectiveSpeed, effectiveSpeedLabel,
@@ -865,7 +901,7 @@ function computeStats(
 
 const ZERO_ALLOC: Record<PowerCategory, number> = { weapons: 0, thrusters: 0, shields: 0, quantum: 0, radar: 0, coolers: 0, lifesupport: 0 };
 const EMPTY_NET: PowerNetworkState = { totalOutput: 0, totalAllocated: 0, totalMinDraw: 0, totalActualDraw: 0, consumptionPercent: 0, freePoints: 0, isOverloaded: false, categories: (() => { const c = {} as any; for (const k of POWER_CATEGORIES) c[k] = emptyCat(); return c; })(), activeCategories: [], instances: [] };
-const EMPTY_STATS: ComputedStats = { totalDps: 0, totalAlpha: 0, shieldHp: 0, shieldRegen: 0, powerOutput: 0, powerDraw: 0, powerBalance: 0, coolingRate: 0, thermalOutput: 0, thermalBalance: 0, emSignature: 0, irSignature: 0, effectiveSpeed: null, effectiveSpeedLabel: "SCM", powerNetwork: EMPTY_NET, weaponMaxPips: 0, summary: { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0, activeComponents: 0, totalComponents: 0 } };
+const EMPTY_STATS: ComputedStats = { totalDps: 0, burstDps: 0, sustainedDps: 0, totalAlpha: 0, shieldHp: 0, shieldRegen: 0, powerOutput: 0, powerDraw: 0, powerBalance: 0, coolingRate: 0, thermalOutput: 0, thermalBalance: 0, emSignature: 0, irSignature: 0, effectiveSpeed: null, effectiveSpeedLabel: "SCM", powerNetwork: EMPTY_NET, weaponMaxPips: 0, summary: { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0, activeComponents: 0, totalComponents: 0 } };
 
 // =============================================================================
 // Module-level performance helpers
@@ -1307,3 +1343,4 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
     return btoa(JSON.stringify(e));
   },
 }));
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             

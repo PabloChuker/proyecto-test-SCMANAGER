@@ -50,7 +50,8 @@ export function StatsPanel() {
 
   // ── Combat stats for compact display ──
   const combatStats = [
-    { label: "DPS", value: stats.totalDps, color: "#ef4444", locked: flightMode === "NAV" },
+    { label: "BURST DPS", value: stats.burstDps, color: "#ef4444", locked: flightMode === "NAV" },
+    { label: "SUSTAINED", value: stats.sustainedDps, color: "#fb923c", locked: flightMode === "NAV" },
     { label: "ALPHA", value: stats.totalAlpha, color: "#f97316", locked: flightMode === "NAV" },
     { label: "SHIELD HP", value: stats.shieldHp, color: "#3b82f6" },
     { label: "SH REGEN", value: stats.shieldRegen, color: "#60a5fa" },
@@ -287,3 +288,4 @@ const fmt2 = (v: number) => {
   if (v >= 1000) return (v / 1000).toFixed(1) + "k";
   return v.toFixed(1);
 };
+                                                                                                             
