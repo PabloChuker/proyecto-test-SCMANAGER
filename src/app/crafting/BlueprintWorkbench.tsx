@@ -124,7 +124,7 @@ function SortableWidget({
     /* Gradient border via CSS mask — only the 1px ring is colored, interior stays transparent */
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.3 : 1, position: "relative", borderRadius: "12px" }}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.3 : 1, position: "relative", borderRadius: "12px", minWidth: 0 }}
     >
       {/* This div renders the gradient ONLY at the 1px border using mask-composite */}
       <div
@@ -619,7 +619,7 @@ export default function BlueprintWorkbench() {
                                   <button
                                     key={bp.uuid}
                                     onClick={() => setSelectedBlueprintId(bp.uuid)}
-                                    className={`w-full text-left px-2 py-1.5 rounded-lg text-xs transition-all duration-150 ${
+                                    className={`w-full overflow-hidden text-left px-2 py-1.5 rounded-lg text-xs transition-all duration-150 ${
                                       selectedBlueprintId === bp.uuid
                                         ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
                                         : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 border border-transparent"
@@ -1106,7 +1106,7 @@ export default function BlueprintWorkbench() {
       <div className="grid grid-cols-1 gap-4 items-start" style={{ gridTemplateColumns: "1fr 1.4fr 0.75fr" }}>
         {columns.map((colWidgets, colIdx) => (
           <SortableContext key={colIdx} items={colWidgets} strategy={verticalListSortingStrategy}>
-            <div className="space-y-3 min-h-20">
+            <div className="space-y-3 min-h-20 min-w-0 overflow-hidden">
               {colWidgets.map((wId) => renderWidgetContent(wId))}
             </div>
           </SortableContext>
