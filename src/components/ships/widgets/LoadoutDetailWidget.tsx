@@ -2,7 +2,8 @@
 // AL FILO — LoadoutDetailWidget (unified)
 // Merged with former CombatSummaryWidget: un solo bloque con DPS, alfa,
 // misiles, escudos + resistencias, casco y deflexion de armadura +
-// multiplicadores de daño. Mantiene el toggle SCM/NAV.
+// multiplicadores de daño. El toggle SCM/NAV vive en POWER GRID — acá solo
+// se usa `flightMode` para dimmear secciones en NAV.
 // =============================================================================
 "use client";
 
@@ -11,23 +12,6 @@ import Image from "next/image";
 import { useLoadoutStore } from "@/store/useLoadoutStore";
 import { useShallow } from "zustand/react/shallow";
 import { fmtStat, fmtDps } from "@/components/ships/loadout-utils";
-
-// ── Mode toggle button ────────────────────────────────────────────────────────
-function ModeBtn({ label, active, c, onClick }: {
-  label: string; active: boolean; c: string; onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={active
-        ? "px-3 py-1 text-[9px] font-mono font-bold tracking-[0.12em] uppercase text-center border"
-        : "px-3 py-1 text-[9px] font-mono tracking-[0.12em] uppercase text-center text-zinc-600 border border-zinc-800/50 hover:text-zinc-400 transition-colors"}
-      style={active ? { backgroundColor: c + "20", color: c, borderColor: c + "60" } : undefined}
-    >
-      {label}
-    </button>
-  );
-}
 
 // ── Pequeña píldora de resistencia (shield) ──────────────────────────────────
 function ResistancePill({ label, pct, color }: { label: string; pct: number | null | undefined; color: string }) {
@@ -48,18 +32,18 @@ function DeflectionChip({ label, deflection, dmgMult, color }: {
 }) {
   if (deflection == null && dmgMult == null) return null;
   return (
-    <div className="flex flex-col items-center gap-0.5 flex-1 min-w-0 px-1.5 py-1 bg-zinc-950/40 border border-zinc-800/60 rounded-[2px]">
-      <span className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</span>
+    <div className="flex flex-col items-center gap-1 flex-1 min-w-0 px-2 py-2 bg-zinc-950/40 border border-zinc-800/60 rounded-[2px]">
+      <span className="text-[9px] font-mono text-zinc-500 tracking-[0.18em] uppercase">{label}</span>
       {deflection != null && (
-        <div className="flex items-baseline gap-0.5">
-          <span className="text-[11px] font-mono font-bold tabular-nums" style={{ color }}>{deflection}</span>
-          <span className="text-[7px] font-mono text-zinc-600 uppercase">defl</span>
+        <div className="flex items-baseline gap-1">
+          <span className="text-base font-mono font-bold tabular-nums" style={{ color }}>{deflection}</span>
+          <span className="text-[8px] font-mono text-zinc-600 uppercase">defl</span>
         </div>
       )}
       {dmgMult != null && (
-        <div className="flex items-baseline gap-0.5">
-          <span className="text-[10px] font-mono font-medium tabular-nums text-zinc-400">×{dmgMult.toFixed(2)}</span>
-          <span className="text-[7px] font-mono text-zinc-600 uppercase">dmg</span>
+        <div className="flex items-baseline gap-1">
+          <span className="text-xs font-mono font-medium tabular-nums text-zinc-300">×{dmgMult.toFixed(2)}</span>
+          <span className="text-[8px] font-mono text-zinc-600 uppercase">dmg</span>
         </div>
       )}
     </div>
@@ -71,8 +55,7 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
   const { shipInfo, overrides, flightMode } = useLoadoutStore(
     useShallow(s => ({ shipInfo: s.shipInfo, overrides: s.overrides, flightMode: s.flightMode }))
   );
-  const getStats      = useLoadoutStore(s => s.getStats);
-  const setFlightMode = useLoadoutStore(s => s.setFlightMode);
+  const getStats = useLoadoutStore(s => s.getStats);
 
   if (!shipInfo) return null;
 
@@ -89,12 +72,6 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
 
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-2.5">
-      {/* Mode toggle */}
-      <div className="flex gap-1.5">
-        <ModeBtn label="SCM" active={flightMode === "SCM"} c="#eab308" onClick={() => setFlightMode("SCM")} />
-        <ModeBtn label="NAV" active={navMode}              c="#8b5cf6" onClick={() => setFlightMode("NAV")} />
-      </div>
-
       {/* ── WEAPONS — sustained primary, burst+alpha secondary ────────────── */}
       <div className={navMode ? "opacity-30" : ""}>
         <div className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase mb-0.5">Sustained DPS</div>
@@ -175,8 +152,8 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
       {/* ── ARMOR DEFLECTION + DAMAGE MULTIPLIERS ──────────────────────────── */}
       {hasArmorBlock && (
         <div className="border-t border-zinc-800/40 pt-2">
-          <div className="text-[8px] font-mono text-zinc-600 tracking-[0.15em] uppercase mb-1.5">Armor Deflection</div>
-          <div className="flex gap-1.5">
+          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.15em] uppercase mb-2">Armor Deflection</div>
+          <div className="flex gap-2">
             <DeflectionChip label="PHY" deflection={si.deflectionPhysical}   dmgMult={res.dmgMultPhysical}   color="#fbbf24" />
             <DeflectionChip label="ENG" deflection={si.deflectionEnergy}     dmgMult={res.dmgMultEnergy}     color="#22d3ee" />
             <DeflectionChip label="DST" deflection={si.deflectionDistortion} dmgMult={res.dmgMultDistortion} color="#a78bfa" />
