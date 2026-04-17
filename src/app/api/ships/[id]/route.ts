@@ -581,6 +581,232 @@ function buildChildren(
   return results;
 }
 
+// ─── Hardpoints industriales sintéticos ─────────────────────────────────────
+//
+// Contexto (2026-04-17): varias naves industriales (Mole/Moth/Prospector/Golem
+// en mining, Vulture/Fortune/Salvation en salvage) NO tienen sus brazos en la
+// tabla `ship_hardpoints` porque CIG los trata como parte fija de la geometría
+// y scunpacked no los mete en la sección Loadout. Como consecuencia los
+// widgets Mining/Salvage del LoadoutBuilder quedaban vacíos para estas naves.
+//
+// En lugar de re-ingestar (task #31), inyectamos hardpoints sintéticos con un
+// equippedItem default razonable. Si el usuario cambia el componente desde el
+// picker, la lógica del store de overrides lo maneja como cualquier otro.
+// El Reclaimer NO está acá porque ya tiene los hardpoints reales en DB.
+
+interface IndustrialArmDef {
+  category: "MINING" | "SALVAGE";
+  hardpointName: string;   // nombre único por brazo
+  size: number;
+  /** Para mining: className que resuelve contra weapon_mining. Para salvage: placeholder del head. */
+  equippedClass: string;
+  equippedName: string;
+  /** Sub-items embebidos (ej. salvage modifiers) para renderizar dentro del widget. */
+  children?: Array<{
+    hardpointName: string;
+    className: string;
+    name: string;
+    size: number;
+  }>;
+}
+
+// Regex ship_reference → lista de brazos a inyectar.
+// Cada regex se evalúa contra `ship.reference` (ej. ARGO_MOLE, ARGO_MOLE_Carbon).
+const INDUSTRIAL_INJECTIONS: Array<{ match: RegExp; arms: IndustrialArmDef[] }> = [
+  // ── MINING ──────────────────────────────────────────────────────────────
+  // Mole: 3 brazos laterales con Arbor MH1 (Mining_Laser_MPUV_Arm) por default.
+  {
+    match: /^ARGO_MOLE/i,
+    arms: [1, 2, 3].map((i) => ({
+      category: "MINING" as const,
+      hardpointName: `hardpoint_mining_arm_${i}`,
+      size: 1,
+      equippedClass: "Mining_Laser_MPUV_Arm",
+      equippedName: "Arbor MH1 Mining Laser",
+    })),
+  },
+  // Moth: brazo mining central (ARGO MPUV Mining, 1 brazo S1 por default).
+  {
+    match: /^ARGO_MOTH/i,
+    arms: [{
+      category: "MINING",
+      hardpointName: "hardpoint_mining_arm",
+      size: 1,
+      equippedClass: "Mining_Laser_MPUV_Arm",
+      equippedName: "Arbor MH1 Mining Laser",
+    }],
+  },
+  // Prospector: 1 brazo frontal con Arbor MH1.
+  {
+    match: /^MISC_Prospector/i,
+    arms: [{
+      category: "MINING",
+      hardpointName: "hardpoint_mining_arm",
+      size: 1,
+      equippedClass: "Mining_Laser_MPUV_Arm",
+      equippedName: "Arbor MH1 Mining Laser",
+    }],
+  },
+  // Golem: 1 brazo trasero con Pitman (custom Drake).
+  {
+    match: /^DRAK_Golem/i,
+    arms: [{
+      category: "MINING",
+      hardpointName: "hardpoint_mining_arm",
+      size: 1,
+      equippedClass: "Mining_Laser_DRAK_Golem_S1",
+      equippedName: "Pitman Mining Laser",
+    }],
+  },
+
+  // ── SALVAGE ─────────────────────────────────────────────────────────────
+  // Vulture: 1 brazo frontal con Baler + ReadyGrip Tractor + Trawler Scraper
+  // (mismo stack que trae el Reclaimer en su DB).
+  {
+    match: /^DRAK_Vulture/i,
+    arms: [{
+      category: "SALVAGE",
+      hardpointName: "hardpoint_salvage_arm",
+      size: 2,
+      equippedClass: "Salvage_Head_standard",
+      equippedName: "Baler Salvage Head",
+      children: [
+        {
+          hardpointName: "hardpoint_salvage_subItem01",
+          className: "Salvage_Modifier_Tractor_Small",
+          name: "ReadyGrip Tractor Module",
+          size: 1,
+        },
+        {
+          hardpointName: "hardpoint_salvage_subItem02",
+          className: "Salvage_Modifier_Scraper_Large",
+          name: "Trawler Scraper Module",
+          size: 1,
+        },
+      ],
+    }],
+  },
+  // Fortune: 1 brazo salvage con stack por default.
+  {
+    match: /^MISC_Fortune/i,
+    arms: [{
+      category: "SALVAGE",
+      hardpointName: "hardpoint_salvage_arm",
+      size: 2,
+      equippedClass: "Salvage_Head_standard",
+      equippedName: "Baler Salvage Head",
+      children: [
+        {
+          hardpointName: "hardpoint_salvage_subItem01",
+          className: "Salvage_Modifier_Tractor_Small",
+          name: "ReadyGrip Tractor Module",
+          size: 1,
+        },
+        {
+          hardpointName: "hardpoint_salvage_subItem02",
+          className: "Salvage_Modifier_Scraper_Large",
+          name: "Trawler Scraper Module",
+          size: 1,
+        },
+      ],
+    }],
+  },
+  // Salvation: nave de salvage grande. 4 brazos salvage por default (estimado
+  // conservador; ajustar cuando haya data oficial).
+  {
+    match: /^RSI_Salvation/i,
+    arms: [1, 2, 3, 4].map((i) => ({
+      category: "SALVAGE" as const,
+      hardpointName: `hardpoint_salvage_arm_${i}`,
+      size: 3,
+      equippedClass: "Salvage_Head_standard",
+      equippedName: "Baler Salvage Head",
+      children: [
+        {
+          hardpointName: `hardpoint_salvage_subItem01_${i}`,
+          className: "Salvage_Modifier_Tractor_Small",
+          name: "ReadyGrip Tractor Module",
+          size: 1,
+        },
+        {
+          hardpointName: `hardpoint_salvage_subItem02_${i}`,
+          className: "Salvage_Modifier_Scraper_Large",
+          name: "Trawler Scraper Module",
+          size: 1,
+        },
+      ],
+    })),
+  },
+];
+
+/**
+ * Construye hardpoints sintéticos (ya con shape final del API) para una nave
+ * industrial que no tiene sus brazos en ship_hardpoints. Si la nave ya tiene
+ * hardpoints reales de la categoría pedida, NO inyecta (evita duplicar en
+ * Reclaimer et al.).
+ */
+function buildSyntheticIndustrialHardpoints(
+  shipReference: string,
+  existing: any[],
+): any[] {
+  const out: any[] = [];
+  for (const { match, arms } of INDUSTRIAL_INJECTIONS) {
+    if (!match.test(shipReference)) continue;
+    for (const arm of arms) {
+      // Skip si la DB ya trae hardpoints de esa categoría (Reclaimer).
+      const alreadyHas = existing.some((hp) => hp.category === arm.category);
+      if (alreadyHas) continue;
+      const idBase = `synthetic:${shipReference}:${arm.hardpointName}`;
+      const equippedItem = {
+        id: `${idBase}:item`,
+        reference: arm.equippedClass,
+        name: arm.equippedName,
+        localizedName: null,
+        className: arm.equippedClass,
+        type: arm.category,
+        size: arm.size,
+        grade: null,
+        manufacturer: null,
+        componentStats: null,
+      };
+      const childWeapons =
+        arm.children?.map((ch, ci) => ({
+          id: `${idBase}:child:${ci}`,
+          hardpointName: ch.hardpointName,
+          category: arm.category,
+          minSize: 0,
+          maxSize: ch.size,
+          isFixed: false,
+          equippedItem: {
+            id: `${idBase}:child:${ci}:item`,
+            reference: ch.className,
+            name: ch.name,
+            localizedName: null,
+            className: ch.className,
+            type: arm.category,
+            size: ch.size,
+            grade: null,
+            manufacturer: null,
+            componentStats: null,
+          },
+        })) ?? [];
+      out.push({
+        id: idBase,
+        hardpointName: arm.hardpointName,
+        category: arm.category,
+        minSize: arm.size,
+        maxSize: arm.size,
+        isFixed: false,
+        isManned: false,
+        isInternal: true,
+        equippedItem,
+        childWeapons,
+      });
+    }
+  }
+  return out;
+}
+
 // ─── Main handler ───────────────────────────────────────────────────────────
 
 export async function GET(
@@ -710,7 +936,7 @@ export async function GET(
     const missileMap = new Map<string, any>();
 
     // ── 6. Build flatHardpoints ──
-    const flatHardpoints = hardpointRows
+    const flatHardpointsFromDb = hardpointRows
       .map((hp) => {
         const category = hpCategory(hp.hardpoint_type, hp.hardpoint_name);
 
@@ -798,6 +1024,17 @@ export async function GET(
         };
       })
       .filter(Boolean);
+
+    // ── 6b. Inyectar hardpoints industriales sintéticos ──
+    // Contexto: Mole/Moth/Prospector/Golem (mining) y Vulture/Fortune/Salvation
+    // (salvage) NO tienen sus brazos en ship_hardpoints porque CIG los modela
+    // como geometría fija. Sin esto los widgets Mining/Salvage del
+    // LoadoutBuilder aparecen vacíos. Reclaimer ya tiene data real y se skipea.
+    const syntheticIndustrial = buildSyntheticIndustrialHardpoints(
+      String(ship.reference ?? ""),
+      flatHardpointsFromDb as any[],
+    );
+    const flatHardpoints = [...flatHardpointsFromDb, ...syntheticIndustrial];
 
     // ── 7. Build response ──
     const scmSpeed =
