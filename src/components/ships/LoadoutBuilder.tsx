@@ -212,7 +212,7 @@ function getWidgetBlocks(
     case "turning-profile":    return 4;
     case "maneuver-radar":     return 4;
     case "ship-selector":      return 2;
-    case "ship-card":          return 5;
+    case "ship-card":          return 3;
     case "loadout-detail":         return 7;
     case "flight-dynamics-3d": return 5;
   }
@@ -277,7 +277,7 @@ function buildDefaultPositions(
 // de escudo, deflexion, damage multipliers) se unificó dentro de `loadout-detail`.
 // loadout-detail pasó de 4 a 7 bloques. Las posiciones persistidas de v9
 // contendrían el id borrado y mostrarían huecos.
-const LAYOUT_STORAGE_KEY = "al-filo-layout-v10";
+const LAYOUT_STORAGE_KEY = "al-filo-layout-v11";
 
 type SavedPos = { i: string; col: number; row: number };
 

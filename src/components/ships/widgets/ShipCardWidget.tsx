@@ -39,13 +39,14 @@ export function getShipImageUrl(name: string, manufacturer?: string | null): str
 }
 
 // ── Ship image with fallback ──────────────────────────────────────────────────
+// Split layout: fill the full height of the card side-by-side with the stats.
 function ShipCardImage({ name, manufacturer }: { name: string; manufacturer: string | null }) {
   const [imgError, setImgError] = useState(false);
   const src = getShipImageUrl(name, manufacturer);
   return (
-    <div className="relative bg-zinc-800/20 border-b border-zinc-800/50 overflow-hidden" style={{ height: 270 }}>
+    <div className="relative bg-zinc-800/20 border-r border-zinc-800/50 overflow-hidden w-[60%] min-h-full">
       {!imgError ? (
-        <Image src={src} alt={name} fill className="object-cover" draggable={false} onError={() => setImgError(true)} />
+        <Image src={src} alt={name} fill className="object-cover" draggable={false} onError={() => setImgError(true)} sizes="(max-width: 1024px) 60vw, 480px" />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center">
           <span className="text-[10px] font-mono text-zinc-700 uppercase tracking-widest">Ship Preview</span>
@@ -55,13 +56,13 @@ function ShipCardImage({ name, manufacturer }: { name: string; manufacturer: str
   );
 }
 
-// ── Stat row ──────────────────────────────────────────────────────────────────
+// ── Stat row (compact — fits 10+ rows in the side panel) ─────────────────────
 function StatRow({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <div className="flex items-baseline justify-between py-[2px] border-b border-zinc-800/20 last:border-b-0">
-      <span className="text-[8px] font-mono text-amber-600/80 tracking-wider uppercase">{label}</span>
-      <span className="text-[10px] font-mono text-zinc-300 tabular-nums">
-        {value}{unit && <span className="text-[8px] text-zinc-600 ml-0.5">{unit}</span>}
+    <div className="flex items-baseline justify-between gap-1 py-[1px] border-b border-zinc-800/20 last:border-b-0">
+      <span className="text-[7px] font-mono text-amber-600/80 tracking-wider uppercase whitespace-nowrap shrink-0">{label}</span>
+      <span className="text-[9px] font-mono text-zinc-300 tabular-nums truncate text-right">
+        {value}{unit && <span className="text-[7px] text-zinc-600 ml-0.5">{unit}</span>}
       </span>
     </div>
   );
@@ -89,40 +90,43 @@ export const ShipCardContent = memo(function ShipCardContent() {
   void overrides;
 
   return (
-    <div className="bg-zinc-900/80 border border-zinc-800/60">
+    <div className="bg-zinc-900/80 border border-zinc-800/60 flex flex-row h-full min-h-[220px]">
+      {/* Foto ocupando ~60% del ancho, full height del card */}
       <ShipCardImage name={shipInfo.name} manufacturer={shipInfo.manufacturer ?? null} />
-      <div className="p-2.5 space-y-2">
-        <div>
-          <div className="text-sm font-medium text-zinc-200 tracking-wide">{shipInfo.localizedName || shipInfo.name}</div>
-          <div className="text-[9px] font-mono text-zinc-600 tracking-[0.12em]">{shipInfo.manufacturer || "Unknown"}</div>
+
+      {/* Panel de datos a la derecha — flex-1 toma el ~40% restante */}
+      <div className="flex-1 min-w-0 p-2 flex flex-col gap-1.5 overflow-y-auto">
+        <div className="shrink-0">
+          <div className="text-[11px] font-medium text-zinc-200 tracking-wide leading-tight truncate">{shipInfo.localizedName || shipInfo.name}</div>
+          <div className="text-[8px] font-mono text-zinc-600 tracking-[0.12em] truncate">{shipInfo.manufacturer || "Unknown"}</div>
         </div>
-        <div className="space-y-0 text-[9px]">
+        <div className="space-y-0 flex-1 min-h-0">
           {si.role   && <StatRow label="ROLE"  value={si.role} />}
           {si.size   && <StatRow label="SIZE"  value={"S" + si.size} />}
-          <StatRow label="CREW SIZE"       value={fmtNum(si.crew)} />
-          <StatRow label="SCM SPEED"       value={fmtNum(si.scmSpeed)}           unit="m/s" />
-          <StatRow label="SCM BOOST FWD"   value={fmtNum(si.boostSpeedForward)}  unit="m/s" />
-          <StatRow label="SCM BOOST BWD"   value={fmtNum(si.boostSpeedBackward)} unit="m/s" />
-          <StatRow label="NAV MAX SPEED"   value={fmtNum(si.afterburnerSpeed)}   unit="m/s" />
-          <StatRow label="PITCH/YAW/ROLL"
-            value={`${fmtNum(si.pitchRate)} / ${fmtNum(si.yawRate)} / ${fmtNum(si.rollRate)}`}
+          <StatRow label="CREW"            value={fmtNum(si.crew)} />
+          <StatRow label="SCM"             value={fmtNum(si.scmSpeed)}           unit="m/s" />
+          <StatRow label="BOOST FWD"       value={fmtNum(si.boostSpeedForward)}  unit="m/s" />
+          <StatRow label="BOOST BWD"       value={fmtNum(si.boostSpeedBackward)} unit="m/s" />
+          <StatRow label="NAV MAX"         value={fmtNum(si.afterburnerSpeed)}   unit="m/s" />
+          <StatRow label="P/Y/R"
+            value={`${fmtNum(si.pitchRate)}/${fmtNum(si.yawRate)}/${fmtNum(si.rollRate)}`}
             unit="°/s" />
           {(si.boostedPitch || si.boostedYaw || si.boostedRoll) && (
-            <StatRow label="BOOSTED MAX"
-              value={`${fmtNum(si.boostedPitch)} / ${fmtNum(si.boostedYaw)} / ${fmtNum(si.boostedRoll)}`}
+            <StatRow label="BOOSTED"
+              value={`${fmtNum(si.boostedPitch)}/${fmtNum(si.boostedYaw)}/${fmtNum(si.boostedRoll)}`}
               unit="°/s" />
           )}
-          <StatRow label="POWER CONSUMPTION" value={String(Math.round(stats.powerDraw))} />
-          <StatRow label="CM DECOY/NOISE"    value={`${cmDecoyCount} / ${cmNoiseCount}`} />
+          <StatRow label="POWER"           value={String(Math.round(stats.powerDraw))} />
+          <StatRow label="CM D/N"          value={`${cmDecoyCount} / ${cmNoiseCount}`} />
           <StatRow label="HP"
             value={si.hullHp ? fmtMass(si.hullHp) : (si.shieldHpTotal ? fmtStat(si.shieldHpTotal) : "—")} />
           <StatRow label="CARGO"
             value={si.cargo > 0 ? Math.round(si.cargo).toString() : "—"} unit="SCU" />
           {si.mass && si.mass > 0 && <StatRow label="MASS" value={fmtMass(si.mass)} unit="kg" />}
-          <StatRow label="HYDROGEN CAPACITY"
+          <StatRow label="H2"
             value={si.hydrogenCapacity ? fmtStat(si.hydrogenCapacity) : "—"} unit="SCU" />
           {si.quantumFuelCapacity && (
-            <StatRow label="QT FUEL CAPACITY" value={fmtDec(si.quantumFuelCapacity)} unit="SCU" />
+            <StatRow label="QT FUEL" value={fmtDec(si.quantumFuelCapacity)} unit="SCU" />
           )}
         </div>
       </div>

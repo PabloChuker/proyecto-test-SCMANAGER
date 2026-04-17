@@ -44,5 +44,5 @@ export const MAX_UNIT_PX         = 390;
 // Gap vertical entre tarjetas dentro de la misma columna (px fijo)
 export const CARD_GAP_PX         = 4;
 
-export const LAYOUT_STORAGE_KEY      = "al-filo-loadout-layout-v15";
+export const LAYOUT_STORAGE_KEY      = "al-filo-loadout-layout-v16";
 export const LAYOUT_CHECKPOINT_KEY   = "al-filo-loadout-layout-checkpoint-v1";
