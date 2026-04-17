@@ -772,6 +772,38 @@ function computeStats(
   emSig = (emSigScaled + baseEm) * emMult;
   irSig = (irSigScaled + baseIr) * irMult;
 
+  // ── Shield regen + cooling scaling with pip allocation (F2.4) ─────────────
+  // In Star Citizen, shield regen and cooling rate scale with power allocation.
+  // Full pips → full value; reduced pips → proportionally reduced.
+  // Max shield HP does NOT scale — it's fixed by the shield component.
+  const shieldInstForScale = instances.find(i => i.hardpointId === SHIELD_POWER_ID);
+  if (shieldInstForScale && shieldInstForScale.totalPips > 0) {
+    const shieldRatio = Math.min(1, Math.max(0, shieldInstForScale.allocatedPips / shieldInstForScale.totalPips));
+    shieldRegen = shieldRegen * shieldRatio;
+  } else if (shieldInstForScale && !shieldInstForScale.isOn) {
+    shieldRegen = 0;
+  }
+
+  // Coolers — scale each cooler's contribution by its own pip ratio
+  let coolingScaled = 0;
+  for (const inst of instances) {
+    if (inst.category !== "coolers" || !inst.isOn) continue;
+    if (inst.totalPips === 0) continue;
+    // Find the underlying cooler hardpoint to pull its raw coolingRate
+    const hp = hardpoints.find(h => h.hardpointName === inst.hardpointName);
+    if (!hp) continue;
+    const item = overrides.has(hp.id) ? (overrides.get(hp.id) ?? null) : hp.defaultItem;
+    if (!item) continue;
+    const rawCooling = pickNum(item.componentStats, "coolingRate");
+    const ratio = Math.min(1, Math.max(0, inst.allocatedPips / inst.totalPips));
+    coolingScaled += rawCooling * ratio;
+  }
+  // Replace raw sum with pip-scaled total only if we had any cooler instances
+  const hasCoolerInstances = instances.some(i => i.category === "coolers");
+  if (hasCoolerInstances) {
+    coolingRate = coolingScaled;
+  }
+
   summary.activeComponents = activeComponents; summary.totalComponents = totalComponents;
   const r = (v: number) => Math.round(v * 100) / 100;
   return {
