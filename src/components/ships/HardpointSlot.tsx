@@ -37,6 +37,15 @@ function isTurretOrRack(item: EquippedItem | null): boolean {
   return /turret|gimbal|varipuck|rack/i.test(n);
 }
 
+/** Check if an item can host industrial children (mining laser + module slots,
+ *  salvage head + tractor/scraper). Usado para que, aunque el user cambie el
+ *  laser, los slots de módulos sigan ahí mientras sea un mining laser válido. */
+function isIndustrialArm(item: EquippedItem | null): boolean {
+  if (!item) return false;
+  const n = (item.name ?? "") + " " + (item.type ?? "");
+  return /mining|salvage|scraper|tractor/i.test(n);
+}
+
 /** Compute ammo info for a weapon item given current pip allocation.
  *  Energy weapons: rounds = min(requestedAmmoLoad, maxAmmoLoad × regenCostPerBullet) × pipRatio / regenCostPerBullet
  *    → el cap por maxAmmoLoad replica el límite game-accurate que muestra Erkul.
@@ -90,7 +99,11 @@ export const HardpointSlot = memo(function HardpointSlot({ hp, item, isOverridde
   const displaySize = hp.maxSize > 0 ? hp.maxSize : (item?.size ?? 0);
   const parentIsTurret = (hp.resolvedCategory === "TURRET" || hp.resolvedCategory === "MISSILE_RACK")
     && (!isOverridden || isTurretOrRack(item));
-  const hasChildren = parentIsTurret && childSlots && childSlots.length > 0;
+  // MINING/SALVAGE también llevan children (module slots / tractor+scraper). Si
+  // el user cambia el laser por otro laser, los slots siguen siendo válidos.
+  const parentIsIndustrial = (hp.resolvedCategory === "MINING" || hp.resolvedCategory === "SALVAGE")
+    && (!isOverridden || isIndustrialArm(item));
+  const hasChildren = (parentIsTurret || parentIsIndustrial) && childSlots && childSlots.length > 0;
   const isWeapon = hp.resolvedCategory === "WEAPON" || hp.resolvedCategory === "TURRET";
   const ammo = isWeapon && item && isOn ? getAmmoInfo(item.componentStats, weaponAllocatedPips ?? 0, weaponMaxPips ?? 0) : null;
 
