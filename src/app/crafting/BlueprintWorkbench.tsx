@@ -384,36 +384,33 @@ export default function BlueprintWorkbench() {
     setActiveId(active.id as WidgetId);
   }, []);
 
-  // All column reads happen inside setColumns(prev=>) to avoid stale closures
-  const handleDragOver = useCallback(({ active, over }: DragOverEvent) => {
-    if (!over || active.id === over.id) return;
-    setColumns((prev) => {
-      const srcCol = prev.findIndex((c) => c.includes(active.id as WidgetId));
-      const dstCol = prev.findIndex((c) => c.includes(over.id as WidgetId));
-      if (srcCol === -1 || dstCol === -1 || srcCol === dstCol) return prev;
-      const next = prev.map((c) => [...c]);
-      const item = active.id as WidgetId;
-      next[srcCol] = next[srcCol].filter((w) => w !== item);
-      const overIdx = next[dstCol].indexOf(over.id as WidgetId);
-      next[dstCol].splice(overIdx >= 0 ? overIdx : next[dstCol].length, 0, item);
-      return next;
-    });
-  }, []);
+  // DragOver is intentionally a no-op — mutating state on every pointer event
+  // causes rapid re-renders that destabilise hit-testing and produce erratic
+  // behaviour. All placement logic is handled once in handleDragEnd.
+  const handleDragOver = useCallback((_e: DragOverEvent) => {}, []);
 
   const handleDragEnd = useCallback(({ active, over }: DragEndEvent) => {
     setActiveId(null);
+    if (!over || active.id === over.id) return;
+
     setColumns((prev) => {
-      if (!over || active.id === over.id) { saveColumns(prev); return prev; }
+      const item = active.id as WidgetId;
+      const overId = over.id as WidgetId;
+
+      const srcColIdx = prev.findIndex((c) => c.includes(item));
+      const dstColIdx = prev.findIndex((c) => c.includes(overId));
+
+      if (srcColIdx === -1 || dstColIdx === -1) return prev;
+
       const next = prev.map((c) => [...c]);
-      const srcCol = next.findIndex((c) => c.includes(active.id as WidgetId));
-      const dstCol = next.findIndex((c) => c.includes(over.id as WidgetId));
-      // Same-column reorder
-      if (srcCol !== -1 && srcCol === dstCol) {
-        const oldIdx = next[srcCol].indexOf(active.id as WidgetId);
-        const newIdx = next[srcCol].indexOf(over.id as WidgetId);
-        if (oldIdx !== -1 && newIdx !== -1) next[srcCol] = arrayMove(next[srcCol], oldIdx, newIdx);
-      }
-      // Cross-column: handleDragOver already placed it; just persist
+
+      // Remove from source
+      next[srcColIdx] = next[srcColIdx].filter((w) => w !== item);
+
+      // Insert at destination — before the widget being hovered
+      const overIdx = next[dstColIdx].indexOf(overId);
+      next[dstColIdx].splice(overIdx >= 0 ? overIdx : next[dstColIdx].length, 0, item);
+
       saveColumns(next);
       return next;
     });
