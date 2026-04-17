@@ -281,6 +281,8 @@ function computeStats(
   flightControllerPower: any | null,  // from power-network-lookup (Controller_Flight_*)
   pools: Record<string, number> | null,  // pool pip counts from ship_power_reference
   usedGroupedScm: Record<string, number> | null,  // per-category pip usage from game data
+  emShieldsRef: number | null = null,  // ship_power_reference.em_shields (CIG aggregate)
+  irShieldsRef: number | null = null,  // ship_power_reference.ir_shields (CIG aggregate)
 ): ComputedStats {
   let totalDps = 0, totalAlpha = 0, shieldHp = 0, shieldRegen = 0;
   let powerOutput = 0, coolingRate = 0, thermalOutput = 0, emSig = 0, irSig = 0;
@@ -779,7 +781,27 @@ function computeStats(
   const irMult = _res?.sigMultInfrared ?? 1;
   // Use scaled component sum; fall back to baseEm/baseIr only for bare hulls.
   emSig = (emSigScaled > 0 ? emSigScaled : baseEm) * emMult;
-  irSig = (irSigScaled > 0 ? irSigScaled : baseIr) * irMult;
+
+  // F2.6 (2026-04-17): IR signature via ratio against CIG's ship-level
+  // aggregate. Per-component irMax values (e.g. Bracer cooler = 7260)
+  // over-count when summed naively because CIG's IrShields aggregate
+  // pre-applies cooler heat-dissipation attenuation that per-component
+  // summation can't replicate (scunpacked only exposes EmGroupsShields,
+  // no IrGroupsShields breakdown).
+  //
+  // Fix: scale irShieldsRef by the EM activity ratio. Assumes IR emissions
+  // scale proportionally to EM with pip allocation, which holds well
+  // enough for combat loadouts. Validated vs Erkul: Avenger Titan
+  // 8714 × (emSigScaled/24227) × 1.1 ≈ 5.1K, matches Erkul's 5K.
+  //
+  // Fall back to the old scaled-sum approach if refs are missing (ships
+  // with no ship_power_reference row).
+  if (irShieldsRef && irShieldsRef > 0 && emShieldsRef && emShieldsRef > 0 && emSigScaled > 0) {
+    const activityRatio = Math.min(1, emSigScaled / emShieldsRef);
+    irSig = irShieldsRef * activityRatio * irMult;
+  } else {
+    irSig = (irSigScaled > 0 ? irSigScaled : baseIr) * irMult;
+  }
 
   // ── Shield regen + cooling scaling with pip allocation (F2.4) ─────────────
   // In Star Citizen, shield regen and cooling rate scale with power allocation.
@@ -912,6 +934,10 @@ interface LoadoutState {
   powerPools: Record<string, number> | null;
   /** Per-category pip usage from ship_power_reference (e.g. { Shield: 8, Radar: 5 }) */
   usedGroupedScm: Record<string, number> | null;
+  /** CIG-authoritative ship-level EM aggregate from ship_power_reference.em_shields */
+  shipEmShieldsRef: number | null;
+  /** CIG-authoritative ship-level IR aggregate from ship_power_reference.ir_shields */
+  shipIrShieldsRef: number | null;
   // Legacy: keep for backward compat but internally maps to instancePower
   allocatedPower: Record<PowerCategory, number>;
   isLoading: boolean; error: string | null;
@@ -941,6 +967,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   componentStates: {}, flightMode: "SCM" as FlightMode,
   instancePower: {}, shipPowerGen: 0, flightControllerPower: null, powerPools: null,
   usedGroupedScm: null,
+  shipEmShieldsRef: null, shipIrShieldsRef: null,
   allocatedPower: { ...ZERO_ALLOC }, isLoading: false, error: null,
 
   getStats: () => {
@@ -948,7 +975,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
     if (s.hardpoints.length === 0) return EMPTY_STATS;
     const key = makeStatsKey(s.shipId, s.flightMode, s.overrides, s.componentStates, s.instancePower, s.shipPowerGen);
     if (_statsCache && _statsCache.key === key) return _statsCache.result;
-    const result = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, s.instancePower, s.shipInfo, s.shipPowerGen, s.flightControllerPower, s.powerPools, s.usedGroupedScm);
+    const result = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, s.instancePower, s.shipInfo, s.shipPowerGen, s.flightControllerPower, s.powerPools, s.usedGroupedScm, s.shipEmShieldsRef, s.shipIrShieldsRef);
     _statsCache = { key, result };
     return result;
   },
@@ -979,6 +1006,12 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
       const rawGrouped = shipPower?.usedGroupedScm;
       const usedGroupedScm: Record<string, number> | null =
         rawGrouped && typeof rawGrouped === "object" ? rawGrouped : null;
+      // F2.6 (2026-04-17): CIG-authoritative ship-level emission aggregates.
+      // Used to compute IR signature via ratio against em_shields (scunpacked
+      // doesn't expose per-group IR breakdown, only EM, so we can't sum IR
+      // per-component correctly due to cooler heat-dissipation attenuation).
+      const shipEmShieldsRef: number | null = shipPower?.emShields ?? null;
+      const shipIrShieldsRef: number | null = shipPower?.irShields ?? null;
 
       const shipInfo: ShipInfo = {
         id: data.id ?? "", reference: data.reference ?? "", name: data.name ?? "",
@@ -1118,6 +1151,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
         componentStates: states, flightMode: "SCM",
         instancePower: {}, shipPowerGen, flightControllerPower, powerPools,
         usedGroupedScm,
+        shipEmShieldsRef, shipIrShieldsRef,
         allocatedPower: { ...ZERO_ALLOC },
         isLoading: false, error: null,
       });
@@ -1201,7 +1235,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   autoAllocatePower: () => {
     const s = get();
     // Compute stats with zero allocation to get instance list
-    const probe = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, {}, s.shipInfo, s.shipPowerGen, s.flightControllerPower, s.powerPools, s.usedGroupedScm);
+    const probe = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, {}, s.shipInfo, s.shipPowerGen, s.flightControllerPower, s.powerPools, s.usedGroupedScm, s.shipEmShieldsRef, s.shipIrShieldsRef);
     const total = probe.powerNetwork.totalOutput;
     const newAlloc: Record<string, number> = {};
     let rem = total;
