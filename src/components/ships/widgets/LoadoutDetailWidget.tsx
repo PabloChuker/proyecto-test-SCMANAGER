@@ -32,8 +32,8 @@ function DeflectionChip({ label, deflection, dmgMult, color }: {
 }) {
   if (deflection == null && dmgMult == null) return null;
   return (
-    <div className="flex flex-col items-center gap-1 flex-1 min-w-0 px-2 py-2 bg-zinc-950/40 border border-zinc-800/60 rounded-[2px]">
-      <span className="text-[9px] font-mono text-zinc-500 tracking-[0.18em] uppercase">{label}</span>
+    <div className="flex flex-col items-center gap-1 flex-1 min-w-0 px-1.5 py-2 bg-zinc-950/40 border border-zinc-800/60 rounded-[2px]">
+      <span className="text-[9px] font-mono text-zinc-400 tracking-[0.08em] uppercase text-center leading-tight">{label}</span>
       {deflection != null && (
         <div className="flex items-baseline gap-1">
           <span className="text-base font-mono font-bold tabular-nums" style={{ color }}>{deflection}</span>
@@ -84,7 +84,7 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
           <span className="text-[8px] font-mono text-zinc-600 tracking-wider uppercase">Burst</span>
           <span className="text-xs font-mono font-bold tabular-nums text-red-500">{fmtDps(stats.burstDps)}</span>
           <span className="text-[8px] font-mono text-zinc-600 tracking-wider uppercase ml-2">Alpha</span>
-          <span className="text-xs font-mono font-bold tabular-nums text-red-400/80">{fmtStat(stats.totalAlpha)}</span>
+          <span className="text-xs font-mono font-bold tabular-nums text-red-400/80">{fmtStat(stats.weaponAlpha)}</span>
         </div>
       </div>
 
@@ -93,7 +93,7 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
         <div className={navMode ? "opacity-30" : ""}>
           <div className="flex items-baseline gap-3">
             <Image src="/icons/missile.png" alt="" width={16} height={16} style={{ opacity: 0.5 }} />
-            <span className="text-lg font-mono font-bold tabular-nums text-orange-500">{fmtStat(stats.totalAlpha)}</span>
+            <span className="text-lg font-mono font-bold tabular-nums text-orange-500">{fmtStat(stats.missileAlpha)}</span>
             <span className="text-[10px] font-mono text-zinc-500">dmg</span>
             <span className="text-[9px] font-mono text-zinc-600 ml-2">×{stats.summary.missiles}</span>
           </div>
@@ -125,9 +125,9 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
         {/* Shield resistance pills — usan *Max (el pico del rango ship-level) */}
         {(si.physicalResistanceMax != null || si.energyResistanceMax != null || si.distortionResistanceMax != null) && (
           <div className="flex flex-wrap gap-1 pl-6">
-            <ResistancePill label="PHY" pct={si.physicalResistanceMax}   color="#fbbf24" />
-            <ResistancePill label="ENG" pct={si.energyResistanceMax}     color="#22d3ee" />
-            <ResistancePill label="DST" pct={si.distortionResistanceMax} color="#a78bfa" />
+            <ResistancePill label="Physical"   pct={si.physicalResistanceMax}   color="#fbbf24" />
+            <ResistancePill label="Energy"     pct={si.energyResistanceMax}     color="#22d3ee" />
+            <ResistancePill label="Distortion" pct={si.distortionResistanceMax} color="#a78bfa" />
           </div>
         )}
       </div>
@@ -154,9 +154,9 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
         <div className="border-t border-zinc-800/40 pt-2">
           <div className="text-[9px] font-mono text-zinc-500 tracking-[0.15em] uppercase mb-2">Armor Deflection</div>
           <div className="flex gap-2">
-            <DeflectionChip label="PHY" deflection={si.deflectionPhysical}   dmgMult={res.dmgMultPhysical}   color="#fbbf24" />
-            <DeflectionChip label="ENG" deflection={si.deflectionEnergy}     dmgMult={res.dmgMultEnergy}     color="#22d3ee" />
-            <DeflectionChip label="DST" deflection={si.deflectionDistortion} dmgMult={res.dmgMultDistortion} color="#a78bfa" />
+            <DeflectionChip label="Physical"   deflection={si.deflectionPhysical}   dmgMult={res.dmgMultPhysical}   color="#fbbf24" />
+            <DeflectionChip label="Energy"     deflection={si.deflectionEnergy}     dmgMult={res.dmgMultEnergy}     color="#22d3ee" />
+            <DeflectionChip label="Distortion" deflection={si.deflectionDistortion} dmgMult={res.dmgMultDistortion} color="#a78bfa" />
           </div>
         </div>
       )}

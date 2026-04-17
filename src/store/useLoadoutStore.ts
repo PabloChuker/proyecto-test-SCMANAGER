@@ -139,6 +139,10 @@ export interface PowerNetworkState {
 
 export interface ComputedStats {
   totalDps: number; totalAlpha: number;
+  /** Alpha damage solo de hardpoints WEAPON/TURRET (excluye misiles). */
+  weaponAlpha: number;
+  /** Alpha damage sumado de MISSILE_RACK children. */
+  missileAlpha: number;
   burstDps: number; sustainedDps: number;
   shieldHp: number; shieldRegen: number;
   powerOutput: number; powerDraw: number; powerBalance: number;
@@ -286,6 +290,8 @@ function computeStats(
   irShieldsRef: number | null = null,  // ship_power_reference.ir_shields (CIG aggregate)
 ): ComputedStats {
   let totalDps = 0, totalSustainedDps = 0, totalAlpha = 0, shieldHp = 0, shieldRegen = 0;
+  // Alpha separado para poder mostrar armas vs misiles por separado en el UI.
+  let weaponAlpha = 0, missileAlpha = 0;
   let powerOutput = 0, coolingRate = 0, thermalOutput = 0, emSig = 0, irSig = 0;
   // Individual power plant outputs — accumulated separately so we can apply
   // diminishing returns at the end (Star Citizen in-game behavior: the best
@@ -537,6 +543,11 @@ function computeStats(
           : child.equippedItem;
         if (!cItem) continue;
         accumDps(cItem.componentStats);
+        // Split alpha by parent kind: TURRET → weaponAlpha, MISSILE_RACK → missileAlpha.
+        // Nota: accumDps ya sumó este alpha a totalAlpha (no se duplica ahí).
+        const childAlpha = pickNum(cItem.componentStats, "alphaDamage", "damage");
+        if (cat === "MISSILE_RACK") missileAlpha += childAlpha;
+        else weaponAlpha += childAlpha;
         if (!cItem.powerNetwork) accumBase(cItem.componentStats);
 
         // Accumulate child weapon power into combined weapons column
@@ -564,8 +575,15 @@ function computeStats(
         }
       }
     } else {
-      if (cat === "WEAPON" || cat === "TURRET") { accumDps(s); }
-      if (cat === "MISSILE_RACK") { totalAlpha += pickNum(s, "alphaDamage", "damage"); }
+      if (cat === "WEAPON" || cat === "TURRET") {
+        accumDps(s);
+        weaponAlpha += pickNum(s, "alphaDamage", "damage");
+      }
+      if (cat === "MISSILE_RACK") {
+        const a = pickNum(s, "alphaDamage", "damage");
+        totalAlpha += a;
+        missileAlpha += a;
+      }
       if (cat === "SHIELD") { shieldHp += pickNum(s, "shieldHp", "maxHp"); shieldRegen += pickNum(s, "shieldRegen", "regenRate"); }
       if (cat === "COOLER") { coolingRate += pickNum(s, "coolingRate"); }
       if (!pn) accumBase(s);
@@ -750,7 +768,7 @@ function computeStats(
   const activeCategories = POWER_CATEGORIES.filter(c => cats[c].componentCount > 0);
 
   if (flightMode === "NAV") {
-    totalDps = 0; totalSustainedDps = 0; totalAlpha = 0; shieldRegen = 0; shieldHp = 0;
+    totalDps = 0; totalSustainedDps = 0; totalAlpha = 0; weaponAlpha = 0; missileAlpha = 0; shieldRegen = 0; shieldHp = 0;
     // NAV mode turns off shields — free their power allocation
     for (const inst of instances) {
       if (inst.category === "shields") {
@@ -888,7 +906,7 @@ function computeStats(
   summary.activeComponents = activeComponents; summary.totalComponents = totalComponents;
   const r = (v: number) => Math.round(v * 100) / 100;
   return {
-    totalDps: r(totalDps), burstDps: r(totalDps), sustainedDps: r(totalSustainedDps), totalAlpha: r(totalAlpha), shieldHp: r(shieldHp), shieldRegen: r(shieldRegen),
+    totalDps: r(totalDps), burstDps: r(totalDps), sustainedDps: r(totalSustainedDps), totalAlpha: r(totalAlpha), weaponAlpha: r(weaponAlpha), missileAlpha: r(missileAlpha), shieldHp: r(shieldHp), shieldRegen: r(shieldRegen),
     powerOutput: r(totalPO), powerDraw: r(totalMinDraw), powerBalance: r(totalPO - totalMinDraw),
     coolingRate: r(coolingRate), thermalOutput: r(thermalOutput), thermalBalance: r(coolingRate - thermalOutput),
     emSignature: r(emSig), irSignature: r(irSig), effectiveSpeed, effectiveSpeedLabel,
@@ -904,7 +922,7 @@ function computeStats(
 
 const ZERO_ALLOC: Record<PowerCategory, number> = { weapons: 0, thrusters: 0, shields: 0, quantum: 0, radar: 0, coolers: 0, lifesupport: 0 };
 const EMPTY_NET: PowerNetworkState = { totalOutput: 0, totalAllocated: 0, totalMinDraw: 0, totalActualDraw: 0, consumptionPercent: 0, freePoints: 0, isOverloaded: false, categories: (() => { const c = {} as any; for (const k of POWER_CATEGORIES) c[k] = emptyCat(); return c; })(), activeCategories: [], instances: [] };
-const EMPTY_STATS: ComputedStats = { totalDps: 0, burstDps: 0, sustainedDps: 0, totalAlpha: 0, shieldHp: 0, shieldRegen: 0, powerOutput: 0, powerDraw: 0, powerBalance: 0, coolingRate: 0, thermalOutput: 0, thermalBalance: 0, emSignature: 0, irSignature: 0, effectiveSpeed: null, effectiveSpeedLabel: "SCM", powerNetwork: EMPTY_NET, weaponMaxPips: 0, summary: { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0, activeComponents: 0, totalComponents: 0 } };
+const EMPTY_STATS: ComputedStats = { totalDps: 0, burstDps: 0, sustainedDps: 0, totalAlpha: 0, weaponAlpha: 0, missileAlpha: 0, shieldHp: 0, shieldRegen: 0, powerOutput: 0, powerDraw: 0, powerBalance: 0, coolingRate: 0, thermalOutput: 0, thermalBalance: 0, emSignature: 0, irSignature: 0, effectiveSpeed: null, effectiveSpeedLabel: "SCM", powerNetwork: EMPTY_NET, weaponMaxPips: 0, summary: { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0, activeComponents: 0, totalComponents: 0 } };
 
 // =============================================================================
 // Module-level performance helpers
