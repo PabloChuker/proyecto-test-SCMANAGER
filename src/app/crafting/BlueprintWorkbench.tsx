@@ -124,7 +124,7 @@ function SortableWidget({
     /* Gradient border via CSS mask — only the 1px ring is colored, interior stays transparent */
     <div
       ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.3 : 1, position: "relative", borderRadius: "12px", minWidth: 0 }}
+      style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.3 : 1, position: "relative", borderRadius: "12px" }}
     >
       {/* This div renders the gradient ONLY at the 1px border using mask-composite */}
       <div
@@ -1101,7 +1101,7 @@ export default function BlueprintWorkbench() {
       <div className="grid grid-cols-1 gap-4 items-start" style={{ gridTemplateColumns: "1fr 1.4fr 0.75fr" }}>
         {columns.map((colWidgets, colIdx) => (
           <SortableContext key={colIdx} items={colWidgets} strategy={verticalListSortingStrategy}>
-            <div className="space-y-3 min-h-20 min-w-0">
+            <div className="space-y-3 min-h-20">
               {colWidgets.map((wId) => renderWidgetContent(wId))}
             </div>
           </SortableContext>
