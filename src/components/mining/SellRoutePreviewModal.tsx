@@ -20,9 +20,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import {
-  optimizeRoute,
-  describeStop,
+  unifyAndAggregate,
+  inferBody,
   type RouteStop,
+  type AggregatedStop,
+  type PriceOption,
 } from "@/lib/routeOptimizer";
 import {
   buildMiningMarker,
@@ -42,6 +44,9 @@ export interface SellRouteInput {
   bestStation: string | null;
   bestSystem: string | null;
   bestPrice: number | null;
+  /** Full price table for this commodity (top→bottom). Used by the
+   *  unifier to pick stations shared with other selected commodities. */
+  priceOptions?: PriceOption[];
 }
 
 export interface SellRoutePreviewModalProps {
@@ -71,6 +76,7 @@ function inputToStop(i: SellRouteInput): RouteStop {
     system: i.bestSystem,
     pricePerScu: i.bestPrice,
     totalValue,
+    priceOptions: i.priceOptions,
   };
 }
 
@@ -85,100 +91,125 @@ export default function SellRoutePreviewModal({
   const t = useTranslations("Mining.routePreview");
   const router = useRouter();
 
-  const [stops, setStops] = useState<RouteStop[]>([]);
+  // Stops are aggregated at the station level: each group = one physical
+  // visit, with potentially several commodity rows to sell at that stop.
+  const [groups, setGroups] = useState<AggregatedStop[]>([]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
-  // Compute the initial ordered route whenever the modal opens with new items.
+  // Compute the initial unified + aggregated route when the modal opens.
   useEffect(() => {
     if (!open) return;
     const rawStops = items.map(inputToStop);
-    setStops(optimizeRoute(rawStops));
+    setGroups(unifyAndAggregate(rawStops, 0.9));
     setError(null);
     setProgress(null);
   }, [open, items]);
 
   const totals = useMemo(() => {
-    const totalScu = stops.reduce((s, x) => s + (x.scu || 0), 0);
-    const totalValue = stops.reduce((s, x) => s + (x.totalValue || 0), 0);
-    const withoutPrice = stops.filter((x) => !x.pricePerScu || !x.station).length;
-    return { totalScu, totalValue, withoutPrice };
-  }, [stops]);
+    let totalScu = 0;
+    let totalValue = 0;
+    let withoutPrice = 0;
+    let itemCount = 0;
+    for (const g of groups) {
+      totalScu += g.subtotalScu;
+      totalValue += g.subtotalValue;
+      for (const it of g.items) {
+        itemCount++;
+        if (!it.pricePerScu || !it.station) withoutPrice++;
+      }
+    }
+    return { totalScu, totalValue, withoutPrice, itemCount };
+  }, [groups]);
 
   // ── Mutations on the preview list ──
-  function removeStop(mineralId: string) {
-    setStops((s) => s.filter((x) => x.mineralId !== mineralId));
+  function removeItem(groupKey: string, mineralId: string) {
+    setGroups((gs) =>
+      gs
+        .map((g) => {
+          if (g.key !== groupKey) return g;
+          const items = g.items.filter((x) => x.mineralId !== mineralId);
+          const subtotalScu = items.reduce((s, x) => s + (x.scu || 0), 0);
+          const subtotalValue = items.reduce((s, x) => s + (x.totalValue || 0), 0);
+          return { ...g, items, subtotalScu, subtotalValue };
+        })
+        .filter((g) => g.items.length > 0),
+    );
   }
   function moveUp(idx: number) {
     if (idx <= 0) return;
-    setStops((s) => {
-      const next = [...s];
+    setGroups((g) => {
+      const next = [...g];
       [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
       return next;
     });
   }
   function moveDown(idx: number) {
-    setStops((s) => {
-      if (idx >= s.length - 1) return s;
-      const next = [...s];
+    setGroups((g) => {
+      if (idx >= g.length - 1) return g;
+      const next = [...g];
       [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
       return next;
     });
   }
 
-  // ── Batch-create N WOs ──
+  // ── Batch-create WOs: one per commodity, stop number = group index ──
   async function handleConfirm() {
-    if (stops.length === 0) return;
+    if (groups.length === 0 || totals.itemCount === 0) return;
     setCreating(true);
     setError(null);
     const groupId = newRouteGroupId();
-    const total = stops.length;
-    setProgress({ done: 0, total });
+    const totalStops = groups.length;
+    setProgress({ done: 0, total: totals.itemCount });
+    let postedItems = 0;
     try {
-      for (let i = 0; i < stops.length; i++) {
-        const stop = stops[i];
-        const stopNumber = i + 1;
-        const miningMarker = sessionId
-          ? buildMiningMarker({
-              sessionId,
-              mineralId: stop.mineralId,
-              mineralName: stop.mineralName,
-            })
-          : "";
-        const routeMarker = buildRouteMarker({
-          groupId,
-          stop: stopNumber,
-          total,
-        });
-        const notesHeader = [miningMarker, routeMarker].filter(Boolean).join("\n");
+      for (let g = 0; g < groups.length; g++) {
+        const group = groups[g];
+        const stopNumber = g + 1;
+        for (const stop of group.items) {
+          const miningMarker = sessionId
+            ? buildMiningMarker({
+                sessionId,
+                mineralId: stop.mineralId,
+                mineralName: stop.mineralName,
+              })
+            : "";
+          const routeMarker = buildRouteMarker({
+            groupId,
+            stop: stopNumber,
+            total: totalStops,
+          });
+          const notesHeader = [miningMarker, routeMarker].filter(Boolean).join("\n");
 
-        const body = {
-          title: `${t("woTitlePrefix")} ${stopNumber}/${total} — ${stop.commodityName || stop.commodityCode}`,
-          status: "draft",
-          commodity_code: stop.commodityCode || null,
-          commodity_name: stop.commodityName || null,
-          buy_station: null,
-          buy_system: null,
-          sell_station: stop.station || null,
-          sell_system: stop.system || null,
-          scu_bought: stop.scu,
-          scu_sold: stop.scu, // assume planning to sell full load
-          scu_lost: 0,
-          buy_price_per_scu: 0,
-          sell_price_per_scu: stop.pricePerScu || 0,
-          notes: notesHeader,
-        };
-        const res = await fetch("/api/trade/work-orders", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(body),
-        });
-        if (!res.ok) {
-          const j = await res.json().catch(() => ({}));
-          throw new Error(j.error || `Error ${res.status}`);
+          const body = {
+            title: `${t("woTitlePrefix")} ${stopNumber}/${totalStops} — ${stop.commodityName || stop.commodityCode}`,
+            status: "draft",
+            commodity_code: stop.commodityCode || null,
+            commodity_name: stop.commodityName || null,
+            buy_station: null,
+            buy_system: null,
+            sell_station: group.station || null,
+            sell_system: group.system || null,
+            scu_bought: stop.scu,
+            scu_sold: stop.scu, // assume planning to sell full load
+            scu_lost: 0,
+            buy_price_per_scu: 0,
+            sell_price_per_scu: stop.pricePerScu || 0,
+            notes: notesHeader,
+          };
+          const res = await fetch("/api/trade/work-orders", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const j = await res.json().catch(() => ({}));
+            throw new Error(j.error || `Error ${res.status}`);
+          }
+          postedItems++;
+          setProgress({ done: postedItems, total: totals.itemCount });
         }
-        setProgress({ done: stopNumber, total });
       }
       onClose();
       router.push("/trade");
@@ -217,7 +248,12 @@ export default function SellRoutePreviewModal({
             <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">
               {t("stopsCount")}
             </div>
-            <div className="text-xl font-mono font-bold text-cyan-300">{stops.length}</div>
+            <div className="text-xl font-mono font-bold text-cyan-300">
+              {groups.length}
+              <span className="text-[10px] text-zinc-500 font-mono ml-1">
+                ({totals.itemCount})
+              </span>
+            </div>
           </div>
           <div>
             <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">
@@ -239,98 +275,126 @@ export default function SellRoutePreviewModal({
 
         {/* Stops list */}
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
-          {stops.length === 0 ? (
+          {groups.length === 0 ? (
             <div className="text-center py-12 text-zinc-500 text-sm italic">
               {t("noStops")}
             </div>
           ) : (
-            stops.map((stop, idx) => {
-              const d = describeStop(stop);
+            groups.map((group, idx) => {
               const isFirst = idx === 0;
-              const isLast = idx === stops.length - 1;
-              const warn = !stop.station || !stop.pricePerScu;
+              const isLast = idx === groups.length - 1;
+              const body = inferBody(group.station, group.system);
+              const warn = !group.station;
+              const unified = group.items.length > 1;
               return (
                 <div
-                  key={stop.mineralId}
-                  className={`flex items-center gap-3 bg-zinc-800/40 border rounded-lg p-3 ${
-                    warn ? "border-amber-500/40" : "border-zinc-700/60"
+                  key={group.key}
+                  className={`bg-zinc-800/40 border rounded-lg p-3 ${
+                    warn ? "border-amber-500/40" : unified ? "border-cyan-500/50" : "border-zinc-700/60"
                   }`}
                 >
-                  {/* Stop number */}
-                  <div
-                    className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold font-mono ${
-                      warn
-                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                        : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
-                    }`}
-                  >
-                    {idx + 1}
+                  <div className="flex items-center gap-3">
+                    {/* Stop number */}
+                    <div
+                      className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold font-mono ${
+                        warn
+                          ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                          : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40"
+                      }`}
+                    >
+                      {idx + 1}
+                    </div>
+
+                    {/* Station header */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-bold text-zinc-100">
+                          {group.station ? (
+                            group.station
+                          ) : (
+                            <span className="italic text-amber-400">
+                              {t("noStation")}
+                            </span>
+                          )}
+                        </span>
+                        {unified && (
+                          <span className="text-[9px] px-1.5 py-0.5 bg-cyan-500/20 text-cyan-300 rounded font-bold uppercase tracking-wider">
+                            {t("unified", { count: group.items.length })}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-zinc-500 mt-0.5">
+                        <span className="text-zinc-500">{body}</span>
+                        <span className="text-zinc-700 mx-1.5">·</span>
+                        <span className="text-zinc-500">{group.system || "—"}</span>
+                      </div>
+                    </div>
+
+                    {/* Group subtotal */}
+                    <div className="flex-shrink-0 text-right">
+                      <div className="text-sm font-mono font-bold text-emerald-300">
+                        {fmtAuec(group.subtotalValue)}
+                      </div>
+                      <div className="text-[10px] text-zinc-600 font-mono">
+                        {group.subtotalScu.toFixed(0)} SCU
+                      </div>
+                    </div>
+
+                    {/* Reorder buttons (whole stop) */}
+                    <div className="flex-shrink-0 flex items-center gap-1">
+                      <button
+                        onClick={() => moveUp(idx)}
+                        disabled={isFirst || creating}
+                        title={t("moveUp")}
+                        className="w-6 h-6 rounded bg-zinc-700/60 text-zinc-400 hover:bg-zinc-600 hover:text-zinc-200 text-xs disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        onClick={() => moveDown(idx)}
+                        disabled={isLast || creating}
+                        title={t("moveDown")}
+                        className="w-6 h-6 rounded bg-zinc-700/60 text-zinc-400 hover:bg-zinc-600 hover:text-zinc-200 text-xs disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        ↓
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-zinc-100 uppercase">
-                        {stop.commodityName}
-                      </span>
-                      <span className="text-[10px] text-zinc-500 font-mono">
-                        ({stop.mineralName})
-                      </span>
-                      <span className="text-xs font-mono text-amber-400">
-                        {stop.scu.toFixed(0)} SCU
-                      </span>
-                    </div>
-                    <div className="text-[11px] text-zinc-400 mt-0.5">
-                      {stop.station ? (
-                        <>
-                          <span className="text-zinc-300">{stop.station}</span>
-                          <span className="text-zinc-600 mx-1.5">·</span>
-                          <span className="text-zinc-500">{d.body}</span>
-                          <span className="text-zinc-600 mx-1.5">·</span>
-                          <span className="text-zinc-500">{d.system}</span>
-                        </>
-                      ) : (
-                        <span className="italic text-amber-400">{t("noStation")}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Subtotal */}
-                  <div className="flex-shrink-0 text-right">
-                    <div className="text-sm font-mono font-bold text-emerald-300">
-                      {fmtAuec(stop.totalValue)}
-                    </div>
-                    <div className="text-[10px] text-zinc-600 font-mono">
-                      @ {stop.pricePerScu?.toLocaleString() || "—"}
-                    </div>
-                  </div>
-
-                  {/* Reorder + remove buttons */}
-                  <div className="flex-shrink-0 flex items-center gap-1">
-                    <button
-                      onClick={() => moveUp(idx)}
-                      disabled={isFirst || creating}
-                      title={t("moveUp")}
-                      className="w-6 h-6 rounded bg-zinc-700/60 text-zinc-400 hover:bg-zinc-600 hover:text-zinc-200 text-xs disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      onClick={() => moveDown(idx)}
-                      disabled={isLast || creating}
-                      title={t("moveDown")}
-                      className="w-6 h-6 rounded bg-zinc-700/60 text-zinc-400 hover:bg-zinc-600 hover:text-zinc-200 text-xs disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      ↓
-                    </button>
-                    <button
-                      onClick={() => removeStop(stop.mineralId)}
-                      disabled={creating}
-                      title={t("removeStop")}
-                      className="w-6 h-6 rounded bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 text-xs disabled:opacity-40"
-                    >
-                      ✕
-                    </button>
+                  {/* Commodity rows */}
+                  <div className="mt-2 pl-11 space-y-1">
+                    {group.items.map((it) => (
+                      <div
+                        key={it.mineralId}
+                        className="flex items-center gap-3 text-xs bg-zinc-950/40 border border-zinc-800/40 rounded px-2.5 py-1.5"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <span className="font-bold text-zinc-200 uppercase">
+                            {it.commodityName}
+                          </span>
+                          <span className="text-[10px] text-zinc-500 font-mono ml-1.5">
+                            ({it.mineralName})
+                          </span>
+                        </div>
+                        <span className="font-mono text-amber-400">
+                          {it.scu.toFixed(0)} SCU
+                        </span>
+                        <span className="font-mono text-zinc-500 text-[10px]">
+                          @ {it.pricePerScu?.toLocaleString() || "—"}
+                        </span>
+                        <span className="font-mono text-emerald-300 font-bold">
+                          {fmtAuec(it.totalValue)}
+                        </span>
+                        <button
+                          onClick={() => removeItem(group.key, it.mineralId)}
+                          disabled={creating}
+                          title={t("removeStop")}
+                          className="w-5 h-5 rounded bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 text-[10px] disabled:opacity-40"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
@@ -364,12 +428,12 @@ export default function SellRoutePreviewModal({
           </button>
           <button
             onClick={handleConfirm}
-            disabled={creating || stops.length === 0}
+            disabled={creating || totals.itemCount === 0}
             className="px-4 py-2 bg-cyan-500 text-zinc-900 rounded font-bold text-sm hover:bg-cyan-400 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {creating
               ? t("creating")
-              : t("confirm", { count: stops.length })}
+              : t("confirm", { count: totals.itemCount })}
           </button>
         </div>
       </div>

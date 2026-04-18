@@ -180,6 +180,11 @@ export default function WorkOrderDashboard() {
   const [sellLocations, setSellLocations] = useState<SellLocation[]>([]);
   const [loadingSellData, setLoadingSellData] = useState(false);
   const [bestPrices, setBestPrices] = useState<Record<string, SellLocation>>({});
+  // Full top-N (~10) sell locations per commodity; used by the route
+  // optimiser to find shared stations across multiple commodities.
+  const [priceOptionsByMineral, setPriceOptionsByMineral] = useState<
+    Record<string, SellLocation[]>
+  >({});
   const [bestPricesLoaded, setBestPricesLoaded] = useState(false);
 
   // ── Multi-sell route state (Fase B) ──
@@ -508,15 +513,23 @@ export default function WorkOrderDashboard() {
       mineralIds.map((id) => {
         return fetch(`/api/mining/commodity-prices?commodity=${id}&dir=buy`)
           .then((r) => r.json())
-          .then((json) => ({ id, top: json.data?.[0] || null }))
-          .catch(() => ({ id, top: null }));
+          .then((json) => ({
+            id,
+            list: (json.data || []) as SellLocation[],
+          }))
+          .catch(() => ({ id, list: [] as SellLocation[] }));
       })
     ).then((results) => {
-      const map: Record<string, SellLocation> = {};
+      const topMap: Record<string, SellLocation> = {};
+      const listMap: Record<string, SellLocation[]> = {};
       for (const r of results) {
-        if (r.top) map[r.id] = r.top;
+        if (r.list && r.list.length > 0) {
+          topMap[r.id] = r.list[0];
+          listMap[r.id] = r.list;
+        }
       }
-      setBestPrices(map);
+      setBestPrices(topMap);
+      setPriceOptionsByMineral(listMap);
       setBestPricesLoaded(true);
     });
   }, [tab, mergedInventory, bestPricesLoaded]);
@@ -600,6 +613,7 @@ export default function WorkOrderDashboard() {
       const match = getCommodityForMineral(inv.mineralId);
       if (!match) continue;
       const best = bestPrices[inv.mineralId] || null;
+      const options = priceOptionsByMineral[inv.mineralId] || [];
       items.push({
         mineralId: inv.mineralId,
         mineralName: inv.mineralName,
@@ -609,12 +623,19 @@ export default function WorkOrderDashboard() {
         bestStation: best?.station || null,
         bestSystem: best?.system || null,
         bestPrice: best?.price ?? null,
+        priceOptions: options
+          .filter((o) => o.station && o.system && typeof o.price === "number")
+          .map((o) => ({
+            station: o.station as string,
+            system: o.system as string,
+            price: o.price as number,
+          })),
       });
     }
     if (items.length === 0) return;
     setRouteModalItems(items);
     setRouteModalOpen(true);
-  }, [selectedMineralIds, mergedInventory, bestPrices]);
+  }, [selectedMineralIds, mergedInventory, bestPrices, priceOptionsByMineral]);
 
   const closeRouteModal = useCallback(() => {
     setRouteModalOpen(false);

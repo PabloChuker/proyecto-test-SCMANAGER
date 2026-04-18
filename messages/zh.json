@@ -677,7 +677,8 @@
       "cancel": "取消",
       "confirm": "{count, plural, other {创建 # 个订单}}",
       "creating": "创建中…",
-      "woTitlePrefix": "停靠点"
+      "woTitlePrefix": "停靠点",
+      "unified": "{count, plural, other {合并 # 项商品}}"
     }
   },
   "Trade": {

@@ -677,7 +677,8 @@
       "cancel": "Cancel",
       "confirm": "{count, plural, one {Create # order} other {Create # orders}}",
       "creating": "Creating…",
-      "woTitlePrefix": "Stop"
+      "woTitlePrefix": "Stop",
+      "unified": "{count, plural, one {# commodity unified} other {# commodities unified}}"
     }
   },
   "Trade": {

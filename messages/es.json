@@ -677,7 +677,8 @@
       "cancel": "Cancelar",
       "confirm": "{count, plural, one {Crear # orden} other {Crear # órdenes}}",
       "creating": "Creando…",
-      "woTitlePrefix": "Parada"
+      "woTitlePrefix": "Parada",
+      "unified": "{count, plural, one {# mercancía unificada} other {# mercancías unificadas}}"
     }
   },
   "Trade": {

@@ -677,7 +677,8 @@
       "cancel": "Annuler",
       "confirm": "{count, plural, one {Créer # ordre} other {Créer # ordres}}",
       "creating": "Création…",
-      "woTitlePrefix": "Arrêt"
+      "woTitlePrefix": "Arrêt",
+      "unified": "{count, plural, one {# marchandise unifiée} other {# marchandises unifiées}}"
     }
   },
   "Trade": {
