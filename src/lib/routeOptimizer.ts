@@ -329,3 +329,146 @@ export function unifyAndAggregate(
 ): AggregatedStop[] {
   return aggregateStops(unifyBestStations(stops, threshold));
 }
+
+// ─── Station classification (for exposure badges) ──────────────────────────
+
+export type StationType =
+  | "city" // Armistice zone, NPC-guarded, safest bet
+  | "lagrange" // Lagrange point stations (L1-L5) — mid-risk, space
+  | "outpost" // Moon / planet surface outpost — no armistice outside dome
+  | "rest-stop" // Free-floating rest stops (Pyro) — typically lawless
+  | "unknown";
+
+/**
+ * Best-effort station type classification from the station name. Used to
+ * render the "exposure" badge on each route stop so the user can judge
+ * PvP risk before committing to a stop order.
+ */
+export function classifyStation(station: string | null): StationType {
+  const s = (station || "").trim().toLowerCase();
+  if (!s) return "unknown";
+
+  // Cities & major hubs (armistice zones)
+  if (
+    /area\s*18|lorville|new\s*babbage|orison|grim\s*hex/i.test(s)
+  ) {
+    return "city";
+  }
+
+  // Rest stops (Pyro) — explicitly called out in SC docs as lawless
+  if (
+    /ruin\s*station|checkmate|bloom|terminus|endgame|megumi\s*refueling|patch\s*city|pyro\s*gateway|stanton\s*gateway/i.test(
+      s,
+    )
+  ) {
+    return "rest-stop";
+  }
+
+  // Lagrange stations: HUR-L1, CRU-L4, MIC-L2, ARC-L1, etc.
+  if (/^[A-Z]{3}-L[1-5]/i.test(s)) return "lagrange";
+  if (/port\s*tressler|port\s*olisar|everus\s*harbor|seraphim\s*station/i.test(s)) {
+    return "lagrange";
+  }
+
+  // Outposts: HDMS-*, Shubin-SAL, Rayari-*, Hickes, Bountiful Harvest, etc.
+  if (/hdms-|shubin-|rayari|hickes|bountiful|outpost|deakins|nuen|terra\s*mills|kudre|shady|reclamation/i.test(s)) {
+    return "outpost";
+  }
+
+  return "unknown";
+}
+
+// ─── Travel-time estimation ────────────────────────────────────────────────
+
+/**
+ * Coarse QT travel-time estimation in *minutes* between two route stops.
+ * No SC datamining exposes precise inter-station distances, so we bucket:
+ *   same station      → 0
+ *   same body         → 1 min  (short OM-to-OM hop + QT inside body)
+ *   same system, diff body → 4 min (typical Stanton body-to-body QT)
+ *   cross-system      → 9 min (Stanton ↔ Pyro gateway jump)
+ *   unknown           → 3 min (mid-range fallback)
+ *
+ * These numbers are intentionally rough — the goal is relative comparison,
+ * not a flight-time calculator.
+ */
+export function estimateTravelMinutes(
+  from: { station: string | null; system: string | null } | null,
+  to: { station: string | null; system: string | null },
+): number {
+  if (!from) return 0; // first stop → no travel yet
+  if (!from.station || !from.system || !to.station || !to.system) return 3;
+
+  if (
+    from.station.toLowerCase() === to.station.toLowerCase() &&
+    from.system.toLowerCase() === to.system.toLowerCase()
+  ) {
+    return 0;
+  }
+
+  const sameSystem =
+    from.system.toLowerCase() === to.system.toLowerCase();
+  if (!sameSystem) return 9;
+
+  const bodyFrom = inferBody(from.station, from.system).toLowerCase();
+  const bodyTo = inferBody(to.station, to.system).toLowerCase();
+  if (bodyFrom === bodyTo) return 1;
+
+  return 4;
+}
+
+// ─── Cross-stop sort comparators (Fase B.10) ───────────────────────────────
+
+/**
+ * Sort preset: highest revenue first.
+ */
+export function sortByRevenue(groups: AggregatedStop[]): AggregatedStop[] {
+  return [...groups].sort((a, b) => (b.subtotalValue || 0) - (a.subtotalValue || 0));
+}
+
+/**
+ * Sort preset: shortest cumulative travel first, using a nearest-neighbour
+ * heuristic starting from the highest-revenue stop. Good default for
+ * "minimise time on the road".
+ */
+export function sortByDistance(groups: AggregatedStop[]): AggregatedStop[] {
+  if (groups.length <= 1) return [...groups];
+  const remaining = [...groups];
+  // Start from highest-revenue stop to anchor the route
+  remaining.sort((a, b) => (b.subtotalValue || 0) - (a.subtotalValue || 0));
+  const ordered: AggregatedStop[] = [remaining.shift()!];
+  while (remaining.length > 0) {
+    const last = ordered[ordered.length - 1];
+    let bestIdx = 0;
+    let bestCost = Infinity;
+    for (let i = 0; i < remaining.length; i++) {
+      const cost = estimateTravelMinutes(
+        { station: last.station, system: last.system },
+        { station: remaining[i].station, system: remaining[i].system },
+      );
+      if (cost < bestCost) {
+        bestCost = cost;
+        bestIdx = i;
+      }
+    }
+    ordered.push(remaining.splice(bestIdx, 1)[0]);
+  }
+  return ordered;
+}
+
+/**
+ * Sort preset: group by system first (Stanton → Pyro), then body, then
+ * station. Same ordering as the default `aggregateStops` output but
+ * exposed as a named preset for the UI.
+ */
+export function sortBySystem(groups: AggregatedStop[]): AggregatedStop[] {
+  return [...groups].sort((a, b) => {
+    const sysA = (a.system || "?").toLowerCase();
+    const sysB = (b.system || "?").toLowerCase();
+    if (sysA !== sysB) return sysA.localeCompare(sysB);
+    const bodyA = a.body.toLowerCase();
+    const bodyB = b.body.toLowerCase();
+    if (bodyA !== bodyB) return bodyA.localeCompare(bodyB);
+    return (a.station || "").toLowerCase().localeCompare((b.station || "").toLowerCase());
+  });
+}

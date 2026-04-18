@@ -7,11 +7,18 @@ import CommodityBrowser from "@/components/trade/CommodityBrowser";
 import TerminalDirectory from "@/components/trade/TerminalDirectory";
 import TradeWorkOrders from "@/components/trade/TradeWorkOrders";
 import TradeDashboard from "@/components/trade/TradeDashboard";
+import ActiveRoutePanel from "@/components/trade/ActiveRoutePanel";
 import { PageVideoBackground } from "@/components/shared/PageVideoBackground";
 import { useTradeWorkOrderStore } from "@/store/useTradeWorkOrderStore";
 import { useTranslations } from "next-intl";
 
-type Tab = "routes" | "commodities" | "terminals" | "workorders" | "dashboard";
+type Tab =
+  | "routes"
+  | "commodities"
+  | "terminals"
+  | "workorders"
+  | "activeRoute"
+  | "dashboard";
 
 export default function TradePage() {
   const [activeTab, setActiveTab] = useState<Tab>("routes");
@@ -23,6 +30,7 @@ export default function TradePage() {
     { id: "commodities", label: tt("commodities") },
     { id: "terminals", label: tt("terminals") },
     { id: "workorders", label: tt("workorders") },
+    { id: "activeRoute", label: tt("activeRoute") },
     { id: "dashboard", label: tt("dashboard") },
   ];
 
@@ -69,6 +77,7 @@ export default function TradePage() {
             {activeTab === "commodities" && <CommodityBrowser />}
             {activeTab === "terminals" && <TerminalDirectory />}
             {activeTab === "workorders" && <TradeWorkOrders />}
+            {activeTab === "activeRoute" && <ActiveRoutePanel />}
             {activeTab === "dashboard" && <TradeDashboard />}
           </div>
         </div>
