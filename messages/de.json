@@ -725,7 +725,13 @@
       "noStation": "Keine Station zugewiesen",
       "itemsCount": "{count, plural, one {# Ware} other {# Waren}}",
       "commoditiesDone": "erledigt",
-      "dragToReorder": "Ziehen"
+      "dragToReorder": "Ziehen",
+      "routeFallback": "Route vom {time}",
+      "routeNoTime": "Route",
+      "routeItems": "{items, plural, one {# Ware} other {# Waren}}",
+      "noPrices": "Keine Preise",
+      "staleTitle": "Dieser Route sind keine Verkaufsstationen zugewiesen",
+      "staleHint": "Die Preise waren beim Erstellen der Route nicht verfügbar. Lösche diese WOs im Tab «Work Orders» und erstelle eine neue Route über Bergbau → Inventar."
     },
     "commodities": {
       "search": "Suchen",

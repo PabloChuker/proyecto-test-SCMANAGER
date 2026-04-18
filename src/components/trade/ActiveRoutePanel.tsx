@@ -71,6 +71,59 @@ interface ActiveRoute {
   stops: LogicalStop[]; // one entry per station (commodities grouped)
 }
 
+/** Human-friendly label for the route picker.
+ *
+ *   primary:  first known sell station (+ "(+N)" if there are more stops)
+ *             or creation time if no station is assigned yet.
+ *   secondary: "N items · SCU · ~aUEC"
+ *   stale:    true when no stop has a recommended station (likely the
+ *             route was created before the commodity_abbr mapping fix, so
+ *             none of the WOs got a sell station attached).
+ */
+function computeRouteLabel(
+  r: ActiveRoute,
+): {
+  primary: string | null;
+  station: string | null;
+  extraCount: number;
+  itemCount: number;
+  totalScu: number;
+  totalValue: number;
+  createdAt: string | null;
+  stale: boolean;
+} {
+  let totalScu = 0;
+  let totalValue = 0;
+  let itemCount = 0;
+  for (const s of r.stops) {
+    totalScu += s.subtotalScu;
+    totalValue += s.subtotalValue;
+    itemCount += s.items.length;
+  }
+  const stopsWithStation = r.stops.filter((s) => s.station);
+  const firstStation = stopsWithStation[0]?.station ?? null;
+  const extraCount = stopsWithStation.length > 1 ? stopsWithStation.length - 1 : 0;
+  // oldest created_at across all WOs in the route — serves as an "at a glance"
+  // timestamp when there's no station yet
+  let earliest: string | null = null;
+  for (const s of r.stops) {
+    for (const it of s.items) {
+      const cur = it.wo.created_at;
+      if (!earliest || (cur && cur < earliest)) earliest = cur;
+    }
+  }
+  return {
+    primary: firstStation,
+    station: firstStation,
+    extraCount,
+    itemCount,
+    totalScu,
+    totalValue,
+    createdAt: earliest,
+    stale: !firstStation,
+  };
+}
+
 function groupIntoLogicalStops(wos: RouteStopWO[]): LogicalStop[] {
   const map = new Map<string, LogicalStop>();
   for (const entry of wos) {
@@ -429,21 +482,51 @@ export default function ActiveRoutePanel() {
         <div className="flex flex-wrap gap-2">
           {activeRoutes.map((r) => {
             const isActive = r.groupId === selectedGroupId;
+            const meta = computeRouteLabel(r);
+            const timeStr = meta.createdAt
+              ? new Date(meta.createdAt).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : null;
+            const title = meta.station
+              ? `${meta.station}${meta.extraCount > 0 ? ` (+${meta.extraCount})` : ""}`
+              : timeStr
+                ? t("routeFallback", { time: timeStr })
+                : t("routeNoTime");
             return (
               <button
                 key={r.groupId}
                 onClick={() => setSelectedGroupId(r.groupId)}
-                className={`px-3 py-2 rounded-sm text-xs font-mono border transition ${
+                title={`#${r.groupId.slice(0, 6).toUpperCase()}`}
+                className={`flex flex-col items-start text-left px-3 py-2 rounded-sm text-xs border transition min-w-[180px] ${
                   isActive
-                    ? "bg-amber-500/20 text-amber-300 border-amber-500/50"
-                    : "bg-zinc-900/40 text-zinc-400 border-zinc-800/50 hover:text-zinc-200"
+                    ? "bg-amber-500/20 text-amber-200 border-amber-500/50"
+                    : meta.stale
+                      ? "bg-zinc-900/40 text-zinc-400 border-amber-500/25 hover:border-amber-500/40 hover:text-zinc-200"
+                      : "bg-zinc-900/40 text-zinc-300 border-zinc-800/50 hover:border-zinc-700 hover:text-zinc-100"
                 }`}
               >
-                <span className="opacity-60 mr-1.5">#</span>
-                {r.groupId.slice(0, 6).toUpperCase()}
-                <span className="ml-2 text-[10px] opacity-70">
-                  {r.completedCount}/{r.total}
-                </span>
+                <div className="flex items-center gap-2 w-full">
+                  <span className="font-mono font-bold truncate max-w-[160px]">
+                    {title}
+                  </span>
+                  {meta.stale && (
+                    <span className="text-[9px] uppercase tracking-wider text-amber-400/80 shrink-0">
+                      {t("noPrices")}
+                    </span>
+                  )}
+                  <span className="ml-auto text-[10px] font-mono opacity-70 shrink-0">
+                    {r.completedCount}/{r.totalCount}
+                  </span>
+                </div>
+                <div className="text-[10px] font-mono opacity-70 mt-0.5 truncate">
+                  {t("routeItems", { items: meta.itemCount })} ·{" "}
+                  {fmt(meta.totalScu)} SCU
+                  {meta.totalValue > 0 && (
+                    <> · ~{fmt(meta.totalValue)} aUEC</>
+                  )}
+                </div>
               </button>
             );
           })}
@@ -452,6 +535,24 @@ export default function ActiveRoutePanel() {
 
       {selected && (
         <>
+          {/* ── Stale route warning: no sell stations were attached to any
+               of the WOs in this route. Usually means the mining inventory
+               didn't have a loaded price table when the route was built. ── */}
+          {(() => {
+            const sel = computeRouteLabel(selected);
+            if (!sel.stale) return null;
+            return (
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-sm p-3 text-[12px] text-amber-200 flex items-start gap-3">
+                <span className="text-lg leading-none">⚠</span>
+                <div className="flex-1">
+                  <div className="font-bold">{t("staleTitle")}</div>
+                  <div className="text-[11px] text-amber-300/80 mt-1">
+                    {t("staleHint")}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
           {/* ── Totals strip ── */}
           <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
             <Stat

@@ -725,7 +725,13 @@
       "noStation": "Sin estación asignada",
       "itemsCount": "{count, plural, one {# ítem} other {# ítems}}",
       "commoditiesDone": "completadas",
-      "dragToReorder": "Arrastrar"
+      "dragToReorder": "Arrastrar",
+      "routeFallback": "Ruta de {time}",
+      "routeNoTime": "Ruta",
+      "routeItems": "{items, plural, one {# ítem} other {# ítems}}",
+      "noPrices": "Sin precios",
+      "staleTitle": "Esta ruta no tiene estaciones de venta asignadas",
+      "staleHint": "Los precios no estaban disponibles cuando creaste la ruta. Borrá estas WO desde la pestaña «Work Orders» y armá una nueva ruta desde Minería → Inventario."
     },
     "commodities": {
       "search": "Buscar",

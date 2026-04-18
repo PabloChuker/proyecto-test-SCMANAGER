@@ -725,7 +725,13 @@
       "noStation": "Aucune station assignée",
       "itemsCount": "{count, plural, one {# article} other {# articles}}",
       "commoditiesDone": "terminées",
-      "dragToReorder": "Glisser"
+      "dragToReorder": "Glisser",
+      "routeFallback": "Route du {time}",
+      "routeNoTime": "Route",
+      "routeItems": "{items, plural, one {# article} other {# articles}}",
+      "noPrices": "Pas de prix",
+      "staleTitle": "Cette route n'a pas de stations de vente assignées",
+      "staleHint": "Les prix n'étaient pas disponibles lors de la création de la route. Supprimez ces WO depuis l'onglet «Work Orders» et créez une nouvelle route depuis Minage → Inventaire."
     },
     "commodities": {
       "search": "Rechercher",
