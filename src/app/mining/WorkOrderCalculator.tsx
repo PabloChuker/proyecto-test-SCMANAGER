@@ -397,12 +397,21 @@ export default function WorkOrderCalculator() {
       });
     });
 
+    // ── Bug #3 fix: if the user already started the local timer, preserve the
+    // remaining seconds when submitting the order (otherwise the dashboard
+    // would restart the countdown from the total input value).
+    const effectiveCountdown = mode === "ship"
+      ? (timer.running || timer.finished
+          ? timer.remaining
+          : (timer.remaining > 0 ? timer.remaining : timer.totalInputSeconds))
+      : 0;
+
     // Save to localStorage ONLY when NOT connected to a Supabase party session
     if (!useSupabase) {
       addOrder({
         sessionId,
         type: mode,
-        status: timer.totalInputSeconds > 0 && mode === "ship" ? "in_progress" : "completed",
+        status: effectiveCountdown > 0 && mode === "ship" ? "in_progress" : "completed",
         refinery: mode === "ship" ? refinery?.name : undefined,
         method: mode === "ship" ? method?.name : undefined,
         ores,
@@ -414,7 +423,7 @@ export default function WorkOrderCalculator() {
         netProfit: 0,
         crew: crew.map((c) => ({ name: c.name, share: c.share, payout: 0 })),
         sellPrice: 0,
-        countdownSeconds: mode === "ship" ? timer.totalInputSeconds : 0,
+        countdownSeconds: effectiveCountdown,
         countdownEndsAt: null,
       });
     }
@@ -439,7 +448,7 @@ export default function WorkOrderCalculator() {
         sell_price: 0,
         net_profit: 0,
         motrader_fee: 0,
-        countdown_seconds: mode === "ship" ? timer.totalInputSeconds : 0,
+        countdown_seconds: effectiveCountdown,
         expenses: [],
         payouts: crew.map((c) => ({
           member_name: c.name,

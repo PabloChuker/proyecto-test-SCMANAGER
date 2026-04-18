@@ -27,6 +27,7 @@ export interface WOMineral {
   quantity: number;   // input cSCU / mSCU / SCU
   yieldQty: number;   // output after refining
   value: number;       // aUEC value
+  quality?: number;    // optional quality/purity percent (for ROC / salvage)
 }
 
 export interface WorkOrder {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
 import {
   getSessions, getOrders, getActiveSessionId, setActiveSessionId,
@@ -184,18 +184,32 @@ export default function WorkOrderDashboard() {
     setMovements(getMovements());
   }, [rk, user]);
 
-  // Tick every second for countdown display + localStorage timer completion
+  // Tick every second for countdown display + localStorage/Supabase timer completion
+  const autoCompletedSbIds = useRef<Set<string>>(new Set());
   useEffect(() => {
     const interval = setInterval(() => {
-      setNow(Date.now());
+      const nowMs = Date.now();
+      setNow(nowMs);
       if (!user) {
         // Only tick localStorage orders in solo mode
         const completed = tickOrders();
         if (completed.length > 0) refresh();
+        return;
+      }
+      // Logged in: auto-complete Supabase orders whose countdown has ended
+      for (const o of sbWorkOrders) {
+        if (o.status !== "in_progress") continue;
+        if (!o.countdown_ends_at) continue;
+        if (autoCompletedSbIds.current.has(o.id)) continue;
+        if (new Date(o.countdown_ends_at).getTime() <= nowMs) {
+          autoCompletedSbIds.current.add(o.id);
+          sbUpdateStatus(o.id, "completed");
+          broadcast("order_updated");
+        }
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, [user]);
+  }, [user, sbWorkOrders, sbUpdateStatus, broadcast]);
 
   const refresh = () => setRk((k) => k + 1);
 
@@ -676,12 +690,11 @@ export default function WorkOrderDashboard() {
       {/* ═══════ WORK ORDERS ═══════ */}
       {tab === "orders" && (
         <div className="space-y-6">
-          {/* Status summary */}
-          <div className="grid grid-cols-3 gap-3">
+          {/* Status summary — 2 columns (Collected merged into inventory hint) */}
+          <div className="grid grid-cols-2 gap-3">
             {[
               { label: t("status.in_progress"), count: inProgress.length, color: "text-amber-400", bg: "border-amber-500/30" },
               { label: t("status.readyToCollect"), count: completed.length, color: "text-emerald-400", bg: "border-emerald-500/30" },
-              { label: t("status.collected"), count: collected.length, color: "text-blue-400", bg: "border-blue-500/30" },
             ].map((s) => (
               <div key={s.label} className={`bg-zinc-900/70 border ${s.bg} rounded-lg p-3 text-center`}>
                 <div className={`text-2xl font-mono font-bold ${s.color}`}>{s.count}</div>
@@ -690,37 +703,56 @@ export default function WorkOrderDashboard() {
             ))}
           </div>
 
-          {/* In Progress orders with live countdown */}
+          {/* In Progress orders — big countdown + progress bar + color tiers */}
           {inProgress.length > 0 && (
             <div>
               <div className="text-xs tracking-[0.1em] uppercase text-amber-500 font-bold mb-2">⏳ {t("status.in_progress")}</div>
               <div className="space-y-2">
                 {inProgress.map((order) => {
                   const rem = getRemainingSeconds(order);
+                  const total = order.countdownSeconds > 0 ? order.countdownSeconds : Math.max(rem, 1);
+                  const elapsed = Math.max(0, total - rem);
+                  const pct = total > 0 ? Math.min(100, Math.max(0, (elapsed / total) * 100)) : 0;
+                  const isReady = rem <= 0;
+                  const tier = isReady
+                    ? { border: "border-emerald-500/50", barBg: "bg-emerald-500", text: "text-emerald-400", glow: "shadow-[0_0_20px_rgba(16,185,129,0.3)]" }
+                    : pct >= 80
+                      ? { border: "border-red-500/40", barBg: "bg-red-500", text: "text-red-400", glow: "" }
+                      : pct >= 50
+                        ? { border: "border-amber-500/40", barBg: "bg-amber-500", text: "text-amber-400", glow: "" }
+                        : { border: "border-cyan-500/40", barBg: "bg-cyan-500", text: "text-cyan-400", glow: "" };
                   const isParty = (order as any)._source === "supabase";
                   return (
-                    <div key={order.id} className="bg-zinc-900/70 border border-amber-500/30 rounded-lg p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="text-xl">{typeIcon(order.type)}</span>
-                        <div>
-                          <div className="text-sm text-zinc-200 font-bold flex items-center gap-2">
-                            {order.refinery || typeLabel(t, order.type)}
-                            {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">{t("party")}</span>}
+                    <div key={order.id} className={`bg-zinc-900/70 border ${tier.border} rounded-lg p-4 ${tier.glow}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <span className="text-xl">{typeIcon(order.type)}</span>
+                          <div>
+                            <div className="text-sm text-zinc-200 font-bold flex items-center gap-2">
+                              {order.refinery || typeLabel(t, order.type)}
+                              {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">{t("party")}</span>}
+                            </div>
+                            <div className="text-[11px] text-zinc-500">{oreLineWithQuality(order.ores)} · {fmtAuec(order.grossValue)} aUEC</div>
                           </div>
-                          <div className="text-[11px] text-zinc-500">{oreLineWithQuality(order.ores)} · {fmtAuec(order.grossValue)} aUEC</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="text-right">
-                          <div className="font-mono text-lg font-bold text-amber-400">{fmtCountdown(rem)}</div>
-                          <div className="text-[9px] text-zinc-600">{t("remaining")}</div>
                         </div>
                         <button
                           onClick={() => handleForceComplete(order.id)}
                           className="px-3 py-1.5 bg-zinc-800 border border-zinc-700 rounded text-[10px] font-bold text-zinc-400 hover:text-zinc-200 hover:border-zinc-500"
                         >
-                          {t("skip")} →
+                          {t("markReady")} →
                         </button>
+                      </div>
+                      <div className="flex items-baseline justify-between mb-2">
+                        <div className={`font-mono text-4xl font-black tracking-wider ${tier.text}`}>{fmtCountdown(rem)}</div>
+                        <div className="text-[10px] text-zinc-500 uppercase tracking-wider">
+                          {isReady ? t("status.readyToCollect") : t("remaining")} · {pct.toFixed(0)}%
+                        </div>
+                      </div>
+                      <div className="h-2 bg-zinc-800/80 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${tier.barBg} transition-all duration-1000 ease-linear`}
+                          style={{ width: `${pct}%` }}
+                        />
                       </div>
                     </div>
                   );
@@ -766,44 +798,10 @@ export default function WorkOrderDashboard() {
             </div>
           )}
 
-          {/* Collected orders */}
+          {/* Collected orders — reduced to a single-line inventory hint (no redundancy) */}
           {collected.length > 0 && (
-            <div>
-              <div className="text-xs tracking-[0.1em] uppercase text-blue-500 font-bold mb-2">📦 {t("status.collected")}</div>
-              <div className="space-y-1">
-                {collected.map((order) => {
-                  const isParty = (order as any)._source === "supabase";
-                  return (
-                    <div key={order.id} className="bg-zinc-900/50 border border-zinc-800/40 rounded-lg px-4 py-3 flex items-center justify-between group">
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg opacity-60">{typeIcon(order.type)}</span>
-                        <div>
-                          <div className="text-xs text-zinc-400 flex items-center gap-2">
-                            {order.refinery || typeLabel(t, order.type)} · {fmtDate(order.createdAt)}
-                            {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">{t("party")}</span>}
-                          </div>
-                          <div className="text-[11px] text-zinc-600">{oreLineWithQuality(order.ores)}</div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-mono text-zinc-500">{fmtAuec(order.grossValue)} aUEC</span>
-                        <button
-                          onClick={() => setDistOrderId(order.id)}
-                          className="px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-[10px] font-bold text-zinc-500 hover:text-amber-400 hover:border-amber-500/30 transition-colors"
-                        >
-                          👥 {t("distribute")}
-                        </button>
-                        <button
-                          onClick={() => handleDeleteOrder(order.id)}
-                          className="opacity-0 group-hover:opacity-100 text-red-500/50 hover:text-red-400 text-xs transition-opacity"
-                        >
-                          🗑
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+            <div className="text-[10px] text-zinc-600 text-center tracking-wider py-1">
+              📦 {t("collectedHint", { n: collected.length })}
             </div>
           )}
 

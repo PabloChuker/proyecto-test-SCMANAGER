@@ -933,6 +933,12 @@ export default function TradeWorkOrderCalculator() {
           {status !== "completed" && (
             <button
               onClick={() => {
+                // ── Bug Trade #1 fix: in solo mode (no participants) the Split
+                // modal is meaningless — just complete the order directly.
+                if (participants.length === 0) {
+                  saveAll("completed");
+                  return;
+                }
                 // Open the split modal with a sensible default strategy:
                 //   - If the user already set some %, prefer role_pct
                 //   - If % are all 0 but aportes exist, suggest by_aporte
@@ -946,11 +952,11 @@ export default function TradeWorkOrderCalculator() {
                 }
                 setShowSplitModal(true);
               }}
-              disabled={saving || participants.length === 0}
-              title={participants.length === 0 ? t("addAtLeastOneParticipant") : ""}
+              disabled={saving}
+              title={participants.length === 0 ? t("completeSoloTooltip") : ""}
               className="px-3 py-1.5 text-[10px] uppercase tracking-widest bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/30 rounded-sm text-emerald-300 transition-colors disabled:opacity-40"
             >
-              {t("completeAndSplit")}
+              {participants.length === 0 ? t("completeSolo") : t("completeAndSplit")}
             </button>
           )}
         </div>
