@@ -16,7 +16,7 @@
 // copy of the WO list so the user can jump straight to it.
 // =============================================================================
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -198,6 +198,9 @@ export default function ActiveRoutePanel() {
   const [repairingId, setRepairingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  // Tracks routes we've already tried to auto-repair this session so we
+  // don't re-fire PATCH storms on every re-render / refresh.
+  const autoRepairedRef = useRef<Set<string>>(new Set());
 
   // ── fetch ──
   const refresh = useCallback(async () => {
@@ -451,6 +454,21 @@ export default function ActiveRoutePanel() {
     () => activeRoutes.find((r) => r.groupId === selectedGroupId) || null,
     [activeRoutes, selectedGroupId],
   );
+
+  // ── Auto-repair on selection ────────────────────────────────────────────
+  // Pablo's complaint: "why do I have to click Repair on every zombie
+  // route?". Fair. Whenever a stale route becomes the selected one, fire a
+  // silent repair in the background. autoRepairedRef keeps us from
+  // hammering the API for the same groupId twice in the same session.
+  useEffect(() => {
+    if (!selected) return;
+    if (!selected.stops.every((s) => !s.station)) return; // not stale
+    if (autoRepairedRef.current.has(selected.groupId)) return;
+    if (repairingId === selected.groupId) return;
+    autoRepairedRef.current.add(selected.groupId);
+    // fire-and-forget — repairRoute handles its own state + refresh
+    repairRoute(selected);
+  }, [selected, repairingId, repairRoute]);
 
   // Apply the user's custom ordering, if any, to the selected route.
   const orderedStops = useMemo<LogicalStop[]>(() => {
