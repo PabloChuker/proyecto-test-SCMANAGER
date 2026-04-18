@@ -81,6 +81,15 @@ function inputToStop(i: SellRouteInput): RouteStop {
   };
 }
 
+/** Apply a user-picked station override to an input (non-destructive). */
+function applyOverride(i: SellRouteInput, o?: PriceOption): SellRouteInput {
+  if (!o) return i;
+  return { ...i, bestStation: o.station, bestSystem: o.system, bestPrice: o.price };
+}
+
+/** How many alternative stations we expose in the "other options" panel. */
+const MAX_ALT_OPTIONS = 5;
+
 // ═════════════════════════════════════════════════════════════════════════════
 
 export default function SellRoutePreviewModal({
@@ -102,14 +111,41 @@ export default function SellRoutePreviewModal({
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
-  // Compute the initial unified + aggregated route when the modal opens.
+  // Per-mineral user-picked station override. When the user clicks
+  // "Otras opciones" and selects an alternative station, we record it here
+  // so re-grouping runs against the overridden data. Resetting removes the
+  // entry (falls back to the top-1 station from the price list).
+  const [overrides, setOverrides] = useState<Record<string, PriceOption>>({});
+  // UI: which commodity row has its alt-options panel open.
+  const [altOpenFor, setAltOpenFor] = useState<string | null>(null);
+
+  // Compute the unified + aggregated route. Recomputes when the modal opens,
+  // when the underlying item list changes, or when the user overrides a
+  // commodity's station — so picking a different option instantly redraws
+  // the stop list (and can collapse/expand stops thanks to unifyBestStations).
   useEffect(() => {
     if (!open) return;
-    const rawStops = items.map(inputToStop);
+    const rawStops = items
+      .map((i) => applyOverride(i, overrides[i.mineralId]))
+      .map(inputToStop);
     setGroups(unifyAndAggregate(rawStops, 0.9));
     setError(null);
     setProgress(null);
-  }, [open, items]);
+  }, [open, items, overrides]);
+
+  /** Pick an alternative station for a single commodity. */
+  function pickStation(mineralId: string, opt: PriceOption) {
+    setOverrides((o) => ({ ...o, [mineralId]: opt }));
+    setAltOpenFor(null);
+  }
+  /** Drop a previously picked override (fall back to top-1). */
+  function resetStation(mineralId: string) {
+    setOverrides((o) => {
+      const next = { ...o };
+      delete next[mineralId];
+      return next;
+    });
+  }
 
   const totals = useMemo(() => {
     let totalScu = 0;
@@ -370,38 +406,143 @@ export default function SellRoutePreviewModal({
 
                   {/* Commodity rows */}
                   <div className="mt-2 pl-11 space-y-1">
-                    {group.items.map((it) => (
-                      <div
-                        key={it.mineralId}
-                        className="flex items-center gap-3 text-xs bg-zinc-950/40 border border-zinc-800/40 rounded px-2.5 py-1.5"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <span className="font-bold text-zinc-200 uppercase">
-                            {it.commodityName}
-                          </span>
-                          <span className="text-[10px] text-zinc-500 font-mono ml-1.5">
-                            ({it.mineralName})
-                          </span>
-                        </div>
-                        <span className="font-mono text-amber-400">
-                          {it.scu.toFixed(0)} SCU
-                        </span>
-                        <span className="font-mono text-zinc-500 text-[10px]">
-                          @ {it.pricePerScu?.toLocaleString() || "—"}
-                        </span>
-                        <span className="font-mono text-emerald-300 font-bold">
-                          {fmtAuec(it.totalValue)}
-                        </span>
-                        <button
-                          onClick={() => removeItem(group.key, it.mineralId)}
-                          disabled={creating}
-                          title={t("removeStop")}
-                          className="w-5 h-5 rounded bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 text-[10px] disabled:opacity-40"
+                    {group.items.map((it) => {
+                      // Alternative sell stations for this commodity. We
+                      // hide the row's current station and show the remaining
+                      // top-N so the user always sees *real* alternatives.
+                      const altsFull = it.priceOptions || [];
+                      const alts = altsFull
+                        .filter(
+                          (o) =>
+                            (o.station || "").toLowerCase() !==
+                            (it.station || "").toLowerCase(),
+                        )
+                        .slice(0, MAX_ALT_OPTIONS);
+                      const hasAlts = alts.length > 0;
+                      const isOpen = altOpenFor === it.mineralId;
+                      const overridden = !!overrides[it.mineralId];
+
+                      return (
+                        <div
+                          key={it.mineralId}
+                          className={`rounded border px-2.5 py-1.5 ${
+                            isOpen
+                              ? "bg-zinc-950/70 border-cyan-500/40"
+                              : "bg-zinc-950/40 border-zinc-800/40"
+                          }`}
                         >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
+                          {/* Main row — human-readable sell line */}
+                          <div className="flex items-center gap-3 text-xs">
+                            <div className="flex-1 min-w-0">
+                              <span className="font-bold text-zinc-100 uppercase">
+                                {it.commodityName}
+                              </span>
+                              <span className="text-[10px] text-zinc-500 font-mono ml-1.5">
+                                ({it.mineralName})
+                              </span>
+                              {overridden && (
+                                <span
+                                  className="ml-1.5 text-[9px] uppercase tracking-wider text-cyan-300"
+                                  title={t("stationOverridden")}
+                                >
+                                  {t("manualPick")}
+                                </span>
+                              )}
+                            </div>
+                            <span className="font-mono text-amber-400">
+                              {it.scu.toFixed(0)} SCU
+                            </span>
+                            <span className="font-mono text-zinc-500 text-[10px]">
+                              @ {it.pricePerScu?.toLocaleString() || "—"} aUEC
+                            </span>
+                            <span className="font-mono text-emerald-300 font-bold">
+                              {fmtAuec(it.totalValue)}
+                            </span>
+                            {hasAlts ? (
+                              <button
+                                onClick={() =>
+                                  setAltOpenFor(isOpen ? null : it.mineralId)
+                                }
+                                disabled={creating}
+                                title={t("otherOptions")}
+                                className={`h-5 px-2 rounded text-[10px] font-mono border disabled:opacity-40 ${
+                                  isOpen
+                                    ? "bg-cyan-500/20 text-cyan-200 border-cyan-500/50"
+                                    : "bg-zinc-800 text-zinc-400 border-zinc-700 hover:text-zinc-200 hover:border-zinc-600"
+                                }`}
+                              >
+                                {isOpen ? "▴" : "▾"} {t("options")}
+                              </button>
+                            ) : (
+                              <span className="h-5 w-[52px]" />
+                            )}
+                            <button
+                              onClick={() =>
+                                removeItem(group.key, it.mineralId)
+                              }
+                              disabled={creating}
+                              title={t("removeStop")}
+                              className="w-5 h-5 rounded bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 text-[10px] disabled:opacity-40"
+                            >
+                              ✕
+                            </button>
+                          </div>
+
+                          {/* Alt-station panel (top-N alternatives, best first) */}
+                          {isOpen && hasAlts && (
+                            <div className="mt-2 border-t border-zinc-800 pt-2">
+                              <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 mb-1.5 flex items-center justify-between">
+                                <span>{t("alternativesFor", { name: it.commodityName })}</span>
+                                {overridden && (
+                                  <button
+                                    onClick={() => resetStation(it.mineralId)}
+                                    disabled={creating}
+                                    className="text-[10px] text-cyan-300 hover:text-cyan-200 underline-offset-2 hover:underline normal-case tracking-normal"
+                                  >
+                                    {t("resetToBest")}
+                                  </button>
+                                )}
+                              </div>
+                              <div className="space-y-1">
+                                {alts.map((opt) => {
+                                  const revenue = opt.price * it.scu;
+                                  const bodyLbl = inferBody(opt.station, opt.system);
+                                  return (
+                                    <button
+                                      key={`${opt.station}|${opt.system}`}
+                                      onClick={() =>
+                                        pickStation(it.mineralId, opt)
+                                      }
+                                      disabled={creating}
+                                      className="w-full flex items-center gap-3 text-left text-xs bg-zinc-900/60 hover:bg-zinc-800/80 border border-zinc-800 hover:border-cyan-500/40 rounded px-2.5 py-1.5 disabled:opacity-40"
+                                    >
+                                      <div className="flex-1 min-w-0">
+                                        <div className="text-zinc-100 font-bold truncate">
+                                          {opt.station}
+                                        </div>
+                                        <div className="text-[10px] text-zinc-500">
+                                          {bodyLbl}
+                                          <span className="text-zinc-700 mx-1.5">·</span>
+                                          {opt.system}
+                                        </div>
+                                      </div>
+                                      <div className="flex-shrink-0 text-right">
+                                        <div className="font-mono text-emerald-300 font-bold">
+                                          {fmtAuec(revenue)}
+                                        </div>
+                                        <div className="text-[10px] text-zinc-500 font-mono">
+                                          {opt.price.toLocaleString()} aUEC/SCU
+                                        </div>
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );

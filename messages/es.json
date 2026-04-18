@@ -679,7 +679,13 @@
       "confirm": "{count, plural, one {Crear # orden} other {Crear # órdenes}}",
       "creating": "Creando…",
       "woTitlePrefix": "Parada",
-      "unified": "{count, plural, one {# mercancía unificada} other {# mercancías unificadas}}"
+      "unified": "{count, plural, one {# mercancía unificada} other {# mercancías unificadas}}",
+      "options": "Opciones",
+      "otherOptions": "Ver otras estaciones donde vender",
+      "alternativesFor": "Otras estaciones para {name}",
+      "resetToBest": "Volver a la mejor",
+      "manualPick": "Elegida",
+      "stationOverridden": "Estación elegida manualmente"
     }
   },
   "Trade": {

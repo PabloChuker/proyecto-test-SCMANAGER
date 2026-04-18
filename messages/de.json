@@ -679,7 +679,13 @@
       "confirm": "{count, plural, one {# Auftrag erstellen} other {# Aufträge erstellen}}",
       "creating": "Erstelle…",
       "woTitlePrefix": "Stopp",
-      "unified": "{count, plural, one {# Ware vereint} other {# Waren vereint}}"
+      "unified": "{count, plural, one {# Ware vereint} other {# Waren vereint}}",
+      "options": "Optionen",
+      "otherOptions": "Andere Verkaufsstationen anzeigen",
+      "alternativesFor": "Andere Stationen für {name}",
+      "resetToBest": "Zur besten zurück",
+      "manualPick": "Gewählt",
+      "stationOverridden": "Station manuell gewählt"
     }
   },
   "Trade": {

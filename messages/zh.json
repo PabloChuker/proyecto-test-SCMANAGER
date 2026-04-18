@@ -679,7 +679,13 @@
       "confirm": "{count, plural, other {创建 # 个订单}}",
       "creating": "创建中…",
       "woTitlePrefix": "停靠点",
-      "unified": "{count, plural, other {合并 # 项商品}}"
+      "unified": "{count, plural, other {合并 # 项商品}}",
+      "options": "选项",
+      "otherOptions": "查看其他销售站点",
+      "alternativesFor": "{name} 的其他站点",
+      "resetToBest": "回到最佳",
+      "manualPick": "已选择",
+      "stationOverridden": "手动选择的站点"
     }
   },
   "Trade": {

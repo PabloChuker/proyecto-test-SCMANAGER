@@ -679,7 +679,13 @@
       "confirm": "{count, plural, one {Create # order} other {Create # orders}}",
       "creating": "Creating…",
       "woTitlePrefix": "Stop",
-      "unified": "{count, plural, one {# commodity unified} other {# commodities unified}}"
+      "unified": "{count, plural, one {# commodity unified} other {# commodities unified}}",
+      "options": "Options",
+      "otherOptions": "See other stations where this sells",
+      "alternativesFor": "Other stations for {name}",
+      "resetToBest": "Back to best",
+      "manualPick": "Picked",
+      "stationOverridden": "Station picked manually"
     }
   },
   "Trade": {
