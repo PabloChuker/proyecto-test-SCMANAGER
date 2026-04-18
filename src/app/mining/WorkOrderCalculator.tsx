@@ -205,6 +205,11 @@ export default function WorkOrderCalculator() {
   const [oreEntries, setOreEntries] = useState<OreEntry[]>([]);
   const oreEntryCounterRef = useRef(0);
 
+  // UX: explicit order stage toggle so the user KNOWS whether the order will
+  // land on "In Progress" (with countdown) or directly on "Ready to Collect".
+  // Default = "refining" to keep the previous behaviour when a timer was set.
+  const [orderStage, setOrderStage] = useState<"refining" | "ready">("refining");
+
   // ── Crew state ──
   const [crew, setCrew] = useState<CrewMember[]>([
     { id: "crew1", name: "You", shareType: "equal", share: 1 },
@@ -296,6 +301,7 @@ export default function WorkOrderCalculator() {
   // ── Reset on tab change ──
   useEffect(() => {
     setOreEntries([]);
+    setOrderStage("refining");
   }, [mode]);
 
   // ── Auto-load available sessions for crew ──
@@ -422,14 +428,23 @@ export default function WorkOrderCalculator() {
       });
     });
 
-    // ── Bug #3 fix: if the user already started the local timer, preserve the
-    // remaining seconds when submitting the order (otherwise the dashboard
-    // would restart the countdown from the total input value).
+    // ── Bug #3 fix + Bug #5 UX: if user marked the order as "ready" (already
+    // refined), we DO NOT pass a countdown → the backend stores it as
+    // "completed" (ready-to-collect). Otherwise we preserve the timer so the
+    // dashboard shows the real remaining seconds.
     const effectiveCountdown = mode === "ship"
-      ? (timer.running || timer.finished
-          ? timer.remaining
-          : (timer.remaining > 0 ? timer.remaining : timer.totalInputSeconds))
+      ? (orderStage === "ready"
+          ? 0
+          : (timer.running || timer.finished
+              ? timer.remaining
+              : (timer.remaining > 0 ? timer.remaining : timer.totalInputSeconds)))
       : 0;
+
+    // Safety net for "refining" orders: if the user forgot to set the timer,
+    // don't silently downgrade the order to "Ready to Collect" — bail out.
+    if (mode === "ship" && orderStage === "refining" && effectiveCountdown <= 0) {
+      return;
+    }
 
     // Save to localStorage ONLY when NOT connected to a Supabase party session
     if (!useSupabase) {
@@ -912,20 +927,82 @@ export default function WorkOrderCalculator() {
         </div>
       </div>
 
+      {/* ── Order Stage Toggle (ship mining only) ───────────────── */}
+      {mode === "ship" && (
+        <div className="mt-6">
+          <div className="text-[10px] tracking-[0.15em] uppercase text-zinc-500 font-bold mb-2 text-center">
+            {t("orderStageLabel")}
+          </div>
+          <div className="grid grid-cols-2 gap-0 border border-zinc-700/60 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setOrderStage("refining")}
+              className={`py-3 text-center text-xs font-bold uppercase tracking-wider transition-colors
+                ${orderStage === "refining"
+                  ? "bg-amber-500 text-zinc-900 shadow-[inset_0_0_15px_rgba(245,158,11,0.3)]"
+                  : "bg-zinc-900/60 text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-200"
+                }`}
+            >
+              ⏳ {t("stageRefining")}
+            </button>
+            <button
+              onClick={() => setOrderStage("ready")}
+              className={`py-3 text-center text-xs font-bold uppercase tracking-wider transition-colors
+                ${orderStage === "ready"
+                  ? "bg-emerald-500 text-zinc-900 shadow-[inset_0_0_15px_rgba(16,185,129,0.3)]"
+                  : "bg-zinc-900/60 text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-200"
+                }`}
+            >
+              ✅ {t("stageReady")}
+            </button>
+          </div>
+          <p className="mt-2 text-[10px] text-zinc-500 text-center italic">
+            {orderStage === "refining" ? t("stageRefiningHint") : t("stageReadyHint")}
+          </p>
+        </div>
+      )}
+
       {/* ── Submit Order Button ──────────────────────────────────── */}
-      <div className="mt-6">
-        <button
-          onClick={submitOrder}
-          disabled={submitted}
-          className={`w-full py-3.5 rounded-lg text-sm font-bold tracking-[0.15em] uppercase transition-all duration-300
-            ${submitted
-              ? "bg-emerald-500 text-zinc-900 shadow-[0_0_20px_rgba(16,185,129,0.4)]"
-              : "bg-amber-500 hover:bg-amber-400 text-zinc-900 shadow-[0_0_15px_rgba(245,158,11,0.3)] hover:shadow-[0_0_20px_rgba(245,158,11,0.5)]"
-            }`}
-        >
-          {submitted ? t("orderSaved") : t("submitWorkOrder")}
-        </button>
-      </div>
+      {(() => {
+        const refiningNeedsTimer =
+          mode === "ship" &&
+          orderStage === "refining" &&
+          !timer.running &&
+          !timer.finished &&
+          timer.totalInputSeconds === 0 &&
+          timer.remaining === 0;
+        const disabled = submitted || refiningNeedsTimer;
+        const submitLabel = submitted
+          ? t("orderSaved")
+          : mode === "ship" && orderStage === "refining"
+            ? t("startRefining")
+            : mode === "ship" && orderStage === "ready"
+              ? t("saveAsRefined")
+              : t("submitWorkOrder");
+        return (
+          <div className={mode === "ship" ? "mt-4" : "mt-6"}>
+            <button
+              onClick={submitOrder}
+              disabled={disabled}
+              className={`w-full py-3.5 rounded-lg text-sm font-bold tracking-[0.15em] uppercase transition-all duration-300
+                ${submitted
+                  ? "bg-emerald-500 text-zinc-900 shadow-[0_0_20px_rgba(16,185,129,0.4)]"
+                  : disabled
+                    ? "bg-zinc-800 text-zinc-600 cursor-not-allowed"
+                    : mode === "ship" && orderStage === "ready"
+                      ? "bg-emerald-500 hover:bg-emerald-400 text-zinc-900 shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:shadow-[0_0_20px_rgba(16,185,129,0.5)]"
+                      : "bg-amber-500 hover:bg-amber-400 text-zinc-900 shadow-[0_0_15px_rgba(245,158,11,0.3)] hover:shadow-[0_0_20px_rgba(245,158,11,0.5)]"
+                }`}
+            >
+              {submitLabel}
+            </button>
+            {refiningNeedsTimer && !submitted && (
+              <p className="mt-2 text-center text-[11px] text-amber-400 italic">
+                ⚠ {t("timerRequired")}
+              </p>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Footer Note ────────────────────────────────────────────── */}
       <div className="mt-6 bg-blue-500/5 border border-blue-500/20 rounded-lg p-4 flex items-start gap-3">
