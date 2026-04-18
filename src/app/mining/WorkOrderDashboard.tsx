@@ -17,6 +17,9 @@ import { useMiningRealtime, useMiningBroadcast } from "@/store/useMiningRealtime
 import { useTradeWorkOrderStore } from "@/store/useTradeWorkOrderStore";
 import { useAuth } from "@/contexts/AuthContext";
 import { getCommodityForMineral } from "@/data/mining/mineral-commodity-map";
+import SellRoutePreviewModal, {
+  type SellRouteInput,
+} from "@/components/mining/SellRoutePreviewModal";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -178,6 +181,11 @@ export default function WorkOrderDashboard() {
   const [loadingSellData, setLoadingSellData] = useState(false);
   const [bestPrices, setBestPrices] = useState<Record<string, SellLocation>>({});
   const [bestPricesLoaded, setBestPricesLoaded] = useState(false);
+
+  // ── Multi-sell route state (Fase B) ──
+  const [selectedMineralIds, setSelectedMineralIds] = useState<Set<string>>(new Set());
+  const [routeModalOpen, setRouteModalOpen] = useState(false);
+  const [routeModalItems, setRouteModalItems] = useState<SellRouteInput[]>([]);
 
   // Load localStorage data ONLY when NOT logged in (solo mode)
   useEffect(() => {
@@ -558,6 +566,62 @@ export default function WorkOrderDashboard() {
     [bestPrices, sbSessionId, activeId, requestOpenFromRoute, router]
   );
 
+  // ── Fase B — multi-sell route handlers ─────────────────────────────────
+  // Items eligible for the route: quantity > 0 AND has a known commodity map.
+  const sellableInventory = useMemo(() => {
+    return mergedInventory.filter((i) => {
+      if (i.quantity <= 0) return false;
+      return !!getCommodityForMineral(i.mineralId);
+    });
+  }, [mergedInventory]);
+
+  const toggleMineralSelected = useCallback((mineralId: string) => {
+    setSelectedMineralIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(mineralId)) next.delete(mineralId);
+      else next.add(mineralId);
+      return next;
+    });
+  }, []);
+
+  const selectAllSellable = useCallback(() => {
+    setSelectedMineralIds(new Set(sellableInventory.map((i) => i.mineralId)));
+  }, [sellableInventory]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedMineralIds(new Set());
+  }, []);
+
+  const openRouteModal = useCallback(() => {
+    const items: SellRouteInput[] = [];
+    for (const mineralId of selectedMineralIds) {
+      const inv = mergedInventory.find((i) => i.mineralId === mineralId);
+      if (!inv) continue;
+      const match = getCommodityForMineral(inv.mineralId);
+      if (!match) continue;
+      const best = bestPrices[inv.mineralId] || null;
+      items.push({
+        mineralId: inv.mineralId,
+        mineralName: inv.mineralName,
+        commodityCode: match.code,
+        commodityName: match.name,
+        scuAvailable: inv.quantity,
+        bestStation: best?.station || null,
+        bestSystem: best?.system || null,
+        bestPrice: best?.price ?? null,
+      });
+    }
+    if (items.length === 0) return;
+    setRouteModalItems(items);
+    setRouteModalOpen(true);
+  }, [selectedMineralIds, mergedInventory, bestPrices]);
+
+  const closeRouteModal = useCallback(() => {
+    setRouteModalOpen(false);
+    setRouteModalItems([]);
+    setSelectedMineralIds(new Set());
+  }, []);
+
   // Connection status indicator
   const isPartyMode = user && sbSessionId;
 
@@ -867,7 +931,45 @@ export default function WorkOrderDashboard() {
             <div className="text-center py-12 text-zinc-600 text-sm">{t("noMaterials")}</div>
           ) : (
             <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg overflow-hidden">
-              <div className="grid grid-cols-[2fr_auto_1fr_1fr_auto_auto] gap-2 px-4 py-2 bg-zinc-800/40 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40">
+              {/* ── Sticky multi-select action bar (Fase B) ── */}
+              {selectedMineralIds.size > 0 && (
+                <div className="sticky top-0 z-10 flex items-center gap-3 px-4 py-2.5 bg-cyan-500/10 border-b border-cyan-500/40 backdrop-blur-sm">
+                  <span className="text-xs font-bold text-cyan-300">
+                    🛣 {t("selectedCount", { n: selectedMineralIds.size })}
+                  </span>
+                  <div className="flex-1" />
+                  <button
+                    onClick={clearSelection}
+                    className="px-2.5 py-1 text-[10px] font-bold text-zinc-400 hover:text-zinc-200 border border-zinc-700 rounded"
+                  >
+                    {t("clearSelection")}
+                  </button>
+                  <button
+                    onClick={openRouteModal}
+                    className="px-3 py-1 text-[11px] font-bold text-zinc-900 bg-cyan-400 hover:bg-cyan-300 rounded uppercase tracking-wider shadow-[0_0_10px_rgba(34,211,238,0.3)]"
+                  >
+                    🛣 {t("buildRoute", { n: selectedMineralIds.size })}
+                  </button>
+                </div>
+              )}
+
+              <div className="grid grid-cols-[auto_2fr_auto_1fr_1fr_auto_auto] gap-2 px-4 py-2 bg-zinc-800/40 text-[10px] tracking-[0.1em] uppercase text-zinc-500 font-bold border-b border-zinc-700/40">
+                <span className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={
+                      sellableInventory.length > 0 &&
+                      sellableInventory.every((i) => selectedMineralIds.has(i.mineralId))
+                    }
+                    onChange={(e) => {
+                      if (e.target.checked) selectAllSellable();
+                      else clearSelection();
+                    }}
+                    disabled={sellableInventory.length === 0}
+                    className="accent-cyan-400 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                    title={t("selectAllSellable")}
+                  />
+                </span>
                 <span>{t("col.material")}</span>
                 <span className="text-center">{t("col.quality")}</span>
                 <span className="text-right">{t("col.available")}</span>
@@ -879,8 +981,26 @@ export default function WorkOrderDashboard() {
                 const q = (item as any).quality as number | undefined;
                 const bestPrice = bestPrices[item.mineralId];
                 const isParty = (item as any)._source === "supabase";
+                const commodityMatch = getCommodityForMineral(item.mineralId);
+                const canSelect = item.quantity > 0 && !!commodityMatch;
+                const isSelected = selectedMineralIds.has(item.mineralId);
                 return (
-                  <div key={item.mineralId} className="grid grid-cols-[2fr_auto_1fr_1fr_auto_auto] gap-2 px-4 py-3 border-b border-zinc-800/30 items-center">
+                  <div
+                    key={item.mineralId}
+                    className={`grid grid-cols-[auto_2fr_auto_1fr_1fr_auto_auto] gap-2 px-4 py-3 border-b border-zinc-800/30 items-center ${
+                      isSelected ? "bg-cyan-500/5" : ""
+                    }`}
+                  >
+                    <span className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleMineralSelected(item.mineralId)}
+                        disabled={!canSelect}
+                        className="accent-cyan-400 cursor-pointer disabled:cursor-not-allowed disabled:opacity-30"
+                        title={!canSelect ? t("noCommodityMatch") : undefined}
+                      />
+                    </span>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold text-zinc-200 uppercase">{item.mineralName}</span>
                       {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">{t("party")}</span>}
@@ -1298,6 +1418,14 @@ export default function WorkOrderDashboard() {
           </div>
         </div>
       )}
+
+      {/* ═══ Sell Route Preview Modal (Fase B — multi-sell) ═══ */}
+      <SellRoutePreviewModal
+        open={routeModalOpen}
+        sessionId={sbSessionId || activeId || null}
+        items={routeModalItems}
+        onClose={closeRouteModal}
+      />
     </div>
   );
 }

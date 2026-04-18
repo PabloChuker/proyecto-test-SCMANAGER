@@ -655,7 +655,29 @@
         "distribute": "Distribuido",
         "manual_add": "Añadido",
         "manual_remove": "Eliminado"
-      }
+      },
+      "selectedCount": "{n, plural, one {# seleccionado} other {# seleccionados}}",
+      "clearSelection": "Limpiar selección",
+      "buildRoute": "Armar ruta ({n})",
+      "selectAllSellable": "Seleccionar todos"
+    },
+    "routePreview": {
+      "title": "Ruta de venta",
+      "subtitle": "Revisá el orden de las paradas, ajustá si querés y creá todas las órdenes de venta.",
+      "stopsCount": "{n, plural, one {# parada} other {# paradas}}",
+      "totalScu": "{scu} SCU",
+      "estimatedRevenue": "~{value} aUEC",
+      "noStops": "No hay paradas.",
+      "noStation": "Sin estación recomendada",
+      "moveUp": "Subir",
+      "moveDown": "Bajar",
+      "removeStop": "Quitar parada",
+      "warningMissingPrice": "{count, plural, one {# parada sin precio} other {# paradas sin precio}}",
+      "progress": "Creando {done}/{total}…",
+      "cancel": "Cancelar",
+      "confirm": "{count, plural, one {Crear # orden} other {Crear # órdenes}}",
+      "creating": "Creando…",
+      "woTitlePrefix": "Parada"
     }
   },
   "Trade": {
@@ -758,6 +780,9 @@
       "totalToTransfer": "Total por transferir",
       "allCaughtUp": "Nada pendiente — todo al día.",
       "more": "{count} más…",
+      "activeRoutes": "Rutas activas",
+      "activeRoutesCount": "{count, plural, one {# ruta} other {# rutas}}",
+      "routeProgress": "{done}/{total} paradas",
       "topRoutes": "Top rutas (por profit)",
       "topCommodities": "Top commodities (por profit)",
       "noCompletedRuns": "Sin runs completadas aún.",
@@ -815,6 +840,8 @@
       "destSystem": "Destino — Sistema",
       "cargoAndPrices": "Cargo y precios",
       "fromMining": "De minería: {name}",
+      "routeStop": "Parada {stop} de {total}",
+      "routeStopShort": "{stop}/{total}",
       "insufficientStock": "Excede el stock disponible ({avail} SCU)",
       "inventoryUpdated": "Inventario actualizado",
       "scuBought": "SCU comprado",

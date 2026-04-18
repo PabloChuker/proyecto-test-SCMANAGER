@@ -21,6 +21,7 @@ import {
   TradeWorkOrder,
   TradeWOParticipant,
 } from "@/store/useTradeWorkOrderStore";
+import { parseRouteMarker } from "@/lib/miningTradeBridge";
 
 // ── helpers ─────────────────────────────────────────────────────────────────
 type Scope = "me" | "party" | "all";
@@ -247,6 +248,54 @@ export default function TradeDashboard() {
     return [...map.values()].sort((a, b) => b.profit - a.profit).slice(0, 5);
   }, [scoped]);
 
+  // ── Active multi-sell routes (Fase B) ──────────────────────────────────
+  // Groups WOs by their [route:GROUP_ID:STOP:TOTAL] marker. A route is
+  // "active" when at least one of its stops is not completed yet.
+  const activeRoutes = useMemo(() => {
+    type Stop = {
+      order: TradeWorkOrder;
+      stop: number;
+    };
+    const map = new Map<
+      string,
+      {
+        groupId: string;
+        total: number;
+        stops: Stop[];
+        completed: number;
+        profit: number;
+      }
+    >();
+    for (const o of scoped) {
+      const marker = parseRouteMarker(o.notes);
+      if (!marker) continue;
+      const entry =
+        map.get(marker.groupId) || {
+          groupId: marker.groupId,
+          total: marker.total,
+          stops: [] as Stop[],
+          completed: 0,
+          profit: 0,
+        };
+      entry.stops.push({ order: o, stop: marker.stop });
+      if (o.status === "completed") {
+        entry.completed += 1;
+        entry.profit += o.net_profit || 0;
+      }
+      // If different stops declared different totals, take the max.
+      if (marker.total > entry.total) entry.total = marker.total;
+      map.set(marker.groupId, entry);
+    }
+    const rows = [...map.values()]
+      .map((g) => ({
+        ...g,
+        stops: g.stops.sort((a, b) => a.stop - b.stop),
+      }))
+      .filter((g) => g.completed < g.total) // only active
+      .sort((a, b) => b.stops.length - a.stops.length);
+    return rows;
+  }, [scoped]);
+
   // ── Profit over time ───────────────────────────────────────────────────
   const timeline = useMemo(() => {
     const map = new Map<string, number>();
@@ -428,6 +477,63 @@ export default function TradeDashboard() {
           </div>
         )}
       </div>
+
+      {/* ── Active multi-sell routes (Fase B) ── */}
+      {activeRoutes.length > 0 && (
+        <div className="bg-zinc-900/60 border border-cyan-500/20 rounded-sm p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-[9px] uppercase tracking-[0.2em] text-cyan-400">
+              🛣 {td("activeRoutes")}
+            </div>
+            <div className="text-[10px] text-zinc-500">
+              {td("activeRoutesCount", { count: activeRoutes.length })}
+            </div>
+          </div>
+          <div className="space-y-2">
+            {activeRoutes.slice(0, 5).map((r) => {
+              const pct = Math.min(100, Math.round((r.completed / r.total) * 100));
+              return (
+                <div
+                  key={r.groupId}
+                  className="bg-zinc-950/40 border border-zinc-800/40 rounded-sm p-3"
+                >
+                  <div className="flex items-center justify-between text-xs mb-2">
+                    <div className="text-zinc-200 font-mono">
+                      {td("routeProgress", { done: r.completed, total: r.total })}
+                    </div>
+                    <div className="font-mono text-emerald-300">
+                      {fmt(r.profit)} aUEC
+                    </div>
+                  </div>
+                  <div className="h-1.5 bg-zinc-800/60 rounded-sm overflow-hidden mb-2">
+                    <div
+                      className="h-full bg-cyan-500/60"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {r.stops.map((s) => (
+                      <button
+                        key={s.order.id}
+                        onClick={() => openEdit(s.order.id)}
+                        className={`px-1.5 py-0.5 text-[10px] font-mono rounded-sm border transition-colors hover:brightness-125 ${
+                          STATUS_STYLES[s.order.status] || STATUS_STYLES.draft
+                        }`}
+                        title={s.order.title}
+                      >
+                        {s.stop}/{r.total} ·{" "}
+                        {s.order.commodity_code ||
+                          s.order.commodity_name ||
+                          "—"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Top routes + commodities ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">

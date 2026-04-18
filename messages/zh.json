@@ -655,7 +655,29 @@
         "distribute": "已分配",
         "manual_add": "已添加",
         "manual_remove": "已移除"
-      }
+      },
+      "selectedCount": "{n, plural, other {已选 # 项}}",
+      "clearSelection": "清除选择",
+      "buildRoute": "构建路线 ({n})",
+      "selectAllSellable": "全选"
+    },
+    "routePreview": {
+      "title": "销售路线",
+      "subtitle": "查看停靠点顺序，根据需要调整，然后创建所有销售订单。",
+      "stopsCount": "{n, plural, other {# 个停靠点}}",
+      "totalScu": "{scu} SCU",
+      "estimatedRevenue": "~{value} aUEC",
+      "noStops": "暂无停靠点。",
+      "noStation": "无推荐站点",
+      "moveUp": "上移",
+      "moveDown": "下移",
+      "removeStop": "移除停靠点",
+      "warningMissingPrice": "{count, plural, other {# 个停靠点无价格}}",
+      "progress": "正在创建 {done}/{total}…",
+      "cancel": "取消",
+      "confirm": "{count, plural, other {创建 # 个订单}}",
+      "creating": "创建中…",
+      "woTitlePrefix": "停靠点"
     }
   },
   "Trade": {
@@ -758,6 +780,9 @@
       "totalToTransfer": "待转账总额",
       "allCaughtUp": "无待办事项 — 全部已处理。",
       "more": "还有 {count} 项…",
+      "activeRoutes": "活跃路线",
+      "activeRoutesCount": "{count, plural, other {# 条路线}}",
+      "routeProgress": "{done}/{total} 站",
       "topRoutes": "最佳路线（按利润）",
       "topCommodities": "最佳商品（按利润）",
       "noCompletedRuns": "暂无已完成的任务。",
@@ -815,6 +840,8 @@
       "destSystem": "终点 — 系统",
       "cargoAndPrices": "货物与价格",
       "fromMining": "来自采矿：{name}",
+      "routeStop": "第 {stop} 站（共 {total} 站）",
+      "routeStopShort": "{stop}/{total}",
       "insufficientStock": "超过可用库存（{avail} SCU）",
       "inventoryUpdated": "库存已更新",
       "scuBought": "已购 SCU",

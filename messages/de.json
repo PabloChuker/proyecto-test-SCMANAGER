@@ -655,7 +655,29 @@
         "distribute": "Verteilt",
         "manual_add": "Hinzugefügt",
         "manual_remove": "Entfernt"
-      }
+      },
+      "selectedCount": "{n, plural, one {# ausgewählt} other {# ausgewählt}}",
+      "clearSelection": "Auswahl löschen",
+      "buildRoute": "Route erstellen ({n})",
+      "selectAllSellable": "Alle auswählen"
+    },
+    "routePreview": {
+      "title": "Verkaufsroute",
+      "subtitle": "Prüfe die Reihenfolge der Stopps, passe sie an und erstelle alle Verkaufsaufträge.",
+      "stopsCount": "{n, plural, one {# Stopp} other {# Stopps}}",
+      "totalScu": "{scu} SCU",
+      "estimatedRevenue": "~{value} aUEC",
+      "noStops": "Keine Stopps.",
+      "noStation": "Keine empfohlene Station",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "removeStop": "Stopp entfernen",
+      "warningMissingPrice": "{count, plural, one {# Stopp ohne Preis} other {# Stopps ohne Preis}}",
+      "progress": "Erstelle {done}/{total}…",
+      "cancel": "Abbrechen",
+      "confirm": "{count, plural, one {# Auftrag erstellen} other {# Aufträge erstellen}}",
+      "creating": "Erstelle…",
+      "woTitlePrefix": "Stopp"
     }
   },
   "Trade": {
@@ -758,6 +780,9 @@
       "totalToTransfer": "Gesamt zu überweisen",
       "allCaughtUp": "Nichts ausstehend — alles erledigt.",
       "more": "{count} weitere…",
+      "activeRoutes": "Aktive Routen",
+      "activeRoutesCount": "{count, plural, one {# Route} other {# Routen}}",
+      "routeProgress": "{done}/{total} Stopps",
       "topRoutes": "Top-Routen (nach Profit)",
       "topCommodities": "Top-Commodities (nach Profit)",
       "noCompletedRuns": "Noch keine abgeschlossenen Runs.",
@@ -815,6 +840,8 @@
       "destSystem": "Ziel — System",
       "cargoAndPrices": "Fracht und Preise",
       "fromMining": "Aus dem Bergbau: {name}",
+      "routeStop": "Stopp {stop} von {total}",
+      "routeStopShort": "{stop}/{total}",
       "insufficientStock": "Übersteigt den verfügbaren Bestand ({avail} SCU)",
       "inventoryUpdated": "Inventar aktualisiert",
       "scuBought": "SCU gekauft",

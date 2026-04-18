@@ -655,7 +655,29 @@
         "distribute": "Distributed",
         "manual_add": "Added",
         "manual_remove": "Removed"
-      }
+      },
+      "selectedCount": "{n, plural, one {# selected} other {# selected}}",
+      "clearSelection": "Clear selection",
+      "buildRoute": "Build route ({n})",
+      "selectAllSellable": "Select all"
+    },
+    "routePreview": {
+      "title": "Sell route",
+      "subtitle": "Review the stop order, tweak if you want, then create all sell orders.",
+      "stopsCount": "{n, plural, one {# stop} other {# stops}}",
+      "totalScu": "{scu} SCU",
+      "estimatedRevenue": "~{value} aUEC",
+      "noStops": "No stops.",
+      "noStation": "No recommended station",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "removeStop": "Remove stop",
+      "warningMissingPrice": "{count, plural, one {# stop without price} other {# stops without price}}",
+      "progress": "Creating {done}/{total}…",
+      "cancel": "Cancel",
+      "confirm": "{count, plural, one {Create # order} other {Create # orders}}",
+      "creating": "Creating…",
+      "woTitlePrefix": "Stop"
     }
   },
   "Trade": {
@@ -758,6 +780,9 @@
       "totalToTransfer": "Total to transfer",
       "allCaughtUp": "Nothing pending — all caught up.",
       "more": "{count} more…",
+      "activeRoutes": "Active routes",
+      "activeRoutesCount": "{count, plural, one {# route} other {# routes}}",
+      "routeProgress": "{done}/{total} stops",
       "topRoutes": "Top routes (by profit)",
       "topCommodities": "Top commodities (by profit)",
       "noCompletedRuns": "No completed runs yet.",
@@ -815,6 +840,8 @@
       "destSystem": "Destination — System",
       "cargoAndPrices": "Cargo and prices",
       "fromMining": "From mining: {name}",
+      "routeStop": "Stop {stop} of {total}",
+      "routeStopShort": "{stop}/{total}",
       "insufficientStock": "Exceeds available stock ({avail} SCU)",
       "inventoryUpdated": "Inventory updated",
       "scuBought": "SCU bought",

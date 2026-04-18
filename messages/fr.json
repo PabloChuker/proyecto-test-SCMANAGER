@@ -655,7 +655,29 @@
         "distribute": "Distribué",
         "manual_add": "Ajouté",
         "manual_remove": "Retiré"
-      }
+      },
+      "selectedCount": "{n, plural, one {# sélectionné} other {# sélectionnés}}",
+      "clearSelection": "Effacer la sélection",
+      "buildRoute": "Créer la route ({n})",
+      "selectAllSellable": "Tout sélectionner"
+    },
+    "routePreview": {
+      "title": "Route de vente",
+      "subtitle": "Vérifiez l'ordre des arrêts, ajustez si besoin et créez tous les ordres de vente.",
+      "stopsCount": "{n, plural, one {# arrêt} other {# arrêts}}",
+      "totalScu": "{scu} SCU",
+      "estimatedRevenue": "~{value} aUEC",
+      "noStops": "Aucun arrêt.",
+      "noStation": "Pas de station recommandée",
+      "moveUp": "Monter",
+      "moveDown": "Descendre",
+      "removeStop": "Supprimer l'arrêt",
+      "warningMissingPrice": "{count, plural, one {# arrêt sans prix} other {# arrêts sans prix}}",
+      "progress": "Création {done}/{total}…",
+      "cancel": "Annuler",
+      "confirm": "{count, plural, one {Créer # ordre} other {Créer # ordres}}",
+      "creating": "Création…",
+      "woTitlePrefix": "Arrêt"
     }
   },
   "Trade": {
@@ -758,6 +780,9 @@
       "totalToTransfer": "Total à transférer",
       "allCaughtUp": "Rien en attente — tout est à jour.",
       "more": "{count} de plus…",
+      "activeRoutes": "Routes actives",
+      "activeRoutesCount": "{count, plural, one {# route} other {# routes}}",
+      "routeProgress": "{done}/{total} arrêts",
       "topRoutes": "Meilleures routes (par profit)",
       "topCommodities": "Meilleures commodities (par profit)",
       "noCompletedRuns": "Aucun run terminé pour l'instant.",
@@ -815,6 +840,8 @@
       "destSystem": "Destination — Système",
       "cargoAndPrices": "Cargaison et prix",
       "fromMining": "Issu du minage : {name}",
+      "routeStop": "Arrêt {stop} sur {total}",
+      "routeStopShort": "{stop}/{total}",
       "insufficientStock": "Dépasse le stock disponible ({avail} SCU)",
       "inventoryUpdated": "Inventaire mis à jour",
       "scuBought": "SCU achetés",

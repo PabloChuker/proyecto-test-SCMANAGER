@@ -24,8 +24,10 @@ import { createClient } from "@/lib/supabase/client";
 import {
   composeNotesWithMarker,
   parseMiningMarker,
-  stripMiningMarker,
+  parseRouteMarker,
+  stripAllMarkers,
   type MiningMarker,
+  type RouteMarker,
 } from "@/lib/miningTradeBridge";
 
 // localStorage key for the unsaved new-WO draft. Only used when creating a
@@ -132,6 +134,10 @@ export default function TradeWorkOrderCalculator() {
   // Set once the inventory discount POST succeeds, so the UI can confirm it
   // visually (amber chip → emerald chip). Null = not yet triggered.
   const [inventoryDiscountedAt, setInventoryDiscountedAt] = useState<string | null>(null);
+  // Fase B — route marker. Present when this WO belongs to a multi-sell route
+  // group. Rendered as a "Parada N de M" chip and preserved across saves so
+  // the route group survives edits.
+  const [routeMarker, setRouteMarker] = useState<RouteMarker | null>(null);
 
   // Participants + expenses (locally editable)
   const [participants, setParticipants] = useState<LocalParticipant[]>([]);
@@ -325,12 +331,15 @@ export default function TradeWorkOrderCalculator() {
     setScuLost(data.scu_lost || 0);
     setBuyPrice(data.buy_price_per_scu || 0);
     setSellPrice(data.sell_price_per_scu || 0);
-    // Split server notes into the hidden [mining:...] marker (bridge link)
-    // and the user-visible remainder so editing the text doesn't wipe the link.
+    // Split server notes into the hidden [mining:...] / [route:...] markers
+    // (bridge links) and the user-visible remainder so editing the text
+    // doesn't wipe the links.
     const serverNotes = data.notes || "";
-    const marker = parseMiningMarker(serverNotes);
-    if (marker) setMiningMarker(marker);
-    setNotes(stripMiningMarker(serverNotes));
+    const mMarker = parseMiningMarker(serverNotes);
+    const rMarker = parseRouteMarker(serverNotes);
+    if (mMarker) setMiningMarker(mMarker);
+    if (rMarker) setRouteMarker(rMarker);
+    setNotes(stripAllMarkers(serverNotes));
     setParticipants(
       (data.trade_wo_participants || []).map((p: TradeWOParticipant) => ({
         id: p.id,
@@ -687,10 +696,10 @@ export default function TradeWorkOrderCalculator() {
       setSaving(true);
       setError(null);
       try {
-        // Re-stamp the [mining:...] marker at the top of notes so the
-        // Mining Dashboard can detect a sourced WO and auto-discount the
-        // inventory once the WO transitions to "completed".
-        const persistedNotes = composeNotesWithMarker(notes, miningMarker);
+        // Re-stamp the [mining:...] + [route:...] markers at the top of notes
+        // so the Mining Dashboard can detect a sourced WO (auto-discount on
+        // completed) and the Trade Dashboard can group by route group id.
+        const persistedNotes = composeNotesWithMarker(notes, miningMarker, routeMarker);
         const body = {
           title,
           status: targetStatus || status,
@@ -885,7 +894,7 @@ export default function TradeWorkOrderCalculator() {
       title, status, partyId, commodityCode, commodityName,
       buyStation, buySystem, sellStation, sellSystem,
       scuBought, scuSold, scuLost, buyPrice, sellPrice,
-      notes, miningMarker, participants, expenses, serverId,
+      notes, miningMarker, routeMarker, participants, expenses, serverId,
     ],
   );
 
@@ -1110,26 +1119,37 @@ export default function TradeWorkOrderCalculator() {
           <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">
             {t("cargoAndPrices")}
           </div>
-          {/* Bridge chip: this WO was opened from a Mining Inventory row. */}
-          {miningMarker && (
-            <div
-              className={`inline-flex items-center gap-2 px-2.5 py-1 rounded border text-[10px] font-bold uppercase tracking-[0.1em] ${
-                inventoryDiscountedAt
-                  ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400"
-                  : "bg-amber-500/10 border-amber-500/40 text-amber-400"
-              }`}
-              title={
-                inventoryDiscountedAt
-                  ? t("inventoryUpdated")
-                  : t("fromMining", { name: miningMarker.mineralName })
-              }
-            >
-              {inventoryDiscountedAt ? "✓" : "⛏"} {miningMarker.mineralName}
-              {scuAvailable !== null && !inventoryDiscountedAt && (
-                <span className="opacity-70">· {scuAvailable} SCU</span>
-              )}
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {/* Fase B chip: this WO is part of a multi-sell route group. */}
+            {routeMarker && (
+              <div
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded border text-[10px] font-bold uppercase tracking-[0.1em] bg-cyan-500/10 border-cyan-500/40 text-cyan-300"
+                title={t("routeStop", { stop: routeMarker.stop, total: routeMarker.total })}
+              >
+                🛣 {t("routeStopShort", { stop: routeMarker.stop, total: routeMarker.total })}
+              </div>
+            )}
+            {/* Bridge chip: this WO was opened from a Mining Inventory row. */}
+            {miningMarker && (
+              <div
+                className={`inline-flex items-center gap-2 px-2.5 py-1 rounded border text-[10px] font-bold uppercase tracking-[0.1em] ${
+                  inventoryDiscountedAt
+                    ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400"
+                    : "bg-amber-500/10 border-amber-500/40 text-amber-400"
+                }`}
+                title={
+                  inventoryDiscountedAt
+                    ? t("inventoryUpdated")
+                    : t("fromMining", { name: miningMarker.mineralName })
+                }
+              >
+                {inventoryDiscountedAt ? "✓" : "⛏"} {miningMarker.mineralName}
+                {scuAvailable !== null && !inventoryDiscountedAt && (
+                  <span className="opacity-70">· {scuAvailable} SCU</span>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div>
