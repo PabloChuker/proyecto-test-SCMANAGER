@@ -465,6 +465,7 @@
       "addMember": "Add member",
       "memberHeader": "Member",
       "remove": "Remove",
+      "addRowForOre": "Add another row of {name}",
       "clearAll": "CLEAR ALL",
       "orderSaved": "✓ Order Saved to Dashboard",
       "submitWorkOrder": "Submit Work Order",

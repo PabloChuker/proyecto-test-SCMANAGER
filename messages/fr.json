@@ -465,6 +465,7 @@
       "addMember": "Ajouter membre",
       "memberHeader": "Membre",
       "remove": "Retirer",
+      "addRowForOre": "Ajouter une autre ligne de {name}",
       "clearAll": "TOUT EFFACER",
       "orderSaved": "✓ Ordre enregistré au Dashboard",
       "submitWorkOrder": "Envoyer l'ordre",

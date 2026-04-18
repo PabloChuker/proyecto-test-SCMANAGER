@@ -465,6 +465,7 @@
       "addMember": "添加成员",
       "memberHeader": "成员",
       "remove": "移除",
+      "addRowForOre": "添加另一行 {name}",
       "clearAll": "清空全部",
       "orderSaved": "✓ 工单已保存到面板",
       "submitWorkOrder": "提交工单",

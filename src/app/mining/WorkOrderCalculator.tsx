@@ -65,6 +65,15 @@ interface CrewMember {
   share: number;
 }
 
+// Bug #2 fix: ore rows are an ordered list of entries (not a Set),
+// so the same ore can appear multiple times with different qualities.
+interface OreEntry {
+  key: string;      // unique per row
+  oreId: string;    // mineral.id (can repeat across rows)
+  quantity: number;
+  quality: number;
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const TAB_CONFIG: { key: TabMode; icon: string }[] = [
@@ -191,9 +200,10 @@ export default function WorkOrderCalculator() {
   // ── Ore & refining state (Ship Mining) ──
   const [selectedRefinery, setSelectedRefinery] = useState(typedRefineries[0]?.id || "");
   const [selectedMethod, setSelectedMethod] = useState(typedMethods[0]?.id || "");
-  const [selectedOres, setSelectedOres] = useState<Set<string>>(new Set());
-  const [oreQuantities, setOreQuantities] = useState<Record<string, number>>({});
-  const [oreQualities, setOreQualities] = useState<Record<string, number>>({});
+  // Bug #2 fix: array of entries (not a Set). Same ore can appear multiple
+  // times with different qualities. Clicking an ore button ALWAYS adds a row.
+  const [oreEntries, setOreEntries] = useState<OreEntry[]>([]);
+  const oreEntryCounterRef = useRef(0);
 
   // ── Crew state ──
   const [crew, setCrew] = useState<CrewMember[]>([
@@ -230,48 +240,62 @@ export default function WorkOrderCalculator() {
   const refinedValue = useMemo(() => {
     if (mode !== "ship" || !refinery || !method) return 0;
     let total = 0;
-    selectedOres.forEach((oreId) => {
-      const qty = oreQuantities[oreId] || 0;
-      if (qty <= 0) return;
-      const mineral = typedMinerals.find((m) => m.id === oreId);
+    oreEntries.forEach((entry) => {
+      if (entry.quantity <= 0) return;
+      const mineral = typedMinerals.find((m) => m.id === entry.oreId);
       if (!mineral) return;
-      const bonus = refinery.bonuses[oreId] || 0;
-      const refined = qty * (method.yieldMultiplier + bonus / 100);
+      const bonus = refinery.bonuses[entry.oreId] || 0;
+      const refined = entry.quantity * (method.yieldMultiplier + bonus / 100);
       total += refined * mineral.basePrice;
     });
     return Math.round(total);
-  }, [mode, selectedOres, oreQuantities, refinery, method, typedMinerals]);
+  }, [mode, oreEntries, refinery, method, typedMinerals]);
 
-  // ── Ore toggle ──
-  const toggleOre = useCallback((oreId: string) => {
-    setSelectedOres((prev) => {
-      const next = new Set(prev);
-      if (next.has(oreId)) {
-        next.delete(oreId);
-        setOreQuantities((q) => { const c = { ...q }; delete c[oreId]; return c; });
-        setOreQualities((q) => { const c = { ...q }; delete c[oreId]; return c; });
-      } else {
-        next.add(oreId);
-      }
-      return next;
-    });
+  // ── Ore entry helpers (Bug #2 fix) ──
+  // Clicking an ore ALWAYS adds a new row so the user can register the same
+  // ore at different qualities. Rows are removed via the per-row ✕ button.
+  const addOreEntry = useCallback((oreId: string) => {
+    oreEntryCounterRef.current += 1;
+    const key = `${oreId}_${Date.now()}_${oreEntryCounterRef.current}`;
+    setOreEntries((prev) => [
+      ...prev,
+      { key, oreId, quantity: 0, quality: 0 },
+    ]);
+  }, []);
+
+  const updateOreEntry = useCallback(
+    (key: string, patch: Partial<Pick<OreEntry, "quantity" | "quality">>) => {
+      setOreEntries((prev) =>
+        prev.map((e) => (e.key === key ? { ...e, ...patch } : e))
+      );
+    },
+    []
+  );
+
+  const removeOreEntry = useCallback((key: string) => {
+    setOreEntries((prev) => prev.filter((e) => e.key !== key));
   }, []);
 
   const selectAllOres = () => {
-    setSelectedOres(new Set(tabMinerals.map((m) => m.id)));
+    oreEntryCounterRef.current += 1;
+    const base = Date.now();
+    setOreEntries(
+      tabMinerals.map((m, idx) => ({
+        key: `${m.id}_${base}_${oreEntryCounterRef.current}_${idx}`,
+        oreId: m.id,
+        quantity: 0,
+        quality: 0,
+      }))
+    );
   };
 
   const selectNoneOres = () => {
-    setSelectedOres(new Set());
-    setOreQuantities({});
-    setOreQualities({});
+    setOreEntries([]);
   };
 
   // ── Reset on tab change ──
   useEffect(() => {
-    setSelectedOres(new Set());
-    setOreQuantities({});
-    setOreQualities({});
+    setOreEntries([]);
   }, [mode]);
 
   // ── Auto-load available sessions for crew ──
@@ -379,21 +403,22 @@ export default function WorkOrderCalculator() {
       }
     }
 
-    // Build ore list
+    // Build ore list (each OreEntry becomes a line in the work order,
+    // even if several entries share the same oreId with different qualities).
     const ores: WOMineral[] = [];
-    selectedOres.forEach((oreId) => {
-      const qty = oreQuantities[oreId] || 0;
+    oreEntries.forEach((entry) => {
+      const qty = entry.quantity;
       if (qty <= 0 && mode !== "share") return;
-      const mineral = typedMinerals.find((m) => m.id === oreId);
+      const mineral = typedMinerals.find((m) => m.id === entry.oreId);
       if (!mineral) return;
-      const yieldQty = mode === "ship" ? getYield(oreId, qty) : qty;
+      const yieldQty = mode === "ship" ? getYield(entry.oreId, qty) : qty;
       ores.push({
-        id: oreId,
+        id: entry.oreId,
         name: mineral.name,
         quantity: qty,
         yieldQty,
         value: yieldQty * mineral.basePrice,
-        quality: oreQualities[oreId] || undefined,
+        quality: entry.quality || undefined,
       });
     });
 
@@ -540,16 +565,24 @@ export default function WorkOrderCalculator() {
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {tabMinerals.map((mineral) => {
-                    const isSelected = selectedOres.has(mineral.id);
+                    const count = oreEntries.reduce(
+                      (n, e) => (e.oreId === mineral.id ? n + 1 : n),
+                      0
+                    );
+                    const isSelected = count > 0;
                     return (
                       <button
                         key={mineral.id}
-                        onClick={() => toggleOre(mineral.id)}
+                        onClick={() => addOreEntry(mineral.id)}
+                        title={t("addRowForOre", { name: mineral.name })}
                         className={`px-2.5 py-1 rounded text-[11px] font-bold tracking-wider border transition-all
                           ${isSelected ? tierColorSelected(mineral.tier) : tierColor(mineral.tier)}
                           hover:brightness-110`}
                       >
                         {mineral.abbr || mineral.id}
+                        {count > 1 && (
+                          <span className="ml-1 text-[9px] opacity-90">×{count}</span>
+                        )}
                       </button>
                     );
                   })}
@@ -589,18 +622,19 @@ export default function WorkOrderCalculator() {
                   )}
                 </div>
 
-                {selectedOres.size === 0 && (
+                {oreEntries.length === 0 && (
                   <p className="text-center text-amber-600 text-sm py-4 italic">
                     {t("noOreSelected")}
                   </p>
                 )}
 
                 <div className="space-y-1">
-                  {tabMinerals
-                    .filter((m) => selectedOres.has(m.id))
-                    .map((mineral) => (
+                  {oreEntries.map((entry) => {
+                    const mineral = tabMinerals.find((m) => m.id === entry.oreId);
+                    if (!mineral) return null;
+                    return (
                       <div
-                        key={mineral.id}
+                        key={entry.key}
                         className="flex items-center gap-2 py-1 border-b border-zinc-800/40"
                       >
                         <span className="flex-1 text-xs font-bold text-zinc-200 uppercase tracking-wider">
@@ -610,12 +644,11 @@ export default function WorkOrderCalculator() {
                           type="number"
                           min="0"
                           max="1000"
-                          value={oreQualities[mineral.id] || ""}
+                          value={entry.quality || ""}
                           onChange={(e) =>
-                            setOreQualities((prev) => ({
-                              ...prev,
-                              [mineral.id]: Math.min(1000, Math.max(0, parseInt(e.target.value) || 0)),
-                            }))
+                            updateOreEntry(entry.key, {
+                              quality: Math.min(1000, Math.max(0, parseInt(e.target.value) || 0)),
+                            })
                           }
                           className="w-20 bg-cyan-500/10 border border-cyan-500/30 rounded px-2 py-1 text-sm text-right text-cyan-200 font-mono focus:outline-none focus:border-cyan-400"
                           placeholder="—"
@@ -623,23 +656,30 @@ export default function WorkOrderCalculator() {
                         <input
                           type="number"
                           min="0"
-                          value={oreQuantities[mineral.id] || ""}
+                          value={entry.quantity || ""}
                           onChange={(e) =>
-                            setOreQuantities((prev) => ({
-                              ...prev,
-                              [mineral.id]: parseFloat(e.target.value) || 0,
-                            }))
+                            updateOreEntry(entry.key, {
+                              quantity: parseFloat(e.target.value) || 0,
+                            })
                           }
                           className="w-24 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1 text-sm text-right text-amber-200 font-mono focus:outline-none focus:border-amber-400"
                           placeholder="0"
                         />
                         {mode === "ship" && (
                           <span className="w-20 text-right text-xs font-mono text-zinc-400">
-                            {getYield(mineral.id, oreQuantities[mineral.id] || 0)}
+                            {getYield(entry.oreId, entry.quantity)}
                           </span>
                         )}
+                        <button
+                          onClick={() => removeOreEntry(entry.key)}
+                          className="text-zinc-600 hover:text-red-400 text-sm px-1 transition-colors"
+                          title={t("remove")}
+                        >
+                          ✕
+                        </button>
                       </div>
-                    ))}
+                    );
+                  })}
                 </div>
               </div>
 

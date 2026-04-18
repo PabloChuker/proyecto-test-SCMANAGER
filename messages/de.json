@@ -465,6 +465,7 @@
       "addMember": "Mitglied hinzufügen",
       "memberHeader": "Mitglied",
       "remove": "Entfernen",
+      "addRowForOre": "Weitere {name}-Zeile hinzufügen",
       "clearAll": "ALLE LÖSCHEN",
       "orderSaved": "✓ Auftrag im Dashboard gespeichert",
       "submitWorkOrder": "Auftrag senden",
