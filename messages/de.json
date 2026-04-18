@@ -732,12 +732,18 @@
       "itemsCount": "{count, plural, one {# Ware} other {# Waren}}",
       "commoditiesDone": "erledigt",
       "dragToReorder": "Ziehen",
-      "routeFallback": "Route vom {time}",
+      "routeCommoditiesMore": "{list} +{more}",
       "routeNoTime": "Route",
       "routeItems": "{items, plural, one {# Ware} other {# Waren}}",
       "noPrices": "Keine Preise",
       "staleTitle": "Dieser Route sind keine Verkaufsstationen zugewiesen",
-      "staleHint": "Die Preise waren beim Erstellen der Route nicht verfügbar. Lösche diese WOs im Tab «Work Orders» und erstelle eine neue Route über Bergbau → Inventar."
+      "staleHint": "Die Preise waren beim Erstellen nicht verfügbar. Nutze «Reparieren», um die besten Stationen aus UEX automatisch zuzuweisen, oder lösche die Route, wenn du sie nicht mehr brauchst.",
+      "repairRoute": "Route mit UEX reparieren",
+      "repairing": "Repariere…",
+      "deleteRoute": "Route löschen",
+      "deleting": "Lösche…",
+      "deleteAllStale": "{count} preislose Routen löschen",
+      "deleteAllStaleHint": "Entfernt alle Routen ohne zugewiesene Stationen ({count})"
     },
     "commodities": {
       "search": "Suchen",

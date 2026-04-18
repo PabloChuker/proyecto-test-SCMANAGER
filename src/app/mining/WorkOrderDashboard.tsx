@@ -522,7 +522,8 @@ export default function WorkOrderDashboard() {
         const match = getCommodityForMineral(id);
         // Non-sellable (ICE, INER) or unknown → skip the roundtrip entirely.
         if (!match) return Promise.resolve({ id, list: [] as SellLocation[] });
-        return fetch(`/api/mining/commodity-prices?commodity=${encodeURIComponent(match.code)}&dir=buy`)
+        // Player-centric: side=sell → station buys from player → ORDER BY price DESC (best payout first)
+        return fetch(`/api/mining/commodity-prices?commodity=${encodeURIComponent(match.code)}&side=sell`)
           .then((r) => r.json())
           .then((json) => ({
             id,
@@ -549,7 +550,16 @@ export default function WorkOrderDashboard() {
     setSellModalItem(mineralId);
     setSellModalName(mineralName);
     setLoadingSellData(true);
-    fetch(`/api/mining/commodity-prices?commodity=${mineralId}&dir=buy`)
+    // Resolve mineralId → UEX commodity_abbr before hitting the API
+    // (the endpoint queries by commodity_abbr, not scunpacked mineral_id).
+    const match = getCommodityForMineral(mineralId);
+    if (!match) {
+      setSellLocations([]);
+      setLoadingSellData(false);
+      return;
+    }
+    // Player-centric: side=sell → station buys from player → ORDER BY price DESC (best payout first)
+    fetch(`/api/mining/commodity-prices?commodity=${encodeURIComponent(match.code)}&side=sell`)
       .then((r) => r.json())
       .then((json) => {
         setSellLocations(json.data || []);

@@ -73,8 +73,10 @@ interface ActiveRoute {
 
 /** Human-friendly label for the route picker.
  *
- *   primary:  first known sell station (+ "(+N)" if there are more stops)
- *             or creation time if no station is assigned yet.
+ *   primary:  first known sell station (+ "(+N)" if there are more stops).
+ *   commodities: unique commodity codes/names across the route, used as the
+ *             fallback label when no station is assigned yet (user hates
+ *             timestamp labels — they want to see WHAT the route is about).
  *   secondary: "N items · SCU · ~aUEC"
  *   stale:    true when no stop has a recommended station (likely the
  *             route was created before the commodity_abbr mapping fix, so
@@ -89,29 +91,36 @@ function computeRouteLabel(
   itemCount: number;
   totalScu: number;
   totalValue: number;
-  createdAt: string | null;
+  commodities: string[];
   stale: boolean;
 } {
   let totalScu = 0;
   let totalValue = 0;
   let itemCount = 0;
+  // Preserve insertion order and dedupe. We prefer short commodity codes
+  // (e.g. "LARA") over full names ("Laranite") so the picker pills stay
+  // compact, but fall back to the name if no code is available.
+  const seen = new Set<string>();
+  const commodities: string[] = [];
   for (const s of r.stops) {
     totalScu += s.subtotalScu;
     totalValue += s.subtotalValue;
     itemCount += s.items.length;
+    for (const it of s.items) {
+      const raw =
+        (it.wo.commodity_code && it.wo.commodity_code.trim()) ||
+        (it.wo.commodity_name && it.wo.commodity_name.trim()) ||
+        "";
+      if (!raw) continue;
+      const key = raw.toUpperCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      commodities.push(raw.toUpperCase());
+    }
   }
   const stopsWithStation = r.stops.filter((s) => s.station);
   const firstStation = stopsWithStation[0]?.station ?? null;
   const extraCount = stopsWithStation.length > 1 ? stopsWithStation.length - 1 : 0;
-  // oldest created_at across all WOs in the route — serves as an "at a glance"
-  // timestamp when there's no station yet
-  let earliest: string | null = null;
-  for (const s of r.stops) {
-    for (const it of s.items) {
-      const cur = it.wo.created_at;
-      if (!earliest || (cur && cur < earliest)) earliest = cur;
-    }
-  }
   return {
     primary: firstStation,
     station: firstStation,
@@ -119,7 +128,7 @@ function computeRouteLabel(
     itemCount,
     totalScu,
     totalValue,
-    createdAt: earliest,
+    commodities,
     stale: !firstStation,
   };
 }
@@ -186,6 +195,9 @@ export default function ActiveRoutePanel() {
   const [customOrder, setCustomOrder] = useState<Record<string, string[]>>({});
   // key → array of logical-stop keys (per groupId) in user-chosen order
   const [dragKey, setDragKey] = useState<string | null>(null);
+  const [repairingId, setRepairingId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   // ── fetch ──
   const refresh = useCallback(async () => {
@@ -218,6 +230,136 @@ export default function ActiveRoutePanel() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // ── Repair a stale route ────────────────────────────────────────────────
+  // Iterates WOs in a route, fetches the best sell station per unique
+  // commodity_code from UEX, and PATCHes each WO with station/system/price.
+  // Survives partial failures — we want something > nothing.
+  const repairRoute = useCallback(
+    async (route: ActiveRoute) => {
+      const groupWOs: TradeWorkOrder[] = [];
+      for (const s of route.stops) {
+        for (const it of s.items) groupWOs.push(it.wo);
+      }
+      const uniqueCommodities = Array.from(
+        new Set(
+          groupWOs
+            .map((w) => (w.commodity_code || "").toUpperCase())
+            .filter((c) => c.length > 0),
+        ),
+      );
+      if (uniqueCommodities.length === 0) return;
+
+      setRepairingId(route.groupId);
+      try {
+        const best: Record<
+          string,
+          { station: string; system: string; price: number } | null
+        > = {};
+        await Promise.all(
+          uniqueCommodities.map(async (code) => {
+            try {
+              const r = await fetch(
+                `/api/mining/commodity-prices?commodity=${encodeURIComponent(code)}&side=sell`,
+              );
+              const json = await r.json();
+              const top = (json?.data || [])[0];
+              best[code] = top
+                ? {
+                    station: String(top.station || ""),
+                    system: String(top.system || ""),
+                    price: Number(top.price) || 0,
+                  }
+                : null;
+            } catch {
+              best[code] = null;
+            }
+          }),
+        );
+
+        // PATCH each WO of that route with its commodity's best station.
+        await Promise.all(
+          groupWOs.map(async (wo) => {
+            const code = (wo.commodity_code || "").toUpperCase();
+            const b = best[code];
+            if (!b || !b.station) return;
+            try {
+              await fetch(`/api/trade/work-orders/${wo.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  sell_station: b.station,
+                  sell_system: b.system,
+                  sell_price_per_scu: b.price,
+                }),
+              });
+            } catch {
+              // swallow — the user sees the updated list once refresh runs
+            }
+          }),
+        );
+
+        await refresh();
+      } finally {
+        setRepairingId(null);
+      }
+    },
+    [refresh],
+  );
+
+  // ── Delete a whole route (all WOs in the group) ─────────────────────────
+  const deleteRoute = useCallback(
+    async (route: ActiveRoute) => {
+      const groupWOs: TradeWorkOrder[] = [];
+      for (const s of route.stops) {
+        for (const it of s.items) groupWOs.push(it.wo);
+      }
+      if (groupWOs.length === 0) return;
+      setDeletingId(route.groupId);
+      try {
+        await Promise.all(
+          groupWOs.map((wo) =>
+            fetch(`/api/trade/work-orders/${wo.id}`, { method: "DELETE" }).catch(
+              () => undefined,
+            ),
+          ),
+        );
+        await refresh();
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [refresh],
+  );
+
+  // ── Bulk-delete every stale route in the current scope ──────────────────
+  // Pablo ran into 16 zombie routes after a failed ingest — this is the
+  // "nuke them all" escape hatch.
+  const deleteAllStale = useCallback(
+    async (routes: ActiveRoute[]) => {
+      const staleRoutes = routes.filter((r) => !r.stops.some((s) => s.station));
+      if (staleRoutes.length === 0) return;
+      const woIds: string[] = [];
+      for (const r of staleRoutes) {
+        for (const s of r.stops) for (const it of s.items) woIds.push(it.wo.id);
+      }
+      if (woIds.length === 0) return;
+      setBulkBusy(true);
+      try {
+        await Promise.all(
+          woIds.map((id) =>
+            fetch(`/api/trade/work-orders/${id}`, { method: "DELETE" }).catch(
+              () => undefined,
+            ),
+          ),
+        );
+        await refresh();
+      } finally {
+        setBulkBusy(false);
+      }
+    },
+    [refresh],
+  );
 
   // Scope-filter (mirrors TradeDashboard logic)
   const scoped = useMemo(() => {
@@ -468,6 +610,24 @@ export default function ActiveRoutePanel() {
               </button>
             ))}
           </div>
+          {(() => {
+            const staleCount = activeRoutes.filter(
+              (r) => !r.stops.some((s) => s.station),
+            ).length;
+            if (staleCount < 2) return null;
+            return (
+              <button
+                onClick={() => deleteAllStale(activeRoutes)}
+                disabled={bulkBusy}
+                className="px-3 py-1 text-[10px] uppercase tracking-widest font-mono bg-red-500/15 border border-red-500/40 rounded-sm text-red-200 hover:bg-red-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={t("deleteAllStaleHint", { count: staleCount })}
+              >
+                {bulkBusy
+                  ? t("deleting")
+                  : t("deleteAllStale", { count: staleCount })}
+              </button>
+            );
+          })()}
           <button
             onClick={refresh}
             className="px-3 py-1 text-[10px] uppercase tracking-widest font-mono bg-zinc-900/50 border border-zinc-800/60 rounded-sm text-zinc-300 hover:bg-zinc-800"
@@ -483,17 +643,18 @@ export default function ActiveRoutePanel() {
           {activeRoutes.map((r) => {
             const isActive = r.groupId === selectedGroupId;
             const meta = computeRouteLabel(r);
-            const timeStr = meta.createdAt
-              ? new Date(meta.createdAt).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              : null;
+            // Fallback label: a short list of commodity codes (e.g.
+            // "QUAN, LARA, GOLD +1") instead of a meaningless timestamp.
+            let commoditiesFallback: string | null = null;
+            if (meta.commodities.length > 0) {
+              const head = meta.commodities.slice(0, 3).join(", ");
+              const extra = meta.commodities.length - 3;
+              commoditiesFallback =
+                extra > 0 ? t("routeCommoditiesMore", { list: head, more: extra }) : head;
+            }
             const title = meta.station
               ? `${meta.station}${meta.extraCount > 0 ? ` (+${meta.extraCount})` : ""}`
-              : timeStr
-                ? t("routeFallback", { time: timeStr })
-                : t("routeNoTime");
+              : commoditiesFallback ?? t("routeNoTime");
             return (
               <button
                 key={r.groupId}
@@ -541,6 +702,9 @@ export default function ActiveRoutePanel() {
           {(() => {
             const sel = computeRouteLabel(selected);
             if (!sel.stale) return null;
+            const busy =
+              repairingId === selected.groupId ||
+              deletingId === selected.groupId;
             return (
               <div className="bg-amber-500/10 border border-amber-500/30 rounded-sm p-3 text-[12px] text-amber-200 flex items-start gap-3">
                 <span className="text-lg leading-none">⚠</span>
@@ -548,6 +712,26 @@ export default function ActiveRoutePanel() {
                   <div className="font-bold">{t("staleTitle")}</div>
                   <div className="text-[11px] text-amber-300/80 mt-1">
                     {t("staleHint")}
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <button
+                      onClick={() => repairRoute(selected)}
+                      disabled={busy}
+                      className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-widest rounded-sm border bg-emerald-500/15 border-emerald-500/40 text-emerald-200 hover:bg-emerald-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {repairingId === selected.groupId
+                        ? t("repairing")
+                        : t("repairRoute")}
+                    </button>
+                    <button
+                      onClick={() => deleteRoute(selected)}
+                      disabled={busy}
+                      className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-widest rounded-sm border bg-red-500/15 border-red-500/40 text-red-200 hover:bg-red-500/25 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {deletingId === selected.groupId
+                        ? t("deleting")
+                        : t("deleteRoute")}
+                    </button>
                   </div>
                 </div>
               </div>

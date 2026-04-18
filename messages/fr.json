@@ -732,12 +732,18 @@
       "itemsCount": "{count, plural, one {# article} other {# articles}}",
       "commoditiesDone": "terminées",
       "dragToReorder": "Glisser",
-      "routeFallback": "Route du {time}",
+      "routeCommoditiesMore": "{list} +{more}",
       "routeNoTime": "Route",
       "routeItems": "{items, plural, one {# article} other {# articles}}",
       "noPrices": "Pas de prix",
       "staleTitle": "Cette route n'a pas de stations de vente assignées",
-      "staleHint": "Les prix n'étaient pas disponibles lors de la création de la route. Supprimez ces WO depuis l'onglet «Work Orders» et créez une nouvelle route depuis Minage → Inventaire."
+      "staleHint": "Les prix n'étaient pas disponibles lors de la création. Essayez «Réparer» pour assigner automatiquement les meilleures stations depuis UEX, ou supprimez-la si vous n'en avez plus besoin.",
+      "repairRoute": "Réparer avec UEX",
+      "repairing": "Réparation…",
+      "deleteRoute": "Supprimer la route",
+      "deleting": "Suppression…",
+      "deleteAllStale": "Supprimer {count} routes sans prix",
+      "deleteAllStaleHint": "Supprime toutes les routes sans stations ({count})"
     },
     "commodities": {
       "search": "Rechercher",

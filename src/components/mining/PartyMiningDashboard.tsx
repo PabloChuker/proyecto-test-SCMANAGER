@@ -113,7 +113,7 @@ export default function PartyMiningDashboard() {
 
     Promise.all(
       mineralIds.map((abbr: string) =>
-        fetch(`/api/mining/commodity-prices?commodity=${abbr}&dir=buy`)
+        fetch(`/api/mining/commodity-prices?commodity=${abbr}&side=sell`)
           .then((r) => r.json())
           .then((json) => ({ abbr, top: json.data?.[0] || null } as { abbr: string; top: SellLocation | null }))
           .catch(() => ({ abbr, top: null } as { abbr: string; top: SellLocation | null }))
@@ -139,7 +139,7 @@ export default function PartyMiningDashboard() {
     setSellModalItem(mineralAbbr);
     setSellModalName(mineralName);
     setLoadingSellData(true);
-    fetch(`/api/mining/commodity-prices?commodity=${mineralAbbr}&dir=buy`)
+    fetch(`/api/mining/commodity-prices?commodity=${mineralAbbr}&side=sell`)
       .then((r) => r.json())
       .then((json) => {
         setSellLocations(json.data || []);

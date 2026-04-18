@@ -732,12 +732,18 @@
       "itemsCount": "{count, plural, other {# 项}}",
       "commoditiesDone": "已完成",
       "dragToReorder": "拖动",
-      "routeFallback": "来自 {time} 的路线",
+      "routeCommoditiesMore": "{list} +{more}",
       "routeNoTime": "路线",
       "routeItems": "{items, plural, other {# 项}}",
       "noPrices": "无价格",
       "staleTitle": "此路线未分配销售站点",
-      "staleHint": "创建路线时价格不可用。请在「Work Orders」标签页中删除这些 WO，然后从「挖矿 → 库存」重新创建路线。"
+      "staleHint": "创建路线时价格不可用。点击「修复」可从 UEX 自动分配最佳站点，或如果不再需要可直接删除。",
+      "repairRoute": "使用 UEX 修复路线",
+      "repairing": "修复中…",
+      "deleteRoute": "删除路线",
+      "deleting": "删除中…",
+      "deleteAllStale": "删除 {count} 条无价格路线",
+      "deleteAllStaleHint": "删除所有未分配站点的路线（{count}）"
     },
     "commodities": {
       "search": "搜索",

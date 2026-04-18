@@ -732,12 +732,18 @@
       "itemsCount": "{count, plural, one {# item} other {# items}}",
       "commoditiesDone": "done",
       "dragToReorder": "Drag",
-      "routeFallback": "Route from {time}",
+      "routeCommoditiesMore": "{list} +{more}",
       "routeNoTime": "Route",
       "routeItems": "{items, plural, one {# item} other {# items}}",
       "noPrices": "No prices",
       "staleTitle": "This route has no sell stations assigned",
-      "staleHint": "Prices weren't available when you created this route. Delete these WOs from the «Work Orders» tab and build a new route from Mining → Inventory."
+      "staleHint": "Prices weren't available when you created this route. Try «Repair» to auto-assign the best stations from UEX, or delete it if you don't need it anymore.",
+      "repairRoute": "Repair route with UEX",
+      "repairing": "Repairing…",
+      "deleteRoute": "Delete route",
+      "deleting": "Deleting…",
+      "deleteAllStale": "Delete {count} stale routes",
+      "deleteAllStaleHint": "Removes every route with no assigned stations ({count})"
     },
     "commodities": {
       "search": "Search",

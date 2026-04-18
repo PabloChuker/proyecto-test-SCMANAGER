@@ -732,12 +732,18 @@
       "itemsCount": "{count, plural, one {# ítem} other {# ítems}}",
       "commoditiesDone": "completadas",
       "dragToReorder": "Arrastrar",
-      "routeFallback": "Ruta de {time}",
+      "routeCommoditiesMore": "{list} +{more}",
       "routeNoTime": "Ruta",
       "routeItems": "{items, plural, one {# ítem} other {# ítems}}",
       "noPrices": "Sin precios",
       "staleTitle": "Esta ruta no tiene estaciones de venta asignadas",
-      "staleHint": "Los precios no estaban disponibles cuando creaste la ruta. Borrá estas WO desde la pestaña «Work Orders» y armá una nueva ruta desde Minería → Inventario."
+      "staleHint": "Los precios no estaban disponibles cuando creaste la ruta. Probá «Reparar ruta» para auto-asignar las mejores estaciones desde UEX, o borrala si ya no la necesitás.",
+      "repairRoute": "Reparar ruta con UEX",
+      "repairing": "Reparando…",
+      "deleteRoute": "Borrar ruta",
+      "deleting": "Borrando…",
+      "deleteAllStale": "Borrar {count} rutas sin precios",
+      "deleteAllStaleHint": "Elimina todas las rutas sin estaciones ({count})"
     },
     "commodities": {
       "search": "Buscar",
