@@ -19,6 +19,14 @@ export interface TradeRoutePrefill {
   buy_price_per_scu?: number;
   sell_price_per_scu?: number;
   scu_bought?: number;
+  // ── Mining → Trade bridge ─────────────────────────────────────────────
+  // Filled when the Trade WO is opened from the Mining Inventory tab. Lets
+  // the Calculator show a "from refined stock" label, warn on over-sell, and
+  // later trigger an automatic inventory discount on WO completion.
+  source_mining_session_id?: string;
+  source_mineral_id?: string;
+  source_mineral_name?: string;
+  scu_available?: number;
 }
 
 export interface TradeWOParticipant {

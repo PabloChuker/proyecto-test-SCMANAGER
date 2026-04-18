@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
+import { useRouter } from "next/navigation";
 import {
   getSessions, getOrders, getActiveSessionId, setActiveSessionId,
   createSession, deleteSession, deleteOrder, collectOrder,
@@ -13,7 +14,9 @@ import {
 } from "@/lib/workOrderStore";
 import { useMiningStore } from "@/store/useMiningStore";
 import { useMiningRealtime, useMiningBroadcast } from "@/store/useMiningRealtime";
+import { useTradeWorkOrderStore } from "@/store/useTradeWorkOrderStore";
 import { useAuth } from "@/contexts/AuthContext";
+import { getCommodityForMineral } from "@/data/mining/mineral-commodity-map";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -110,6 +113,8 @@ const TABS: { key: DashTab; icon: string }[] = [
 
 export default function WorkOrderDashboard() {
   const t = useTranslations("Mining.dashboard");
+  const router = useRouter();
+  const requestOpenFromRoute = useTradeWorkOrderStore((s) => s.requestOpenFromRoute);
   const [tab, setTab] = useState<DashTab>("orders");
   const [sessions, setSessions] = useState<WOSession[]>([]);
   const [orders, setOrders] = useState<WorkOrder[]>([]);
@@ -524,6 +529,35 @@ export default function WorkOrderDashboard() {
       });
   }, []);
 
+  /**
+   * Bridge Mining Inventory → Trade Work Order.
+   * Prefills the Trade Calculator with the refined stock + best sell price
+   * and tags the WO with source_mining_* so completion auto-discounts inventory.
+   */
+  const openSellOnRoute = useCallback(
+    (item: InventoryItem) => {
+      const match = getCommodityForMineral(item.mineralId);
+      if (!match) return; // caller already disables the button in this case
+      const best = bestPrices[item.mineralId];
+      const sessionId = sbSessionId || activeId || undefined;
+
+      requestOpenFromRoute({
+        commodity_code: match.code,
+        commodity_name: match.name,
+        scu_bought: item.quantity,
+        sell_price_per_scu: best?.price,
+        sell_station: best?.station,
+        sell_system: best?.system,
+        source_mining_session_id: sessionId,
+        source_mineral_id: item.mineralId,
+        source_mineral_name: item.mineralName,
+        scu_available: item.quantity,
+      });
+      router.push("/trade");
+    },
+    [bestPrices, sbSessionId, activeId, requestOpenFromRoute, router]
+  );
+
   // Connection status indicator
   const isPartyMode = user && sbSessionId;
 
@@ -866,6 +900,24 @@ export default function WorkOrderDashboard() {
                       >
                         {t("sell")}
                       </button>
+                      {(() => {
+                        const match = getCommodityForMineral(item.mineralId);
+                        const disabled = !match || item.quantity <= 0;
+                        return (
+                          <button
+                            onClick={() => openSellOnRoute(item)}
+                            disabled={disabled}
+                            title={!match ? t("noCommodityMatch") : undefined}
+                            className={`px-2 py-1 rounded text-[9px] font-bold transition-colors border ${
+                              disabled
+                                ? "bg-zinc-800/60 border-zinc-700/40 text-zinc-600 cursor-not-allowed"
+                                : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20"
+                            }`}
+                          >
+                            🛣 {t("sellOnRoute")}
+                          </button>
+                        );
+                      })()}
                       <button
                         onClick={() => setInvAction({ mineralId: item.mineralId, mineralName: item.mineralName, type: "craft", qty: 0, member: "" })}
                         className="px-2 py-1 bg-blue-500/10 border border-blue-500/30 rounded text-[9px] font-bold text-blue-400 hover:bg-blue-500/20"

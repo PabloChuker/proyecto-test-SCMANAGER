@@ -21,6 +21,12 @@ import {
   TradeWOExpense,
 } from "@/store/useTradeWorkOrderStore";
 import { createClient } from "@/lib/supabase/client";
+import {
+  composeNotesWithMarker,
+  parseMiningMarker,
+  stripMiningMarker,
+  type MiningMarker,
+} from "@/lib/miningTradeBridge";
 
 // localStorage key for the unsaved new-WO draft. Only used when creating a
 // brand-new WO (no `editingId`) — edits of existing server WOs are not cached
@@ -116,6 +122,17 @@ export default function TradeWorkOrderCalculator() {
 
   const [notes, setNotes] = useState("");
 
+  // ── Mining → Trade bridge state ───────────────────────────────────────────
+  // When the WO was opened from the Mining Inventory tab, we remember the
+  // source ids so (a) the UI can show a "from refined stock" chip + over-sell
+  // warning, and (b) the WO's notes get stamped with a [mining:...] marker
+  // that the Dashboard reads on status→completed to auto-discount inventory.
+  const [miningMarker, setMiningMarker] = useState<MiningMarker | null>(null);
+  const [scuAvailable, setScuAvailable] = useState<number | null>(null);
+  // Set once the inventory discount POST succeeds, so the UI can confirm it
+  // visually (amber chip → emerald chip). Null = not yet triggered.
+  const [inventoryDiscountedAt, setInventoryDiscountedAt] = useState<string | null>(null);
+
   // Participants + expenses (locally editable)
   const [participants, setParticipants] = useState<LocalParticipant[]>([]);
   const [expenses, setExpenses] = useState<LocalExpense[]>([]);
@@ -164,6 +181,17 @@ export default function TradeWorkOrderCalculator() {
           setScuSold(p.scu_bought); // assume planning to sell full load
         }
         if (p.commodity_name) setTitle(`Run — ${p.commodity_name}`);
+        // Mining origin: lets the Calculator show the "from refined stock"
+        // chip + warn on over-sell, and gets serialized into notes on save
+        // so the Dashboard can auto-discount the inventory on completion.
+        if (p.source_mining_session_id && p.source_mineral_id) {
+          setMiningMarker({
+            sessionId: p.source_mining_session_id,
+            mineralId: p.source_mineral_id,
+            mineralName: p.source_mineral_name || p.source_mineral_id,
+          });
+        }
+        if (typeof p.scu_available === "number") setScuAvailable(p.scu_available);
         // Fresh prefill — wipe any stale draft so we don't overlay old data
         try { localStorage.removeItem(DRAFT_KEY); } catch {}
       } else {
@@ -297,7 +325,12 @@ export default function TradeWorkOrderCalculator() {
     setScuLost(data.scu_lost || 0);
     setBuyPrice(data.buy_price_per_scu || 0);
     setSellPrice(data.sell_price_per_scu || 0);
-    setNotes(data.notes || "");
+    // Split server notes into the hidden [mining:...] marker (bridge link)
+    // and the user-visible remainder so editing the text doesn't wipe the link.
+    const serverNotes = data.notes || "";
+    const marker = parseMiningMarker(serverNotes);
+    if (marker) setMiningMarker(marker);
+    setNotes(stripMiningMarker(serverNotes));
     setParticipants(
       (data.trade_wo_participants || []).map((p: TradeWOParticipant) => ({
         id: p.id,
@@ -654,6 +687,10 @@ export default function TradeWorkOrderCalculator() {
       setSaving(true);
       setError(null);
       try {
+        // Re-stamp the [mining:...] marker at the top of notes so the
+        // Mining Dashboard can detect a sourced WO and auto-discount the
+        // inventory once the WO transitions to "completed".
+        const persistedNotes = composeNotesWithMarker(notes, miningMarker);
         const body = {
           title,
           status: targetStatus || status,
@@ -669,7 +706,7 @@ export default function TradeWorkOrderCalculator() {
           scu_lost: scuLost,
           buy_price_per_scu: buyPrice,
           sell_price_per_scu: sellPrice,
-          notes: notes || null,
+          notes: persistedNotes || null,
         };
 
         let woId = serverId;
@@ -798,6 +835,39 @@ export default function TradeWorkOrderCalculator() {
           if (!r.ok) throw new Error("Failed to update status");
         }
 
+        // 5.5) Mining → Trade bridge: when this WO was sourced from a Mining
+        // Inventory row AND we just transitioned to "completed", discount the
+        // sold SCU from `mining_inventory`. Guarded by `status !== completed`
+        // so re-saving an already-completed WO doesn't double-deduct.
+        if (
+          targetStatus === "completed" &&
+          status !== "completed" &&
+          miningMarker &&
+          scuSold > 0
+        ) {
+          try {
+            await fetch("/api/mining/inventory", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                session_id: miningMarker.sessionId,
+                mineral_id: miningMarker.mineralId,
+                mineral_name: miningMarker.mineralName,
+                quantity: scuSold,
+                reason: "sell",
+                work_order_id: null, // FK is on mining_work_orders, not trade
+                destination_ref: `trade_wo:${woId}`,
+              }),
+            });
+            setInventoryDiscountedAt(new Date().toISOString());
+          } catch (err) {
+            // Don't fail the whole save if the inventory ping misfires —
+            // the Trade WO is already completed. Surface a soft warning.
+            // eslint-disable-next-line no-console
+            console.warn("[mining-trade bridge] inventory discount failed", err);
+          }
+        }
+
         // 6) Refresh
         const rf = await fetch(`/api/trade/work-orders/${woId}`);
         if (rf.ok) {
@@ -815,7 +885,7 @@ export default function TradeWorkOrderCalculator() {
       title, status, partyId, commodityCode, commodityName,
       buyStation, buySystem, sellStation, sellSystem,
       scuBought, scuSold, scuLost, buyPrice, sellPrice,
-      notes, participants, expenses, serverId,
+      notes, miningMarker, participants, expenses, serverId,
     ],
   );
 
@@ -1036,8 +1106,30 @@ export default function TradeWorkOrderCalculator() {
 
       {/* ── Cargo + precios ── */}
       <div className={sectionCard}>
-        <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500 mb-3">
-          {t("cargoAndPrices")}
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">
+            {t("cargoAndPrices")}
+          </div>
+          {/* Bridge chip: this WO was opened from a Mining Inventory row. */}
+          {miningMarker && (
+            <div
+              className={`inline-flex items-center gap-2 px-2.5 py-1 rounded border text-[10px] font-bold uppercase tracking-[0.1em] ${
+                inventoryDiscountedAt
+                  ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400"
+                  : "bg-amber-500/10 border-amber-500/40 text-amber-400"
+              }`}
+              title={
+                inventoryDiscountedAt
+                  ? t("inventoryUpdated")
+                  : t("fromMining", { name: miningMarker.mineralName })
+              }
+            >
+              {inventoryDiscountedAt ? "✓" : "⛏"} {miningMarker.mineralName}
+              {scuAvailable !== null && !inventoryDiscountedAt && (
+                <span className="opacity-70">· {scuAvailable} SCU</span>
+              )}
+            </div>
+          )}
         </div>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div>
@@ -1047,6 +1139,11 @@ export default function TradeWorkOrderCalculator() {
           <div>
             <label className={labelClass}>{t("scuSold")}</label>
             <input type="number" min={0} value={scuSold || ""} onChange={(e) => setScuSold(parseFloat(e.target.value) || 0)} className={inputClass} />
+            {scuAvailable !== null && scuSold > scuAvailable && (
+              <p className="mt-1 text-[10px] text-amber-400 italic leading-tight">
+                ⚠ {t("insufficientStock", { avail: scuAvailable })}
+              </p>
+            )}
           </div>
           <div>
             <label className={labelClass}>{t("scuLost")}</label>
