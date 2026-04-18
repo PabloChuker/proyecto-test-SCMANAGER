@@ -145,8 +145,16 @@ export default function ActiveRoutePanel() {
         else setError("__load_failed__");
         return;
       }
-      const data = (await res.json()) as TradeWorkOrder[];
-      setAllOrders(Array.isArray(data) ? data : []);
+      // The endpoint wraps the list as { data: TradeWorkOrder[] } — same
+      // shape TradeDashboard reads. Without this unwrap allOrders stays [],
+      // which makes the panel render "no active routes" even when WOs exist.
+      const json = await res.json();
+      const list = Array.isArray(json)
+        ? json
+        : Array.isArray(json?.data)
+          ? json.data
+          : [];
+      setAllOrders(list as TradeWorkOrder[]);
     } catch {
       setError("__load_failed__");
     } finally {
