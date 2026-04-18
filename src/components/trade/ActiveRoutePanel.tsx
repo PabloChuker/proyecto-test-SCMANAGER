@@ -114,6 +114,16 @@ export default function ActiveRoutePanel() {
   const t = useTranslations("Trade.activeRoute");
   const { user } = useAuth();
   const openEdit = useTradeWorkOrderStore((s) => s.openEdit);
+  // Handoff from the Mining sell-route flow: when the modal confirms, it
+  // stashes the fresh groupId in the store and bumps requestActiveRouteTab.
+  // We consume the id once on mount and every time the handoff bumps so
+  // the just-created route lands as the active one in the picker.
+  const pendingActiveRouteGroupId = useTradeWorkOrderStore(
+    (s) => s.pendingActiveRouteGroupId,
+  );
+  const consumePendingActiveRouteGroupId = useTradeWorkOrderStore(
+    (s) => s.consumePendingActiveRouteGroupId,
+  );
 
   const [allOrders, setAllOrders] = useState<TradeWorkOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -199,6 +209,29 @@ export default function ActiveRoutePanel() {
     rows.sort((a, b) => b.totalCount - a.totalCount);
     return rows;
   }, [scoped]);
+
+  // Prefer a pending group id pushed by the Mining sell-route flow. We wait
+  // until that route actually appears in the fetched list (the POSTs may
+  // finish slightly after this panel's first fetch) and then auto-select it.
+  useEffect(() => {
+    if (!pendingActiveRouteGroupId) return;
+    if (activeRoutes.some((r) => r.groupId === pendingActiveRouteGroupId)) {
+      setSelectedGroupId(pendingActiveRouteGroupId);
+      consumePendingActiveRouteGroupId();
+    }
+  }, [pendingActiveRouteGroupId, activeRoutes, consumePendingActiveRouteGroupId]);
+
+  // If a pending id was queued but the fetch happened before the WOs
+  // materialised on the server, re-pull once after a short delay.
+  useEffect(() => {
+    if (!pendingActiveRouteGroupId) return;
+    const has = activeRoutes.some((r) => r.groupId === pendingActiveRouteGroupId);
+    if (has) return;
+    const timer = setTimeout(() => {
+      refresh();
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [pendingActiveRouteGroupId, activeRoutes, refresh]);
 
   // Auto-select the first route when none picked / current selection disappears
   useEffect(() => {

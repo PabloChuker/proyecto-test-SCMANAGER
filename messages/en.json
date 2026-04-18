@@ -659,14 +659,15 @@
       "selectedCount": "{n, plural, one {# selected} other {# selected}}",
       "clearSelection": "Clear selection",
       "buildRoute": "Build route ({n})",
-      "selectAllSellable": "Select all"
+      "selectAllSellable": "Select all",
+      "loadingPrices": "Loading prices…"
     },
     "routePreview": {
       "title": "Sell route",
       "subtitle": "Review the stop order, tweak if you want, then create all sell orders.",
-      "stopsCount": "{n, plural, one {# stop} other {# stops}}",
-      "totalScu": "{scu} SCU",
-      "estimatedRevenue": "~{value} aUEC",
+      "stopsCount": "Stops",
+      "totalScu": "Total SCU",
+      "estimatedRevenue": "Estimated revenue",
       "noStops": "No stops.",
       "noStation": "No recommended station",
       "moveUp": "Move up",

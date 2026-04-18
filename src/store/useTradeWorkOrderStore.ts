@@ -92,6 +92,13 @@ interface TradeWOState {
   editingId: string | null;
   prefill: TradeRoutePrefill | null;
   requestTabSwitch: number; // incremented to signal page to switch to WO tab
+  // ── Active Route tab handoff ──────────────────────────────────────────
+  // Bumped by flows that want to land the user on the Active Route panel
+  // (e.g. after confirming a mining sell route preview). The optional
+  // pendingActiveRouteGroupId lets ActiveRoutePanel auto-select the freshly
+  // created route group.
+  requestActiveRouteTab: number;
+  pendingActiveRouteGroupId: string | null;
 
   setView: (v: TradeWOView) => void;
   openNew: (prefill?: TradeRoutePrefill | null) => void;
@@ -99,6 +106,8 @@ interface TradeWOState {
   backToList: () => void;
   consumePrefill: () => TradeRoutePrefill | null;
   requestOpenFromRoute: (prefill: TradeRoutePrefill) => void;
+  requestActiveRouteTabSwitch: (groupId?: string | null) => void;
+  consumePendingActiveRouteGroupId: () => string | null;
 }
 
 export const useTradeWorkOrderStore = create<TradeWOState>((set, get) => ({
@@ -106,6 +115,8 @@ export const useTradeWorkOrderStore = create<TradeWOState>((set, get) => ({
   editingId: null,
   prefill: null,
   requestTabSwitch: 0,
+  requestActiveRouteTab: 0,
+  pendingActiveRouteGroupId: null,
 
   setView: (v) => set({ view: v }),
 
@@ -138,4 +149,16 @@ export const useTradeWorkOrderStore = create<TradeWOState>((set, get) => ({
       prefill,
       requestTabSwitch: s.requestTabSwitch + 1,
     })),
+
+  requestActiveRouteTabSwitch: (groupId = null) =>
+    set((s) => ({
+      requestActiveRouteTab: s.requestActiveRouteTab + 1,
+      pendingActiveRouteGroupId: groupId,
+    })),
+
+  consumePendingActiveRouteGroupId: () => {
+    const g = get().pendingActiveRouteGroupId;
+    set({ pendingActiveRouteGroupId: null });
+    return g;
+  },
 }));

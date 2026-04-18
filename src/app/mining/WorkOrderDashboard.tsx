@@ -505,13 +505,24 @@ export default function WorkOrderDashboard() {
     refresh();
   };
 
-  // Fetch best sell price for each inventory item
+  // Fetch best sell price for each inventory item.
+  //
+  // Important: the /api/mining/commodity-prices endpoint queries by
+  // `commodity_abbr` (UEX 4-letter code) while the inventory is keyed by
+  // `mineral_id` (scunpacked code). The two are 1:1 for most minerals but
+  // diverge for a handful (e.g. BERL → BERY). We resolve the commodity code
+  // via getCommodityForMineral BEFORE firing the request so prices actually
+  // come back for those overrides — and we still key the result maps by
+  // the original mineralId so the rest of the UI doesn't have to know.
   useEffect(() => {
     if (tab !== "inventory" || mergedInventory.length === 0 || bestPricesLoaded) return;
     const mineralIds = Array.from(new Set(mergedInventory.map((i) => i.mineralId)));
     Promise.all(
       mineralIds.map((id) => {
-        return fetch(`/api/mining/commodity-prices?commodity=${id}&dir=buy`)
+        const match = getCommodityForMineral(id);
+        // Non-sellable (ICE, INER) or unknown → skip the roundtrip entirely.
+        if (!match) return Promise.resolve({ id, list: [] as SellLocation[] });
+        return fetch(`/api/mining/commodity-prices?commodity=${encodeURIComponent(match.code)}&dir=buy`)
           .then((r) => r.json())
           .then((json) => ({
             id,
@@ -958,6 +969,12 @@ export default function WorkOrderDashboard() {
                   <span className="text-xs font-bold text-cyan-300">
                     🛣 {t("selectedCount", { n: selectedMineralIds.size })}
                   </span>
+                  {!bestPricesLoaded && (
+                    <span className="text-[10px] font-mono text-amber-400 flex items-center gap-1">
+                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                      {t("loadingPrices")}
+                    </span>
+                  )}
                   <div className="flex-1" />
                   <button
                     onClick={clearSelection}
@@ -967,7 +984,12 @@ export default function WorkOrderDashboard() {
                   </button>
                   <button
                     onClick={openRouteModal}
-                    className="px-3 py-1 text-[11px] font-bold text-zinc-900 bg-cyan-400 hover:bg-cyan-300 rounded uppercase tracking-wider shadow-[0_0_10px_rgba(34,211,238,0.3)]"
+                    disabled={!bestPricesLoaded}
+                    className={`px-3 py-1 text-[11px] font-bold rounded uppercase tracking-wider transition-colors ${
+                      bestPricesLoaded
+                        ? "text-zinc-900 bg-cyan-400 hover:bg-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.3)]"
+                        : "text-zinc-600 bg-zinc-800 border border-zinc-700 cursor-not-allowed"
+                    }`}
                   >
                     🛣 {t("buildRoute", { n: selectedMineralIds.size })}
                   </button>

@@ -31,6 +31,7 @@ import {
   buildRouteMarker,
   newRouteGroupId,
 } from "@/lib/miningTradeBridge";
+import { useTradeWorkOrderStore } from "@/store/useTradeWorkOrderStore";
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -90,6 +91,9 @@ export default function SellRoutePreviewModal({
 }: SellRoutePreviewModalProps) {
   const t = useTranslations("Mining.routePreview");
   const router = useRouter();
+  const requestActiveRouteTabSwitch = useTradeWorkOrderStore(
+    (s) => s.requestActiveRouteTabSwitch,
+  );
 
   // Stops are aggregated at the station level: each group = one physical
   // visit, with potentially several commodity rows to sell at that stop.
@@ -211,6 +215,9 @@ export default function SellRoutePreviewModal({
           setProgress({ done: postedItems, total: totals.itemCount });
         }
       }
+      // Signal the Trade page to land on the Active Route tab and pre-select
+      // the route we just created.
+      requestActiveRouteTabSwitch(groupId);
       onClose();
       router.push("/trade");
     } catch (e: any) {

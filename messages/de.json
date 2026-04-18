@@ -659,14 +659,15 @@
       "selectedCount": "{n, plural, one {# ausgewählt} other {# ausgewählt}}",
       "clearSelection": "Auswahl löschen",
       "buildRoute": "Route erstellen ({n})",
-      "selectAllSellable": "Alle auswählen"
+      "selectAllSellable": "Alle auswählen",
+      "loadingPrices": "Preise werden geladen…"
     },
     "routePreview": {
       "title": "Verkaufsroute",
       "subtitle": "Prüfe die Reihenfolge der Stopps, passe sie an und erstelle alle Verkaufsaufträge.",
-      "stopsCount": "{n, plural, one {# Stopp} other {# Stopps}}",
-      "totalScu": "{scu} SCU",
-      "estimatedRevenue": "~{value} aUEC",
+      "stopsCount": "Stopps",
+      "totalScu": "SCU gesamt",
+      "estimatedRevenue": "Geschätzter Erlös",
       "noStops": "Keine Stopps.",
       "noStation": "Keine empfohlene Station",
       "moveUp": "Nach oben",

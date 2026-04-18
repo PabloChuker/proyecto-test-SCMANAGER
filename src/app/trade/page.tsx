@@ -23,6 +23,9 @@ type Tab =
 export default function TradePage() {
   const [activeTab, setActiveTab] = useState<Tab>("routes");
   const requestTabSwitch = useTradeWorkOrderStore((s) => s.requestTabSwitch);
+  const requestActiveRouteTab = useTradeWorkOrderStore(
+    (s) => s.requestActiveRouteTab,
+  );
   const t = useTranslations("PageTitles");
   const tt = useTranslations("Trade.tabs");
   const TABS: { id: Tab; label: string }[] = [
@@ -40,6 +43,15 @@ export default function TradePage() {
       setActiveTab("workorders");
     }
   }, [requestTabSwitch]);
+
+  // When the mining sell-route flow fires a handoff, land on Active Route.
+  // ActiveRoutePanel consumes pendingActiveRouteGroupId on mount/change to
+  // auto-select the freshly created route group.
+  useEffect(() => {
+    if (requestActiveRouteTab > 0) {
+      setActiveTab("activeRoute");
+    }
+  }, [requestActiveRouteTab]);
 
   return (
     <main className="relative min-h-screen text-zinc-100">

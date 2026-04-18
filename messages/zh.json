@@ -659,14 +659,15 @@
       "selectedCount": "{n, plural, other {已选 # 项}}",
       "clearSelection": "清除选择",
       "buildRoute": "构建路线 ({n})",
-      "selectAllSellable": "全选"
+      "selectAllSellable": "全选",
+      "loadingPrices": "正在加载价格…"
     },
     "routePreview": {
       "title": "销售路线",
       "subtitle": "查看停靠点顺序，根据需要调整，然后创建所有销售订单。",
-      "stopsCount": "{n, plural, other {# 个停靠点}}",
-      "totalScu": "{scu} SCU",
-      "estimatedRevenue": "~{value} aUEC",
+      "stopsCount": "停靠点",
+      "totalScu": "总 SCU",
+      "estimatedRevenue": "预估收入",
       "noStops": "暂无停靠点。",
       "noStation": "无推荐站点",
       "moveUp": "上移",

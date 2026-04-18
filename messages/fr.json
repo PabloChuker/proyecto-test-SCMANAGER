@@ -659,14 +659,15 @@
       "selectedCount": "{n, plural, one {# sélectionné} other {# sélectionnés}}",
       "clearSelection": "Effacer la sélection",
       "buildRoute": "Créer la route ({n})",
-      "selectAllSellable": "Tout sélectionner"
+      "selectAllSellable": "Tout sélectionner",
+      "loadingPrices": "Chargement des prix…"
     },
     "routePreview": {
       "title": "Route de vente",
       "subtitle": "Vérifiez l'ordre des arrêts, ajustez si besoin et créez tous les ordres de vente.",
-      "stopsCount": "{n, plural, one {# arrêt} other {# arrêts}}",
-      "totalScu": "{scu} SCU",
-      "estimatedRevenue": "~{value} aUEC",
+      "stopsCount": "Arrêts",
+      "totalScu": "SCU total",
+      "estimatedRevenue": "Revenu estimé",
       "noStops": "Aucun arrêt.",
       "noStation": "Pas de station recommandée",
       "moveUp": "Monter",
