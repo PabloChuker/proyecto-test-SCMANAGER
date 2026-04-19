@@ -1206,7 +1206,7 @@ export async function GET(
         powerGeneration: numOrNull(
           col(fuelStats, "power_generation", "powerGeneration"),
         ),
-        hullHp: numOrNull(col(fuelStats, "hull_hp", "hullHp")),
+        hullHp: numOrNull(col(fuelStats, "hull_hp", "hullHp")) ?? numOrNull(resistances?.armor_hp),
         deflectionPhysical: numOrNull(ship.deflection_physical),
         deflectionEnergy: numOrNull(ship.deflection_energy),
         deflectionDistortion: numOrNull(ship.deflection_distortion),

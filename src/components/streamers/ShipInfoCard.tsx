@@ -917,8 +917,8 @@ export default function ShipInfoCard({
     const W = 1800;
     const H = 560;
     const ACCENT_H = 4;
-    const DATA_H = 168;
-    const HERO_H = H - ACCENT_H - DATA_H; // 388px
+    const DATA_H = 200;
+    const HERO_H = H - ACCENT_H - DATA_H; // 356px
     const typo = TYPO_H;
 
     // Responsive font size so long names don't overflow the left column (~740px)
