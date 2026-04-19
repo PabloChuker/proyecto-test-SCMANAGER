@@ -63,6 +63,13 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Hangar",
     href: "/hangar",
   },
+  {
+    key: "tools",
+    label: "Tools",
+    items: [
+      { label: "Pyro Timers", href: "/timers" },
+    ],
+  },
 ];
 
 /**

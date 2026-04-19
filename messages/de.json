@@ -51,7 +51,8 @@
       "ships": "Schiffe",
       "industry": "Industrie",
       "social": "Sozial",
-      "hangar": "Hangar"
+      "hangar": "Hangar",
+      "tools": "Tools"
     },
     "menu": {
       "profile": "Profil",
@@ -251,7 +252,54 @@
     "organization": "Organisation",
     "party": "Gruppe",
     "friends": "Freunde",
-    "miningFinder": "Material-Finder"
+    "miningFinder": "Material-Finder",
+    "timers": "Pyro-Timer"
+  },
+  "Timers": {
+    "tabs": {
+      "hangar": "Executive Hangar",
+      "cz": "Umkämpfte Zonen",
+      "compboard": "Compboard"
+    },
+    "hangar": {
+      "online": "ONLINE",
+      "offline": "OFFLINE",
+      "remaining": "Verbleibend in Phase",
+      "greenPhase": "Grün (Online) — 65 Min",
+      "redPhase": "Rot (Offline) — 120 Min",
+      "cycleDuration": "185-Min-Zyklus",
+      "syncOffset": "Synchronisierung",
+      "resetBtn": "Zurücksetzen",
+      "hint": "Mit +/− den Timer an die aktuelle In-Game-Phase anpassen. Der Versatz wird automatisch gespeichert."
+    },
+    "cz": {
+      "checkmate": "Station Checkmate",
+      "orbituary": "Station Orbituary",
+      "ruin": "Station Ruin",
+      "printer": "Drucker",
+      "vaultDoor": "Tresorraum-Tür",
+      "vaultOpen": "OFFEN",
+      "vaultClosed": "GESCHLOSSEN",
+      "vaultCycle": "1 Min offen · 20 Min geschlossen",
+      "startTimer": "Starten",
+      "resetTimer": "Zurücksetzen",
+      "ready": "BEREIT",
+      "syncVault": "Tresor geöffnet"
+    },
+    "compboard": {
+      "title": "Compboard-Tracker",
+      "progress": "Fortschritt",
+      "resetAll": "Alles zurücksetzen",
+      "items": {
+        "chk1": "Checkmate — Hangar Ebene 1",
+        "chk2": "Checkmate — Sicherheitsbüro",
+        "orb1": "Orbituary — Wartungsbucht",
+        "orb2": "Orbituary — Kommandobrücke",
+        "ruin1": "Ruin — Unterer Tresor",
+        "ruin2": "Ruin — Oberes Lager",
+        "ruin3": "Ruin — Ingenieurbucht"
+      }
+    }
   },
   "Hangar": {
     "loading": "Hangar wird geladen...",

@@ -51,7 +51,8 @@
       "ships": "Vaisseaux",
       "industry": "Industrie",
       "social": "Social",
-      "hangar": "Hangar"
+      "hangar": "Hangar",
+      "tools": "Outils"
     },
     "menu": {
       "profile": "Profil",
@@ -251,7 +252,54 @@
     "organization": "Organisation",
     "party": "Groupe",
     "friends": "Amis",
-    "miningFinder": "Chercheur de Matériaux"
+    "miningFinder": "Chercheur de Matériaux",
+    "timers": "Timers Pyro"
+  },
+  "Timers": {
+    "tabs": {
+      "hangar": "Hangar Exécutif",
+      "cz": "Zones Contestées",
+      "compboard": "Compboard"
+    },
+    "hangar": {
+      "online": "EN LIGNE",
+      "offline": "HORS LIGNE",
+      "remaining": "Restant dans la phase",
+      "greenPhase": "Vert (En ligne) — 65 min",
+      "redPhase": "Rouge (Hors ligne) — 120 min",
+      "cycleDuration": "Cycle de 185 min",
+      "syncOffset": "Décalage de synchronisation",
+      "resetBtn": "Réinitialiser",
+      "hint": "Utilisez +/− pour aligner le timer avec la phase actuelle en jeu. Le décalage est sauvegardé automatiquement."
+    },
+    "cz": {
+      "checkmate": "Station Checkmate",
+      "orbituary": "Station Orbituary",
+      "ruin": "Station Ruin",
+      "printer": "Imprimante",
+      "vaultDoor": "Porte du Coffre",
+      "vaultOpen": "OUVERTE",
+      "vaultClosed": "FERMÉE",
+      "vaultCycle": "1 min ouverte · 20 min fermée",
+      "startTimer": "Démarrer",
+      "resetTimer": "Réinitialiser",
+      "ready": "PRÊTE",
+      "syncVault": "Coffre Ouvert"
+    },
+    "compboard": {
+      "title": "Suivi Compboard",
+      "progress": "Progression",
+      "resetAll": "Tout réinitialiser",
+      "items": {
+        "chk1": "Checkmate — Niveau 1 du Hangar",
+        "chk2": "Checkmate — Bureau de Sécurité",
+        "orb1": "Orbituary — Baie de Maintenance",
+        "orb2": "Orbituary — Pont de Commandement",
+        "ruin1": "Ruin — Coffre Inférieur",
+        "ruin2": "Ruin — Stockage Supérieur",
+        "ruin3": "Ruin — Baie d'Ingénierie"
+      }
+    }
   },
   "Hangar": {
     "loading": "Chargement du hangar...",

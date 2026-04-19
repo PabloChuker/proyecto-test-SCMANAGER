@@ -51,7 +51,8 @@
       "ships": "Ships",
       "industry": "Industry",
       "social": "Social",
-      "hangar": "Hangar"
+      "hangar": "Hangar",
+      "tools": "Tools"
     },
     "menu": {
       "profile": "Profile",
@@ -251,7 +252,54 @@
     "organization": "Organization",
     "party": "Party",
     "friends": "Friends",
-    "miningFinder": "Material Finder"
+    "miningFinder": "Material Finder",
+    "timers": "Pyro Timers"
+  },
+  "Timers": {
+    "tabs": {
+      "hangar": "Executive Hangar",
+      "cz": "Contested Zones",
+      "compboard": "Compboard"
+    },
+    "hangar": {
+      "online": "ONLINE",
+      "offline": "OFFLINE",
+      "remaining": "Remaining in phase",
+      "greenPhase": "Green (Online) — 65 min",
+      "redPhase": "Red (Offline) — 120 min",
+      "cycleDuration": "185 min cycle",
+      "syncOffset": "Sync Offset",
+      "resetBtn": "Reset",
+      "hint": "Use +/− to align the timer with the in-game phase. Offset is saved automatically."
+    },
+    "cz": {
+      "checkmate": "Checkmate Station",
+      "orbituary": "Orbituary Station",
+      "ruin": "Ruin Station",
+      "printer": "Printer",
+      "vaultDoor": "Vault Door",
+      "vaultOpen": "OPEN",
+      "vaultClosed": "CLOSED",
+      "vaultCycle": "1 min open · 20 min closed",
+      "startTimer": "Start",
+      "resetTimer": "Reset",
+      "ready": "READY",
+      "syncVault": "Vault Opened"
+    },
+    "compboard": {
+      "title": "Compboard Tracker",
+      "progress": "Progress",
+      "resetAll": "Reset All",
+      "items": {
+        "chk1": "Checkmate — Hangar Level 1",
+        "chk2": "Checkmate — Security Office",
+        "orb1": "Orbituary — Maintenance Bay",
+        "orb2": "Orbituary — Command Deck",
+        "ruin1": "Ruin — Lower Vault",
+        "ruin2": "Ruin — Upper Storage",
+        "ruin3": "Ruin — Engineering Bay"
+      }
+    }
   },
   "Hangar": {
     "loading": "Loading hangar...",

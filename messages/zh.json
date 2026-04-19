@@ -51,7 +51,8 @@
       "ships": "舰船",
       "industry": "工业",
       "social": "社交",
-      "hangar": "机库"
+      "hangar": "机库",
+      "tools": "工具"
     },
     "menu": {
       "profile": "个人资料",
@@ -251,7 +252,54 @@
     "organization": "组织",
     "party": "队伍",
     "friends": "好友",
-    "miningFinder": "矿物搜索"
+    "miningFinder": "矿物搜索",
+    "timers": "派罗计时器"
+  },
+  "Timers": {
+    "tabs": {
+      "hangar": "行政机库",
+      "cz": "争夺区",
+      "compboard": "计分板"
+    },
+    "hangar": {
+      "online": "在线",
+      "offline": "离线",
+      "remaining": "当前阶段剩余",
+      "greenPhase": "绿色（在线）— 65 分钟",
+      "redPhase": "红色（离线）— 120 分钟",
+      "cycleDuration": "185 分钟周期",
+      "syncOffset": "同步偏移",
+      "resetBtn": "重置",
+      "hint": "使用 +/− 将计时器与游戏内当前阶段对齐。偏移量将自动保存。"
+    },
+    "cz": {
+      "checkmate": "将军站",
+      "orbituary": "轨道站",
+      "ruin": "废墟站",
+      "printer": "打印机",
+      "vaultDoor": "金库门",
+      "vaultOpen": "已开启",
+      "vaultClosed": "已关闭",
+      "vaultCycle": "开启 1 分钟 · 关闭 20 分钟",
+      "startTimer": "开始",
+      "resetTimer": "重置",
+      "ready": "就绪",
+      "syncVault": "金库已开启"
+    },
+    "compboard": {
+      "title": "计分板追踪",
+      "progress": "进度",
+      "resetAll": "全部重置",
+      "items": {
+        "chk1": "将军站 — 机库1层",
+        "chk2": "将军站 — 安全办公室",
+        "orb1": "轨道站 — 维修湾",
+        "orb2": "轨道站 — 指挥甲板",
+        "ruin1": "废墟站 — 下层金库",
+        "ruin2": "废墟站 — 上层仓库",
+        "ruin3": "废墟站 — 工程湾"
+      }
+    }
   },
   "Hangar": {
     "loading": "正在加载机库...",
