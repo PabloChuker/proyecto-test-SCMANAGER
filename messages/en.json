@@ -766,19 +766,27 @@
       "you": "You",
       "actionDelete": "Delete",
       "actionMarkDistributed": "Mark distributed",
+      "actionCloseOrder": "Close payout order",
+      "actionCloseOrderHint": "Only available once every transfer is marked paid.",
+      "confirmCloseOrder": "Close this payout order? Payments can no longer be edited or the distribution reopened.",
+      "cannotCloseUnpaid": "Cannot close: {count, plural, one {# transfer still pending} other {# transfers still pending}}.",
       "flashMarkedDistributed": "Distribution marked as distributed.",
       "flashLedgerOpened": "{count, plural, one {# ledger entry opened in the settlement ledger.} other {# ledger entries opened in the settlement ledger.}}",
+      "flashClosedOrder": "Payout order closed.",
       "distributedAt": "Distributed · {date}",
+      "closedAt": "Closed · {date}",
       "stopLabel": "Stop {index} of {total}",
       "filter": {
         "pending": "Pending",
         "distributed": "Distributed",
+        "closed": "Closed",
         "archived": "Archived",
         "all": "All"
       },
       "status": {
         "pending": "Pending",
         "distributed": "Distributed",
+        "closed": "Closed",
         "archived": "Archived"
       },
       "mode": {

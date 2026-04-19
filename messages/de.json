@@ -766,19 +766,27 @@
       "you": "Du",
       "actionDelete": "Löschen",
       "actionMarkDistributed": "Als verteilt markieren",
+      "actionCloseOrder": "Auszahlungsauftrag abschließen",
+      "actionCloseOrderHint": "Nur verfügbar, wenn alle Transfers als bezahlt markiert sind.",
+      "confirmCloseOrder": "Diesen Auszahlungsauftrag abschließen? Zahlungen können nicht mehr bearbeitet und die Verteilung nicht wieder geöffnet werden.",
+      "cannotCloseUnpaid": "Abschluss nicht möglich: {count, plural, one {# Transfer noch offen} other {# Transfers noch offen}}.",
       "flashMarkedDistributed": "Verteilung als verteilt markiert.",
       "flashLedgerOpened": "{count, plural, one {# Eintrag im Abrechnungs-Ledger geöffnet.} other {# Einträge im Abrechnungs-Ledger geöffnet.}}",
+      "flashClosedOrder": "Auszahlungsauftrag abgeschlossen.",
       "distributedAt": "Verteilt · {date}",
+      "closedAt": "Abgeschlossen · {date}",
       "stopLabel": "Stopp {index} von {total}",
       "filter": {
         "pending": "Ausstehend",
         "distributed": "Verteilt",
+        "closed": "Abgeschlossen",
         "archived": "Archiviert",
         "all": "Alle"
       },
       "status": {
         "pending": "Ausstehend",
         "distributed": "Verteilt",
+        "closed": "Abgeschlossen",
         "archived": "Archiviert"
       },
       "mode": {

@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { simplifyDebts, type LedgerEntryInput } from "@/lib/debt-simplifier";
+import { sendNotification } from "@/lib/notifications";
 
 // -- GET -------------------------------------------------------------------
 
@@ -110,6 +111,51 @@ export async function PATCH(request: NextRequest) {
       .in("id", idList)
       .select();
     if (error) throw error;
+
+    // Fase E.3 — al marcar paid=true notificamos al receptor (to_user_id) con
+    // "{from} te transfirió {amount} aUEC". Loopeamos porque el PATCH acepta
+    // bulk (ids). Si falla la notif, no reventamos el endpoint: es best-effort.
+    // Fase E.4 — si había un payout_pending previo para este ledger entry, lo
+    // marcamos como leído (una transferencia cumplida no debería seguir
+    // notificando un pago pendiente).
+    if (paid === true && Array.isArray(data) && data.length > 0) {
+      await Promise.all(
+        data.map(async (row: any) => {
+          if (!row?.to_user_id) return;
+          const amountFmt = Math.round(
+            Number(row.amount_auec) || 0,
+          ).toLocaleString();
+          const fromLabel =
+            row.from_display_name || row.from_user_id || "Alguien";
+          try {
+            await sendNotification({
+              supabase,
+              recipientId: row.to_user_id,
+              fromUserId: user.id,
+              type: "payout_transferred",
+              title: `${fromLabel} te transfirió ${amountFmt} aUEC`,
+              message: row.notes || undefined,
+              link: "/trade",
+              metadata: {
+                ledger_id: row.id,
+                amount_auec: row.amount_auec,
+                distribution_id: row.distribution_id,
+                direction: row.direction,
+              },
+            });
+            // Mark any prior payout_pending notif for this ledger entry read.
+            await supabase
+              .from("notifications")
+              .update({ is_read: true })
+              .eq("user_id", row.to_user_id)
+              .eq("type", "payout_pending")
+              .contains("metadata", { ledger_id: row.id });
+          } catch {
+            /* best-effort — no reventar el PATCH por una notif */
+          }
+        }),
+      );
+    }
 
     return NextResponse.json({ data });
   } catch (e: any) {

@@ -29,12 +29,17 @@ const TYPE_ICONS: Record<string, string> = {
   friend_request: "👥",
   party_invite: "🎮",
   org_invite: "🏛",
+  // Fase E.3/E.4 — distribución de ganancias de una ruta de venta
+  payout_transferred: "💰",
+  payout_pending: "⏳",
 };
 
 const TYPE_COLORS: Record<string, string> = {
   friend_request: "text-blue-400",
   party_invite: "text-amber-400",
   org_invite: "text-emerald-400",
+  payout_transferred: "text-emerald-300",
+  payout_pending: "text-amber-300",
 };
 
 // Actionable notification types — show accept/reject buttons
@@ -314,12 +319,23 @@ export default function NotificationBell() {
                 const actionTaken = n.metadata?.action_taken as string | undefined;
                 const isActing = actingOn.has(n.id);
 
+                // Fase E — non-actionable notifs with a link are clickable:
+                // click = navigate + mark read + close bell.
+                const isClickable = !isActionable && !!n.link;
+                const onClickItem = () => {
+                  if (!isClickable) return;
+                  markRead(n.id);
+                  setOpen(false);
+                  if (n.link) router.push(n.link);
+                };
+
                 return (
                   <div
                     key={n.id}
+                    onClick={onClickItem}
                     className={`px-3 py-2.5 transition-colors border-b border-zinc-800/20 ${
                       n.is_read ? "hover:bg-zinc-800/30" : "bg-zinc-800/20 hover:bg-zinc-800/40"
-                    }`}
+                    } ${isClickable ? "cursor-pointer" : ""}`}
                   >
                     <div className="flex items-start gap-2.5">
                       {/* Avatar / Icon */}

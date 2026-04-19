@@ -766,19 +766,27 @@
       "you": "你",
       "actionDelete": "删除",
       "actionMarkDistributed": "标记为已分配",
+      "actionCloseOrder": "关闭支付订单",
+      "actionCloseOrderHint": "仅在所有转账均标记为已支付时可用。",
+      "confirmCloseOrder": "关闭此支付订单？之后将无法修改支付或重新打开该分配。",
+      "cannotCloseUnpaid": "无法关闭：仍有 {count} 笔转账待处理。",
       "flashMarkedDistributed": "分配已标记为已分配。",
       "flashLedgerOpened": "已在结算账本中开启 {count} 条条目。",
+      "flashClosedOrder": "支付订单已关闭。",
       "distributedAt": "已分配 · {date}",
+      "closedAt": "已关闭 · {date}",
       "stopLabel": "第 {index} / {total} 站",
       "filter": {
         "pending": "待处理",
         "distributed": "已分配",
+        "closed": "已关闭",
         "archived": "已归档",
         "all": "全部"
       },
       "status": {
         "pending": "待处理",
         "distributed": "已分配",
+        "closed": "已关闭",
         "archived": "已归档"
       },
       "mode": {

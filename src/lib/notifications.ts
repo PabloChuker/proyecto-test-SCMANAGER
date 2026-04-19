@@ -1,6 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-export type NotificationType = "friend_request" | "party_invite" | "org_invite";
+export type NotificationType =
+  | "friend_request"
+  | "party_invite"
+  | "org_invite"
+  // Fase E.3 — cuando alguien marca un entry del settlement ledger como pagado,
+  // notificamos al receptor con "{from} te transfirió {amount} aUEC".
+  | "payout_transferred"
+  // Fase E.4 — cuando se crea un entry del settlement ledger (paid=false) con
+  // to_user_id = usuario, notificamos con "Tenés un pago pendiente de {amount}
+  // aUEC". Se marca as_read cuando se crea el payout_transferred asociado.
+  | "payout_pending";
 
 interface SendNotificationParams {
   supabase: SupabaseClient;

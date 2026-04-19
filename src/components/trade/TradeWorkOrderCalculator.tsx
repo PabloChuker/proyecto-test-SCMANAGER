@@ -29,6 +29,9 @@ import {
   type MiningMarker,
   type RouteMarker,
 } from "@/lib/miningTradeBridge";
+import CobrarStopModal, {
+  type CobrarStopContext,
+} from "./CobrarStopModal";
 
 // localStorage key for the unsaved new-WO draft. Only used when creating a
 // brand-new WO (no `editingId`) — edits of existing server WOs are not cached
@@ -103,6 +106,9 @@ export default function TradeWorkOrderCalculator() {
   const consumePrefill = useTradeWorkOrderStore((s) => s.consumePrefill);
   const backToList = useTradeWorkOrderStore((s) => s.backToList);
   const openEdit = useTradeWorkOrderStore((s) => s.openEdit);
+  const requestActiveRouteTabSwitch = useTradeWorkOrderStore(
+    (s) => s.requestActiveRouteTabSwitch,
+  );
 
   // Header / main fields
   const [title, setTitle] = useState("Trade Run");
@@ -900,12 +906,54 @@ export default function TradeWorkOrderCalculator() {
 
   // Fires saveAll("completed") on the render AFTER applySplitAndComplete
   // mutated participants, so saveAll's closure sees the fresh role_pct/payout.
+  //
+  // Fase E.1 — if this was the LAST stop of a multi-sell route, after the
+  // completion save succeeds we fetch every WO that belongs to the same
+  // route_group_id and auto-open CobrarStopModal with the aggregate totals.
+  // That way Pablo goes: Save+Next through stops 1..N-1 → Complete+Split on
+  // stop N → the distribution modal pops up immediately with the whole trip's
+  // numbers, no need to hop to the Active Route tab.
   useEffect(() => {
     if (!pendingCompleteSave) return;
     setPendingCompleteSave(false);
-    saveAll("completed");
+    (async () => {
+      await saveAll("completed");
+      if (!routeMarker || routeMarker.stop < routeMarker.total) return;
+      // We're on the last stop — fetch the full group and open the modal.
+      try {
+        const res = await fetch("/api/trade/work-orders");
+        if (!res.ok) return;
+        const json = await res.json();
+        const list: TradeWorkOrder[] = Array.isArray(json)
+          ? (json as TradeWorkOrder[])
+          : Array.isArray((json as { data?: TradeWorkOrder[] })?.data)
+            ? ((json as { data: TradeWorkOrder[] }).data)
+            : [];
+        const group = list.filter((wo) => {
+          const m = parseRouteMarker(wo.notes);
+          return !!m && m.groupId === routeMarker.groupId;
+        });
+        if (group.length === 0) return;
+        setAutoDistCtx({
+          routeGroupId: routeMarker.groupId,
+          stopIndex: routeMarker.total,
+          routeTotalStops: routeMarker.total,
+          station: sellStation || null,
+          system: sellSystem || null,
+          workOrders: group,
+        });
+      } catch {
+        /* swallow — user can still Cobrar manually from ActiveRoutePanel */
+      }
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingCompleteSave, saveAll]);
+  }, [pendingCompleteSave, saveAll, routeMarker]);
+
+  // ── Auto-distribution modal state (Fase E.1) ───────────────────────────
+  // When null, nothing shows. When set by the pendingCompleteSave effect
+  // above on a last-stop completion, the CobrarStopModal renders inline at
+  // the bottom of the calculator.
+  const [autoDistCtx, setAutoDistCtx] = useState<CobrarStopContext | null>(null);
 
   // ── Save + Next ──────────────────────────────────────────────────────────
   // Only meaningful when this WO belongs to a multi-sell route group
@@ -1735,6 +1783,23 @@ export default function TradeWorkOrderCalculator() {
           </div>
         );
       })()}
+
+      {/* ── Fase E.1 — Auto-distribución al cerrar última parada ───────── */}
+      {autoDistCtx && (
+        <CobrarStopModal
+          ctx={autoDistCtx}
+          onClose={() => setAutoDistCtx(null)}
+          onSuccess={() => {
+            // Distribution guardada — mandamos al user al panel de ruta
+            // activa con el grupo pre-seleccionado para que vea los payouts
+            // pendientes y pueda cerrar la orden de pago desde ahí.
+            const gid = autoDistCtx.routeGroupId;
+            setAutoDistCtx(null);
+            requestActiveRouteTabSwitch(gid);
+            backToList();
+          }}
+        />
+      )}
     </div>
   );
 }

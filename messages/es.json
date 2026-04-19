@@ -766,19 +766,27 @@
       "you": "Vos",
       "actionDelete": "Eliminar",
       "actionMarkDistributed": "Marcar distribuido",
+      "actionCloseOrder": "Cerrar orden de pago",
+      "actionCloseOrderHint": "Solo disponible cuando todas las transferencias están marcadas como pagadas.",
+      "confirmCloseOrder": "¿Cerrar la orden de pago? Ya no se podrán modificar los pagos ni reabrir la distribución.",
+      "cannotCloseUnpaid": "No se puede cerrar: {count, plural, one {queda # transferencia pendiente} other {quedan # transferencias pendientes}}.",
       "flashMarkedDistributed": "Distribución marcada como distribuida.",
       "flashLedgerOpened": "{count, plural, one {Se abrió # asiento en el ledger de settlement.} other {Se abrieron # asientos en el ledger de settlement.}}",
+      "flashClosedOrder": "Orden de pago cerrada.",
       "distributedAt": "Distribuido · {date}",
+      "closedAt": "Cerrada · {date}",
       "stopLabel": "Parada {index} de {total}",
       "filter": {
         "pending": "Pendientes",
         "distributed": "Distribuidos",
+        "closed": "Cerradas",
         "archived": "Archivados",
-        "all": "Todos"
+        "all": "Todas"
       },
       "status": {
         "pending": "Pendiente",
         "distributed": "Distribuido",
+        "closed": "Cerrada",
         "archived": "Archivado"
       },
       "mode": {

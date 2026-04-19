@@ -29,6 +29,7 @@ import {
   type MiningRole,
   type TradeRole,
 } from "@/lib/distribution-calc";
+import { sendNotification } from "@/lib/notifications";
 
 // -- Helpers ----------------------------------------------------------------
 
@@ -360,15 +361,45 @@ export async function PATCH(request: NextRequest) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await request.json();
-    const { id, status, notes } = body ?? {};
+    const { id, status, notes, close } = body ?? {};
     if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
     const updates: Record<string, any> = {};
-    if (status && ["pending", "distributed", "archived"].includes(status)) {
+    if (status && ["pending", "distributed", "closed", "archived"].includes(status)) {
       updates.status = status;
       if (status === "distributed") updates.distributed_at = new Date().toISOString();
+      if (status === "closed") {
+        updates.closed_at = new Date().toISOString();
+        updates.closed_by = user.id;
+      }
     }
     if (notes !== undefined) updates.notes = notes;
+
+    // Fase E.2 — close=true: atajo de "cerrar orden de pago". Valida que
+    // todos los entries del settlement ledger para esta distribution esten
+    // paid=true; si falta alguno devuelve 409. No reemplaza a status='closed':
+    // setea status='closed' + closed_at + closed_by.
+    if (close === true) {
+      const { data: unpaid, error: upErr } = await supabase
+        .from("mining_settlement_ledger")
+        .select("id, to_display_name, amount_auec, paid")
+        .eq("distribution_id", id)
+        .eq("paid", false);
+      if (upErr) throw upErr;
+      if (unpaid && unpaid.length > 0) {
+        return NextResponse.json(
+          {
+            error: "cannot close: some ledger entries are still unpaid",
+            unpaidCount: unpaid.length,
+            unpaid,
+          },
+          { status: 409 },
+        );
+      }
+      updates.status = "closed";
+      updates.closed_at = new Date().toISOString();
+      updates.closed_by = user.id;
+    }
 
     if (Object.keys(updates).length === 0) {
       return NextResponse.json({ error: "nothing to update" }, { status: 400 });
@@ -446,6 +477,39 @@ export async function PATCH(request: NextRequest) {
             .select();
           if (insErr) throw insErr;
           ledgerEntries = inserted || [];
+
+          // Fase E.4 — para cada entry nuevo, notificar al receptor que
+          // tiene un payout pendiente. Best-effort: si falla, no reventamos
+          // el PATCH porque la deuda ya quedó en el ledger.
+          await Promise.all(
+            ledgerEntries.map(async (row: any) => {
+              if (!row?.to_user_id) return;
+              const amountFmt = Math.round(
+                Number(row.amount_auec) || 0,
+              ).toLocaleString();
+              const fromLabel =
+                row.from_display_name || "Caja de la sesión";
+              try {
+                await sendNotification({
+                  supabase,
+                  recipientId: row.to_user_id,
+                  fromUserId: user.id,
+                  type: "payout_pending",
+                  title: `Pago pendiente: ${amountFmt} aUEC`,
+                  message: `${fromLabel} te debe ${amountFmt} aUEC — pendiente de transferencia.`,
+                  link: "/trade",
+                  metadata: {
+                    ledger_id: row.id,
+                    amount_auec: row.amount_auec,
+                    distribution_id: row.distribution_id,
+                    direction: row.direction,
+                  },
+                });
+              } catch {
+                /* best-effort */
+              }
+            }),
+          );
         }
       }
     }

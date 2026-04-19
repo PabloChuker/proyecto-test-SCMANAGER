@@ -21,7 +21,11 @@ import { useTranslations } from "next-intl";
 
 // -- Types ------------------------------------------------------------------
 
-export type DistributionStatus = "pending" | "distributed" | "archived";
+export type DistributionStatus =
+  | "pending"
+  | "distributed"
+  | "closed" // Fase E.2 — orden de pago cerrada (todos los ledger entries paid)
+  | "archived";
 export type StatusFilter = DistributionStatus | "all";
 
 interface PendingPayout {
@@ -58,6 +62,10 @@ interface StopDistribution {
   triggered_by: string;
   triggered_at: string;
   distributed_at: string | null;
+  /** Fase E.2 — timestamp de cierre de orden de pago (solo con status=closed) */
+  closed_at: string | null;
+  /** Fase E.2 — user_id de quien cerró la orden */
+  closed_by: string | null;
   notes: string | null;
   created_at: string;
   mining_pending_payouts: PendingPayout[];
@@ -93,6 +101,8 @@ function statusColors(s: DistributionStatus): string {
       return "bg-amber-500/20 text-amber-300 border-amber-500/40";
     case "distributed":
       return "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
+    case "closed":
+      return "bg-cyan-500/20 text-cyan-300 border-cyan-500/40";
     case "archived":
       return "bg-zinc-700/30 text-zinc-400 border-zinc-600/40";
   }
@@ -233,6 +243,37 @@ export default function PendingPayoutsPanel({ miningSessionId, currentUserId }: 
     [load, t],
   );
 
+  // Fase E.2 — cerrar orden de pago. El backend valida que todos los ledger
+  // entries esten paid=true; si alguno no lo esta devuelve 409 con el conteo.
+  const closeOrderOfPayment = useCallback(
+    async (id: string) => {
+      if (!confirm(t("confirmCloseOrder"))) return;
+      setMutatingId(id);
+      try {
+        const r = await fetch("/api/mining/distributions", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, close: true }),
+        });
+        const json = await r.json();
+        if (r.status === 409) {
+          const count =
+            typeof json?.unpaidCount === "number" ? json.unpaidCount : 0;
+          alert(t("cannotCloseUnpaid", { count }));
+          return;
+        }
+        if (!r.ok) throw new Error(json?.error || "Failed to close order");
+        setFlash(t("flashClosedOrder"));
+        await load();
+      } catch (e: any) {
+        alert(e?.message || "Unknown error");
+      } finally {
+        setMutatingId(null);
+      }
+    },
+    [load, t],
+  );
+
   const deleteDistribution = useCallback(
     async (id: string) => {
       if (!confirm(t("confirmDelete"))) return;
@@ -291,7 +332,7 @@ export default function PendingPayoutsPanel({ miningSessionId, currentUserId }: 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 text-xs">
         <div className="inline-flex rounded-md overflow-hidden border border-zinc-700/60">
-          {(["pending", "distributed", "archived", "all"] as StatusFilter[]).map((s) => (
+          {(["pending", "distributed", "closed", "archived", "all"] as StatusFilter[]).map((s) => (
             <button
               key={s}
               onClick={() => setStatusFilter(s)}
@@ -487,8 +528,23 @@ export default function PendingPayoutsPanel({ miningSessionId, currentUserId }: 
                         </>
                       )}
                       {d.status === "distributed" && (
-                        <span className="text-[10px] text-emerald-400 italic">
-                          {t("distributedAt", { date: fmtDate(d.distributed_at) })}
+                        <>
+                          <span className="text-[10px] text-emerald-400 italic">
+                            {t("distributedAt", { date: fmtDate(d.distributed_at) })}
+                          </span>
+                          <button
+                            onClick={() => closeOrderOfPayment(d.id)}
+                            disabled={mutatingId === d.id}
+                            title={t("actionCloseOrderHint")}
+                            className="px-3 py-1.5 bg-cyan-500/10 border border-cyan-500/40 rounded text-[10px] font-bold text-cyan-300 hover:bg-cyan-500/20 hover:border-cyan-500/60 disabled:opacity-50"
+                          >
+                            {t("actionCloseOrder")}
+                          </button>
+                        </>
+                      )}
+                      {d.status === "closed" && (
+                        <span className="text-[10px] text-cyan-300 italic">
+                          {t("closedAt", { date: fmtDate(d.closed_at) })}
                         </span>
                       )}
                     </div>

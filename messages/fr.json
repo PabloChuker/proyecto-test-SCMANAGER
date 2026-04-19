@@ -766,19 +766,27 @@
       "you": "Toi",
       "actionDelete": "Supprimer",
       "actionMarkDistributed": "Marquer distribué",
+      "actionCloseOrder": "Clôturer l'ordre de paiement",
+      "actionCloseOrderHint": "Disponible uniquement lorsque tous les transferts sont marqués comme payés.",
+      "confirmCloseOrder": "Clôturer cet ordre de paiement ? Les paiements ne pourront plus être modifiés ni la distribution rouverte.",
+      "cannotCloseUnpaid": "Impossible de clôturer : {count, plural, one {# transfert toujours en attente} other {# transferts toujours en attente}}.",
       "flashMarkedDistributed": "Distribution marquée comme distribuée.",
       "flashLedgerOpened": "{count, plural, one {# entrée ouverte dans le registre de règlement.} other {# entrées ouvertes dans le registre de règlement.}}",
+      "flashClosedOrder": "Ordre de paiement clôturé.",
       "distributedAt": "Distribué · {date}",
+      "closedAt": "Clôturé · {date}",
       "stopLabel": "Arrêt {index} sur {total}",
       "filter": {
         "pending": "En attente",
         "distributed": "Distribués",
+        "closed": "Clôturés",
         "archived": "Archivés",
         "all": "Tous"
       },
       "status": {
         "pending": "En attente",
         "distributed": "Distribué",
+        "closed": "Clôturé",
         "archived": "Archivé"
       },
       "mode": {
