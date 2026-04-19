@@ -715,6 +715,8 @@
       "you": "Vos",
       "actionDelete": "Eliminar",
       "actionMarkDistributed": "Marcar distribuido",
+      "flashMarkedDistributed": "Distribución marcada como distribuida.",
+      "flashLedgerOpened": "{count, plural, one {Se abrió # asiento en el ledger de settlement.} other {Se abrieron # asientos en el ledger de settlement.}}",
       "distributedAt": "Distribuido · {date}",
       "stopLabel": "Parada {index} de {total}",
       "filter": {

@@ -1,9 +1,14 @@
 // =============================================================================
 // SC LABS — /api/mining/distributions
 //
-// POST  — Crear o recalcular una distribucion de stop (cobrado)
+// POST  — Crear o recalcular una distribucion de stop (cobrado)  [Fase D.1/D.2]
 // GET   — Listar distribuciones (con filtros opcionales)
-// PATCH — Actualizar status (p.ej. pending → distributed → archived)
+// PATCH — Actualizar status (p.ej. pending → distributed → archived)  [D.4]
+//         Cuando pasa a 'distributed':
+//           - flipea mining_pending_payouts.status → 'distributed'
+//           - inserta una entry en mining_settlement_ledger por cada payout
+//             con direction='from_mining' (idempotente: no duplica si ya
+//             existian entries para la distribution)
 //
 // Flujo POST:
 //   1. Resuelve WOs del stop + trade participants + mining members.
@@ -12,9 +17,6 @@
 //   4. Si ya existia una pending distribution para (route_group_id, stop_index),
 //      la reemplaza (borra sus payouts + updatea la row) — "va a recalcular".
 //   5. Inserta mining_stop_distribution_wos y mining_pending_payouts.
-//
-// La escritura al settlement ledger ocurre cuando el status pasa a
-// 'distributed' — eso se maneja en PATCH (fase D.4).
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -380,15 +382,75 @@ export async function PATCH(request: NextRequest) {
       .single();
     if (error) throw error;
 
-    // Si marcamos como distributed, flipeamos los pending_payouts tambien.
+    // -- Si marcamos como distributed: flipeamos payouts + escribimos ledger.
+    let ledgerEntries: any[] = [];
     if (updates.status === "distributed") {
+      // 1. Marcar pending_payouts como distributed
       await supabase
         .from("mining_pending_payouts")
         .update({ status: "distributed", distributed_at: updates.distributed_at })
         .eq("distribution_id", id);
+
+      // 2. Chequear idempotencia: si ya hay entries en el ledger para esta
+      //    distribution (direction='from_mining'), saltar la escritura.
+      const { data: existingLedger, error: elErr } = await supabase
+        .from("mining_settlement_ledger")
+        .select("id")
+        .eq("distribution_id", id)
+        .eq("direction", "from_mining")
+        .limit(1);
+      if (elErr) throw elErr;
+
+      if (!existingLedger || existingLedger.length === 0) {
+        // 3. Cargar payouts actualizados + session info para el "from" name
+        const { data: payouts, error: pErr } = await supabase
+          .from("mining_pending_payouts")
+          .select("id, user_id, display_name, pending_auec")
+          .eq("distribution_id", id);
+        if (pErr) throw pErr;
+
+        let sessionName: string | null = null;
+        if (data.mining_session_id) {
+          const { data: sess } = await supabase
+            .from("mining_sessions")
+            .select("name")
+            .eq("id", data.mining_session_id)
+            .maybeSingle();
+          sessionName = sess?.name || null;
+        }
+        const fromLabel = sessionName
+          ? `Caja · ${sessionName}`
+          : "Caja de la sesión";
+
+        // 4. Insertar una entry por payout. Filtramos amounts <= 0 y redondeamos.
+        const rows = (payouts || [])
+          .map((p: any) => ({
+            from_user_id: null, // sale de la "caja" — no hay un pagador concreto
+            from_display_name: fromLabel,
+            to_user_id: p.user_id || null,
+            to_display_name: p.display_name || "Unnamed",
+            amount_auec: round2(Number(p.pending_auec) || 0),
+            direction: "from_mining",
+            distribution_id: id,
+            pending_payout_id: p.id,
+            session_id: data.mining_session_id || null,
+            paid: false,
+            notes: null,
+          }))
+          .filter((r) => r.amount_auec > 0);
+
+        if (rows.length > 0) {
+          const { data: inserted, error: insErr } = await supabase
+            .from("mining_settlement_ledger")
+            .insert(rows)
+            .select();
+          if (insErr) throw insErr;
+          ledgerEntries = inserted || [];
+        }
+      }
     }
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ data, ledgerEntries });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

@@ -715,6 +715,8 @@
       "you": "Toi",
       "actionDelete": "Supprimer",
       "actionMarkDistributed": "Marquer distribué",
+      "flashMarkedDistributed": "Distribution marquée comme distribuée.",
+      "flashLedgerOpened": "{count, plural, one {# entrée ouverte dans le registre de règlement.} other {# entrées ouvertes dans le registre de règlement.}}",
       "distributedAt": "Distribué · {date}",
       "stopLabel": "Arrêt {index} sur {total}",
       "filter": {

@@ -715,6 +715,8 @@
       "you": "你",
       "actionDelete": "删除",
       "actionMarkDistributed": "标记为已分配",
+      "flashMarkedDistributed": "分配已标记为已分配。",
+      "flashLedgerOpened": "已在结算账本中开启 {count} 条条目。",
       "distributedAt": "已分配 · {date}",
       "stopLabel": "第 {index} / {total} 站",
       "filter": {

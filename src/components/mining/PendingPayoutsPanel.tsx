@@ -128,6 +128,14 @@ export default function PendingPayoutsPanel({ miningSessionId, currentUserId }: 
   const [distributions, setDistributions] = useState<StopDistribution[]>([]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [mutatingId, setMutatingId] = useState<string | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+
+  // Auto-clear flash mensajes despues de 3.5s
+  useEffect(() => {
+    if (!flash) return;
+    const t = setTimeout(() => setFlash(null), 3500);
+    return () => clearTimeout(t);
+  }, [flash]);
 
   // -- Load -----------------------------------------------------------------
 
@@ -209,6 +217,12 @@ export default function PendingPayoutsPanel({ miningSessionId, currentUserId }: 
         });
         const json = await r.json();
         if (!r.ok) throw new Error(json?.error || "Failed to mark distributed");
+        const entries = Array.isArray(json?.ledgerEntries) ? json.ledgerEntries.length : 0;
+        setFlash(
+          entries > 0
+            ? t("flashLedgerOpened", { count: entries })
+            : t("flashMarkedDistributed"),
+        );
         await load();
       } catch (e: any) {
         alert(e?.message || "Unknown error");
@@ -311,6 +325,19 @@ export default function PendingPayoutsPanel({ miningSessionId, currentUserId }: 
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3 text-sm text-red-300">
           {error}
+        </div>
+      )}
+
+      {/* Flash (e.g. ledger opened) */}
+      {flash && (
+        <div className="bg-emerald-500/10 border border-emerald-500/40 rounded-lg px-4 py-3 text-sm text-emerald-300 flex items-center justify-between">
+          <span>{flash}</span>
+          <button
+            onClick={() => setFlash(null)}
+            className="text-emerald-300/60 hover:text-emerald-200 text-xs"
+          >
+            ✕
+          </button>
         </div>
       )}
 

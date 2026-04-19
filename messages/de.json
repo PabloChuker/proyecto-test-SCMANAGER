@@ -715,6 +715,8 @@
       "you": "Du",
       "actionDelete": "Löschen",
       "actionMarkDistributed": "Als verteilt markieren",
+      "flashMarkedDistributed": "Verteilung als verteilt markiert.",
+      "flashLedgerOpened": "{count, plural, one {# Eintrag im Abrechnungs-Ledger geöffnet.} other {# Einträge im Abrechnungs-Ledger geöffnet.}}",
       "distributedAt": "Verteilt · {date}",
       "stopLabel": "Stopp {index} von {total}",
       "filter": {

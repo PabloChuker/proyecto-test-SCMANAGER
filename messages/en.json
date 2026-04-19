@@ -715,6 +715,8 @@
       "you": "You",
       "actionDelete": "Delete",
       "actionMarkDistributed": "Mark distributed",
+      "flashMarkedDistributed": "Distribution marked as distributed.",
+      "flashLedgerOpened": "{count, plural, one {# ledger entry opened in the settlement ledger.} other {# ledger entries opened in the settlement ledger.}}",
       "distributedAt": "Distributed · {date}",
       "stopLabel": "Stop {index} of {total}",
       "filter": {
