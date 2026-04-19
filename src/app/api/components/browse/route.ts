@@ -59,7 +59,7 @@ const TABLE_COLUMNS: Record<string, ColumnDef[]> = {
     { key: "manufacturer", label: "Manufacturer", type: "text", width: 2 },
     { key: "role", label: "Role", type: "text" },
     { key: "size", label: "Size", type: "number" },
-    { key: "max_crew", label: "Crew", type: "number" },
+    { key: "crew", label: "Crew", type: "number" },
     { key: "cargo_capacity", label: "Cargo", type: "number" },
     { key: "scm_speed", label: "SCM Speed", type: "number" },
     { key: "afterburner_speed", label: "NAV Speed", type: "number" },

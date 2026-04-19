@@ -58,7 +58,7 @@ const SORT_MAP: Record<string, string> = {
   scmSpeed: "fs.scm_speed",
   maxSpeed: "fs.max_speed",
   cargo: "s.cargo_capacity",
-  maxCrew: "s.max_crew",
+  maxCrew: "s.crew",
   afterburnerSpeed: "fs.max_speed",
   manufacturer: "s.manufacturer",
   size: "s.size",
@@ -142,7 +142,7 @@ async function handleShipsQuery(params: ShipsQueryParams) {
             PARTITION BY LOWER(COALESCE(name, '')), LOWER(COALESCE(manufacturer, ''))
             ORDER BY
               ( (CASE WHEN msrp_usd       IS NOT NULL THEN 1 ELSE 0 END)
-              + (CASE WHEN max_crew       IS NOT NULL THEN 1 ELSE 0 END)
+              + (CASE WHEN crew           IS NOT NULL THEN 1 ELSE 0 END)
               + (CASE WHEN cargo_capacity IS NOT NULL THEN 1 ELSE 0 END)
               + (CASE WHEN mass           IS NOT NULL THEN 1 ELSE 0 END)
               + (CASE WHEN role           IS NOT NULL THEN 1 ELSE 0 END)
@@ -169,7 +169,7 @@ async function handleShipsQuery(params: ShipsQueryParams) {
     const ships: any[] = await sql.unsafe(
       `${dedupCTE}
        SELECT s.id, s.class_name AS reference, s.name, s.manufacturer, s.role, s.size,
-              s.max_crew, s.mass, s.cargo_capacity, s.game_version,
+              s.crew, s.mass, s.cargo_capacity, s.game_version,
               s.msrp_usd, s.warbond_usd,
               fs.scm_speed, fs.max_speed as afterburner_speed
        FROM deduped s
@@ -212,7 +212,7 @@ async function handleShipsQuery(params: ShipsQueryParams) {
       msrpUsd: inGameOnly ? null : (s.msrp_usd != null ? Number(s.msrp_usd) : null),
       warbondUsd: inGameOnly ? null : (s.warbond_usd != null ? Number(s.warbond_usd) : null),
       ship: {
-        maxCrew: s.max_crew,
+        maxCrew: s.crew,
         mass: s.mass != null ? Number(s.mass) : null,
         cargo: s.cargo_capacity != null ? Number(s.cargo_capacity) : null,
         scmSpeed: s.scm_speed != null ? Number(s.scm_speed) : null,

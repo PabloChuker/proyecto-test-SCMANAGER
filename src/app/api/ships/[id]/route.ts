@@ -1150,7 +1150,7 @@ export async function GET(
         pitchRate: numOrNull(col(flightStats, "pitch", "pitchRate")),
         yawRate: numOrNull(col(flightStats, "yaw", "yawRate")),
         rollRate: numOrNull(col(flightStats, "roll", "rollRate")),
-        maxCrew: col(ship, "max_crew", "maxCrew"),
+        maxCrew: col(ship, "crew", "maxCrew"),
         cargo: numOrNull(
           col(ship, "cargo_capacity", "cargoCapacity", "cargo"),
         ),
