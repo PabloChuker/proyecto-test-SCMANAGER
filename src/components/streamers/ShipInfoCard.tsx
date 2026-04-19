@@ -1185,11 +1185,24 @@ export default function ShipInfoCard({
   }
 
   // ═════════════════════════════════════════════════════════════════════
-  // VERTICAL — título arriba + img + 2 cols stacked
+  // VERTICAL — cinematic dossier, 760 × 1380
   // ═════════════════════════════════════════════════════════════════════
   const W = 760;
   const H = 1380;
+  const HERO_H = 560;
+  const KPI_H = 80;
+  const BRAND_H = 70;
+  const DATA_H = H - HERO_H - KPI_H - BRAND_H; // 670
   const typo = TYPO_V;
+
+  const nameFontSize = Math.max(36, Math.min(110, Math.floor(680 / Math.max(displayName.length, 4))));
+
+  const kpiStats = [
+    cargo != null    ? { label: "Cargo",     value: num(cargo),    unit: "SCU" } : null,
+    hullHp != null   ? { label: "Hull HP",   value: num(hullHp),   unit: "HP"  } : null,
+    scmSpeed != null ? { label: "SCM Speed", value: num(scmSpeed), unit: "m/s" } : null,
+    shieldHp != null ? { label: "Shield",    value: num(shieldHp), unit: "HP"  } : null,
+  ].filter(Boolean) as { label: string; value: string; unit: string }[];
 
   return (
     <div
@@ -1198,302 +1211,231 @@ export default function ShipInfoCard({
         position: "relative",
         width: W,
         height: H,
-        backgroundColor: theme.bg,
+        backgroundColor: "#000",
         color: theme.text,
-        border: `1px solid ${theme.border}`,
-        fontFamily:
-          '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        border: `1px solid ${theme.accent}55`,
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
         overflow: "hidden",
       }}
     >
-      {/* Accent top */}
-      <div
+      {/* ── Background gradient ── */}
+      <div style={{
+        position:"absolute", top:0, left:0, right:0, height:HERO_H,
+        background:`linear-gradient(135deg, ${theme.accent}18 0%, transparent 40%)`,
+        pointerEvents:"none",
+      }} />
+
+      {/* Thin left accent bar */}
+      <div style={{
+        position:"absolute", top:0, left:0, width:3, height:HERO_H,
+        background:`linear-gradient(to bottom, ${theme.accent}, transparent)`,
+      }} />
+
+      {/* ── Ship image ── */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={imageUrl}
+        alt={displayName}
+        crossOrigin="anonymous"
         style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 4,
-          backgroundColor: theme.accent,
+          position:"absolute", top:0, left:0,
+          width: W, height: HERO_H,
+          objectFit:"contain", objectPosition:"center 45%",
+          filter:`drop-shadow(0 0 50px ${theme.accent}99) drop-shadow(0 0 130px ${theme.accent}44)`,
         }}
+        onError={(e) => { (e.target as HTMLImageElement).style.opacity = "0.08"; }}
       />
 
-      <div
-        style={{
-          position: "absolute",
-          top: 20,
-          left: 26,
-          right: 26,
-          bottom: 36,
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {/* ── Título arriba: logo + marca + nombre ── */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: 12,
-          }}
-        >
-          <BrandMark theme={theme} size={44} labelSize={17} subSize={9} />
-          <div
-            style={{
-              fontSize: 11,
-              letterSpacing: "0.22em",
-              textTransform: "uppercase",
-              color: theme.textMuted,
-            }}
-          >
-            {ship.gameVersion || "4.x"}
-          </div>
-        </div>
+      {/* Ambient glow */}
+      <div style={{
+        position:"absolute", top:0, left:0, right:0, height:HERO_H,
+        background:`radial-gradient(ellipse 75% 55% at 50% 50%, ${theme.accent}22 0%, transparent 68%)`,
+        pointerEvents:"none",
+      }} />
 
-        {/* Manufacturer + Ship name as title */}
-        <div
-          style={{
-            marginBottom: 10,
-            paddingBottom: 10,
-            borderBottom: `1px solid ${theme.border}`,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 13,
-              letterSpacing: "0.26em",
-              textTransform: "uppercase",
-              color: theme.textMuted,
-              marginBottom: 4,
-            }}
-          >
-            {ship.manufacturer ?? "Manufacturer"}
+      {/* Viñeta superior */}
+      <div style={{
+        position:"absolute", top:0, left:0, right:0, height:100,
+        background:"linear-gradient(to bottom, #000000c0 0%, transparent 100%)",
+        pointerEvents:"none", zIndex:2,
+      }} />
+      {/* Viñeta inferior del hero */}
+      <div style={{
+        position:"absolute", top:HERO_H - 140, left:0, right:0, height:140,
+        background:"linear-gradient(to top, #000000f5 0%, transparent 100%)",
+        pointerEvents:"none", zIndex:2,
+      }} />
+      {/* Viñeta izquierda */}
+      <div style={{
+        position:"absolute", top:0, left:0, width:70, height:HERO_H,
+        background:"linear-gradient(to right, #000000b0 0%, transparent 100%)",
+        pointerEvents:"none",
+      }} />
+      {/* Viñeta derecha */}
+      <div style={{
+        position:"absolute", top:0, right:0, width:70, height:HERO_H,
+        background:"linear-gradient(to left, #000000b0 0%, transparent 100%)",
+        pointerEvents:"none",
+      }} />
+
+      {/* ── Identity block — encima del hero, esquina inferior ── */}
+      <div style={{
+        position:"absolute",
+        bottom: KPI_H + DATA_H + BRAND_H + 18,
+        left: 22, right: 22,
+        zIndex: 3,
+      }}>
+        <BrandMark theme={theme} size={22} labelSize={9} subSize={7} />
+        <div style={{ marginTop:14 }}>
+          <div style={{
+            fontSize:10, fontWeight:700, letterSpacing:"0.38em",
+            textTransform:"uppercase", color:theme.accent,
+            marginBottom:6, lineHeight:1,
+          }}>
+            {ship.manufacturer ?? "—"}
           </div>
-          <div
-            style={{
-              fontSize: 46,
-              fontWeight: 300,
-              lineHeight: 1,
-              color: theme.text,
-              letterSpacing: "-0.01em",
-            }}
-          >
+          <div style={{
+            fontSize: nameFontSize,
+            fontWeight:800, lineHeight:0.88,
+            letterSpacing:"-0.03em", textTransform:"uppercase",
+            color:theme.text,
+            textShadow:`0 0 60px ${theme.accent}55, 0 2px 0 #000`,
+            marginBottom:14,
+          }}>
             {displayName}
           </div>
-          {(ship.type || specs.role) && (
-            <div
-              style={{
-                fontSize: 14,
-                marginTop: 6,
-                color: theme.accent,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-              }}
-            >
-              {[ship.type, specs.role].filter(Boolean).join(" · ")}
-            </div>
-          )}
-        </div>
-
-        {/* Ship image */}
-        <div
-          style={{
-            position: "relative",
-            width: "100%",
-            height: 280,
-            backgroundColor: theme.bgPanel,
-            borderTop: `2px solid ${theme.accent}`,
-            borderBottom: `2px solid ${theme.accent}`,
-            marginBottom: 8,
-          }}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageUrl}
-            alt={displayName}
-            crossOrigin="anonymous"
-            style={{
-              position: "absolute",
-              inset: 0,
-              width: "100%",
-              height: "100%",
-              objectFit: "contain",
-              padding: 16,
-            }}
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.opacity = "0.3";
-            }}
-          />
-        </div>
-
-        {/* 2-col data grid */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            columnGap: 18,
-            flex: 1,
-            alignContent: "start",
-          }}
-        >
-          {/* LEFT COLUMN */}
-          <div>
-            <SectionHeader title="Hull" theme={theme} typo={typo} />
-            <Row label="Dimensions (F)" value={dimsFlight} theme={theme} typo={typo} />
-            <Row label="Mass" value={num(mass)} unit="Kg" theme={theme} typo={typo} />
-            <Row
-              label="Total HP"
-              value={num(hullHp)}
-              unit="HP"
-              theme={theme}
-              typo={typo}
-            />
-
-            <SubHeader title="Vital Part" theme={theme} typo={typo} />
-            <Row label="Body" value={MISSING} unit="HP" theme={theme} typo={typo} />
-            <SubHeader title="Damage Modifiers" theme={theme} typo={typo} />
-            <ModifierTriplet
-              a={["Physical", deflPhys != null ? `${num(deflPhys)} %` : MISSING]}
-              b={["EM", MISSING]}
-              theme={theme}
-              typo={typo}
-            />
-            <ModifierTriplet
-              a={["Energy", deflEne != null ? `${num(deflEne)} %` : MISSING]}
-              b={["CrossSec.", MISSING]}
-              theme={theme}
-              typo={typo}
-            />
-            <ModifierTriplet
-              a={["Distortion", deflDis != null ? `${num(deflDis)} %` : MISSING]}
-              b={["Infrared", MISSING]}
-              theme={theme}
-              typo={typo}
-            />
-
-            <SectionHeader title="Weaponry" theme={theme} typo={typo} />
-            <Row
-              label="Pilot DPS"
-              value={pilotDps != null ? num(pilotDps) : MISSING}
-              theme={theme}
-              typo={typo}
-            />
-            <Row label="Crew DPS" value={MISSING} theme={theme} typo={typo} />
-            <Row
-              label="Missiles & Bombs"
-              value={MISSING}
-              unit="Dmg"
-              theme={theme}
-              typo={typo}
-            />
-            <Row
-              label="Max Armed / Rearm"
-              value={MISSING}
-              theme={theme}
-              typo={typo}
-            />
-            <Row
-              label="Shield (Quadrant)"
-              value={shieldHp != null ? num(shieldHp) : MISSING}
-              unit="HP"
-              theme={theme}
-              typo={typo}
-            />
-
-            <SectionHeader title="Armor" theme={theme} typo={typo} />
-            <Row label="Health points" value={MISSING} unit="HP" theme={theme} typo={typo} />
-            <Row label="Deflect. Threshold" value={MISSING} theme={theme} typo={typo} />
-          </div>
-
-          {/* RIGHT COLUMN */}
-          <div>
-            <SectionHeader title="Carrying Capacity" theme={theme} typo={typo} />
-            <Row label="Cargo Grid" value={num(cargo)} unit="SCU" theme={theme} typo={typo} />
-
-            <SectionHeader title="Fuel" theme={theme} typo={typo} />
-            <Row label="Hydrogen" value={h2Str} unit="SCU" theme={theme} typo={typo} />
-            <Row label="Quantum" value={qtStr} unit="SCU" theme={theme} typo={typo} />
-            <Row
-              label="Range"
-              value={qtRangeGm != null ? num(qtRangeGm, 2) : MISSING}
-              unit="GM"
-              theme={theme}
-              typo={typo}
-            />
-
-            <SectionHeader title="Refuel Cost" theme={theme} typo={typo} />
-            <Row label="Hydrogen" value={MISSING} unit="aUEC" theme={theme} typo={typo} />
-            <Row label="Quantum" value={MISSING} unit="aUEC" theme={theme} typo={typo} />
-
-            <SectionHeader title="Flight Performances" theme={theme} typo={typo} />
-            <Row
-              label="SCM / Fwd Boost"
-              value={scmBoostStr}
-              unit="m/s"
-              theme={theme}
-              typo={typo}
-            />
-            <Row label="NAV" value={MISSING} unit="m/s" theme={theme} typo={typo} />
-            <Row
-              label="Pitch / Yaw / Roll"
-              value={pitchYawRoll}
-              unit="°/s"
-              theme={theme}
-              typo={typo}
-            />
-            <Row label="Boosted" value={boostedPYR} unit="°/s" theme={theme} typo={typo} />
-
-            <SectionHeader title="Accelerations" theme={theme} typo={typo} />
-            <Row label="Main" value={toG(accelFwd)} unit="G" theme={theme} typo={typo} />
-            <Row label="Retro" value={toG(accelBwd)} unit="G" theme={theme} typo={typo} />
-            <Row label="Up" value={toG(accelUp)} unit="G" theme={theme} typo={typo} />
-            <Row label="Down" value={toG(accelDown)} unit="G" theme={theme} typo={typo} />
-            <Row label="Strafe" value={toG(accelStr)} unit="G" theme={theme} typo={typo} />
-
-            <SectionHeader title="Insurance" theme={theme} typo={typo} />
-            <Row label="Claim / Expedite" value={MISSING} theme={theme} typo={typo} />
-            <Row label="Expedite cost" value={MISSING} unit="aUEC" theme={theme} typo={typo} />
+          <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+            {(ship.type || specs.role) && (
+              <span style={{
+                fontSize:10, fontWeight:700,
+                letterSpacing:"0.16em", textTransform:"uppercase",
+                color:"#000", backgroundColor:theme.accent,
+                padding:"3px 10px", lineHeight:1.5,
+              }}>
+                {[ship.type, specs.role].filter(Boolean).join(" · ")}
+              </span>
+            )}
+            {specs.maxCrew != null && (
+              <span style={{ fontSize:11, color:theme.textMuted }}>
+                <span style={{ color:theme.text, fontWeight:700 }}>{specs.maxCrew}</span> crew
+              </span>
+            )}
+            {mass != null && (
+              <span style={{ fontSize:11, color:theme.textMuted }}>
+                <span style={{ color:theme.text, fontWeight:700 }}>{num(mass)}</span> kg
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Footer: cortesía */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: 30,
-          backgroundColor: theme.bgPanel,
-          borderTop: `1px solid ${theme.border}`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "0 26px",
-        }}
-      >
-        <span
-          style={{
-            fontSize: 11,
-            letterSpacing: "0.22em",
-            textTransform: "uppercase",
-            color: theme.textMuted,
-          }}
-        >
-          Cortesía de SC Labs
-        </span>
-        <span
-          style={{
-            fontSize: 11,
-            letterSpacing: "0.22em",
-            textTransform: "uppercase",
-            color: theme.accent,
-          }}
-        >
-          sclabs.space
-        </span>
+      {/* ── KPI stats strip ── */}
+      <div style={{
+        position:"absolute", top:HERO_H, left:0, right:0, height:KPI_H,
+        backgroundColor: theme.bgPanel,
+        borderTop:`1px solid ${theme.border}`, borderBottom:`1px solid ${theme.border}`,
+        display:"flex", alignItems:"center",
+      }}>
+        {kpiStats.map((s, i) => (
+          <div key={i} style={{
+            flex:1, padding:"6px 0", textAlign:"center",
+            borderRight: i < kpiStats.length - 1 ? `1px solid ${theme.border}` : undefined,
+          }}>
+            <div style={{
+              fontSize:9, letterSpacing:"0.22em", textTransform:"uppercase",
+              color:theme.textMuted, marginBottom:2, lineHeight:1,
+            }}>{s.label}</div>
+            <div style={{
+              fontSize:26, fontWeight:800, color:theme.accent, lineHeight:1,
+              fontVariantNumeric:"tabular-nums",
+            }}>{s.value}</div>
+            <div style={{
+              fontSize:9, color:theme.textMuted,
+              letterSpacing:"0.1em", textTransform:"uppercase", marginTop:1,
+            }}>{s.unit}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Data area: 2 cols ── */}
+      <div style={{
+        position:"absolute", top:HERO_H + KPI_H, left:0, right:0, height:DATA_H,
+        backgroundColor: theme.bgPanel,
+        display:"grid", gridTemplateColumns:"1fr 1px 1fr",
+      }}>
+        {/* Col izquierda: Structure + Combat */}
+        <div>
+          <DataColumn title="Structure" theme={theme} typo={typo}>
+            <Row label="Dimensions" value={dimsFlight} theme={theme} typo={typo} />
+            <Row label="Hull HP" value={num(hullHp)} unit="HP" theme={theme} typo={typo} />
+            <div style={{ marginTop:4, display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 10px" }}>
+              <MiniStat label="Physical"   value={deflPhys != null ? `${num(deflPhys)} %` : MISSING} theme={theme} typo={typo} />
+              <MiniStat label="Energy"     value={deflEne  != null ? `${num(deflEne)}  %` : MISSING} theme={theme} typo={typo} />
+              <MiniStat label="Distortion" value={deflDis  != null ? `${num(deflDis)}  %` : MISSING} theme={theme} typo={typo} />
+            </div>
+          </DataColumn>
+          <DataColumn title="Combat" theme={theme} typo={typo}>
+            <Row label="Pilot DPS"        value={pilotDps != null ? num(pilotDps) : MISSING} theme={theme} typo={typo} />
+            <Row label="Crew DPS"         value={MISSING}                                     theme={theme} typo={typo} />
+            <Row label="Shield HP"        value={shieldHp != null ? num(shieldHp) : MISSING} unit="HP"  theme={theme} typo={typo} />
+            <Row label="Missiles & Bombs" value={MISSING}                                     unit="Dmg" theme={theme} typo={typo} />
+          </DataColumn>
+        </div>
+
+        {/* Divider */}
+        <div style={{ backgroundColor:theme.border }} />
+
+        {/* Col derecha: Logistics + Propulsion */}
+        <div>
+          <DataColumn title="Logistics" theme={theme} typo={typo}>
+            <Row label="Cargo Grid"   value={num(cargo)}                                        unit="SCU" theme={theme} typo={typo} />
+            <Row label="H₂ Fuel"      value={h2Str}                                             unit="SCU" theme={theme} typo={typo} />
+            <Row label="Quantum Fuel" value={qtStr}                                             unit="SCU" theme={theme} typo={typo} />
+            <Row label="QT Range"     value={qtRangeGm != null ? num(qtRangeGm,2) : MISSING}   unit="Gm"  theme={theme} typo={typo} />
+          </DataColumn>
+          <DataColumn title="Propulsion" theme={theme} typo={typo}>
+            <Row label="SCM / Boost"        value={scmBoostStr}  unit="m/s" theme={theme} typo={typo} />
+            <Row label="Pitch / Yaw / Roll" value={pitchYawRoll} unit="°/s" theme={theme} typo={typo} />
+            <div style={{ marginTop:4, display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 10px" }}>
+              <MiniStat label="Main"   value={`${toG(accelFwd)} G`} theme={theme} typo={typo} />
+              <MiniStat label="Retro"  value={`${toG(accelBwd)} G`} theme={theme} typo={typo} />
+              <MiniStat label="Up"     value={`${toG(accelUp)} G`}  theme={theme} typo={typo} />
+              <MiniStat label="Strafe" value={`${toG(accelStr)} G`} theme={theme} typo={typo} />
+            </div>
+          </DataColumn>
+        </div>
+      </div>
+
+      {/* ── Brand footer ── */}
+      <div style={{
+        position:"absolute", bottom:0, left:0, right:0, height:BRAND_H,
+        backgroundColor: theme.bgPanel,
+        borderTop:`1px solid ${theme.border}`,
+        display:"flex", alignItems:"center", justifyContent:"center", gap:14,
+      }}>
+        <Image
+          src="/sclabs-logo.png"
+          alt="SC LABS"
+          width={36} height={36}
+          style={{ borderRadius:5 }}
+          crossOrigin="anonymous"
+          unoptimized
+        />
+        <div>
+          <div style={{
+            fontSize:13, fontWeight:700, letterSpacing:"0.22em",
+            textTransform:"uppercase", color:theme.text, lineHeight:1,
+          }}>SC LABS</div>
+          <div style={{
+            fontSize:7, letterSpacing:"0.18em", textTransform:"uppercase",
+            color:theme.textMuted, marginTop:3, lineHeight:1.3,
+          }}>Star Citizen Intelligence</div>
+        </div>
+        <div style={{ width:1, height:28, backgroundColor:theme.border }} />
+        <div style={{
+          fontSize:12, fontWeight:700, letterSpacing:"0.18em",
+          textTransform:"uppercase", color:theme.accent,
+        }}>SCLABS.SPACE</div>
       </div>
     </div>
   );
