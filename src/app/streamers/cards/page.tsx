@@ -62,7 +62,7 @@ export default function StreamerCardsPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             search: search.trim(),
-            limit: 30,
+            limit: 500,
             sortBy: "name",
             sortOrder: "ASC",
           }),
