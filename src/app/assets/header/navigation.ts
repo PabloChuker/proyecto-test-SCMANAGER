@@ -61,7 +61,10 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     key: "hangar",
     label: "Hangar",
-    href: "/hangar",
+    items: [
+      { label: "Hangar Manager",   href: "/hangar" },
+      { label: "Executive Hangar", href: "/hangar-executive" },
+    ],
   },
 ];
 
@@ -76,8 +79,9 @@ export const NAV_MODULES: NavModule[] = [
   { key: "mining",     label: "Mining",           href: "/mining" },
   { key: "trade",      label: "Trade",            href: "/trade" },
   { key: "crafting",   label: "Crafting",         href: "/crafting" },
-  { key: "activities", label: "Activities",       href: "/activities" },
-  { key: "hangar",     label: "Hangar",           href: "/hangar" },
+  { key: "activities",       label: "Activities",       href: "/activities" },
+  { key: "hangar",           label: "Hangar",           href: "/hangar" },
+  { key: "hangar-executive", label: "Executive Hangar", href: "/hangar-executive" },
 ];
 
 /**

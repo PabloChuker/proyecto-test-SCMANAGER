@@ -250,7 +250,9 @@
     "streamers": "Streamers",
     "organization": "Organization",
     "party": "Party",
-    "friends": "Friends"
+    "friends": "Friends",
+    "hangarExecutive": "Executive Hangar",
+    "miningFinder": "Material Finder"
   },
   "Hangar": {
     "loading": "Loading hangar...",
@@ -400,7 +402,8 @@
       "dashboard": "Dashboard",
       "rock": "Rock Calculator",
       "refinery": "Refinery Data",
-      "loadout": "Loadout Calculator"
+      "loadout": "Loadout Calculator",
+      "finder": "Material Finder"
     },
     "rock": {
       "rockN": "Rock {n}",
@@ -1174,5 +1177,66 @@
       "mining": "Mining Lasers",
       "turrets": "Turrets"
     }
+  },
+  "HangarExecutive": {
+    "title": "Executive Hangar",
+    "description": "Synchronized clock for the in-game Executive Hangar cycles. Shows when the window opens and closes.",
+    "loading": "Loading clock…",
+    "error": "Failed to load the clock: {message}",
+    "statusOpen": "Open now",
+    "statusClosed": "Closed",
+    "untilClose": "until it closes",
+    "untilOpen": "until next opening",
+    "cycleNumber": "Cycle #{n}",
+    "closesAt": "Closes at",
+    "opensAt": "Opens at",
+    "localTime": "local time",
+    "utcTime": "UTC",
+    "showUtc": "Show UTC",
+    "showLocal": "Show local time",
+    "version": "Data {version}",
+    "upcomingTitle": "Upcoming cycles",
+    "openDuration": "Open: {n} min",
+    "closedDuration": "Closed: {n} min",
+    "interval": "Interval: {n} min",
+    "sourceLabel": "Source",
+    "intervalLabel": "Interval",
+    "openShort": "open",
+    "closedShort": "closed",
+    "fallbackWarn": "⚠ Data from local fallback (prod DB table not present yet)."
+  },
+  "MiningFinder": {
+    "tab": "Material Finder",
+    "title": "Material Finder",
+    "description": "Where to mine each material in Stanton, Pyro and Nyx — with chance per location and method (Ship, ROC, Hand).",
+    "loading": "Loading mining data…",
+    "empty": "No results for the current filters.",
+    "filterMaterial": "Material",
+    "filterSystem": "System",
+    "filterMethod": "Method",
+    "allMaterials": "All materials",
+    "allSystems": "All systems",
+    "allMethods": "All methods",
+    "methodShip": "Ship",
+    "methodRoc": "ROC",
+    "methodHand": "Hand",
+    "colLocation": "Location",
+    "colSystem": "System",
+    "colMaterial": "Material",
+    "colMethod": "Method",
+    "colChance": "Chance",
+    "colTier": "Tier",
+    "colSignature": "Radar sig.",
+    "colInstability": "Instability",
+    "colResistance": "Resistance",
+    "viewByLocation": "By location",
+    "viewByMaterial": "By material",
+    "viewSignatures": "Radar signatures",
+    "tierCommon": "Common",
+    "tierUncommon": "Uncommon",
+    "tierRare": "Rare",
+    "tierVeryRare": "Very Rare",
+    "source": "Community data — gstool.org (v{version})",
+    "fallbackWarn": "⚠ Tables not populated in prod yet. Run migrations 049/050 in Supabase."
   }
 }

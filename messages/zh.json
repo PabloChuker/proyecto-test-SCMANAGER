@@ -250,7 +250,9 @@
     "streamers": "主播",
     "organization": "组织",
     "party": "队伍",
-    "friends": "好友"
+    "friends": "好友",
+    "hangarExecutive": "行政机库",
+    "miningFinder": "矿物搜索"
   },
   "Hangar": {
     "loading": "正在加载机库...",
@@ -400,7 +402,8 @@
       "dashboard": "仪表盘",
       "rock": "岩石计算器",
       "refinery": "精炼数据",
-      "loadout": "装备配置"
+      "loadout": "装备配置",
+      "finder": "矿物查找器"
     },
     "rock": {
       "rockN": "岩石 {n}",
@@ -1174,5 +1177,66 @@
       "mining": "采矿激光器",
       "turrets": "炮塔"
     }
+  },
+  "HangarExecutive": {
+    "title": "行政机库",
+    "description": "与游戏内行政机库周期同步的时钟。显示窗口何时开启与关闭。",
+    "loading": "正在加载时钟…",
+    "error": "加载失败：{message}",
+    "statusOpen": "现在开启",
+    "statusClosed": "已关闭",
+    "untilClose": "距关闭",
+    "untilOpen": "距下次开启",
+    "cycleNumber": "周期 #{n}",
+    "closesAt": "关闭于",
+    "opensAt": "开启于",
+    "localTime": "本地时间",
+    "utcTime": "UTC",
+    "showUtc": "显示 UTC",
+    "showLocal": "显示本地时间",
+    "version": "数据 {version}",
+    "upcomingTitle": "未来周期",
+    "openDuration": "开启：{n} 分钟",
+    "closedDuration": "关闭：{n} 分钟",
+    "interval": "间隔：{n} 分钟",
+    "sourceLabel": "来源",
+    "intervalLabel": "间隔",
+    "openShort": "开启",
+    "closedShort": "关闭",
+    "fallbackWarn": "⚠ 数据来自本地回退（生产数据库表尚未创建）。"
+  },
+  "MiningFinder": {
+    "tab": "矿物搜索",
+    "title": "矿物搜索",
+    "description": "在 Stanton、Pyro 与 Nyx 中查找每种矿物的开采位置 —— 显示每个位置和方式（飞船、ROC、手持）的概率。",
+    "loading": "正在加载采矿数据…",
+    "empty": "当前筛选条件无结果。",
+    "filterMaterial": "矿物",
+    "filterSystem": "星系",
+    "filterMethod": "方式",
+    "allMaterials": "全部矿物",
+    "allSystems": "全部星系",
+    "allMethods": "全部方式",
+    "methodShip": "飞船",
+    "methodRoc": "ROC",
+    "methodHand": "手持",
+    "colLocation": "位置",
+    "colSystem": "星系",
+    "colMaterial": "矿物",
+    "colMethod": "方式",
+    "colChance": "概率",
+    "colTier": "稀有度",
+    "colSignature": "雷达信号",
+    "colInstability": "不稳定性",
+    "colResistance": "抗性",
+    "viewByLocation": "按位置",
+    "viewByMaterial": "按矿物",
+    "viewSignatures": "雷达签名",
+    "tierCommon": "常见",
+    "tierUncommon": "不常见",
+    "tierRare": "稀有",
+    "tierVeryRare": "极稀有",
+    "source": "社区数据 — gstool.org (v{version})",
+    "fallbackWarn": "⚠ 生产环境表尚未填充。请在 Supabase 中执行迁移 049/050。"
   }
 }

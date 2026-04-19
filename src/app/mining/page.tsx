@@ -10,6 +10,7 @@ import WorkOrderCalculator from "./WorkOrderCalculator";
 import WorkOrderDashboard from "./WorkOrderDashboard";
 import RockCalculator from "./RockCalculator";
 import RefineryDataTable from "./RefineryDataTable";
+import MaterialFinder from "./MaterialFinder";
 import { useTranslations } from "next-intl";
 export default function MiningPage() {
   const [activeTab, setActiveTab] = useState("workorder");
@@ -21,6 +22,7 @@ export default function MiningPage() {
     { id: "rock", label: tm("rock"), icon: "🪨" },
     { id: "refinery", label: tm("refinery"), icon: "🏚" },
     { id: "loadout", label: tm("loadout"), icon: "⛏" },
+    { id: "finder", label: tm("finder"), icon: "🔎" },
   ];
 
   return (
@@ -91,6 +93,7 @@ export default function MiningPage() {
               {activeTab === "dashboard" && <WorkOrderDashboard />}
               {activeTab === "rock" && <RockCalculator />}
               {activeTab === "refinery" && <RefineryDataTable />}
+              {activeTab === "finder" && <MaterialFinder />}
             </div>
           </div>
         </div>

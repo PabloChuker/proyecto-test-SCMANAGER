@@ -36,3 +36,6 @@ manufacturers.json
 
 
 thermal_update.sql
+
+# Nightly autonomous work logs
+NIGHTLY_LOG_*.md

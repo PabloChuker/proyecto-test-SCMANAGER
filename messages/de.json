@@ -250,7 +250,9 @@
     "streamers": "Streamer",
     "organization": "Organisation",
     "party": "Gruppe",
-    "friends": "Freunde"
+    "friends": "Freunde",
+    "hangarExecutive": "Executive Hangar",
+    "miningFinder": "Material-Finder"
   },
   "Hangar": {
     "loading": "Hangar wird geladen...",
@@ -400,7 +402,8 @@
       "dashboard": "Übersicht",
       "rock": "Gesteinsrechner",
       "refinery": "Raffinerie",
-      "loadout": "Ausrüstung"
+      "loadout": "Ausrüstung",
+      "finder": "Materialfinder"
     },
     "rock": {
       "rockN": "Fels {n}",
@@ -1174,5 +1177,66 @@
       "mining": "Bergbaulaser",
       "turrets": "Geschütztürme"
     }
+  },
+  "HangarExecutive": {
+    "title": "Executive Hangar",
+    "description": "Synchronisierte Uhr für die In-Game-Zyklen des Executive Hangar. Zeigt, wann das Fenster öffnet und schließt.",
+    "loading": "Uhr wird geladen…",
+    "error": "Fehler beim Laden: {message}",
+    "statusOpen": "Jetzt offen",
+    "statusClosed": "Geschlossen",
+    "untilClose": "bis zum Schließen",
+    "untilOpen": "bis zur nächsten Öffnung",
+    "cycleNumber": "Zyklus #{n}",
+    "closesAt": "Schließt um",
+    "opensAt": "Öffnet um",
+    "localTime": "Ortszeit",
+    "utcTime": "UTC",
+    "showUtc": "UTC anzeigen",
+    "showLocal": "Ortszeit anzeigen",
+    "version": "Daten {version}",
+    "upcomingTitle": "Nächste Zyklen",
+    "openDuration": "Offen: {n} Min",
+    "closedDuration": "Geschlossen: {n} Min",
+    "interval": "Intervall: {n} Min",
+    "sourceLabel": "Quelle",
+    "intervalLabel": "Intervall",
+    "openShort": "offen",
+    "closedShort": "geschlossen",
+    "fallbackWarn": "⚠ Daten aus lokalem Fallback (Prod-Tabelle fehlt noch)."
+  },
+  "MiningFinder": {
+    "tab": "Material-Finder",
+    "title": "Material-Finder",
+    "description": "Wo man jedes Material in Stanton, Pyro und Nyx abbaut — Chance pro Ort und Methode (Schiff, ROC, Hand).",
+    "loading": "Bergbaudaten werden geladen…",
+    "empty": "Keine Ergebnisse für die aktuellen Filter.",
+    "filterMaterial": "Material",
+    "filterSystem": "System",
+    "filterMethod": "Methode",
+    "allMaterials": "Alle Materialien",
+    "allSystems": "Alle Systeme",
+    "allMethods": "Alle Methoden",
+    "methodShip": "Schiff",
+    "methodRoc": "ROC",
+    "methodHand": "Hand",
+    "colLocation": "Ort",
+    "colSystem": "System",
+    "colMaterial": "Material",
+    "colMethod": "Methode",
+    "colChance": "Chance",
+    "colTier": "Stufe",
+    "colSignature": "Radarsignatur",
+    "colInstability": "Instabilität",
+    "colResistance": "Widerstand",
+    "viewByLocation": "Nach Ort",
+    "viewByMaterial": "Nach Material",
+    "viewSignatures": "Radarsignaturen",
+    "tierCommon": "Häufig",
+    "tierUncommon": "Ungewöhnlich",
+    "tierRare": "Selten",
+    "tierVeryRare": "Sehr selten",
+    "source": "Community-Daten — gstool.org (v{version})",
+    "fallbackWarn": "⚠ Tabellen in Prod noch leer. Migrationen 049/050 in Supabase ausführen."
   }
 }
