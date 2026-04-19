@@ -18,7 +18,7 @@
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 
-export const revalidate = 600; // 10 min — los datos son estables por patch
+export const revalidate = 60; // 1 min — reducido desde 600 para evitar cachear fallbacks "missing-tables" por 10 min tras aplicar migraciones
 
 type MaterialRow = { name: string };
 type SignatureRow = {
