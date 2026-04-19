@@ -31,9 +31,10 @@ async function compareShips(ids: string[]) {
     // Build parameterized query for multiple IDs
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
     const ships: any[] = await sql.unsafe(
-      `SELECT s.*, s.class_name AS reference, sp.msrp_usd, sp.warbond_usd
+      `SELECT s.*, s.class_name AS reference, sp.msrp_usd, sp.warbond_usd, m.name AS manufacturer
        FROM ships s
        LEFT JOIN ship_price sp ON sp.id = s.id
+       LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
        WHERE s.id::text IN (${placeholders})`,
       ids,
     );

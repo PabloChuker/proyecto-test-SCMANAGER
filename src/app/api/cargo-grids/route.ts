@@ -17,7 +17,7 @@ export async function GET() {
       SELECT
         s.id            AS ship_id,
         s.name          AS ship_name,
-        s.manufacturer,
+        m.name          AS manufacturer,
         s.cargo_capacity,
         json_agg(
           json_build_object(
@@ -32,13 +32,14 @@ export async function GET() {
         ) AS grids
       FROM ships s
       JOIN cargo_grids cg ON cg.ship_id = s.id
+      LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
       WHERE cg.scu_capacity > 0
         AND cg.dimensions IS NOT NULL
         AND cg.dimensions != '{}'::jsonb
         AND COALESCE((cg.dimensions->>'x')::float, 0) > 0
         AND COALESCE((cg.dimensions->>'y')::float, 0) > 0
         AND COALESCE((cg.dimensions->>'z')::float, 0) > 0
-      GROUP BY s.id, s.name, s.manufacturer, s.cargo_capacity
+      GROUP BY s.id, s.name, m.name, s.cargo_capacity
       ORDER BY s.name ASC
     `;
 

@@ -867,7 +867,7 @@ export async function GET(
 
     // ── 1. Find the ship (exact matches prioritized over partial) ──
     const shipRows: any[] = await sql.unsafe(
-      `SELECT s.*, s.class_name AS reference, sp.msrp_usd, sp.warbond_usd,
+      `SELECT s.*, s.class_name AS reference, sp.msrp_usd, sp.warbond_usd, m.name AS manufacturer,
          CASE
            WHEN s.class_name = $1 THEN 0
            WHEN s.class_name ILIKE $1 THEN 1
@@ -877,6 +877,7 @@ export async function GET(
          END AS match_rank
        FROM ships s
        LEFT JOIN ship_price sp ON sp.id = s.id
+       LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
        WHERE s.class_name = $1
           OR s.class_name ILIKE $1
           OR s.name ILIKE $1

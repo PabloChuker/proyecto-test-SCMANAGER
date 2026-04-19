@@ -54,12 +54,13 @@ export async function POST(request: NextRequest) {
 
     // ── 1. Load all ships with MSRP ──
     const shipRows: any[] = await sql.unsafe(`
-      SELECT s.id, s.class_name AS reference, s.name, s.manufacturer, sp.msrp_usd, sp.warbond_usd,
+      SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer, sp.msrp_usd, sp.warbond_usd,
              COALESCE(sp.is_ccu_eligible, true) AS is_ccu_eligible,
              COALESCE(sp.is_limited, false) AS is_limited,
              COALESCE(s.flight_status, 'flight_ready') AS flight_status
       FROM ships s
       LEFT JOIN ship_price sp ON sp.id = s.id
+      LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
       WHERE sp.msrp_usd IS NOT NULL AND sp.msrp_usd > 0
       ORDER BY sp.msrp_usd ASC
     `, []);

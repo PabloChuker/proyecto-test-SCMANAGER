@@ -19,13 +19,14 @@ export async function GET(request: NextRequest) {
     const maxPrice = parseFloat(searchParams.get("maxPrice") || "99999");
 
     let query = `
-      SELECT s.id, s.class_name AS reference, s.name, s.manufacturer, sp.msrp_usd, sp.warbond_usd,
+      SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer, sp.msrp_usd, sp.warbond_usd,
              COALESCE(sp.is_ccu_eligible, true) AS is_ccu_eligible,
              COALESCE(sp.is_limited, false) AS is_limited,
              COALESCE(s.flight_status, 'flight_ready') AS flight_status,
              s.size, s.role
       FROM ships s
       LEFT JOIN ship_price sp ON sp.id = s.id
+      LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
       WHERE sp.msrp_usd IS NOT NULL
         AND sp.msrp_usd > 0
         AND sp.msrp_usd >= $1
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
     let paramIdx = 3;
 
     if (search) {
-      query += ` AND (s.name ILIKE $${paramIdx} OR s.class_name ILIKE $${paramIdx} OR s.manufacturer ILIKE $${paramIdx})`;
+      query += ` AND (s.name ILIKE $${paramIdx} OR s.class_name ILIKE $${paramIdx} OR m.name ILIKE $${paramIdx})`;
       params.push(`%${search}%`);
       paramIdx++;
     }

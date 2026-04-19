@@ -60,7 +60,7 @@ const SORT_MAP: Record<string, string> = {
   cargo: "s.cargo_capacity",
   maxCrew: "s.crew",
   afterburnerSpeed: "fs.max_speed",
-  manufacturer: "s.manufacturer",
+  manufacturer: "m.name",
   size: "s.size",
   role: "s.role",
   mass: "s.mass_total_kg",
@@ -112,14 +112,14 @@ async function handleShipsQuery(params: ShipsQueryParams) {
 
     if (search) {
       conditions.push(
-        `(s.name ILIKE $${paramIdx} OR s.class_name ILIKE $${paramIdx} OR s.manufacturer ILIKE $${paramIdx})`,
+        `(s.name ILIKE $${paramIdx} OR s.class_name ILIKE $${paramIdx} OR m.name ILIKE $${paramIdx})`,
       );
       queryParams.push(`%${search}%`);
       paramIdx++;
     }
 
     if (manufacturer) {
-      conditions.push(`s.manufacturer ILIKE $${paramIdx}`);
+      conditions.push(`m.name ILIKE $${paramIdx}`);
       queryParams.push(`%${manufacturer}%`);
       paramIdx++;
     }
@@ -139,7 +139,7 @@ async function handleShipsQuery(params: ShipsQueryParams) {
       WITH deduped AS (
         SELECT *,
           ROW_NUMBER() OVER (
-            PARTITION BY LOWER(COALESCE(name, '')), LOWER(COALESCE(manufacturer, ''))
+            PARTITION BY LOWER(COALESCE(name, '')), COALESCE(manufacturer_id::text, '')
             ORDER BY
               ( (CASE WHEN crew           IS NOT NULL THEN 1 ELSE 0 END)
               + (CASE WHEN cargo_capacity IS NOT NULL THEN 1 ELSE 0 END)
@@ -165,10 +165,11 @@ async function handleShipsQuery(params: ShipsQueryParams) {
     // Fetch ships with optional LEFT JOIN to flight_stats for speed data
     const offset = (page - 1) * limit;
     const joinClause = `LEFT JOIN ship_flight_stats fs ON fs.ship_id = s.id
-       LEFT JOIN ship_price sp ON sp.id = s.id`;
+       LEFT JOIN ship_price sp ON sp.id = s.id
+       LEFT JOIN manufacturers m ON m.id = s.manufacturer_id`;
     const ships: any[] = await sql.unsafe(
       `${dedupCTE}
-       SELECT s.id, s.class_name AS reference, s.name, s.manufacturer, s.role, s.size,
+       SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer, s.role, s.size,
               s.crew, s.mass_total_kg AS mass, s.cargo_capacity, s.game_version,
               sp.msrp_usd, sp.warbond_usd,
               fs.scm_speed, fs.max_speed as afterburner_speed
@@ -182,7 +183,7 @@ async function handleShipsQuery(params: ShipsQueryParams) {
 
     // Get manufacturer list for filter dropdown
     const mfrs: any[] = await sql.unsafe(
-      `SELECT DISTINCT manufacturer FROM ships WHERE manufacturer IS NOT NULL ORDER BY manufacturer ASC`,
+      `SELECT DISTINCT m.name AS manufacturer FROM ships s LEFT JOIN manufacturers m ON m.id = s.manufacturer_id WHERE m.name IS NOT NULL ORDER BY m.name ASC`,
       [],
     );
 
