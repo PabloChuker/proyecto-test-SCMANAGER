@@ -251,7 +251,6 @@
     "organization": "Organizacion",
     "party": "Party",
     "friends": "Amigos",
-    "hangarExecutive": "Hangar Ejecutivo",
     "miningFinder": "Buscador de Minerales"
   },
   "Hangar": {
@@ -1177,33 +1176,6 @@
       "mining": "Láseres de minería",
       "turrets": "Torretas"
     }
-  },
-  "HangarExecutive": {
-    "title": "Hangar Ejecutivo",
-    "description": "Reloj sincronizado con los ciclos in-game del Hangar Ejecutivo. Mostrá cuándo abre y cierra la ventana para visitarlo.",
-    "loading": "Cargando reloj…",
-    "error": "Error al cargar el reloj: {message}",
-    "statusOpen": "Abierto ahora",
-    "statusClosed": "Cerrado",
-    "untilClose": "hasta que cierre",
-    "untilOpen": "hasta la próxima apertura",
-    "cycleNumber": "Ciclo #{n}",
-    "closesAt": "Cierra a las",
-    "opensAt": "Abre a las",
-    "localTime": "hora local",
-    "utcTime": "UTC",
-    "showUtc": "Mostrar UTC",
-    "showLocal": "Mostrar hora local",
-    "version": "Data {version}",
-    "upcomingTitle": "Próximos ciclos",
-    "openDuration": "Abierto: {n} min",
-    "closedDuration": "Cerrado: {n} min",
-    "interval": "Intervalo: {n} min",
-    "sourceLabel": "Fuente",
-    "intervalLabel": "Intervalo",
-    "openShort": "abierto",
-    "closedShort": "cerrado",
-    "fallbackWarn": "⚠ Datos desde fallback local (la BD de prod aún no tiene la tabla)."
   },
   "MiningFinder": {
     "tab": "Buscador de Minerales",

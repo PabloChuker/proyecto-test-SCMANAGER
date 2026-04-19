@@ -251,7 +251,6 @@
     "organization": "Organisation",
     "party": "Groupe",
     "friends": "Amis",
-    "hangarExecutive": "Hangar Exécutif",
     "miningFinder": "Chercheur de Matériaux"
   },
   "Hangar": {
@@ -1177,33 +1176,6 @@
       "mining": "Lasers miniers",
       "turrets": "Tourelles"
     }
-  },
-  "HangarExecutive": {
-    "title": "Hangar Exécutif",
-    "description": "Horloge synchronisée avec les cycles in-game du Hangar Exécutif. Indique quand la fenêtre s'ouvre et se ferme.",
-    "loading": "Chargement de l'horloge…",
-    "error": "Erreur de chargement : {message}",
-    "statusOpen": "Ouvert maintenant",
-    "statusClosed": "Fermé",
-    "untilClose": "avant la fermeture",
-    "untilOpen": "avant la prochaine ouverture",
-    "cycleNumber": "Cycle nº{n}",
-    "closesAt": "Ferme à",
-    "opensAt": "Ouvre à",
-    "localTime": "heure locale",
-    "utcTime": "UTC",
-    "showUtc": "Afficher UTC",
-    "showLocal": "Afficher heure locale",
-    "version": "Données {version}",
-    "upcomingTitle": "Prochains cycles",
-    "openDuration": "Ouvert : {n} min",
-    "closedDuration": "Fermé : {n} min",
-    "interval": "Intervalle : {n} min",
-    "sourceLabel": "Source",
-    "intervalLabel": "Intervalle",
-    "openShort": "ouvert",
-    "closedShort": "fermé",
-    "fallbackWarn": "⚠ Données depuis le repli local (table prod absente)."
   },
   "MiningFinder": {
     "tab": "Chercheur de Matériaux",

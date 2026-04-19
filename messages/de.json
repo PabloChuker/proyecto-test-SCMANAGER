@@ -251,7 +251,6 @@
     "organization": "Organisation",
     "party": "Gruppe",
     "friends": "Freunde",
-    "hangarExecutive": "Executive Hangar",
     "miningFinder": "Material-Finder"
   },
   "Hangar": {
@@ -1177,33 +1176,6 @@
       "mining": "Bergbaulaser",
       "turrets": "Geschütztürme"
     }
-  },
-  "HangarExecutive": {
-    "title": "Executive Hangar",
-    "description": "Synchronisierte Uhr für die In-Game-Zyklen des Executive Hangar. Zeigt, wann das Fenster öffnet und schließt.",
-    "loading": "Uhr wird geladen…",
-    "error": "Fehler beim Laden: {message}",
-    "statusOpen": "Jetzt offen",
-    "statusClosed": "Geschlossen",
-    "untilClose": "bis zum Schließen",
-    "untilOpen": "bis zur nächsten Öffnung",
-    "cycleNumber": "Zyklus #{n}",
-    "closesAt": "Schließt um",
-    "opensAt": "Öffnet um",
-    "localTime": "Ortszeit",
-    "utcTime": "UTC",
-    "showUtc": "UTC anzeigen",
-    "showLocal": "Ortszeit anzeigen",
-    "version": "Daten {version}",
-    "upcomingTitle": "Nächste Zyklen",
-    "openDuration": "Offen: {n} Min",
-    "closedDuration": "Geschlossen: {n} Min",
-    "interval": "Intervall: {n} Min",
-    "sourceLabel": "Quelle",
-    "intervalLabel": "Intervall",
-    "openShort": "offen",
-    "closedShort": "geschlossen",
-    "fallbackWarn": "⚠ Daten aus lokalem Fallback (Prod-Tabelle fehlt noch)."
   },
   "MiningFinder": {
     "tab": "Material-Finder",

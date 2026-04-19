@@ -251,7 +251,6 @@
     "organization": "Organization",
     "party": "Party",
     "friends": "Friends",
-    "hangarExecutive": "Executive Hangar",
     "miningFinder": "Material Finder"
   },
   "Hangar": {
@@ -1177,33 +1176,6 @@
       "mining": "Mining Lasers",
       "turrets": "Turrets"
     }
-  },
-  "HangarExecutive": {
-    "title": "Executive Hangar",
-    "description": "Synchronized clock for the in-game Executive Hangar cycles. Shows when the window opens and closes.",
-    "loading": "Loading clock…",
-    "error": "Failed to load the clock: {message}",
-    "statusOpen": "Open now",
-    "statusClosed": "Closed",
-    "untilClose": "until it closes",
-    "untilOpen": "until next opening",
-    "cycleNumber": "Cycle #{n}",
-    "closesAt": "Closes at",
-    "opensAt": "Opens at",
-    "localTime": "local time",
-    "utcTime": "UTC",
-    "showUtc": "Show UTC",
-    "showLocal": "Show local time",
-    "version": "Data {version}",
-    "upcomingTitle": "Upcoming cycles",
-    "openDuration": "Open: {n} min",
-    "closedDuration": "Closed: {n} min",
-    "interval": "Interval: {n} min",
-    "sourceLabel": "Source",
-    "intervalLabel": "Interval",
-    "openShort": "open",
-    "closedShort": "closed",
-    "fallbackWarn": "⚠ Data from local fallback (prod DB table not present yet)."
   },
   "MiningFinder": {
     "tab": "Material Finder",

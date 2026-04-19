@@ -251,7 +251,6 @@
     "organization": "组织",
     "party": "队伍",
     "friends": "好友",
-    "hangarExecutive": "行政机库",
     "miningFinder": "矿物搜索"
   },
   "Hangar": {
@@ -1177,33 +1176,6 @@
       "mining": "采矿激光器",
       "turrets": "炮塔"
     }
-  },
-  "HangarExecutive": {
-    "title": "行政机库",
-    "description": "与游戏内行政机库周期同步的时钟。显示窗口何时开启与关闭。",
-    "loading": "正在加载时钟…",
-    "error": "加载失败：{message}",
-    "statusOpen": "现在开启",
-    "statusClosed": "已关闭",
-    "untilClose": "距关闭",
-    "untilOpen": "距下次开启",
-    "cycleNumber": "周期 #{n}",
-    "closesAt": "关闭于",
-    "opensAt": "开启于",
-    "localTime": "本地时间",
-    "utcTime": "UTC",
-    "showUtc": "显示 UTC",
-    "showLocal": "显示本地时间",
-    "version": "数据 {version}",
-    "upcomingTitle": "未来周期",
-    "openDuration": "开启：{n} 分钟",
-    "closedDuration": "关闭：{n} 分钟",
-    "interval": "间隔：{n} 分钟",
-    "sourceLabel": "来源",
-    "intervalLabel": "间隔",
-    "openShort": "开启",
-    "closedShort": "关闭",
-    "fallbackWarn": "⚠ 数据来自本地回退（生产数据库表尚未创建）。"
   },
   "MiningFinder": {
     "tab": "矿物搜索",
