@@ -1183,4 +1183,81 @@
       "completedCount": "Abgeschlossen",
       "lifetimeProfit": "Gewinn insgesamt",
       "totalScuSold": "SCU verkauft gesamt",
-      "loginRequired": "Du musst angemeldet sein
+      "loginRequired": "Du musst angemeldet sein, um deine Aufträge zu sehen.",
+      "noWorkOrders": "Noch keine Aufträge.",
+      "createHint": "Erstelle einen über <btn>+ Neuer Auftrag</btn> oder sende ihn von einer Route im Routen-Tab.",
+      "partyRun": "Party-Run",
+      "col": {
+        "title": "Titel",
+        "commodity": "Commodity",
+        "route": "Route",
+        "netProfit": "Nettogewinn",
+        "status": "Status",
+        "created": "Erstellt"
+      },
+      "status": {
+        "draft": "Entwurf",
+        "in_progress": "In Bearbeitung",
+        "completed": "Abgeschlossen",
+        "archived": "Archiviert"
+      }
+    }
+  },
+  "Components": {
+    "loading": "Wird geladen...",
+    "loadoutManager": "Loadout-Manager",
+    "searchCategory": "{category} suchen...",
+    "allSizes": "Alle Größen",
+    "sizeN": "Größe {n}",
+    "rowsCount": "{shown} / {total} Zeilen",
+    "truncatedHint": "Zeige die ersten {shown} von {total} Zeilen. Suche oder Filter zum Eingrenzen verwenden.",
+    "noResults": "Keine Ergebnisse",
+    "category": {
+      "ships": "Schiffe",
+      "weapons": "Waffen",
+      "missiles": "Raketen",
+      "emps": "EMP-Generatoren",
+      "shields": "Schilde",
+      "power_plants": "Reaktoren",
+      "coolers": "Kühler",
+      "quantum_drives": "Quantenantriebe",
+      "qed": "QED-Generatoren",
+      "mining": "Bergbaulaser",
+      "turrets": "Geschütztürme"
+    }
+  },
+  "MiningFinder": {
+    "tab": "Material-Finder",
+    "title": "Material-Finder",
+    "description": "Wo man jedes Material in Stanton, Pyro und Nyx abbaut — Chance pro Ort und Methode (Schiff, ROC, Hand).",
+    "loading": "Bergbaudaten werden geladen…",
+    "empty": "Keine Ergebnisse für die aktuellen Filter.",
+    "filterMaterial": "Material",
+    "filterSystem": "System",
+    "filterMethod": "Methode",
+    "allMaterials": "Alle Materialien",
+    "allSystems": "Alle Systeme",
+    "allMethods": "Alle Methoden",
+    "methodShip": "Schiff",
+    "methodRoc": "ROC",
+    "methodHand": "Hand",
+    "colLocation": "Ort",
+    "colSystem": "System",
+    "colMaterial": "Material",
+    "colMethod": "Methode",
+    "colChance": "Chance",
+    "colTier": "Stufe",
+    "colSignature": "Radarsignatur",
+    "colInstability": "Instabilität",
+    "colResistance": "Widerstand",
+    "viewByLocation": "Nach Ort",
+    "viewByMaterial": "Nach Material",
+    "viewSignatures": "Radarsignaturen",
+    "tierCommon": "Häufig",
+    "tierUncommon": "Ungewöhnlich",
+    "tierRare": "Selten",
+    "tierVeryRare": "Sehr selten",
+    "source": "Community-Daten — gstool.org (v{version})",
+    "fallbackWarn": "⚠ Tabellen in Prod noch leer. Migrationen 049/050 in Supabase ausführen."
+  }
+}

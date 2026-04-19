@@ -1183,4 +1183,81 @@
       "completedCount": "Completadas",
       "lifetimeProfit": "Profit Histórico",
       "totalScuSold": "Total SCU vendido",
-      "log
+      "loginRequired": "Necesitas iniciar sesión para ver tus órdenes.",
+      "noWorkOrders": "No hay órdenes aún.",
+      "createHint": "Crea una desde <btn>+ Nueva Orden</btn> o envíala desde una ruta en la pestaña Rutas.",
+      "partyRun": "Corrida en party",
+      "col": {
+        "title": "Título",
+        "commodity": "Commodity",
+        "route": "Ruta",
+        "netProfit": "Profit Neto",
+        "status": "Estado",
+        "created": "Creada"
+      },
+      "status": {
+        "draft": "Borrador",
+        "in_progress": "En Progreso",
+        "completed": "Completada",
+        "archived": "Archivada"
+      }
+    }
+  },
+  "Components": {
+    "loading": "Cargando...",
+    "loadoutManager": "Gestor de Loadout",
+    "searchCategory": "Buscar {category}...",
+    "allSizes": "Todos los tamaños",
+    "sizeN": "Tamaño {n}",
+    "rowsCount": "{shown} / {total} filas",
+    "truncatedHint": "Mostrando las primeras {shown} filas de {total}. Usa la búsqueda o los filtros para acotar.",
+    "noResults": "Sin resultados",
+    "category": {
+      "ships": "Naves",
+      "weapons": "Armas",
+      "missiles": "Misiles",
+      "emps": "Generadores EMP",
+      "shields": "Escudos",
+      "power_plants": "Reactores",
+      "coolers": "Refrigeradores",
+      "quantum_drives": "Motores cuánticos",
+      "qed": "Generadores QED",
+      "mining": "Láseres de minería",
+      "turrets": "Torretas"
+    }
+  },
+  "MiningFinder": {
+    "tab": "Buscador de Minerales",
+    "title": "Buscador de Minerales",
+    "description": "Dónde minar cada material en Stanton, Pyro y Nyx — con probabilidad por ubicación y método (nave, ROC, a mano).",
+    "loading": "Cargando datos de minería…",
+    "empty": "Sin resultados para los filtros actuales.",
+    "filterMaterial": "Material",
+    "filterSystem": "Sistema",
+    "filterMethod": "Método",
+    "allMaterials": "Todos los materiales",
+    "allSystems": "Todos los sistemas",
+    "allMethods": "Todos los métodos",
+    "methodShip": "Nave",
+    "methodRoc": "ROC",
+    "methodHand": "A mano",
+    "colLocation": "Ubicación",
+    "colSystem": "Sistema",
+    "colMaterial": "Material",
+    "colMethod": "Método",
+    "colChance": "Probabilidad",
+    "colTier": "Rareza",
+    "colSignature": "Firma radar",
+    "colInstability": "Inestabilidad",
+    "colResistance": "Resistencia",
+    "viewByLocation": "Por ubicación",
+    "viewByMaterial": "Por material",
+    "viewSignatures": "Firmas de radar",
+    "tierCommon": "Común",
+    "tierUncommon": "Poco común",
+    "tierRare": "Raro",
+    "tierVeryRare": "Muy raro",
+    "source": "Datos: comunidad — gstool.org (v{version})",
+    "fallbackWarn": "⚠ Tablas aún no pobladas en prod. Corré las migraciones 049/050 en Supabase."
+  }
+}
