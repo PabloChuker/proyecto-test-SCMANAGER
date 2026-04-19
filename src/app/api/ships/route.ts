@@ -262,10 +262,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(result, {
       headers: secureHeaders(),
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[API /ships GET] Error:", error);
     return NextResponse.json(
-      { error: "Error al obtener las naves" },
+      { error: "Error al obtener las naves", detail: error?.message ?? String(error) },
       { status: 500, headers: secureHeaders() },
     );
   }
@@ -300,10 +300,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result, {
       headers: secureHeaders(),
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[API /ships POST] Error:", error);
     return NextResponse.json(
-      { error: "Error al obtener las naves" },
+      { error: "Error al obtener las naves", detail: error?.message ?? String(error) },
       { status: 500, headers: secureHeaders() },
     );
   }
