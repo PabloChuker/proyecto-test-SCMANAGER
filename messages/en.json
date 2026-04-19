@@ -842,6 +842,7 @@
       "refresh": "Refresh",
       "noActiveRoutes": "You have no active routes right now.",
       "noActiveRoutesHint": "Create a route from Mining → Inventory → 'Build route' with several minerals selected.",
+      "noPartyRoutesHint": "Your active routes aren't tagged with a party. New routes from Mining will auto-tag if you have an active party.",
       "errorNeedLogin": "You need to sign in to view your orders.",
       "errorLoadFailed": "Failed to load orders.",
       "scope": {
@@ -1183,80 +1184,4 @@
       "lifetimeProfit": "Lifetime Profit",
       "totalScuSold": "Total SCU sold",
       "loginRequired": "You need to be logged in to view your Work Orders.",
-      "noWorkOrders": "No Work Orders yet.",
-      "createHint": "Create one from <btn>+ New Work Order</btn> or send it from a route in the Trade Routes tab.",
-      "partyRun": "Party run",
-      "col": {
-        "title": "Title",
-        "commodity": "Commodity",
-        "route": "Route",
-        "netProfit": "Net Profit",
-        "status": "Status",
-        "created": "Created"
-      },
-      "status": {
-        "draft": "Draft",
-        "in_progress": "In Progress",
-        "completed": "Completed",
-        "archived": "Archived"
-      }
-    }
-  },
-  "Components": {
-    "loading": "Loading...",
-    "loadoutManager": "Loadout Manager",
-    "searchCategory": "Search {category}...",
-    "allSizes": "All Sizes",
-    "sizeN": "Size {n}",
-    "rowsCount": "{shown} / {total} rows",
-    "truncatedHint": "Showing the first {shown} rows of {total}. Use search or filters to narrow down.",
-    "noResults": "No results found",
-    "category": {
-      "ships": "Ships",
-      "weapons": "Weapons",
-      "missiles": "Missiles",
-      "emps": "EMP Generators",
-      "shields": "Shields",
-      "power_plants": "Power Plants",
-      "coolers": "Coolers",
-      "quantum_drives": "Quantum Drives",
-      "qed": "QED Generators",
-      "mining": "Mining Lasers",
-      "turrets": "Turrets"
-    }
-  },
-  "MiningFinder": {
-    "tab": "Material Finder",
-    "title": "Material Finder",
-    "description": "Where to mine each material in Stanton, Pyro and Nyx — with chance per location and method (Ship, ROC, Hand).",
-    "loading": "Loading mining data…",
-    "empty": "No results for the current filters.",
-    "filterMaterial": "Material",
-    "filterSystem": "System",
-    "filterMethod": "Method",
-    "allMaterials": "All materials",
-    "allSystems": "All systems",
-    "allMethods": "All methods",
-    "methodShip": "Ship",
-    "methodRoc": "ROC",
-    "methodHand": "Hand",
-    "colLocation": "Location",
-    "colSystem": "System",
-    "colMaterial": "Material",
-    "colMethod": "Method",
-    "colChance": "Chance",
-    "colTier": "Tier",
-    "colSignature": "Radar sig.",
-    "colInstability": "Instability",
-    "colResistance": "Resistance",
-    "viewByLocation": "By location",
-    "viewByMaterial": "By material",
-    "viewSignatures": "Radar signatures",
-    "tierCommon": "Common",
-    "tierUncommon": "Uncommon",
-    "tierRare": "Rare",
-    "tierVeryRare": "Very Rare",
-    "source": "Community data — gstool.org (v{version})",
-    "fallbackWarn": "⚠ Tables not populated in prod yet. Run migrations 049/050 in Supabase."
-  }
-}
+      "noWorkOrders":

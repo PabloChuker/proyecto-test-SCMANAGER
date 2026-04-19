@@ -32,6 +32,7 @@ import {
   newRouteGroupId,
 } from "@/lib/miningTradeBridge";
 import { useTradeWorkOrderStore } from "@/store/useTradeWorkOrderStore";
+import { createClient } from "@/lib/supabase/client";
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -119,6 +120,14 @@ export default function SellRoutePreviewModal({
   // UI: which commodity row has its alt-options panel open.
   const [altOpenFor, setAltOpenFor] = useState<string | null>(null);
 
+  // Active party for the signed-in user. When present, every draft WO the
+  // batch creates gets tagged with party_id so ActiveRoutePanel's "party"
+  // scope filter (o.party_id != null) can find them. Without this, mining
+  // -> trade bridge routes were always solo (party_id = null), which made
+  // the "Party" tab always read as empty.
+  const [activePartyId, setActivePartyId] = useState<string | null>(null);
+  const [partyLoading, setPartyLoading] = useState(false);
+
   // Compute the unified + aggregated route. Recomputes when the modal opens,
   // when the underlying item list changes, or when the user overrides a
   // commodity's station — so picking a different option instantly redraws
@@ -132,6 +141,44 @@ export default function SellRoutePreviewModal({
     setError(null);
     setProgress(null);
   }, [open, items, overrides]);
+
+  // Load the user's active party membership so batch-created WOs can be
+  // scoped to it. We only need to know party_id — the ActiveRoutePanel
+  // filter is `!!o.party_id`, so any non-null value is enough to land in
+  // the Party tab. Pattern mirrors TradeWorkOrderCalculator.loadFromParty().
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      setPartyLoading(true);
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          if (!cancelled) setActivePartyId(null);
+          return;
+        }
+        const { data: memberships } = await supabase
+          .from("party_members")
+          .select("party_id")
+          .eq("user_id", user.id)
+          .limit(1);
+        if (cancelled) return;
+        setActivePartyId(
+          memberships && memberships.length > 0 ? memberships[0].party_id : null,
+        );
+      } catch {
+        if (!cancelled) setActivePartyId(null);
+      } finally {
+        if (!cancelled) setPartyLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   /** Pick an alternative station for a single commodity. */
   function pickStation(mineralId: string, opt: PriceOption) {
@@ -225,6 +272,10 @@ export default function SellRoutePreviewModal({
           const body = {
             title: `${t("woTitlePrefix")} ${stopNumber}/${totalStops} — ${stop.commodityName || stop.commodityCode}`,
             status: "draft",
+            // Tag every batch-created WO with the user's active party_id so
+            // ActiveRoutePanel's "Party" scope actually finds these routes.
+            // Null is fine for solo users — the API accepts it.
+            party_id: activePartyId || null,
             commodity_code: stop.commodityCode || null,
             commodity_name: stop.commodityName || null,
             buy_station: null,
@@ -269,20 +320,43 @@ export default function SellRoutePreviewModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-zinc-900 border-2 border-cyan-500/50 rounded-xl w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col shadow-[0_0_30px_rgba(34,211,238,0.2)]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-zinc-800 flex items-start justify-between">
-          <div>
+        <div className="px-6 py-4 border-b border-zinc-800 flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <h3 className="text-lg font-bold text-zinc-100 flex items-center gap-2">
               🛣 {t("title")}
             </h3>
             <p className="text-[11px] text-zinc-500 mt-1">{t("subtitle")}</p>
           </div>
-          <button
-            onClick={onClose}
-            disabled={creating}
-            className="text-zinc-500 hover:text-zinc-300 text-xl disabled:opacity-40"
-          >
-            ✕
-          </button>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {/* Party / solo indicator — shows the user *up front* whether
+                these routes will land in the Party tab of Active Route.  */}
+            {partyLoading ? (
+              <span className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-mono px-2 py-1 rounded border border-zinc-700/60 bg-zinc-800/40">
+                …
+              </span>
+            ) : activePartyId ? (
+              <span
+                title="Routes will be tagged with your active party"
+                className="text-[10px] uppercase tracking-[0.18em] text-emerald-300 font-mono font-bold px-2 py-1 rounded border border-emerald-500/40 bg-emerald-500/10"
+              >
+                ● Party
+              </span>
+            ) : (
+              <span
+                title="Solo run — routes will not be tagged with a party"
+                className="text-[10px] uppercase tracking-[0.18em] text-zinc-400 font-mono font-bold px-2 py-1 rounded border border-zinc-700/60 bg-zinc-800/40"
+              >
+                ○ Solo
+              </span>
+            )}
+            <button
+              onClick={onClose}
+              disabled={creating}
+              className="text-zinc-500 hover:text-zinc-300 text-xl disabled:opacity-40"
+            >
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Summary strip */}

@@ -710,10 +710,30 @@ export default function ActiveRoutePanel() {
   }
 
   if (activeRoutes.length === 0) {
+    // Scope-aware hint: if the user is looking at the "Party" tab but there
+    // ARE active routes in the unscoped list, tell them explicitly that the
+    // existing routes just aren't tagged with a party (instead of the
+    // generic "create a route" hint, which is misleading in that case).
+    const hasAnyRouteMarker =
+      scope === "party" && allOrders.some((o) => parseRouteMarker(o.notes));
     return (
       <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-sm p-6 text-center">
         <div className="text-zinc-500 text-sm">{t("noActiveRoutes")}</div>
-        <div className="text-xs text-zinc-600 mt-2">{t("noActiveRoutesHint")}</div>
+        <div className="text-xs text-zinc-600 mt-2">
+          {hasAnyRouteMarker
+            ? t("noPartyRoutesHint")
+            : t("noActiveRoutesHint")}
+        </div>
+        {scope === "party" && (
+          <div className="mt-3">
+            <button
+              onClick={() => setScope("me")}
+              className="text-[10px] uppercase tracking-widest text-amber-300 hover:text-amber-200 font-mono"
+            >
+              {t("scope.me")} →
+            </button>
+          </div>
+        )}
       </div>
     );
   }

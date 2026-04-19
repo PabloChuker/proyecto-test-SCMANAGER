@@ -842,6 +842,7 @@
       "refresh": "刷新",
       "noActiveRoutes": "当前没有活动路线。",
       "noActiveRoutesHint": "从 挖矿 → 库存 → 「构建路线」选择多个矿物来创建路线。",
+      "noPartyRoutesHint": "你的活动路线没有关联到任何队伍。当你加入队伍后，从挖矿创建的新路线会自动打上队伍标签。",
       "errorNeedLogin": "需要登录才能查看你的工单。",
       "errorLoadFailed": "加载工单失败。",
       "scope": {
@@ -1183,80 +1184,4 @@
       "lifetimeProfit": "累计利润",
       "totalScuSold": "SCU 售出总计",
       "loginRequired": "需要登录后才能查看工单。",
-      "noWorkOrders": "暂无工单。",
-      "createHint": "通过 <btn>+ 新工单</btn> 创建,或从航线标签页发送。",
-      "partyRun": "Party 运行",
-      "col": {
-        "title": "标题",
-        "commodity": "Commodity",
-        "route": "航线",
-        "netProfit": "净利润",
-        "status": "状态",
-        "created": "创建时间"
-      },
-      "status": {
-        "draft": "草稿",
-        "in_progress": "进行中",
-        "completed": "已完成",
-        "archived": "已归档"
-      }
-    }
-  },
-  "Components": {
-    "loading": "加载中...",
-    "loadoutManager": "装载管理器",
-    "searchCategory": "搜索{category}...",
-    "allSizes": "所有尺寸",
-    "sizeN": "尺寸 {n}",
-    "rowsCount": "{shown} / {total} 行",
-    "truncatedHint": "显示 {total} 行中的前 {shown} 行。使用搜索或筛选器缩小范围。",
-    "noResults": "未找到结果",
-    "category": {
-      "ships": "飞船",
-      "weapons": "武器",
-      "missiles": "导弹",
-      "emps": "EMP 发生器",
-      "shields": "护盾",
-      "power_plants": "电源",
-      "coolers": "散热器",
-      "quantum_drives": "量子驱动器",
-      "qed": "QED 发生器",
-      "mining": "采矿激光器",
-      "turrets": "炮塔"
-    }
-  },
-  "MiningFinder": {
-    "tab": "矿物搜索",
-    "title": "矿物搜索",
-    "description": "在 Stanton、Pyro 与 Nyx 中查找每种矿物的开采位置 —— 显示每个位置和方式（飞船、ROC、手持）的概率。",
-    "loading": "正在加载采矿数据…",
-    "empty": "当前筛选条件无结果。",
-    "filterMaterial": "矿物",
-    "filterSystem": "星系",
-    "filterMethod": "方式",
-    "allMaterials": "全部矿物",
-    "allSystems": "全部星系",
-    "allMethods": "全部方式",
-    "methodShip": "飞船",
-    "methodRoc": "ROC",
-    "methodHand": "手持",
-    "colLocation": "位置",
-    "colSystem": "星系",
-    "colMaterial": "矿物",
-    "colMethod": "方式",
-    "colChance": "概率",
-    "colTier": "稀有度",
-    "colSignature": "雷达信号",
-    "colInstability": "不稳定性",
-    "colResistance": "抗性",
-    "viewByLocation": "按位置",
-    "viewByMaterial": "按矿物",
-    "viewSignatures": "雷达签名",
-    "tierCommon": "常见",
-    "tierUncommon": "不常见",
-    "tierRare": "稀有",
-    "tierVeryRare": "极稀有",
-    "source": "社区数据 — gstool.org (v{version})",
-    "fallbackWarn": "⚠ 生产环境表尚未填充。请在 Supabase 中执行迁移 049/050。"
-  }
-}
+      "no
