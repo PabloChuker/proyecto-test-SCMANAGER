@@ -252,7 +252,7 @@ async function compareShips(ids: string[]) {
         ship: {
           maxCrew: numOrNull(ship.crew),
           cargo: numOrNull(ship.cargo_capacity),
-          mass: numOrNull(ship.mass),
+          mass: numOrNull(ship.mass_total_kg),
           scmSpeed: numOrNull(fs?.scm_speed ?? ship.scm_speed),
           afterburnerSpeed: numOrNull(fs?.max_speed ?? ship.afterburner_speed),
           pitchRate: numOrNull(fs?.pitch ?? fs?.pitch_rate),

@@ -63,7 +63,7 @@ const SORT_MAP: Record<string, string> = {
   manufacturer: "s.manufacturer",
   size: "s.size",
   role: "s.role",
-  mass: "s.mass",
+  mass: "s.mass_total_kg",
   msrpUsd: "s.msrp_usd",
   price: "s.msrp_usd",
 };
@@ -144,7 +144,7 @@ async function handleShipsQuery(params: ShipsQueryParams) {
               ( (CASE WHEN msrp_usd       IS NOT NULL THEN 1 ELSE 0 END)
               + (CASE WHEN crew           IS NOT NULL THEN 1 ELSE 0 END)
               + (CASE WHEN cargo_capacity IS NOT NULL THEN 1 ELSE 0 END)
-              + (CASE WHEN mass           IS NOT NULL THEN 1 ELSE 0 END)
+              + (CASE WHEN mass_total_kg   IS NOT NULL THEN 1 ELSE 0 END)
               + (CASE WHEN role           IS NOT NULL THEN 1 ELSE 0 END)
               ) DESC,
               id ASC
@@ -169,7 +169,7 @@ async function handleShipsQuery(params: ShipsQueryParams) {
     const ships: any[] = await sql.unsafe(
       `${dedupCTE}
        SELECT s.id, s.class_name AS reference, s.name, s.manufacturer, s.role, s.size,
-              s.crew, s.mass, s.cargo_capacity, s.game_version,
+              s.crew, s.mass_total_kg AS mass, s.cargo_capacity, s.game_version,
               s.msrp_usd, s.warbond_usd,
               fs.scm_speed, fs.max_speed as afterburner_speed
        FROM deduped s
