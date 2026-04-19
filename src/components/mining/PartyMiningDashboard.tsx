@@ -88,6 +88,7 @@ export default function PartyMiningDashboard() {
     return valid.includes(t as SubTab) ? (t as SubTab) : "sessions";
   })();
   const focusDistributionId = searchParams?.get("dist") ?? null;
+  const focusLedgerId = searchParams?.get("ledger") ?? null;
   const [subTab, setSubTab] = useState<SubTab>(initialTab);
   const { user } = useAuth();
   const {
@@ -594,6 +595,7 @@ export default function PartyMiningDashboard() {
         <SettlementPanel
           miningSessionId={activeSessionId}
           currentUserId={user?.id ?? null}
+          focusLedgerId={focusLedgerId}
         />
       )}
 

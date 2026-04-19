@@ -97,13 +97,29 @@ type PaidFilter = "all" | "unpaid" | "paid";
 interface Props {
   miningSessionId: string | null;
   currentUserId?: string | null;
+  /**
+   * Fase E.E — Cuando se llega al panel desde una notificación
+   * (payout_pending / payout_transferred) se pasa el id del ledger entry
+   * para forzar la vista "ledger", ampliar el filtro a "all" y hacer
+   * scroll + highlight a la fila correspondiente.
+   */
+  focusLedgerId?: string | null;
 }
 
-export default function SettlementPanel({ miningSessionId, currentUserId }: Props) {
+export default function SettlementPanel({
+  miningSessionId,
+  currentUserId,
+  focusLedgerId,
+}: Props) {
   const t = useTranslations("Mining.settlement");
 
-  const [view, setView] = useState<View>("simplified");
-  const [paidFilter, setPaidFilter] = useState<PaidFilter>("unpaid");
+  // Si venimos linkeados desde una notif, arrancamos en la vista de ledger con
+  // el filtro amplio para asegurar que el entry target aparezca (ya esté
+  // paid/unpaid). Si no, default habitual simplified + unpaid.
+  const [view, setView] = useState<View>(focusLedgerId ? "ledger" : "simplified");
+  const [paidFilter, setPaidFilter] = useState<PaidFilter>(
+    focusLedgerId ? "all" : "unpaid",
+  );
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [simplified, setSimplified] = useState<SimplifiedPayload | null>(null);
   const [loading, setLoading] = useState(false);
@@ -141,6 +157,25 @@ export default function SettlementPanel({ miningSessionId, currentUserId }: Prop
   }, [miningSessionId, paidFilter]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Fase E.E — scroll + highlight de la fila linkeada desde una notificación.
+  // Se dispara una única vez, cuando las entries ya están cargadas y el target
+  // existe en la lista.
+  const [focusApplied, setFocusApplied] = useState(false);
+  useEffect(() => {
+    if (!focusLedgerId || focusApplied) return;
+    const exists = entries.some((e) => e.id === focusLedgerId);
+    if (!exists) return; // esperamos al próximo load
+    // Si por alguna razón estamos en simplified, pasamos a ledger
+    if (view !== "ledger") setView("ledger");
+    setTimeout(() => {
+      const el = document.getElementById(`ledger-${focusLedgerId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 50);
+    setFocusApplied(true);
+  }, [focusLedgerId, focusApplied, entries, view]);
 
   // -- Actions ------------------------------------------------------------
 
@@ -464,11 +499,15 @@ export default function SettlementPanel({ miningSessionId, currentUserId }: Prop
               const touchesMe =
                 currentUserId &&
                 (e.from_user_id === currentUserId || e.to_user_id === currentUserId);
+              const isFocused = focusLedgerId === e.id;
               return (
                 <div
                   key={e.id}
-                  className={`grid grid-cols-[1fr_auto_1fr_auto_auto] gap-3 px-4 py-2.5 rounded-lg border items-center ${
-                    e.paid
+                  id={`ledger-${e.id}`}
+                  className={`grid grid-cols-[1fr_auto_1fr_auto_auto] gap-3 px-4 py-2.5 rounded-lg border items-center transition-colors ${
+                    isFocused
+                      ? "bg-amber-500/10 border-2 border-amber-500/60 ring-2 ring-amber-400/30"
+                      : e.paid
                       ? "bg-zinc-900/40 border-zinc-800/60 opacity-60"
                       : touchesMe
                       ? "bg-emerald-500/5 border-emerald-500/30"
