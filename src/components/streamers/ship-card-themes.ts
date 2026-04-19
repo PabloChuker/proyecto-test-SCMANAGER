@@ -153,4 +153,4 @@ export function getTheme(key: string): CardTheme {
   return CARD_THEMES.find((t) => t.key === key) ?? CARD_THEMES[0];
 }
 
-export type CardVariant = "horizontal" | "vertical";
+export type CardVariant = "horizontal" | "vertical" | "showcase";

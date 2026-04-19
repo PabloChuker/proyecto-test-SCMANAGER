@@ -13,6 +13,8 @@
 import Image from "next/image";
 import type { ShipDetailResponseV2 } from "@/types/ships";
 import { getTheme, type CardVariant } from "./ship-card-themes";
+import { ShipViewer3D } from "@/components/shared/flight-dynamics/ShipViewer3D";
+import { shipGlbCandidates } from "@/lib/shipGlb";
 
 // ─── Formato ─────────────────────────────────────────────────────────────────
 
@@ -618,6 +620,121 @@ export default function ShipInfoCard({
             </div>
             <div style={{ width: 40, height: 1, backgroundColor: theme.border }} />
             <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.14em", textTransform: "uppercase", color: theme.accent }}>SCLABS.SPACE</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════
+  // SHOWCASE — 1800 × 900 — "Showroom espacial"
+  // ══════════════════════════════════════════════════════════════════════
+  if (variant === "showcase") {
+    const SW = 1800;
+    const SH = 900;
+    const PANEL_H = 130;
+
+    const glbCandidates = shipGlbCandidates((ship as any).reference ?? null);
+
+    const nameFontSize = Math.max(48, Math.min(130, Math.floor(880 / Math.max(displayName.length, 4))));
+
+    const showcaseStats = [
+      cargo    != null ? { label: "Cargo",     value: num(cargo),            unit: "SCU" } : null,
+      hullHp   != null ? { label: "Hull HP",   value: num(hullHp),           unit: "HP"  } : null,
+      scmSpeed != null ? { label: "SCM Speed", value: num(scmSpeed),         unit: "m/s" } : null,
+      shieldHp != null ? { label: "Shield",    value: num(shieldHp),         unit: "HP"  } : null,
+      specs.maxCrew != null ? { label: "Crew", value: String(specs.maxCrew), unit: "crew"} : null,
+      mass     != null ? { label: "Mass",      value: num(mass),             unit: "kg"  } : null,
+    ].filter(Boolean) as { label: string; value: string; unit: string }[];
+
+    return (
+      <div
+        id={captureId}
+        style={{
+          position: "relative", width: SW, height: SH,
+          overflow: "hidden",
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+        }}
+      >
+        {/* Fondo CSS: simula horizonte espacial. Se oculta si showcase-bg.jpg carga. */}
+        <div style={{
+          position: "absolute", inset: 0,
+          background: [
+            "radial-gradient(ellipse 140% 60% at 50% 132%, #1a5080 0%, #0c3259 22%, transparent 52%)",
+            "radial-gradient(circle 200px at 72% 13%, #ffe066cc 0%, #f59e0b55 22%, transparent 42%)",
+            "linear-gradient(170deg, #000005 0%, #000a1c 40%, #00132e 75%, #000814 100%)",
+          ].join(", "),
+          zIndex: 0,
+        }} />
+
+        {/* Imagen de fondo real — se muestra si el archivo existe */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/media/images/showcase-bg.jpg"
+          alt=""
+          crossOrigin="anonymous"
+          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center center", zIndex: 1 }}
+          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+        />
+
+        {/* Vignette superior */}
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 220, background: "linear-gradient(to bottom, #000000b0 0%, transparent 100%)", zIndex: 3, pointerEvents: "none" }} />
+
+        {/* Vignette inferior — funde con el panel */}
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 300, background: "linear-gradient(to top, #000000a0 0%, transparent 100%)", zIndex: 3, pointerEvents: "none" }} />
+
+        {/* 3D Ship Viewer — ocupa toda la tarjeta, fondo transparente */}
+        <div style={{ position: "absolute", inset: 0, zIndex: 2 }}>
+          <ShipViewer3D
+            glbUrl={glbCandidates}
+            rotationAxis="yaw"
+            animate
+            animationSpeed={0.3}
+            className="w-full h-full"
+          />
+        </div>
+
+        {/* Brand mark — top-left */}
+        <div style={{ position: "absolute", top: 28, left: 36, zIndex: 10 }}>
+          <BrandMark theme={{ ...theme, text: "#ffffff", textMuted: "rgba(255,255,255,0.55)" }} size={36} labelSize={13} subSize={8} />
+        </div>
+
+        {/* Nombre de nave — bottom-left, sobre el panel */}
+        <div style={{ position: "absolute", bottom: PANEL_H + 20, left: 36, right: "48%", zIndex: 10 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.38em", textTransform: "uppercase", color: theme.accent, marginBottom: 8, lineHeight: 1 }}>
+            {ship.manufacturer ?? "—"}
+          </div>
+          <div style={{ fontSize: nameFontSize, fontWeight: 800, lineHeight: 0.88, letterSpacing: "-0.03em", textTransform: "uppercase", color: "#ffffff", textShadow: `0 0 80px ${theme.accent}99, 0 3px 12px #000` }}>
+            {displayName}
+          </div>
+          {(ship.type || specs.role) && (
+            <span style={{ display: "inline-block", marginTop: 14, fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "#000", backgroundColor: theme.accent, padding: "5px 16px", lineHeight: 1.5 }}>
+              {[ship.type, specs.role].filter(Boolean).join(" · ")}
+            </span>
+          )}
+        </div>
+
+        {/* Panel glassmorphism — stats en la base */}
+        <div style={{
+          position: "absolute", bottom: 0, left: 0, right: 0, height: PANEL_H,
+          background: "rgba(0, 0, 0, 0.60)",
+          backdropFilter: "blur(24px)",
+          WebkitBackdropFilter: "blur(24px)",
+          borderTop: "1px solid rgba(255,255,255,0.07)",
+          display: "flex", alignItems: "center",
+          zIndex: 10,
+        }}>
+          {showcaseStats.map((s, i) => (
+            <div key={i} style={{ flex: 1, textAlign: "center", borderRight: i < showcaseStats.length - 1 ? "1px solid rgba(255,255,255,0.07)" : undefined, padding: "0 16px" }}>
+              <div style={{ fontSize: 10, letterSpacing: "0.24em", textTransform: "uppercase", color: "rgba(255,255,255,0.40)", marginBottom: 5, lineHeight: 1 }}>{s.label}</div>
+              <div style={{ fontSize: 38, fontWeight: 800, color: theme.accent, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{s.value}</div>
+              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.30)", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 4 }}>{s.unit}</div>
+            </div>
+          ))}
+          {/* Brand slot final */}
+          <div style={{ padding: "0 28px", borderLeft: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            <Image src="/sclabs-logo.png" alt="SC LABS" width={34} height={34} style={{ borderRadius: 5 }} crossOrigin="anonymous" unoptimized />
+            <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.20em", textTransform: "uppercase", color: "rgba(255,255,255,0.45)" }}>SCLABS.SPACE</div>
           </div>
         </div>
       </div>

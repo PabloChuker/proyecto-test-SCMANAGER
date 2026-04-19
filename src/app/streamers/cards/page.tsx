@@ -241,7 +241,7 @@ export default function StreamerCardsPage() {
               <div className="text-[10px] tracking-[0.18em] uppercase font-mono text-amber-500 mb-2">
                 ➋ Orientación
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <button
                   onClick={() => setVariant("horizontal")}
                   className={`py-2 text-[10px] tracking-widest uppercase font-mono rounded transition-colors border ${
@@ -261,6 +261,16 @@ export default function StreamerCardsPage() {
                   }`}
                 >
                   ▯ Vertical
+                </button>
+                <button
+                  onClick={() => setVariant("showcase")}
+                  className={`py-2 text-[10px] tracking-widest uppercase font-mono rounded transition-colors border ${
+                    variant === "showcase"
+                      ? "bg-amber-500/15 border-amber-500/40 text-amber-300"
+                      : "bg-zinc-900/60 border-zinc-800 text-zinc-500 hover:text-zinc-300"
+                  }`}
+                >
+                  ✦ Showcase
                 </button>
               </div>
             </div>
@@ -333,7 +343,9 @@ export default function StreamerCardsPage() {
                 Pegá la URL en una fuente &quot;Browser&quot; de OBS.
                 {variant === "horizontal"
                   ? " Dimensiones sugeridas: 1800 × 720."
-                  : " Dimensiones sugeridas: 760 × 1560."}
+                  : variant === "vertical"
+                  ? " Dimensiones sugeridas: 760 × 1560."
+                  : " Dimensiones sugeridas: 1800 × 900. La nave rota en tiempo real."}
               </p>
             </div>
           </aside>
@@ -361,10 +373,14 @@ export default function StreamerCardsPage() {
                     width:
                       variant === "vertical"
                         ? 760 * 0.40
+                        : variant === "showcase"
+                        ? 1800 * 0.44
                         : 1800 * 0.5,
                     height:
                       variant === "vertical"
                         ? 1560 * 0.40
+                        : variant === "showcase"
+                        ? 900 * 0.44
                         : 720 * 0.5,
                     position: "relative",
                   }}
@@ -372,7 +388,11 @@ export default function StreamerCardsPage() {
                   <div
                     style={{
                       transform:
-                        variant === "vertical" ? "scale(0.40)" : "scale(0.5)",
+                        variant === "vertical"
+                          ? "scale(0.40)"
+                          : variant === "showcase"
+                          ? "scale(0.44)"
+                          : "scale(0.5)",
                       transformOrigin: "top left",
                     }}
                   >
@@ -387,11 +407,9 @@ export default function StreamerCardsPage() {
             </div>
 
             <p className="mt-3 text-[10px] text-zinc-600 font-mono tracking-wider text-center">
-              Vista previa escalada. PNG exportado a resolución real
-              {variant === "vertical"
-                ? " 1520 × 3120"
-                : " 3600 × 1440"}{" "}
-              (2×).
+              {variant === "showcase"
+                ? "Vista previa en vivo — Showcase usa 3D WebGL. Usá la URL de OBS para el resultado final."
+                : `Vista previa escalada. PNG exportado a resolución real${variant === "vertical" ? " 1520 × 3120" : " 3600 × 1440"} (2×).`}
             </p>
           </section>
         </div>
