@@ -39,10 +39,16 @@ type YieldRow = {
   material_name: string;
   chance_pct: number;
 };
+type VariantRow = {
+  material_name: string;
+  method: "Ship" | "ROC" | "Hand";
+  radar_signature: number;
+  sort_order: number;
+};
 
 export async function GET() {
   try {
-    const [materials, signatures, locations, yields] = await Promise.all([
+    const [materials, signatures, variants, locations, yields] = await Promise.all([
       sql<MaterialRow[]>`
         SELECT name FROM mining_materials ORDER BY name ASC
       `,
@@ -52,6 +58,18 @@ export async function GET() {
         FROM mining_material_signatures
         ORDER BY material_name ASC, method ASC
       `,
+      // 051 — firmas multiples por (material, metodo). Puede no existir aun.
+      (async () => {
+        try {
+          return await sql<VariantRow[]>`
+            SELECT material_name, method, radar_signature, sort_order
+            FROM mining_material_signature_variants
+            ORDER BY material_name ASC, method ASC, sort_order ASC
+          `;
+        } catch {
+          return [] as VariantRow[];
+        }
+      })(),
       sql<LocationRow[]>`
         SELECT name, system FROM mining_locations
         ORDER BY system ASC, name ASC
@@ -66,19 +84,37 @@ export async function GET() {
     const datasetVersion =
       (signatures as any[])[0]?.dataset_version ?? "unknown";
 
+    // Agrupar variants por (material, method) => array de radar_signatures.
+    const variantMap: Record<string, number[]> = {};
+    for (const v of variants as any[]) {
+      const key = `${v.material_name}|${v.method}`;
+      if (!variantMap[key]) variantMap[key] = [];
+      variantMap[key].push(Number(v.radar_signature));
+    }
+
     return NextResponse.json({
       data: {
         materials: (materials as any[]).map((m) => m.name),
-        signatures: (signatures as any[]).map((s) => ({
-          material: s.material_name,
-          method: s.method,
-          radarSignature:
-            s.radar_signature !== null ? Number(s.radar_signature) : null,
-          tier: s.tier,
-          instability: s.instability !== null ? Number(s.instability) : null,
-          resistance: s.resistance !== null ? Number(s.resistance) : null,
-          note: s.note,
-        })),
+        signatures: (signatures as any[]).map((s) => {
+          const key = `${s.material_name}|${s.method}`;
+          const variantSigs = variantMap[key] ?? [];
+          return {
+            material: s.material_name,
+            method: s.method,
+            radarSignature:
+              s.radar_signature !== null ? Number(s.radar_signature) : null,
+            // Array de firmas alternativas (rock type IDs). Incluye la base.
+            radarSignatures: variantSigs.length
+              ? variantSigs
+              : s.radar_signature !== null
+              ? [Number(s.radar_signature)]
+              : [],
+            tier: s.tier,
+            instability: s.instability !== null ? Number(s.instability) : null,
+            resistance: s.resistance !== null ? Number(s.resistance) : null,
+            note: s.note,
+          };
+        }),
         locations: (locations as any[]).map((l) => ({
           name: l.name,
           system: l.system,

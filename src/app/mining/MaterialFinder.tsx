@@ -9,6 +9,8 @@ interface SigRow {
   material: string;
   method: Method;
   radarSignature: number | null;
+  /** Array de radar signatures (rock type IDs) — poblado por migracion 051. */
+  radarSignatures?: number[];
   tier: string | null;
   instability: number | null;
   resistance: number | null;
@@ -424,7 +426,20 @@ export default function MaterialFinder() {
                     {tierLabel(s.tier, t)}
                   </td>
                   <td className="px-3 py-2 text-right font-mono tabular-nums text-zinc-300">
-                    {s.radarSignature ?? "—"}
+                    {s.radarSignatures && s.radarSignatures.length > 0 ? (
+                      <div className="flex flex-wrap gap-1 justify-end">
+                        {s.radarSignatures.map((sig) => (
+                          <span
+                            key={sig}
+                            className="inline-flex items-center rounded border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 text-[10px] text-cyan-300"
+                          >
+                            {sig}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      s.radarSignature ?? "—"
+                    )}
                   </td>
                   <td className="px-3 py-2 text-right font-mono tabular-nums text-zinc-300">
                     {s.instability !== null ? s.instability.toFixed(0) : "—"}

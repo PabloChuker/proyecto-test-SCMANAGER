@@ -1,0 +1,298 @@
+{
+  "raw": [
+    {
+      "signature": 3170,
+      "materials": [
+        "Quantainium",
+        "Beryl"
+      ]
+    },
+    {
+      "signature": 3185,
+      "materials": [
+        "Stileron",
+        "Taranite"
+      ]
+    },
+    {
+      "signature": 3200,
+      "materials": [
+        "Savrilium",
+        "Gold"
+      ]
+    },
+    {
+      "signature": 3370,
+      "materials": [
+        "Ouratite",
+        "Agricium"
+      ]
+    },
+    {
+      "signature": 3385,
+      "materials": [
+        "Riccite",
+        "Laranite"
+      ]
+    },
+    {
+      "signature": 3400,
+      "materials": [
+        "Lindinium",
+        "Tungsten"
+      ]
+    },
+    {
+      "signature": 3540,
+      "materials": [
+        "Beryl"
+      ]
+    },
+    {
+      "signature": 3555,
+      "materials": [
+        "Taranite"
+      ]
+    },
+    {
+      "signature": 3570,
+      "materials": [
+        "Borase",
+        "Gold",
+        "Bexalite"
+      ]
+    },
+    {
+      "signature": 3585,
+      "materials": [
+        "Gold",
+        "Borase",
+        "Bexalite"
+      ]
+    },
+    {
+      "signature": 3600,
+      "materials": [
+        "Bexalite",
+        "Gold",
+        "Borase"
+      ]
+    },
+    {
+      "signature": 3825,
+      "materials": [
+        "Laranite",
+        "Tungsten"
+      ]
+    },
+    {
+      "signature": 3840,
+      "materials": [
+        "Aslarite",
+        "Agricium",
+        "Titanium"
+      ]
+    },
+    {
+      "signature": 3855,
+      "materials": [
+        "Titanium",
+        "Aslarite",
+        "Agricium"
+      ]
+    },
+    {
+      "signature": 3870,
+      "materials": [
+        "Tungsten",
+        "Laranite"
+      ]
+    },
+    {
+      "signature": 3885,
+      "materials": [
+        "Agricium",
+        "Titanium",
+        "Aslarite"
+      ]
+    },
+    {
+      "signature": 3900,
+      "materials": [
+        "Torite"
+      ]
+    },
+    {
+      "signature": 4180,
+      "materials": [
+        "Hephaestanite",
+        "Quartz",
+        "Silicon"
+      ]
+    },
+    {
+      "signature": 4195,
+      "materials": [
+        "Tin",
+        "Copper"
+      ]
+    },
+    {
+      "signature": 4210,
+      "materials": [
+        "Quartz",
+        "Silicon"
+      ]
+    },
+    {
+      "signature": 4225,
+      "materials": [
+        "Corundum",
+        "Aluminum"
+      ]
+    },
+    {
+      "signature": 4240,
+      "materials": [
+        "Copper",
+        "Tin"
+      ]
+    },
+    {
+      "signature": 4255,
+      "materials": [
+        "Silicon",
+        "Quartz",
+        "Hephaestanite"
+      ]
+    },
+    {
+      "signature": 4270,
+      "materials": [
+        "Iron"
+      ]
+    },
+    {
+      "signature": 4285,
+      "materials": [
+        "Aluminum",
+        "Corundum"
+      ]
+    },
+    {
+      "signature": 4300,
+      "materials": [
+        "Pressuriced Ice"
+      ]
+    }
+  ],
+  "by_material": {
+    "Quantainium": [
+      3170
+    ],
+    "Beryl": [
+      3170,
+      3540
+    ],
+    "Stileron": [
+      3185
+    ],
+    "Taranite": [
+      3185,
+      3555
+    ],
+    "Savrilium": [
+      3200
+    ],
+    "Gold": [
+      3200,
+      3570,
+      3585,
+      3600
+    ],
+    "Ouratite": [
+      3370
+    ],
+    "Agricium": [
+      3370,
+      3840,
+      3855,
+      3885
+    ],
+    "Riccite": [
+      3385
+    ],
+    "Laranite": [
+      3385,
+      3825,
+      3870
+    ],
+    "Lindinium": [
+      3400
+    ],
+    "Tungsten": [
+      3400,
+      3825,
+      3870
+    ],
+    "Borase": [
+      3570,
+      3585,
+      3600
+    ],
+    "Bexalite": [
+      3570,
+      3585,
+      3600
+    ],
+    "Aslarite": [
+      3840,
+      3855,
+      3885
+    ],
+    "Titanium": [
+      3840,
+      3855,
+      3885
+    ],
+    "Torite": [
+      3900
+    ],
+    "Hephaestanite": [
+      4180,
+      4255
+    ],
+    "Quartz": [
+      4180,
+      4210,
+      4255
+    ],
+    "Silicon": [
+      4180,
+      4210,
+      4255
+    ],
+    "Tin": [
+      4195,
+      4240
+    ],
+    "Copper": [
+      4195,
+      4240
+    ],
+    "Corundum": [
+      4225,
+      4285
+    ],
+    "Aluminum": [
+      4225,
+      4285
+    ],
+    "Iron": [
+      4270
+    ],
+    "Pressuriced Ice": [
+      4300
+    ]
+  }
+}
