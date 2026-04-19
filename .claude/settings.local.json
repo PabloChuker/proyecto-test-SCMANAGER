@@ -14,7 +14,17 @@
       "Bash(py --version)",
       "Bash(python -c \"import reportlab; print\\('OK', reportlab.Version\\)\")",
       "Bash(python -m pip install reportlab --quiet)",
-      "Bash(python generate_audit_pdf.py)"
+      "Bash(python generate_audit_pdf.py)",
+      "Bash(git stash:*)",
+      "Bash(git checkout:*)",
+      "Bash(node -e \"require\\('zustand/react/shallow'\\); console.log\\('OK'\\)\")",
+      "Bash(find \"C:\\\\Users\\\\Usuario\\\\Desktop\\\\SCLabs\\\\proyecto-test-SCMANAGER\" -name \"*.tsx\" -type f -exec grep -l \"localStorage\" {} \\\\;)",
+      "Bash(find \"C:\\\\Users\\\\Usuario\\\\Desktop\\\\SCLabs\\\\proyecto-test-SCMANAGER\" -name \"*.tsx\" -type f -exec grep -l \"react-grid-layout\" {} \\\\;)",
+      "Bash(du -sh \"C:\\\\Users\\\\Usuario\\\\Desktop\\\\SCLabs\\\\proyecto-test-SCMANAGER\\\\node_modules\"/*)",
+      "Bash(git pull *)",
+      "Bash(rm -f generate_audit_pdf.py chart-preview.html GuildSwarm_Analysis_Report.pdf SC_Labs_Hangar_Manager_Proposal.docx INSTRUCCIONES_MERGE_XOLI.md 'BOT LOGIN DISCORD.txt' deploy-test.txt 'instrucciones revision chrome.jpg' requirements.txt .lock tsconfig.tsbuildinfo sc-labs-project-context.md cws-icon-128.png cws-promo-marquee.png cws-promo-small.png cws-screenshot-1.png docs/erkul-reverse-engineering-report.md docs/i18n-implementation-report.md docs/power-model-investigation.md docs/architecture/diagrams/Gemini_Generated_Image_cdnn32cdnn32cdnn.png docs/archive/legacy-sql/equipment_load.sql docs/archive/legacy-sql/fix_crew_and_children.sql docs/archive/legacy-sql/hardpoints_remaining.sql docs/archive/legacy-sql/satellite_tables.sql)",
+      "Bash(rmdir --ignore-fail-on-non-empty \"docs/archive/legacy-sql\" \"docs/archive\" \"docs/architecture/diagrams\" \"precios_naves\")",
+      "Bash(rm -rf \"precios_naves\")"
     ]
   }
 }
