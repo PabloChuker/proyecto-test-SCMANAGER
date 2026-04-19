@@ -224,6 +224,53 @@ export default function WorkOrderCalculator() {
   const [loadingCrew, setLoadingCrew] = useState(false);
   const [loadingSessions, setLoadingSessions] = useState(false);
 
+  // ── Crew persistence (solo mode) ──────────────────────────────────────────
+  // When the user ISN'T in a Supabase party session, their manual crew would
+  // otherwise reset on every page refresh. We persist it to localStorage so
+  // Pablo can close the tab, come back tomorrow, and still have the same
+  // crew pre-loaded for the next work order. Party mode already handles this
+  // via the session-crew auto-load path above, so we only write/read here
+  // when there's no active Supabase session.
+  const CREW_STORAGE_KEY = "sc-labs-wo-crew-solo";
+  const didHydrateCrewRef = useRef(false);
+
+  // Hydrate once on mount.
+  useEffect(() => {
+    if (didHydrateCrewRef.current) return;
+    if (supabaseSessionId) return; // party mode handles its own crew
+    try {
+      const raw = typeof window !== "undefined"
+        ? window.localStorage.getItem(CREW_STORAGE_KEY)
+        : null;
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0 &&
+          parsed.every((m) => m && typeof m.name === "string")) {
+        setCrew(parsed as CrewMember[]);
+      }
+    } catch {
+      /* ignore malformed cache */
+    } finally {
+      didHydrateCrewRef.current = true;
+    }
+    // We intentionally depend only on supabaseSessionId: we want to run this
+    // exactly once after we know whether we're solo or party.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabaseSessionId]);
+
+  // Persist whenever crew changes in solo mode.
+  useEffect(() => {
+    if (supabaseSessionId) return; // don't pollute solo cache with party crew
+    if (!didHydrateCrewRef.current) return; // wait until we've loaded once
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(CREW_STORAGE_KEY, JSON.stringify(crew));
+      }
+    } catch {
+      /* storage quota / privacy mode — non-fatal */
+    }
+  }, [crew, supabaseSessionId]);
+
   // ── Countdown Timer ──
   const timer = useCountdown();
 
@@ -393,9 +440,25 @@ export default function WorkOrderCalculator() {
   };
 
   // ── Submit Order ──
+  // `submitted` drives the "Order Saved ✓" label on the main Save button.
+  // `nextReady` drives a lighter confirmation on the "Save + Next" button so
+  // Pablo can burst-save several orders in a row (same crew, same refinery)
+  // without going back to Dashboard between each one.
   const [submitted, setSubmitted] = useState(false);
+  const [nextReady, setNextReady] = useState(false);
 
-  const submitOrder = () => {
+  // Clears only the "content" of the current order (ores, refining stage,
+  // countdown). Everything Pablo expects to carry between orders — crew,
+  // selected session, mode, refinery, method — stays untouched. This is what
+  // "Save + Next" calls after a successful submit.
+  const resetForNextOrder = () => {
+    setOreEntries([]);
+    setOrderStage("refining");
+    timer.reset();
+  };
+
+  const submitOrder = (opts?: { continueAfter?: boolean }) => {
+    const continueAfter = !!opts?.continueAfter;
     // Determine save target: Supabase (party) or localStorage (solo)
     const useSupabase = !!(supabaseSessionId && user);
 
@@ -501,8 +564,16 @@ export default function WorkOrderCalculator() {
       }).catch((err) => console.error("Supabase work order save failed:", err));
     }
 
-    setSubmitted(true);
-    setTimeout(() => setSubmitted(false), 3000);
+    if (continueAfter) {
+      // "Save + Next" path: confirm briefly, then wipe the order content so
+      // the form is ready to capture the next haul without losing the party.
+      setNextReady(true);
+      setTimeout(() => setNextReady(false), 2000);
+      resetForNextOrder();
+    } else {
+      setSubmitted(true);
+      setTimeout(() => setSubmitted(false), 3000);
+    }
   };
 
   // ═════════════════════════════════════════════════════════════════════════════
@@ -961,7 +1032,11 @@ export default function WorkOrderCalculator() {
         </div>
       )}
 
-      {/* ── Submit Order Button ──────────────────────────────────── */}
+      {/* ── Submit Order Buttons ─────────────────────────────────────
+           Two actions: Save (sticks on the confirmation and lets the user go
+           do something else) and Save + Next (saves, then wipes only the
+           order content so the same crew + session can batch-capture the
+           next haul without going back to Dashboard). */}
       {(() => {
         const refiningNeedsTimer =
           mode === "ship" &&
@@ -970,7 +1045,7 @@ export default function WorkOrderCalculator() {
           !timer.finished &&
           timer.totalInputSeconds === 0 &&
           timer.remaining === 0;
-        const disabled = submitted || refiningNeedsTimer;
+        const disabled = submitted || nextReady || refiningNeedsTimer;
         const submitLabel = submitted
           ? t("orderSaved")
           : mode === "ship" && orderStage === "refining"
@@ -978,28 +1053,48 @@ export default function WorkOrderCalculator() {
             : mode === "ship" && orderStage === "ready"
               ? t("saveAsRefined")
               : t("submitWorkOrder");
+        const nextLabel = nextReady ? t("nextOrderReady") : t("saveAndNext");
         return (
           <div className={mode === "ship" ? "mt-4" : "mt-6"}>
-            <button
-              onClick={submitOrder}
-              disabled={disabled}
-              className={`w-full py-3.5 rounded-lg text-sm font-bold tracking-[0.15em] uppercase transition-all duration-300
-                ${submitted
-                  ? "bg-emerald-500 text-zinc-900 shadow-[0_0_20px_rgba(16,185,129,0.4)]"
-                  : disabled
-                    ? "bg-zinc-800 text-zinc-600 cursor-not-allowed"
-                    : mode === "ship" && orderStage === "ready"
-                      ? "bg-emerald-500 hover:bg-emerald-400 text-zinc-900 shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:shadow-[0_0_20px_rgba(16,185,129,0.5)]"
-                      : "bg-amber-500 hover:bg-amber-400 text-zinc-900 shadow-[0_0_15px_rgba(245,158,11,0.3)] hover:shadow-[0_0_20px_rgba(245,158,11,0.5)]"
-                }`}
-            >
-              {submitLabel}
-            </button>
-            {refiningNeedsTimer && !submitted && (
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+              <button
+                onClick={() => submitOrder()}
+                disabled={disabled}
+                className={`w-full py-3.5 rounded-lg text-sm font-bold tracking-[0.15em] uppercase transition-all duration-300
+                  ${submitted
+                    ? "bg-emerald-500 text-zinc-900 shadow-[0_0_20px_rgba(16,185,129,0.4)]"
+                    : disabled
+                      ? "bg-zinc-800 text-zinc-600 cursor-not-allowed"
+                      : mode === "ship" && orderStage === "ready"
+                        ? "bg-emerald-500 hover:bg-emerald-400 text-zinc-900 shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:shadow-[0_0_20px_rgba(16,185,129,0.5)]"
+                        : "bg-amber-500 hover:bg-amber-400 text-zinc-900 shadow-[0_0_15px_rgba(245,158,11,0.3)] hover:shadow-[0_0_20px_rgba(245,158,11,0.5)]"
+                  }`}
+              >
+                {submitLabel}
+              </button>
+              <button
+                onClick={() => submitOrder({ continueAfter: true })}
+                disabled={disabled}
+                title={t("saveAndNextHint")}
+                className={`w-full sm:w-auto px-5 py-3.5 rounded-lg text-xs font-bold tracking-[0.15em] uppercase transition-all duration-300
+                  ${nextReady
+                    ? "bg-cyan-500 text-zinc-900 shadow-[0_0_20px_rgba(6,182,212,0.4)]"
+                    : disabled
+                      ? "bg-zinc-800 text-zinc-600 cursor-not-allowed"
+                      : "bg-zinc-900/80 border border-cyan-500/40 text-cyan-200 hover:bg-cyan-500/15"
+                  }`}
+              >
+                + {nextLabel}
+              </button>
+            </div>
+            {refiningNeedsTimer && !submitted && !nextReady && (
               <p className="mt-2 text-center text-[11px] text-amber-400 italic">
                 ⚠ {t("timerRequired")}
               </p>
             )}
+            <p className="mt-2 text-center text-[10px] text-zinc-500 italic">
+              {t("partyPersistsHint")}
+            </p>
           </div>
         );
       })()}

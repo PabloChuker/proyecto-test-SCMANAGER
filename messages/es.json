@@ -527,6 +527,10 @@
       "startRefining": "⏳ Iniciar refinería",
       "saveAsRefined": "✅ Guardar como ya refinada",
       "timerRequired": "Configurá un tiempo de refinería o cambiá a \"Ya refinada\".",
+      "saveAndNext": "Guardar y siguiente",
+      "saveAndNextHint": "Guarda esta orden y prepara el formulario para la próxima sin perder la party ni la sesión",
+      "nextOrderReady": "✓ Listo para la siguiente",
+      "partyPersistsHint": "La party y la sesión se mantienen entre órdenes. Si cambia, editala arriba.",
       "footerNoteLabel": "NOTA:",
       "footerNoteBody": "Esta es una calculadora independiente. Si querés trabajar con más de una orden, almacenar órdenes consecutivas o compartirlas con amigos, considerá iniciar sesión y crear/unirte a una sesión desde el dashboard. Las órdenes dentro de Sesiones se pueden capturar automáticamente desde el juego o subiendo capturas con OCR."
     },

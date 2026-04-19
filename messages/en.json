@@ -527,6 +527,10 @@
       "startRefining": "⏳ Start refinery",
       "saveAsRefined": "✅ Save as already refined",
       "timerRequired": "Set a refinery time or switch to \"Already refined\".",
+      "saveAndNext": "Save + Next",
+      "saveAndNextHint": "Save this order and clear the form for the next haul without losing your party or session",
+      "nextOrderReady": "✓ Ready for next",
+      "partyPersistsHint": "Party and session carry over between orders. If it changes, edit it above.",
       "footerNoteLabel": "NOTE:",
       "footerNoteBody": "This is a standalone calculator. If you want to work on more than one order, store consecutive orders or share your work orders with friends then consider logging in and creating/joining a session from the dashboard. Work orders inside Sessions can be captured automatically from the game or by uploading screenshots using OCR."
     },
