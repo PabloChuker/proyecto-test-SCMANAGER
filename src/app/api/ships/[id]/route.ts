@@ -1208,6 +1208,14 @@ export async function GET(
         deflectionPhysical: numOrNull(ship.deflection_physical),
         deflectionEnergy: numOrNull(ship.deflection_energy),
         deflectionDistortion: numOrNull(ship.deflection_distortion),
+        // Physical dimensions (from ships table)
+        lengthMeters: numOrNull(ship.length_meters ?? ship.length),
+        beamMeters: numOrNull(ship.beam_meters ?? ship.beam),
+        heightMeters: numOrNull(ship.height_meters ?? ship.height),
+        // Base signatures (from ships table)
+        baseEmSignature: numOrNull(ship.base_em_signature),
+        baseIrSignature: numOrNull(ship.base_ir_signature),
+        baseCsSignature: numOrNull(ship.base_cs_signature),
         // Hull / armor resistances (full ship_resistances row)
         resistances: resistances ? {
           armorHp: numOrNull(resistances.armor_hp),
