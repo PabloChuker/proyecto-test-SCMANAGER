@@ -23,15 +23,17 @@ export async function GET(request: NextRequest) {
       SELECT
         cp.id,
         cp.from_ship_id, s1.name AS from_ship_name, s1.class_name AS from_ship_ref,
-        s1.msrp_usd AS from_msrp,
+        sp1.msrp_usd AS from_msrp,
         cp.to_ship_id, s2.name AS to_ship_name, s2.class_name AS to_ship_ref,
-        s2.msrp_usd AS to_msrp,
+        sp2.msrp_usd AS to_msrp,
         cp.standard_price, cp.warbond_price,
         cp.is_available, cp.is_warbond_available, cp.is_limited,
         cp.source, cp.last_verified
       FROM ccu_prices cp
       JOIN ships s1 ON s1.id = cp.from_ship_id
       JOIN ships s2 ON s2.id = cp.to_ship_id
+      LEFT JOIN ship_price sp1 ON sp1.id = cp.from_ship_id
+      LEFT JOIN ship_price sp2 ON sp2.id = cp.to_ship_id
       WHERE cp.is_available = true
     `;
     const params: any[] = [];

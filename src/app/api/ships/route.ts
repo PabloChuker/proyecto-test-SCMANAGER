@@ -64,8 +64,8 @@ const SORT_MAP: Record<string, string> = {
   size: "s.size",
   role: "s.role",
   mass: "s.mass_total_kg",
-  msrpUsd: "s.msrp_usd",
-  price: "s.msrp_usd",
+  msrpUsd: "sp.msrp_usd",
+  price: "sp.msrp_usd",
 };
 
 interface ShipsQueryParams {
@@ -141,8 +141,7 @@ async function handleShipsQuery(params: ShipsQueryParams) {
           ROW_NUMBER() OVER (
             PARTITION BY LOWER(COALESCE(name, '')), LOWER(COALESCE(manufacturer, ''))
             ORDER BY
-              ( (CASE WHEN msrp_usd       IS NOT NULL THEN 1 ELSE 0 END)
-              + (CASE WHEN crew           IS NOT NULL THEN 1 ELSE 0 END)
+              ( (CASE WHEN crew           IS NOT NULL THEN 1 ELSE 0 END)
               + (CASE WHEN cargo_capacity IS NOT NULL THEN 1 ELSE 0 END)
               + (CASE WHEN mass_total_kg   IS NOT NULL THEN 1 ELSE 0 END)
               + (CASE WHEN role           IS NOT NULL THEN 1 ELSE 0 END)
@@ -165,12 +164,13 @@ async function handleShipsQuery(params: ShipsQueryParams) {
 
     // Fetch ships with optional LEFT JOIN to flight_stats for speed data
     const offset = (page - 1) * limit;
-    const joinClause = `LEFT JOIN ship_flight_stats fs ON fs.ship_id = s.id`;
+    const joinClause = `LEFT JOIN ship_flight_stats fs ON fs.ship_id = s.id
+       LEFT JOIN ship_price sp ON sp.id = s.id`;
     const ships: any[] = await sql.unsafe(
       `${dedupCTE}
        SELECT s.id, s.class_name AS reference, s.name, s.manufacturer, s.role, s.size,
               s.crew, s.mass_total_kg AS mass, s.cargo_capacity, s.game_version,
-              s.msrp_usd, s.warbond_usd,
+              sp.msrp_usd, sp.warbond_usd,
               fs.scm_speed, fs.max_speed as afterburner_speed
        FROM deduped s
        ${joinClause}

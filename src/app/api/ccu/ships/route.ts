@@ -19,27 +19,28 @@ export async function GET(request: NextRequest) {
     const maxPrice = parseFloat(searchParams.get("maxPrice") || "99999");
 
     let query = `
-      SELECT id, class_name AS reference, name, manufacturer, msrp_usd, warbond_usd,
-             COALESCE(is_ccu_eligible, true) AS is_ccu_eligible,
-             COALESCE(is_limited, false) AS is_limited,
-             COALESCE(flight_status, 'flight_ready') AS flight_status,
-             size, role
-      FROM ships
-      WHERE msrp_usd IS NOT NULL
-        AND msrp_usd > 0
-        AND msrp_usd >= $1
-        AND msrp_usd <= $2
+      SELECT s.id, s.class_name AS reference, s.name, s.manufacturer, sp.msrp_usd, sp.warbond_usd,
+             COALESCE(sp.is_ccu_eligible, true) AS is_ccu_eligible,
+             COALESCE(sp.is_limited, false) AS is_limited,
+             COALESCE(s.flight_status, 'flight_ready') AS flight_status,
+             s.size, s.role
+      FROM ships s
+      LEFT JOIN ship_price sp ON sp.id = s.id
+      WHERE sp.msrp_usd IS NOT NULL
+        AND sp.msrp_usd > 0
+        AND sp.msrp_usd >= $1
+        AND sp.msrp_usd <= $2
     `;
     const params: any[] = [minPrice, maxPrice];
     let paramIdx = 3;
 
     if (search) {
-      query += ` AND (name ILIKE $${paramIdx} OR class_name ILIKE $${paramIdx} OR manufacturer ILIKE $${paramIdx})`;
+      query += ` AND (s.name ILIKE $${paramIdx} OR s.class_name ILIKE $${paramIdx} OR s.manufacturer ILIKE $${paramIdx})`;
       params.push(`%${search}%`);
       paramIdx++;
     }
 
-    query += ` ORDER BY msrp_usd ASC, name ASC`;
+    query += ` ORDER BY sp.msrp_usd ASC, s.name ASC`;
 
     const rows: any[] = await sql.unsafe(query, params);
 
