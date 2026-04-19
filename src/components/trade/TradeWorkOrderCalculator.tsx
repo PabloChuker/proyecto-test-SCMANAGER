@@ -907,6 +907,52 @@ export default function TradeWorkOrderCalculator() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingCompleteSave, saveAll]);
 
+  // ── Save + Next ──────────────────────────────────────────────────────────
+  // Only meaningful when this WO belongs to a multi-sell route group
+  // (routeMarker present). Saves the current stop, then resolves the next
+  // stop in the same groupId and pushes it into edit mode so Pablo can walk
+  // Stop 1/3 → 2/3 → 3/3 without bouncing back to the Work Orders list.
+  //
+  // If the current stop is already the last one we just return to the list —
+  // the route is effectively done.
+  const [jumpingNext, setJumpingNext] = useState(false);
+  const hasNextStop = !!routeMarker && routeMarker.stop < routeMarker.total;
+
+  const saveAndJumpToNext = useCallback(async () => {
+    if (!routeMarker) return;
+    setJumpingNext(true);
+    try {
+      await saveAll();
+      // If saveAll set an error, bail out — user should fix the error first.
+      // (We can't read React state synchronously here, but the error banner
+      // will be visible after this function returns.)
+      const res = await fetch("/api/trade/work-orders");
+      if (!res.ok) {
+        backToList();
+        return;
+      }
+      const json = await res.json();
+      const list: TradeWorkOrder[] = Array.isArray(json)
+        ? (json as TradeWorkOrder[])
+        : Array.isArray((json as { data?: TradeWorkOrder[] })?.data)
+          ? ((json as { data: TradeWorkOrder[] }).data)
+          : [];
+      const nextStopNum = routeMarker.stop + 1;
+      const nextWO = list.find((wo) => {
+        const m = parseRouteMarker(wo.notes);
+        return !!m && m.groupId === routeMarker.groupId && m.stop === nextStopNum;
+      });
+      if (nextWO) {
+        openEdit(nextWO.id);
+      } else {
+        // Last stop (or next stop not found) — go back to the list.
+        backToList();
+      }
+    } finally {
+      setJumpingNext(false);
+    }
+  }, [routeMarker, saveAll, openEdit, backToList]);
+
   async function deleteOrder() {
     if (!serverId) {
       backToList();
@@ -1000,6 +1046,21 @@ export default function TradeWorkOrderCalculator() {
           >
             {saving ? t("saving") : t("save")}
           </button>
+          {hasNextStop && routeMarker && (
+            <button
+              onClick={saveAndJumpToNext}
+              disabled={saving || jumpingNext}
+              title={t("saveAndNextHint")}
+              className="px-3 py-1.5 text-[10px] uppercase tracking-widest bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 rounded-sm text-amber-200 transition-colors disabled:opacity-40"
+            >
+              {jumpingNext
+                ? t("jumpingToNext")
+                : t("saveAndNext", {
+                    next: routeMarker.stop + 1,
+                    total: routeMarker.total,
+                  })}
+            </button>
+          )}
           {status !== "in_progress" && status !== "completed" && (
             <button
               onClick={() => saveAll("in_progress")}
