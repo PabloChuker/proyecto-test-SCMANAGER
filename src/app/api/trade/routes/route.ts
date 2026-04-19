@@ -31,7 +31,7 @@ const SORT_MAP_OLD: Record<string, string> = {
 };
 
 interface RouteQueryParams {
-  cargo_scu: number;
+  cargo_capacity: number;
   max_investment: number | null;
   commodity: string;
   system_start: string;
@@ -62,7 +62,7 @@ async function hasCommodityPrices(): Promise<boolean> {
 async function handleQueryNew(p: RouteQueryParams) {
   const page = validateInt(p.page, 1, 1, 1000);
   const limit = validateInt(p.limit, 20, 1, 200);
-  const cargo = validateInt(p.cargo_scu, 100, 1, 1000000);
+  const cargo = validateInt(p.cargo_capacity, 100, 1, 1000000);
   const minProfit = Math.max(0, p.min_profit || 0);
   const sortBy = validateSortColumn(p.sortBy, SORT_MAP_NEW, "profit");
   const sortOrder = validateSortDir(p.sortOrder);
@@ -144,7 +144,7 @@ async function handleQueryNew(p: RouteQueryParams) {
 async function handleQueryOld(p: RouteQueryParams) {
   const page = validateInt(p.page, 1, 1, 1000);
   const limit = validateInt(p.limit, 20, 1, 200);
-  const cargo = validateInt(p.cargo_scu, 100, 1, 1000000);
+  const cargo = validateInt(p.cargo_capacity, 100, 1, 1000000);
   const minProfit = Math.max(0, p.min_profit || 0);
   const sortBy = validateSortColumn(p.sortBy, SORT_MAP_OLD, "profit");
   const sortOrder = validateSortDir(p.sortOrder);
@@ -239,7 +239,7 @@ async function handleQuery(p: RouteQueryParams) {
 // ─── HTTP handlers ───────────────────────────────────────────────────────────
 function parseParams(s: URLSearchParams): RouteQueryParams {
   return {
-    cargo_scu: parseInt(s.get("cargo_scu") || "100", 10),
+    cargo_capacity: parseInt(s.get("cargo_capacity") || "100", 10),
     max_investment: s.get("max_investment") ? parseInt(s.get("max_investment")!, 10) : null,
     commodity: s.get("commodity") || "",
     system_start: s.get("system_start") || "",
@@ -273,7 +273,7 @@ export async function POST(request: NextRequest) {
     if (!body)
       return NextResponse.json({ error: "Invalid body" }, { status: 400, headers: secureHeaders() });
     const result = await handleQuery({
-      cargo_scu: body.cargo_scu || 100,
+      cargo_capacity: body.cargo_capacity || 100,
       max_investment: body.max_investment || null,
       commodity: body.commodity || "",
       system_start: body.system_start || "",

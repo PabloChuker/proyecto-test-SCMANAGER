@@ -148,7 +148,7 @@ export default function TradeRoutes() {
     setError(null);
     try {
       const p = new URLSearchParams({
-        cargo_scu: String(cargoScu),
+        cargo_capacity: String(cargoScu),
         sortBy,
         sortOrder: sortDesc ? "desc" : "asc",
         page: String(page),
