@@ -18,8 +18,20 @@
 import minerals from "./minerals.json";
 
 // Mineral ids whose commodity_abbr differs from the mineral_id itself.
+//
+// These were discovered by querying the real `trade_commodities` table in
+// production (2026-04-18): the scunpacked short id for the raw ore is not
+// always the UEX `code`, and the API silently returned 0 sell locations
+// for any mineral where the two didn't match. Prices only work once we
+// send the UEX code.
 const OVERRIDES: Record<string, string> = {
-  BERL: "BERY", // Beryl
+  BERL: "BERY",   // Beryl
+  BORS: "BORA",   // Borase (scunpacked: BORS, UEX: BORA)
+  OURA: "OURAT",  // Ouratite (scunpacked: OURA, UEX: OURAT)
+  ASLA: "ASLAR",  // Aslarite (scunpacked: ASLA, UEX: ASLAR)
+  JACL: "JACO",   // Jaclium (scunpacked: JACL, UEX: JACO)
+  SALDN: "SALD",  // Saldynium (scunpacked: SALDN, UEX: SALD)
+  DOLV: "DOLI",   // Dolivine (scunpacked: DOLV, UEX: DOLI)
 };
 
 // Mineral ids that cannot be sold in the in-game commodity market.

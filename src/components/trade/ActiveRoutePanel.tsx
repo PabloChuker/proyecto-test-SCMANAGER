@@ -243,8 +243,9 @@ export default function ActiveRoutePanel() {
 
   // ── Repair a stale route ────────────────────────────────────────────────
   // Iterates WOs in a route, fetches the best sell station per unique
-  // commodity_code from UEX, and PATCHes each WO with station/system/price.
-  // Survives partial failures — we want something > nothing.
+  // commodity_code from the commodity-prices endpoint, and PATCHes each WO
+  // with station/system/price. Survives partial failures — we want
+  // something > nothing.
   const repairRoute = useCallback(
     async (route: ActiveRoute) => {
       const groupWOs: TradeWorkOrder[] = [];
