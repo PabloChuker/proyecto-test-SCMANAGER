@@ -348,46 +348,79 @@ export default function MaterialFinder() {
       )}
 
       {view === "byLocation" && (
-        <div className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
           {Object.keys(groupedByLocation).length === 0 && (
-            <div className="text-center text-zinc-500 py-8">{t("empty")}</div>
+            <div className="col-span-full text-center text-zinc-500 py-8">
+              {t("empty")}
+            </div>
           )}
           {Object.entries(groupedByLocation)
             .sort(([a], [b]) => a.localeCompare(b))
             .map(([key, group]) => {
               const locName = key.split("|")[0];
+              const topChance = group.rows[0]?.chance ?? 0;
               return (
                 <div
                   key={key}
-                  className="rounded border border-zinc-800 bg-zinc-900/40"
+                  className="rounded border border-zinc-800 bg-zinc-900/40 flex flex-col"
                 >
-                  <div className="px-4 py-2 border-b border-zinc-800/60 flex items-center justify-between">
-                    <div>
-                      <div className="font-light text-amber-400">{locName}</div>
-                      <div className="text-[11px] text-zinc-500">
+                  {/* Card header */}
+                  <div className="px-3 py-2 border-b border-zinc-800/60 flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="font-light text-amber-400 text-sm truncate">
+                        {locName}
+                      </div>
+                      <div className="text-[10px] text-zinc-500 uppercase tracking-wider">
                         {group.system}
                       </div>
                     </div>
-                    <div className="text-[10px] uppercase text-zinc-500">
-                      {group.rows.length}{" "}
-                      {group.rows.length === 1 ? "material" : "materiales"}
+                    <div className="text-right shrink-0">
+                      <div className="text-[10px] uppercase text-zinc-500">
+                        {group.rows.length}{" "}
+                        {group.rows.length === 1 ? "material" : "materiales"}
+                      </div>
+                      <div className="text-[10px] text-zinc-600 font-mono tabular-nums">
+                        max {topChance.toFixed(1)}%
+                      </div>
                     </div>
                   </div>
+                  {/* Rows */}
                   <div className="divide-y divide-zinc-800/40">
-                    {group.rows.map((r, i) => (
-                      <div
-                        key={i}
-                        className="px-4 py-2 flex flex-wrap items-center gap-3 text-sm"
-                      >
-                        <div className="flex-1 min-w-[180px]">
-                          <div className="text-zinc-200">{r.material}</div>
-                          <div className="text-[11px] text-zinc-500">
-                            {methodLabel(r.method, t)}
+                    {group.rows.map((r, i) => {
+                      const color =
+                        r.chance >= 25
+                          ? "bg-emerald-500"
+                          : r.chance >= 10
+                          ? "bg-amber-500"
+                          : "bg-zinc-500";
+                      const w = Math.min(100, Math.max(2, r.chance));
+                      return (
+                        <div
+                          key={i}
+                          className="px-3 py-1.5 flex items-center gap-2 text-xs"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-baseline gap-2">
+                              <span className="text-zinc-200 text-[13px] truncate">
+                                {r.material}
+                              </span>
+                              <span className="text-[9px] uppercase text-zinc-500 tracking-wider shrink-0">
+                                {methodLabel(r.method, t)}
+                              </span>
+                            </div>
+                            <div className="h-1 bg-zinc-800 rounded overflow-hidden mt-0.5">
+                              <div
+                                className={`h-full ${color}`}
+                                style={{ width: `${w}%` }}
+                              />
+                            </div>
+                          </div>
+                          <div className="font-mono tabular-nums text-zinc-300 w-12 text-right shrink-0">
+                            {r.chance.toFixed(1)}%
                           </div>
                         </div>
-                        <ChanceBar pct={r.chance} />
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );
