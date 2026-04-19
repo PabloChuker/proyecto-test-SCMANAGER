@@ -15,8 +15,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import SessionManager from "./SessionManager";
 import CrewPanel from "./CrewPanel";
 import PendingPayoutsPanel from "./PendingPayoutsPanel";
+import SettlementPanel from "./SettlementPanel";
 
-type SubTab = "sessions" | "crew" | "orders" | "inventory" | "payouts";
+type SubTab = "sessions" | "crew" | "orders" | "inventory" | "payouts" | "settlement";
 
 const SUB_TABS: { key: SubTab; labelKey: string; icon: string }[] = [
   { key: "sessions", labelKey: "sessions", icon: "📋" },
@@ -24,6 +25,7 @@ const SUB_TABS: { key: SubTab; labelKey: string; icon: string }[] = [
   { key: "orders", labelKey: "orders", icon: "⛏" },
   { key: "inventory", labelKey: "inventory", icon: "📦" },
   { key: "payouts", labelKey: "payouts", icon: "💰" },
+  { key: "settlement", labelKey: "settlement", icon: "🤝" },
 ];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -104,10 +106,32 @@ export default function PartyMiningDashboard() {
     }
   }, [activeSessionId]);
   useEffect(() => { refreshPayoutsCount(); }, [refreshPayoutsCount]);
-  // Refresh when switching into payouts tab so the count follows actions inside.
   useEffect(() => {
     if (subTab === "payouts") refreshPayoutsCount();
   }, [subTab, refreshPayoutsCount]);
+
+  // ── Settlement unpaid global indicator ──
+  const [unpaidSettlementsCount, setUnpaidSettlementsCount] = useState(0);
+  const refreshSettlementsCount = useCallback(async () => {
+    if (!activeSessionId) {
+      setUnpaidSettlementsCount(0);
+      return;
+    }
+    try {
+      const r = await fetch(
+        `/api/mining/settlements?session_id=${encodeURIComponent(activeSessionId)}&paid=false`,
+      );
+      if (!r.ok) { setUnpaidSettlementsCount(0); return; }
+      const json = await r.json();
+      setUnpaidSettlementsCount(Array.isArray(json?.data) ? json.data.length : 0);
+    } catch {
+      setUnpaidSettlementsCount(0);
+    }
+  }, [activeSessionId]);
+  useEffect(() => { refreshSettlementsCount(); }, [refreshSettlementsCount]);
+  useEffect(() => {
+    if (subTab === "settlement" || subTab === "payouts") refreshSettlementsCount();
+  }, [subTab, refreshSettlementsCount]);
 
   // ── Clear inventory confirmation ──
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -189,7 +213,7 @@ export default function PartyMiningDashboard() {
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Sub-tabs + live indicator */}
       <div className="flex items-center gap-3">
-        <div className="flex-1 grid grid-cols-5 gap-0 border border-zinc-700/60 rounded-lg overflow-hidden">
+        <div className="flex-1 grid grid-cols-6 gap-0 border border-zinc-700/60 rounded-lg overflow-hidden">
           {SUB_TABS.map((tab) => (
             <button
               key={tab.key}
@@ -212,6 +236,18 @@ export default function PartyMiningDashboard() {
                   title={`${pendingPayoutsCount} pending`}
                 >
                   {pendingPayoutsCount}
+                </span>
+              )}
+              {tab.key === "settlement" && unpaidSettlementsCount > 0 && (
+                <span
+                  className={`absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[9px] font-bold border ${
+                    subTab === "settlement"
+                      ? "bg-zinc-900 text-emerald-400 border-zinc-900"
+                      : "bg-emerald-500 text-zinc-900 border-emerald-400 animate-pulse"
+                  }`}
+                  title={`${unpaidSettlementsCount} unpaid`}
+                >
+                  {unpaidSettlementsCount}
                 </span>
               )}
             </button>
@@ -529,6 +565,14 @@ export default function PartyMiningDashboard() {
       {/* ═══════ PAYOUTS ═══════ */}
       {subTab === "payouts" && (
         <PendingPayoutsPanel
+          miningSessionId={activeSessionId}
+          currentUserId={user?.id ?? null}
+        />
+      )}
+
+      {/* ═══════ SETTLEMENT ═══════ */}
+      {subTab === "settlement" && (
+        <SettlementPanel
           miningSessionId={activeSessionId}
           currentUserId={user?.id ?? null}
         />

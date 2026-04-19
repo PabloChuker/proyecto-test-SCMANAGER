@@ -539,7 +539,8 @@
         "inventory": "库存",
         "crew": "船员分成",
         "stats": "统计",
-        "payouts": "结算"
+        "payouts": "结算",
+        "settlement": "清算"
       },
       "partyModeTooltip": "队伍模式 — 已连接 Supabase",
       "soloModeTooltip": "单人模式 — 仅 localStorage",
@@ -740,6 +741,40 @@
         "trade": "贸易",
         "both": "两者"
       }
+    },
+    "settlement": {
+      "title": "成员间结算",
+      "noSession": "请选择一个采矿会话以查看结算。",
+      "statUnpaid": "未结",
+      "statTotalUnpaid": "未结总额",
+      "statMeBalance": "你的余额",
+      "view": {
+        "simplified": "简化",
+        "ledger": "分类账"
+      },
+      "filter": {
+        "unpaid": "未结",
+        "paid": "已结",
+        "all": "全部"
+      },
+      "refresh": "刷新",
+      "refreshing": "刷新中…",
+      "emptyBalances": "本会话没有未结余额。",
+      "emptyTransfers": "无需结算，所有余额已清。",
+      "emptyLedger": "没有匹配此筛选的分录。",
+      "colMember": "成员",
+      "colReceived": "已收",
+      "colOwed": "应付",
+      "colBalance": "余额",
+      "you": "你",
+      "guest": "访客",
+      "transfersTitle": "谁给谁付款",
+      "transfersCount": "{count} 笔转账",
+      "actionMarkPaid": "标记为已付",
+      "actionUnmarkPaid": "撤销付款",
+      "paidLabel": "已付",
+      "confirmMarkTransferPaid": "将从 {from} 到 {to} 共 {amount} aUEC 的转账标记为已付？",
+      "noCandidateEntries": "未找到可覆盖此转账的未结分录。"
     }
   },
   "Trade": {

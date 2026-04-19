@@ -539,7 +539,8 @@
         "inventory": "INVENTAIRE",
         "crew": "ÉQUIPAGE",
         "stats": "STATS",
-        "payouts": "PAIEMENTS"
+        "payouts": "PAIEMENTS",
+        "settlement": "RÈGLEMENT"
       },
       "partyModeTooltip": "Mode party — connecté à Supabase",
       "soloModeTooltip": "Mode solo — localStorage uniquement",
@@ -740,6 +741,40 @@
         "trade": "Trade",
         "both": "Les deux"
       }
+    },
+    "settlement": {
+      "title": "Soldes entre membres",
+      "noSession": "Sélectionnez une session de minage pour voir les soldes.",
+      "statUnpaid": "Impayés",
+      "statTotalUnpaid": "Total impayé",
+      "statMeBalance": "Votre solde",
+      "view": {
+        "simplified": "Simplifié",
+        "ledger": "Grand livre"
+      },
+      "filter": {
+        "unpaid": "Impayés",
+        "paid": "Payés",
+        "all": "Tous"
+      },
+      "refresh": "Rafraîchir",
+      "refreshing": "Rafraîchissement…",
+      "emptyBalances": "Aucun solde ouvert dans cette session.",
+      "emptyTransfers": "Rien à régler. Tous les soldes sont clôturés.",
+      "emptyLedger": "Aucune écriture ne correspond à ce filtre.",
+      "colMember": "Membre",
+      "colReceived": "Reçu",
+      "colOwed": "Dû",
+      "colBalance": "Solde",
+      "you": "Vous",
+      "guest": "Invité",
+      "transfersTitle": "Qui paie qui",
+      "transfersCount": "{count, plural, one {# transfert} other {# transferts}}",
+      "actionMarkPaid": "Marquer payé",
+      "actionUnmarkPaid": "Annuler paiement",
+      "paidLabel": "Payé",
+      "confirmMarkTransferPaid": "Marquer comme payé le transfert de {from} à {to} pour {amount} aUEC ?",
+      "noCandidateEntries": "Aucune écriture en attente ne couvre ce transfert."
     }
   },
   "Trade": {

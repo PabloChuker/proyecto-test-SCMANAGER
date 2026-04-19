@@ -539,7 +539,8 @@
         "inventory": "INVENTARIO",
         "crew": "TRIPULACIÓN",
         "stats": "ESTADÍSTICAS",
-        "payouts": "COBROS"
+        "payouts": "COBROS",
+        "settlement": "SETTLEMENT"
       },
       "partyModeTooltip": "Modo party — conectado a Supabase",
       "soloModeTooltip": "Modo solo — solo localStorage",
@@ -740,6 +741,40 @@
         "trade": "Trade",
         "both": "Ambos"
       }
+    },
+    "settlement": {
+      "title": "Saldos entre miembros",
+      "noSession": "Seleccioná una sesión de minería para ver los saldos.",
+      "statUnpaid": "Pendientes",
+      "statTotalUnpaid": "Total pendiente",
+      "statMeBalance": "Tu saldo",
+      "view": {
+        "simplified": "Simplificado",
+        "ledger": "Ledger"
+      },
+      "filter": {
+        "unpaid": "Pendientes",
+        "paid": "Pagados",
+        "all": "Todos"
+      },
+      "refresh": "Refrescar",
+      "refreshing": "Refrescando…",
+      "emptyBalances": "No hay saldos abiertos en esta sesión.",
+      "emptyTransfers": "Nada por liquidar. Todos los saldos están cerrados.",
+      "emptyLedger": "No hay asientos con este filtro.",
+      "colMember": "Miembro",
+      "colReceived": "Recibido",
+      "colOwed": "Debe",
+      "colBalance": "Saldo",
+      "you": "Vos",
+      "guest": "Invitado",
+      "transfersTitle": "Quién le paga a quién",
+      "transfersCount": "{count, plural, one {# transferencia} other {# transferencias}}",
+      "actionMarkPaid": "Marcar pagado",
+      "actionUnmarkPaid": "Revertir pago",
+      "paidLabel": "Pagado",
+      "confirmMarkTransferPaid": "¿Marcar como pagado el traspaso de {from} a {to} por {amount} aUEC?",
+      "noCandidateEntries": "No se encontraron asientos pendientes que cubran este traspaso."
     }
   },
   "Trade": {

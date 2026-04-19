@@ -539,7 +539,8 @@
         "inventory": "INVENTORY",
         "crew": "CREW SHARES",
         "stats": "STATS",
-        "payouts": "PAYOUTS"
+        "payouts": "PAYOUTS",
+        "settlement": "SETTLEMENT"
       },
       "partyModeTooltip": "Party mode - connected to Supabase",
       "soloModeTooltip": "Solo mode - localStorage only",
@@ -740,6 +741,40 @@
         "trade": "Trade",
         "both": "Both"
       }
+    },
+    "settlement": {
+      "title": "Balances between members",
+      "noSession": "Select a mining session to view balances.",
+      "statUnpaid": "Unpaid",
+      "statTotalUnpaid": "Total unpaid",
+      "statMeBalance": "Your balance",
+      "view": {
+        "simplified": "Simplified",
+        "ledger": "Ledger"
+      },
+      "filter": {
+        "unpaid": "Unpaid",
+        "paid": "Paid",
+        "all": "All"
+      },
+      "refresh": "Refresh",
+      "refreshing": "Refreshing…",
+      "emptyBalances": "No open balances in this session.",
+      "emptyTransfers": "Nothing to settle. All balances are closed.",
+      "emptyLedger": "No ledger entries match this filter.",
+      "colMember": "Member",
+      "colReceived": "Received",
+      "colOwed": "Owed",
+      "colBalance": "Balance",
+      "you": "You",
+      "guest": "Guest",
+      "transfersTitle": "Who pays whom",
+      "transfersCount": "{count, plural, one {# transfer} other {# transfers}}",
+      "actionMarkPaid": "Mark paid",
+      "actionUnmarkPaid": "Unmark paid",
+      "paidLabel": "Paid",
+      "confirmMarkTransferPaid": "Mark the transfer from {from} to {to} for {amount} aUEC as paid?",
+      "noCandidateEntries": "No pending entries found that cover this transfer."
     }
   },
   "Trade": {

@@ -539,7 +539,8 @@
         "inventory": "INVENTAR",
         "crew": "CREW",
         "stats": "STATS",
-        "payouts": "AUSZAHLUNGEN"
+        "payouts": "AUSZAHLUNGEN",
+        "settlement": "ABRECHNUNG"
       },
       "partyModeTooltip": "Party-Modus — mit Supabase verbunden",
       "soloModeTooltip": "Solo-Modus — nur localStorage",
@@ -740,6 +741,40 @@
         "trade": "Trade",
         "both": "Beides"
       }
+    },
+    "settlement": {
+      "title": "Salden zwischen Mitgliedern",
+      "noSession": "Wähle eine Mining-Session, um Salden anzuzeigen.",
+      "statUnpaid": "Offen",
+      "statTotalUnpaid": "Offener Gesamtbetrag",
+      "statMeBalance": "Dein Saldo",
+      "view": {
+        "simplified": "Vereinfacht",
+        "ledger": "Hauptbuch"
+      },
+      "filter": {
+        "unpaid": "Offen",
+        "paid": "Bezahlt",
+        "all": "Alle"
+      },
+      "refresh": "Aktualisieren",
+      "refreshing": "Aktualisiere…",
+      "emptyBalances": "Keine offenen Salden in dieser Session.",
+      "emptyTransfers": "Nichts auszugleichen. Alle Salden sind geschlossen.",
+      "emptyLedger": "Keine Einträge passen zu diesem Filter.",
+      "colMember": "Mitglied",
+      "colReceived": "Erhalten",
+      "colOwed": "Geschuldet",
+      "colBalance": "Saldo",
+      "you": "Du",
+      "guest": "Gast",
+      "transfersTitle": "Wer zahlt an wen",
+      "transfersCount": "{count, plural, one {# Transfer} other {# Transfers}}",
+      "actionMarkPaid": "Als bezahlt markieren",
+      "actionUnmarkPaid": "Bezahlung zurücksetzen",
+      "paidLabel": "Bezahlt",
+      "confirmMarkTransferPaid": "Den Transfer von {from} an {to} über {amount} aUEC als bezahlt markieren?",
+      "noCandidateEntries": "Keine offenen Einträge gefunden, die diesen Transfer abdecken."
     }
   },
   "Trade": {
