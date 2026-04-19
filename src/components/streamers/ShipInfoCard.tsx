@@ -670,7 +670,7 @@ export default function ShipInfoCard({
         {/* Imagen de fondo real — se muestra si el archivo existe */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src="/media/images/showcase-bg.jpg"
+          src="/media/images/pyrostarsystem.webp"
           alt=""
           crossOrigin="anonymous"
           style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center center", zIndex: 1 }}
