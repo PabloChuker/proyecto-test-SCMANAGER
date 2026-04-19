@@ -51,6 +51,14 @@ interface ExistingDistribution {
   status: string;
 }
 
+// Fase E.E4 — ledger entry que ya viene del server (settlements API).
+interface ExistingLedgerEntry {
+  id: string;
+  toUserId: string | null;
+  toDisplayName: string | null;
+  paid: boolean;
+}
+
 // ── Helpers UI ─────────────────────────────────────────────────────────────
 
 function fmt(n: number) {
@@ -111,6 +119,17 @@ export default function CobrarStopModal({ ctx, onClose, onSuccess }: Props) {
   // Fase E.B — quienes ya fueron pagados en efectivo al momento de cerrar.
   // identityKey -> paid?
   const [paidKeys, setPaidKeys] = useState<Set<string>>(new Set());
+  // Fase E.E4 — ledger entries previos (si existe una distribucion para este
+  // stop). Se usan para (a) pre-marcar checkboxes de los ya pagados, y (b)
+  // al submit, PATCHear los entries que quedan recien tildados en lugar de
+  // crear una distribucion nueva desde cero (lo cual pisaria los paid=true
+  // previos).
+  const [existingLedger, setExistingLedger] = useState<ExistingLedgerEntry[]>(
+    [],
+  );
+  // Flag para evitar que el seed auto de paidKeys pise cambios manuales
+  // del usuario despues de haber cargado el ledger una vez.
+  const [ledgerSeeded, setLedgerSeeded] = useState(false);
 
   const miningSessionId = useMemo(
     () => detectMiningSessionId(ctx.workOrders),
@@ -177,19 +196,28 @@ export default function CobrarStopModal({ ctx, onClose, onSuccess }: Props) {
           }
         }
 
-        // 3. Existing pending distribution para este stop?
+        // 3. Existing distribution para este stop? Aceptamos pending o
+        //    distributed — si ya fue distribuida, el ledger tiene el estado
+        //    real de paid que debemos reflejar.
         let existingDist: ExistingDistribution | null = null;
         try {
           const url = `/api/mining/distributions?route_group_id=${encodeURIComponent(
             ctx.routeGroupId,
-          )}&status=pending`;
+          )}`;
           const r = await fetch(url);
           if (r.ok) {
             const json = await r.json();
             const list = Array.isArray(json?.data) ? json.data : [];
-            const match = list.find(
-              (d: any) => Number(d.stop_index) === ctx.stopIndex,
+            const matches = list.filter(
+              (d: any) =>
+                Number(d.stop_index) === ctx.stopIndex &&
+                d.status !== "archived",
             );
+            // Preferimos "distributed" (tiene ledger) sobre "pending".
+            const match =
+              matches.find((d: any) => d.status === "distributed") ||
+              matches[0] ||
+              null;
             if (match) {
               existingDist = { id: match.id, status: match.status };
               if (match.split_mode) {
@@ -201,10 +229,36 @@ export default function CobrarStopModal({ ctx, onClose, onSuccess }: Props) {
           /* swallow */
         }
 
+        // 4. Si hay distribucion existente, traemos el ledger para reflejar
+        //    estado paid. Fase E.E4.
+        let existingLedgerRows: ExistingLedgerEntry[] = [];
+        if (existingDist) {
+          try {
+            const r = await fetch(
+              `/api/mining/settlements?distribution_id=${encodeURIComponent(
+                existingDist.id,
+              )}`,
+            );
+            if (r.ok) {
+              const json = await r.json();
+              const rows = Array.isArray(json?.data) ? json.data : [];
+              existingLedgerRows = rows.map((row: any) => ({
+                id: row.id,
+                toUserId: row.to_user_id ?? null,
+                toDisplayName: row.to_display_name ?? null,
+                paid: !!row.paid,
+              }));
+            }
+          } catch {
+            /* swallow */
+          }
+        }
+
         if (cancelled) return;
         setTradeParticipants(allParts);
         setMiningMembers(mm);
         setExisting(existingDist);
+        setExistingLedger(existingLedgerRows);
       } catch (e: any) {
         if (!cancelled) setError(e?.message || "load_failed");
       } finally {
@@ -241,15 +295,137 @@ export default function CobrarStopModal({ ctx, onClose, onSuccess }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [splitMode]);
 
+  // Fase E.E4 — seed de paidKeys desde el ledger existente. Corre una sola
+  // vez cuando preview.rows y existingLedger estan listos, para no pisar
+  // clicks manuales del usuario despues.
+  useEffect(() => {
+    if (ledgerSeeded) return;
+    if (loading) return;
+    if (preview.rows.length === 0) return;
+    if (existingLedger.length === 0) {
+      setLedgerSeeded(true);
+      return;
+    }
+    const next = new Set<string>();
+    for (const le of existingLedger) {
+      if (!le.paid) continue;
+      const match = preview.rows.find((row) => {
+        if (row.userId && le.toUserId && row.userId === le.toUserId) return true;
+        if (
+          le.toDisplayName &&
+          row.displayName.toLowerCase() === le.toDisplayName.toLowerCase()
+        ) {
+          return true;
+        }
+        return false;
+      });
+      if (match) next.add(match.identityKey);
+    }
+    setPaidKeys(next);
+    setLedgerSeeded(true);
+  }, [ledgerSeeded, loading, preview.rows, existingLedger]);
+
   // ── Submit (Fase E.B cascade) ──────────────────────────────────────────
-  // 1. POST distribution (status=pending)
-  // 2. PATCH distribution → status=distributed  (dispara payout_pending a todos)
-  // 3. PATCH settlements (paid=true) para los checkeados en paidKeys
-  //    → dispara payout_transferred a esos mismos.
+  // Dos caminos:
+  //   A) Ya existe distribucion "distributed" con ledger → solo hacemos diff
+  //      de paid vs existingLedger y PATCHeamos settlements. No creamos
+  //      distribucion nueva (pisaria el ledger).
+  //   B) No existe (o sigue pending) → crear POST + PATCH distributed + PATCH
+  //      settlements para los checkeados.
   async function handleSubmit() {
     setSubmitting(true);
     setError(null);
     try {
+      // ── Camino A: ledger ya existente ────────────────────────────────
+      // Fase E.E4 — al reabrir el modal desde una notif payout_pending la
+      // distribucion ya esta distributed y el ledger ya existe. Solo
+      // sincronizamos el estado paid sin recrear nada.
+      if (existing?.status === "distributed" && existingLedger.length > 0) {
+        // Reconstruir el set de paid que queda configurado en el modal en
+        // terminos de ledger entry IDs. Match por user_id (preferido) o
+        // display_name como fallback.
+        const targetPaidIds = new Set<string>();
+        const targetUnpaidIds = new Set<string>();
+        for (const le of existingLedger) {
+          // Buscar la row del preview que matchea a este ledger entry.
+          const match = preview.rows.find((row) => {
+            if (row.userId && le.toUserId && row.userId === le.toUserId)
+              return true;
+            if (
+              le.toDisplayName &&
+              row.displayName.toLowerCase() === le.toDisplayName.toLowerCase()
+            ) {
+              return true;
+            }
+            return false;
+          });
+          if (!match) continue;
+          if (paidKeys.has(match.identityKey)) {
+            if (!le.paid) targetPaidIds.add(le.id);
+          } else {
+            if (le.paid) targetUnpaidIds.add(le.id);
+          }
+        }
+
+        // PATCH paid=true para los nuevos pagados
+        if (targetPaidIds.size > 0) {
+          try {
+            const r = await fetch("/api/mining/settlements", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                ids: Array.from(targetPaidIds),
+                paid: true,
+              }),
+            });
+            if (!r.ok) {
+              const j = await r.json().catch(() => ({}));
+              console.warn(
+                "[CobrarStopModal] PATCH settlements paid=true failed:",
+                j?.error,
+              );
+            }
+          } catch (e) {
+            console.warn(
+              "[CobrarStopModal] PATCH settlements paid=true exception:",
+              e,
+            );
+          }
+        }
+
+        // PATCH paid=false para los que quedaron destildados (edge-case pero
+        // por consistencia: si el usuario destilda un paid previo, lo rollback).
+        if (targetUnpaidIds.size > 0) {
+          try {
+            const r = await fetch("/api/mining/settlements", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                ids: Array.from(targetUnpaidIds),
+                paid: false,
+              }),
+            });
+            if (!r.ok) {
+              const j = await r.json().catch(() => ({}));
+              console.warn(
+                "[CobrarStopModal] PATCH settlements paid=false failed:",
+                j?.error,
+              );
+            }
+          } catch (e) {
+            console.warn(
+              "[CobrarStopModal] PATCH settlements paid=false exception:",
+              e,
+            );
+          }
+        }
+
+        if (onSuccess) onSuccess(existing.id);
+        onClose();
+        return;
+      }
+
+      // ── Camino B: no hay distribucion (o esta pending) ───────────────
       // Paso 1: crear distribucion pending
       const body = {
         route_group_id: ctx.routeGroupId,
@@ -292,8 +468,6 @@ export default function CobrarStopModal({ ctx, onClose, onSuccess }: Props) {
         });
         const distribJson = await distribRes.json().catch(() => ({}));
         if (!distribRes.ok) {
-          // Falla parcial: distribucion creada pending, pero no llego a distributed.
-          // No reventamos el flujo, solo avisamos.
           console.warn(
             "[CobrarStopModal] PATCH distributed failed:",
             distribJson?.error,
@@ -307,11 +481,9 @@ export default function CobrarStopModal({ ctx, onClose, onSuccess }: Props) {
 
       // Paso 3: marcar paid a los checkeados
       if (paidKeys.size > 0 && ledgerEntries.length > 0) {
-        // Mapear identityKey -> preview row -> encontrar ledger entry
         const idsToMarkPaid: string[] = [];
         for (const row of preview.rows) {
           if (!paidKeys.has(row.identityKey)) continue;
-          // Primero match por user_id si preview row lo tiene; si no, por display name.
           const match = ledgerEntries.find((le) => {
             if (row.userId && le.to_user_id && le.to_user_id === row.userId) {
               return true;
