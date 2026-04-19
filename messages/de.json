@@ -538,7 +538,8 @@
         "orders": "AUFTRÄGE",
         "inventory": "INVENTAR",
         "crew": "CREW",
-        "stats": "STATS"
+        "stats": "STATS",
+        "payouts": "AUSZAHLUNGEN"
       },
       "partyModeTooltip": "Party-Modus — mit Supabase verbunden",
       "soloModeTooltip": "Solo-Modus — nur localStorage",
@@ -686,6 +687,57 @@
       "resetToBest": "Zur besten zurück",
       "manualPick": "Gewählt",
       "stationOverridden": "Station manuell gewählt"
+    },
+    "payouts": {
+      "title": "Ausstehende Auszahlungen",
+      "noSession": "Wähle eine Mining-Session aus, um Auszahlungen zu sehen.",
+      "statPending": "Ausstehend",
+      "statTotalNet": "Netto gesamt",
+      "statMeOwed": "Dir wird geschuldet",
+      "searchMember": "Nach Mitglied suchen…",
+      "refresh": "Aktualisieren",
+      "refreshing": "Aktualisiere…",
+      "emptyPending": "Keine ausstehenden Auszahlungen in dieser Session.",
+      "empty": "Keine Verteilungen passen zu diesem Filter.",
+      "confirmMarkDistributed": "Diese Auszahlung als verteilt markieren? Damit wird der Saldo im Abrechnungs-Ledger eröffnet.",
+      "confirmDelete": "Diese ausstehende Verteilung löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+      "members": "Mitglieder",
+      "net": "Netto",
+      "gross": "Bruttoumsatz",
+      "buyCost": "Kaufkosten",
+      "expenses": "Ausgaben",
+      "noPayouts": "Diese Verteilung hat keine Auszahlungszeilen.",
+      "colMember": "Mitglied",
+      "colRole": "Rolle",
+      "colShare": "%",
+      "colWeight": "Gewicht",
+      "colAuec": "aUEC",
+      "you": "Du",
+      "actionDelete": "Löschen",
+      "actionMarkDistributed": "Als verteilt markieren",
+      "distributedAt": "Verteilt · {date}",
+      "stopLabel": "Stopp {index} von {total}",
+      "filter": {
+        "pending": "Ausstehend",
+        "distributed": "Verteilt",
+        "archived": "Archiviert",
+        "all": "Alle"
+      },
+      "status": {
+        "pending": "Ausstehend",
+        "distributed": "Verteilt",
+        "archived": "Archiviert"
+      },
+      "mode": {
+        "equitable": "Gleichmäßig",
+        "manual_pct": "Manuell %",
+        "role_weight": "Nach Rolle"
+      },
+      "source": {
+        "mining": "Mining",
+        "trade": "Trade",
+        "both": "Beides"
+      }
     }
   },
   "Trade": {

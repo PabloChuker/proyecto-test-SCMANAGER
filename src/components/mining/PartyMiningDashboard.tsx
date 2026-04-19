@@ -8,18 +8,22 @@
 // =============================================================================
 
 import { useState, useEffect, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import { useMiningStore } from "@/store/useMiningStore";
 import { useMiningRealtime, useMiningBroadcast } from "@/store/useMiningRealtime";
+import { useAuth } from "@/contexts/AuthContext";
 import SessionManager from "./SessionManager";
 import CrewPanel from "./CrewPanel";
+import PendingPayoutsPanel from "./PendingPayoutsPanel";
 
-type SubTab = "sessions" | "crew" | "orders" | "inventory";
+type SubTab = "sessions" | "crew" | "orders" | "inventory" | "payouts";
 
-const SUB_TABS: { key: SubTab; label: string; icon: string }[] = [
-  { key: "sessions", label: "Sessions", icon: "📋" },
-  { key: "crew", label: "Crew", icon: "👥" },
-  { key: "orders", label: "Orders", icon: "⛏" },
-  { key: "inventory", label: "Inventory", icon: "📦" },
+const SUB_TABS: { key: SubTab; labelKey: string; icon: string }[] = [
+  { key: "sessions", labelKey: "sessions", icon: "📋" },
+  { key: "crew", labelKey: "crew", icon: "👥" },
+  { key: "orders", labelKey: "orders", icon: "⛏" },
+  { key: "inventory", labelKey: "inventory", icon: "📦" },
+  { key: "payouts", labelKey: "payouts", icon: "💰" },
 ];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -63,7 +67,9 @@ interface SellLocation {
 }
 
 export default function PartyMiningDashboard() {
+  const t = useTranslations("Mining.dashboard");
   const [subTab, setSubTab] = useState<SubTab>("sessions");
+  const { user } = useAuth();
   const {
     activeSessionId,
     workOrders,
@@ -78,6 +84,30 @@ export default function PartyMiningDashboard() {
     fetchSessions,
     setActiveSession,
   } = useMiningStore();
+
+  // ── Pending payouts global indicator ──
+  const [pendingPayoutsCount, setPendingPayoutsCount] = useState(0);
+  const refreshPayoutsCount = useCallback(async () => {
+    if (!activeSessionId) {
+      setPendingPayoutsCount(0);
+      return;
+    }
+    try {
+      const r = await fetch(
+        `/api/mining/distributions?mining_session_id=${encodeURIComponent(activeSessionId)}&status=pending`,
+      );
+      if (!r.ok) { setPendingPayoutsCount(0); return; }
+      const json = await r.json();
+      setPendingPayoutsCount(Array.isArray(json?.data) ? json.data.length : 0);
+    } catch {
+      setPendingPayoutsCount(0);
+    }
+  }, [activeSessionId]);
+  useEffect(() => { refreshPayoutsCount(); }, [refreshPayoutsCount]);
+  // Refresh when switching into payouts tab so the count follows actions inside.
+  useEffect(() => {
+    if (subTab === "payouts") refreshPayoutsCount();
+  }, [subTab, refreshPayoutsCount]);
 
   // ── Clear inventory confirmation ──
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -159,19 +189,31 @@ export default function PartyMiningDashboard() {
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Sub-tabs + live indicator */}
       <div className="flex items-center gap-3">
-        <div className="flex-1 grid grid-cols-4 gap-0 border border-zinc-700/60 rounded-lg overflow-hidden">
-          {SUB_TABS.map((t) => (
+        <div className="flex-1 grid grid-cols-5 gap-0 border border-zinc-700/60 rounded-lg overflow-hidden">
+          {SUB_TABS.map((tab) => (
             <button
-              key={t.key}
-              onClick={() => setSubTab(t.key)}
-              className={`py-3 text-center text-[10px] tracking-[0.1em] uppercase font-bold transition-all ${
-                subTab === t.key
+              key={tab.key}
+              onClick={() => setSubTab(tab.key)}
+              className={`relative py-3 text-center text-[10px] tracking-[0.1em] uppercase font-bold transition-all ${
+                subTab === tab.key
                   ? "bg-amber-500 text-zinc-900"
                   : "bg-zinc-900/60 text-zinc-400 hover:bg-zinc-800/80 hover:text-zinc-200"
               }`}
             >
-              <span className="mr-1">{t.icon}</span>
-              {t.label}
+              <span className="mr-1">{tab.icon}</span>
+              {t(`tab.${tab.labelKey}`)}
+              {tab.key === "payouts" && pendingPayoutsCount > 0 && (
+                <span
+                  className={`absolute top-1.5 right-1.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[9px] font-bold border ${
+                    subTab === "payouts"
+                      ? "bg-zinc-900 text-amber-400 border-zinc-900"
+                      : "bg-amber-500 text-zinc-900 border-amber-400 animate-pulse"
+                  }`}
+                  title={`${pendingPayoutsCount} pending`}
+                >
+                  {pendingPayoutsCount}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -482,6 +524,14 @@ export default function PartyMiningDashboard() {
             </>
           )}
         </div>
+      )}
+
+      {/* ═══════ PAYOUTS ═══════ */}
+      {subTab === "payouts" && (
+        <PendingPayoutsPanel
+          miningSessionId={activeSessionId}
+          currentUserId={user?.id ?? null}
+        />
       )}
 
       {/* ═══════ CLEAR INVENTORY CONFIRM ═══════ */}

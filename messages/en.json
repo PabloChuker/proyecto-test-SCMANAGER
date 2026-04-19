@@ -538,7 +538,8 @@
         "orders": "WORK ORDERS",
         "inventory": "INVENTORY",
         "crew": "CREW SHARES",
-        "stats": "STATS"
+        "stats": "STATS",
+        "payouts": "PAYOUTS"
       },
       "partyModeTooltip": "Party mode - connected to Supabase",
       "soloModeTooltip": "Solo mode - localStorage only",
@@ -686,6 +687,57 @@
       "resetToBest": "Back to best",
       "manualPick": "Picked",
       "stationOverridden": "Station picked manually"
+    },
+    "payouts": {
+      "title": "Pending payouts",
+      "noSession": "Select a mining session to view payouts.",
+      "statPending": "Pending",
+      "statTotalNet": "Total net",
+      "statMeOwed": "You are owed",
+      "searchMember": "Search by member…",
+      "refresh": "Refresh",
+      "refreshing": "Refreshing…",
+      "emptyPending": "No pending payouts in this session.",
+      "empty": "No distributions match this filter.",
+      "confirmMarkDistributed": "Mark this payout as distributed? This will open the balance in the settlement ledger.",
+      "confirmDelete": "Delete this pending distribution? This action cannot be undone.",
+      "members": "members",
+      "net": "Net",
+      "gross": "Gross sales",
+      "buyCost": "Buy cost",
+      "expenses": "Expenses",
+      "noPayouts": "This distribution has no payout rows.",
+      "colMember": "Member",
+      "colRole": "Role",
+      "colShare": "%",
+      "colWeight": "Weight",
+      "colAuec": "aUEC",
+      "you": "You",
+      "actionDelete": "Delete",
+      "actionMarkDistributed": "Mark distributed",
+      "distributedAt": "Distributed · {date}",
+      "stopLabel": "Stop {index} of {total}",
+      "filter": {
+        "pending": "Pending",
+        "distributed": "Distributed",
+        "archived": "Archived",
+        "all": "All"
+      },
+      "status": {
+        "pending": "Pending",
+        "distributed": "Distributed",
+        "archived": "Archived"
+      },
+      "mode": {
+        "equitable": "Equitable",
+        "manual_pct": "Manual %",
+        "role_weight": "By role"
+      },
+      "source": {
+        "mining": "Mining",
+        "trade": "Trade",
+        "both": "Both"
+      }
     }
   },
   "Trade": {

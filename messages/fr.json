@@ -538,7 +538,8 @@
         "orders": "ORDRES",
         "inventory": "INVENTAIRE",
         "crew": "ÉQUIPAGE",
-        "stats": "STATS"
+        "stats": "STATS",
+        "payouts": "PAIEMENTS"
       },
       "partyModeTooltip": "Mode party — connecté à Supabase",
       "soloModeTooltip": "Mode solo — localStorage uniquement",
@@ -686,6 +687,57 @@
       "resetToBest": "Revenir à la meilleure",
       "manualPick": "Choisie",
       "stationOverridden": "Station choisie manuellement"
+    },
+    "payouts": {
+      "title": "Paiements en attente",
+      "noSession": "Sélectionne une session de minage pour voir les paiements.",
+      "statPending": "En attente",
+      "statTotalNet": "Net total",
+      "statMeOwed": "On te doit",
+      "searchMember": "Rechercher un membre…",
+      "refresh": "Actualiser",
+      "refreshing": "Actualisation…",
+      "emptyPending": "Aucun paiement en attente dans cette session.",
+      "empty": "Aucune distribution ne correspond à ce filtre.",
+      "confirmMarkDistributed": "Marquer ce paiement comme distribué ? Cela ouvrira le solde dans le registre.",
+      "confirmDelete": "Supprimer cette distribution en attente ? Cette action est irréversible.",
+      "members": "membres",
+      "net": "Net",
+      "gross": "Ventes brutes",
+      "buyCost": "Coût d'achat",
+      "expenses": "Dépenses",
+      "noPayouts": "Cette distribution n'a aucune ligne de paiement.",
+      "colMember": "Membre",
+      "colRole": "Rôle",
+      "colShare": "%",
+      "colWeight": "Poids",
+      "colAuec": "aUEC",
+      "you": "Toi",
+      "actionDelete": "Supprimer",
+      "actionMarkDistributed": "Marquer distribué",
+      "distributedAt": "Distribué · {date}",
+      "stopLabel": "Arrêt {index} sur {total}",
+      "filter": {
+        "pending": "En attente",
+        "distributed": "Distribués",
+        "archived": "Archivés",
+        "all": "Tous"
+      },
+      "status": {
+        "pending": "En attente",
+        "distributed": "Distribué",
+        "archived": "Archivé"
+      },
+      "mode": {
+        "equitable": "Équitable",
+        "manual_pct": "Manuel %",
+        "role_weight": "Par rôle"
+      },
+      "source": {
+        "mining": "Minage",
+        "trade": "Trade",
+        "both": "Les deux"
+      }
     }
   },
   "Trade": {

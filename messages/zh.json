@@ -538,7 +538,8 @@
         "orders": "工单",
         "inventory": "库存",
         "crew": "船员分成",
-        "stats": "统计"
+        "stats": "统计",
+        "payouts": "结算"
       },
       "partyModeTooltip": "队伍模式 — 已连接 Supabase",
       "soloModeTooltip": "单人模式 — 仅 localStorage",
@@ -686,6 +687,57 @@
       "resetToBest": "回到最佳",
       "manualPick": "已选择",
       "stationOverridden": "手动选择的站点"
+    },
+    "payouts": {
+      "title": "待结算",
+      "noSession": "请先选择一个采矿会话以查看结算。",
+      "statPending": "待处理",
+      "statTotalNet": "净总额",
+      "statMeOwed": "欠你的",
+      "searchMember": "按成员搜索…",
+      "refresh": "刷新",
+      "refreshing": "刷新中…",
+      "emptyPending": "此会话没有待结算项。",
+      "empty": "没有符合此筛选条件的分配。",
+      "confirmMarkDistributed": "将此结算标记为已分配？这将在清算账本中开启余额。",
+      "confirmDelete": "删除此待处理分配？此操作无法撤销。",
+      "members": "成员",
+      "net": "净额",
+      "gross": "总销售",
+      "buyCost": "购买成本",
+      "expenses": "支出",
+      "noPayouts": "此分配没有结算行。",
+      "colMember": "成员",
+      "colRole": "角色",
+      "colShare": "%",
+      "colWeight": "权重",
+      "colAuec": "aUEC",
+      "you": "你",
+      "actionDelete": "删除",
+      "actionMarkDistributed": "标记为已分配",
+      "distributedAt": "已分配 · {date}",
+      "stopLabel": "第 {index} / {total} 站",
+      "filter": {
+        "pending": "待处理",
+        "distributed": "已分配",
+        "archived": "已归档",
+        "all": "全部"
+      },
+      "status": {
+        "pending": "待处理",
+        "distributed": "已分配",
+        "archived": "已归档"
+      },
+      "mode": {
+        "equitable": "均分",
+        "manual_pct": "手动 %",
+        "role_weight": "按角色"
+      },
+      "source": {
+        "mining": "采矿",
+        "trade": "贸易",
+        "both": "两者"
+      }
     }
   },
   "Trade": {
