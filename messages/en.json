@@ -893,6 +893,7 @@
       "repairing": "Repairing…",
       "deleteRoute": "Delete route",
       "deleting": "Deleting…",
+      "discardCardHint": "Discard this route",
       "deleteAllStale": "Delete {count} stale routes",
       "deleteAllStaleHint": "Removes every route with no assigned stations ({count})",
       "bulkAutoRepair": "Refreshing prices {done}/{total}…",

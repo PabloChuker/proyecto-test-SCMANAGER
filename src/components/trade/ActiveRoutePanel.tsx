@@ -910,40 +910,63 @@ export default function ActiveRoutePanel() {
             const title = meta.station
               ? `${meta.station}${meta.extraCount > 0 ? ` (+${meta.extraCount})` : ""}`
               : commoditiesFallback ?? t("routeNoTime");
+            const isDeletingThis = deletingId === r.groupId;
             return (
-              <button
+              // Fase E.E6 — cada card es un contenedor con dos botones:
+              //   1) selección (abre esta ruta)
+              //   2) descarte (×) — sin tener que seleccionarla primero
+              // Así Pablo puede limpiar rápido las ~30 rutas huérfanas que
+              // nunca se cobraron y quedaron colgadas en draft/in_progress.
+              <div
                 key={r.groupId}
-                onClick={() => setSelectedGroupId(r.groupId)}
-                title={`#${r.groupId.slice(0, 6).toUpperCase()}`}
-                className={`flex flex-col items-start text-left px-3 py-2 rounded-sm text-xs border transition min-w-[180px] ${
+                className={`relative flex rounded-sm border transition min-w-[180px] ${
                   isActive
                     ? "bg-amber-500/20 text-amber-200 border-amber-500/50"
                     : meta.stale
                       ? "bg-zinc-900/40 text-zinc-400 border-amber-500/25 hover:border-amber-500/40 hover:text-zinc-200"
                       : "bg-zinc-900/40 text-zinc-300 border-zinc-800/50 hover:border-zinc-700 hover:text-zinc-100"
-                }`}
+                } ${isDeletingThis ? "opacity-50" : ""}`}
               >
-                <div className="flex items-center gap-2 w-full">
-                  <span className="font-mono font-bold truncate max-w-[160px]">
-                    {title}
-                  </span>
-                  {meta.stale && (
-                    <span className="text-[9px] uppercase tracking-wider text-amber-400/80 shrink-0">
-                      {t("noPrices")}
+                <button
+                  onClick={() => setSelectedGroupId(r.groupId)}
+                  disabled={isDeletingThis}
+                  title={`#${r.groupId.slice(0, 6).toUpperCase()}`}
+                  className="flex flex-col items-start text-left px-3 py-2 text-xs flex-1 pr-7 disabled:cursor-not-allowed"
+                >
+                  <div className="flex items-center gap-2 w-full">
+                    <span className="font-mono font-bold truncate max-w-[160px]">
+                      {title}
                     </span>
-                  )}
-                  <span className="ml-auto text-[10px] font-mono opacity-70 shrink-0">
-                    {r.completedCount}/{r.totalCount}
-                  </span>
-                </div>
-                <div className="text-[10px] font-mono opacity-70 mt-0.5 truncate">
-                  {t("routeItems", { items: meta.itemCount })} ·{" "}
-                  {fmt(meta.totalScu)} SCU
-                  {meta.totalValue > 0 && (
-                    <> · ~{fmt(meta.totalValue)} aUEC</>
-                  )}
-                </div>
-              </button>
+                    {meta.stale && (
+                      <span className="text-[9px] uppercase tracking-wider text-amber-400/80 shrink-0">
+                        {t("noPrices")}
+                      </span>
+                    )}
+                    <span className="ml-auto text-[10px] font-mono opacity-70 shrink-0">
+                      {r.completedCount}/{r.totalCount}
+                    </span>
+                  </div>
+                  <div className="text-[10px] font-mono opacity-70 mt-0.5 truncate">
+                    {t("routeItems", { items: meta.itemCount })} ·{" "}
+                    {fmt(meta.totalScu)} SCU
+                    {meta.totalValue > 0 && (
+                      <> · ~{fmt(meta.totalValue)} aUEC</>
+                    )}
+                  </div>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void deleteRoute(r);
+                  }}
+                  disabled={isDeletingThis}
+                  title={t("discardCardHint")}
+                  aria-label={t("discardCardHint")}
+                  className="absolute top-1 right-1 h-5 w-5 flex items-center justify-center rounded-sm text-zinc-500 hover:text-red-300 hover:bg-red-500/20 disabled:opacity-50 disabled:cursor-not-allowed text-xs leading-none font-mono"
+                >
+                  ×
+                </button>
+              </div>
             );
           })}
         </div>

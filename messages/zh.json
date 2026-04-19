@@ -893,6 +893,7 @@
       "repairing": "修复中…",
       "deleteRoute": "删除路线",
       "deleting": "删除中…",
+      "discardCardHint": "丢弃此路线",
       "deleteAllStale": "删除 {count} 条无价格路线",
       "deleteAllStaleHint": "删除所有未分配站点的路线（{count}）",
       "bulkAutoRepair": "正在更新价格 {done}/{total}…",
