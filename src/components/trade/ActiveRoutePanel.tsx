@@ -17,7 +17,7 @@
 // =============================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -178,6 +178,13 @@ export default function ActiveRoutePanel() {
   const t = useTranslations("Trade.activeRoute");
   const { user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Fase E.E2 — cuando se llega desde una notificación payout_pending /
+  // payout_transferred el link trae `?settle=<route_group_id>`: pre-seleccionamos
+  // esa ruta y auto-abrimos el CobrarStopModal para que Pablo pueda tildar los
+  // pagos y cerrar la orden sin buscar la ruta a mano.
+  const settleParamGroupId = searchParams?.get("settle") ?? null;
+  const [settleAutoOpened, setSettleAutoOpened] = useState(false);
   const openEdit = useTradeWorkOrderStore((s) => s.openEdit);
   // Handoff from the Mining sell-route flow: when the modal confirms, it
   // stashes the fresh groupId in the store and bumps requestActiveRouteTab.
@@ -483,10 +490,21 @@ export default function ActiveRoutePanel() {
       if (selectedGroupId !== null) setSelectedGroupId(null);
       return;
     }
+    // Fase E.E2 — si llegamos con ?settle=<groupId> y existe esa ruta, la
+    // seleccionamos antes del fallback de "primera ruta". Prioridad sobre
+    // el default.
+    if (
+      settleParamGroupId &&
+      activeRoutes.some((r) => r.groupId === settleParamGroupId) &&
+      selectedGroupId !== settleParamGroupId
+    ) {
+      setSelectedGroupId(settleParamGroupId);
+      return;
+    }
     if (!selectedGroupId || !activeRoutes.some((r) => r.groupId === selectedGroupId)) {
       setSelectedGroupId(activeRoutes[0].groupId);
     }
-  }, [activeRoutes, selectedGroupId]);
+  }, [activeRoutes, selectedGroupId, settleParamGroupId]);
 
   const selected = useMemo(
     () => activeRoutes.find((r) => r.groupId === selectedGroupId) || null,
@@ -582,6 +600,29 @@ export default function ActiveRoutePanel() {
     if (!selectedGroupId) return;
     refreshCobradoStops(selectedGroupId);
   }, [selectedGroupId, refreshCobradoStops]);
+
+  // Fase E.E2 — cuando llegamos desde una notificación (?settle=<groupId>),
+  // una vez que la ruta está seleccionada y sus stops cargados, auto-abrimos
+  // el CobrarStopModal usando TODOS los WOs de la ruta. Sólo se dispara una vez.
+  useEffect(() => {
+    if (!settleParamGroupId || settleAutoOpened) return;
+    if (!selected || selected.groupId !== settleParamGroupId) return;
+    if (cobrarStop) return; // ya abierto
+    if (!selected.stops || selected.stops.length === 0) return;
+    const lastStop = selected.stops[selected.stops.length - 1];
+    if (!lastStop) return;
+    const allWOs = selected.stops.flatMap((s) => s.items.map((it) => it.wo));
+    if (allWOs.length === 0) return;
+    setCobrarStop({
+      routeGroupId: selected.groupId,
+      stopIndex: lastStop.minStop,
+      routeTotalStops: selected.total,
+      station: lastStop.station,
+      system: lastStop.system,
+      workOrders: allWOs,
+    });
+    setSettleAutoOpened(true);
+  }, [settleParamGroupId, settleAutoOpened, selected, cobrarStop]);
 
   // Apply the user's custom ordering, if any, to the selected route.
   const orderedStops = useMemo<LogicalStop[]>(() => {

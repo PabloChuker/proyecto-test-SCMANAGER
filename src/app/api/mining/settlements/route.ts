@@ -119,6 +119,27 @@ export async function PATCH(request: NextRequest) {
     // marcamos como leído (una transferencia cumplida no debería seguir
     // notificando un pago pendiente).
     if (paid === true && Array.isArray(data) && data.length > 0) {
+      // Fase E.E2 — pre-fetch de route_group_id por cada distribution_id único
+      // así la notif puede linkear a /trade?tab=activeRoute&settle=<groupId>.
+      const distIds = Array.from(
+        new Set(
+          (data as any[])
+            .map((r) => r?.distribution_id)
+            .filter((x): x is string => !!x),
+        ),
+      );
+      const routeGroupByDist = new Map<string, string>();
+      if (distIds.length > 0) {
+        const { data: distRows } = await supabase
+          .from("mining_stop_distributions")
+          .select("id, route_group_id")
+          .in("id", distIds);
+        for (const d of distRows || []) {
+          if (d?.id && d?.route_group_id) {
+            routeGroupByDist.set(d.id, d.route_group_id);
+          }
+        }
+      }
       await Promise.all(
         data.map(async (row: any) => {
           if (!row?.to_user_id) return;
@@ -127,6 +148,12 @@ export async function PATCH(request: NextRequest) {
           ).toLocaleString();
           const fromLabel =
             row.from_display_name || row.from_user_id || "Alguien";
+          const routeGroupId = row.distribution_id
+            ? routeGroupByDist.get(row.distribution_id) ?? null
+            : null;
+          const link = routeGroupId
+            ? `/trade?tab=activeRoute&settle=${routeGroupId}`
+            : "/trade";
           try {
             await sendNotification({
               supabase,
@@ -135,11 +162,12 @@ export async function PATCH(request: NextRequest) {
               type: "payout_transferred",
               title: `${fromLabel} te transfirió ${amountFmt} aUEC`,
               message: row.notes || undefined,
-              link: `/mining?tab=settlement&ledger=${row.id}`,
+              link,
               metadata: {
                 ledger_id: row.id,
                 amount_auec: row.amount_auec,
                 distribution_id: row.distribution_id,
+                route_group_id: routeGroupId,
                 direction: row.direction,
               },
             });

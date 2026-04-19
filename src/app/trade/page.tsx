@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import Header from "@/app/assets/header/Header";
 import TradeRoutes from "@/components/trade/TradeRoutes";
 import CommodityBrowser from "@/components/trade/CommodityBrowser";
@@ -20,8 +21,26 @@ type Tab =
   | "activeRoute"
   | "dashboard";
 
+const VALID_TABS: Tab[] = [
+  "routes",
+  "commodities",
+  "terminals",
+  "workorders",
+  "activeRoute",
+  "dashboard",
+];
+
 export default function TradePage() {
-  const [activeTab, setActiveTab] = useState<Tab>("routes");
+  const searchParams = useSearchParams();
+  // Fase E.E2 — permitir que una notificación payout_pending/transferred
+  // aterrice directamente en el tab "Active Route" (o cualquier otro) vía
+  // /trade?tab=<tab>[&settle=<groupId>]. ActiveRoutePanel lee `settle` por
+  // su cuenta.
+  const initialTab: Tab = (() => {
+    const t = searchParams?.get("tab");
+    return VALID_TABS.includes(t as Tab) ? (t as Tab) : "routes";
+  })();
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const requestTabSwitch = useTradeWorkOrderStore((s) => s.requestTabSwitch);
   const requestActiveRouteTab = useTradeWorkOrderStore(
     (s) => s.requestActiveRouteTab,

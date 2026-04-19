@@ -497,11 +497,16 @@ export async function PATCH(request: NextRequest) {
                   type: "payout_pending",
                   title: `Pago pendiente: ${amountFmt} aUEC`,
                   message: `${fromLabel} te debe ${amountFmt} aUEC — pendiente de transferencia.`,
-                  link: `/mining?tab=settlement&ledger=${row.id}`,
+                  // Fase E.E2 — el "cuadro de orden de pago" vive en
+                  // /trade → tab Active Route → CobrarStopModal. Pasamos el
+                  // route_group_id para que ActiveRoutePanel lo pre-seleccione
+                  // y auto-abra el modal al aterrizar.
+                  link: `/trade?tab=activeRoute&settle=${data.route_group_id}`,
                   metadata: {
                     ledger_id: row.id,
                     amount_auec: row.amount_auec,
                     distribution_id: row.distribution_id,
+                    route_group_id: data.route_group_id,
                     direction: row.direction,
                   },
                 });
