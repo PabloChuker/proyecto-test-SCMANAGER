@@ -840,6 +840,8 @@
       "eyebrow": "Routenplaner",
       "title": "Route des Tages",
       "refresh": "Aktualisieren",
+      "nextRoute": "Nächste Route",
+      "nextRouteHint": "Zum Inventar springen und die nächste Route erstellen, ohne die aktive Party zu verlieren",
       "noActiveRoutes": "Derzeit keine aktiven Routen.",
       "noActiveRoutesHint": "Erstelle eine Route über Bergbau → Inventar → „Route erstellen“ mit mehreren ausgewählten Mineralien.",
       "noPartyRoutesHint": "Deine aktiven Routen sind keiner Party zugeordnet. Neue Routen aus dem Bergbau werden automatisch markiert, wenn du eine aktive Party hast.",

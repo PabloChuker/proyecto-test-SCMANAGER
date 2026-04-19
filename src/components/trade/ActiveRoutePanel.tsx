@@ -17,6 +17,7 @@
 // =============================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -176,6 +177,7 @@ function groupIntoLogicalStops(wos: RouteStopWO[]): LogicalStop[] {
 export default function ActiveRoutePanel() {
   const t = useTranslations("Trade.activeRoute");
   const { user } = useAuth();
+  const router = useRouter();
   const openEdit = useTradeWorkOrderStore((s) => s.openEdit);
   // Handoff from the Mining sell-route flow: when the modal confirms, it
   // stashes the fresh groupId in the store and bumps requestActiveRouteTab.
@@ -724,16 +726,22 @@ export default function ActiveRoutePanel() {
             ? t("noPartyRoutesHint")
             : t("noActiveRoutesHint")}
         </div>
-        {scope === "party" && (
-          <div className="mt-3">
+        <div className="mt-4 flex items-center justify-center gap-2">
+          <button
+            onClick={() => router.push("/mining?next-route=1")}
+            className="px-3 py-1.5 text-[10px] uppercase tracking-widest font-mono bg-amber-500/15 border border-amber-500/40 rounded-sm text-amber-200 hover:bg-amber-500/25"
+          >
+            + {t("nextRoute")}
+          </button>
+          {scope === "party" && (
             <button
               onClick={() => setScope("me")}
-              className="text-[10px] uppercase tracking-widest text-amber-300 hover:text-amber-200 font-mono"
+              className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-amber-300 hover:text-amber-200 font-mono"
             >
               {t("scope.me")} →
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     );
   }
@@ -827,6 +835,13 @@ export default function ActiveRoutePanel() {
             className="px-3 py-1 text-[10px] uppercase tracking-widest font-mono bg-zinc-900/50 border border-zinc-800/60 rounded-sm text-zinc-300 hover:bg-zinc-800"
           >
             {t("refresh")}
+          </button>
+          <button
+            onClick={() => router.push("/mining?next-route=1")}
+            className="px-3 py-1 text-[10px] uppercase tracking-widest font-mono bg-amber-500/15 border border-amber-500/40 rounded-sm text-amber-200 hover:bg-amber-500/25"
+            title={t("nextRouteHint")}
+          >
+            + {t("nextRoute")}
           </button>
         </div>
       </div>

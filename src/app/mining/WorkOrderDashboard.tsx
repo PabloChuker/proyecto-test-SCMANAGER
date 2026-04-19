@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   getSessions, getOrders, getActiveSessionId, setActiveSessionId,
   createSession, deleteSession, deleteOrder, collectOrder,
@@ -117,8 +117,13 @@ const TABS: { key: DashTab; icon: string }[] = [
 export default function WorkOrderDashboard() {
   const t = useTranslations("Mining.dashboard");
   const router = useRouter();
+  // ?next-route=1 (from ActiveRoutePanel "+ Siguiente ruta") lands us on the
+  // Inventory sub-tab so Pablo can immediately pick stock and build the next
+  // sell route — no back-and-forth between Trade and Mining.
+  const searchParams = useSearchParams();
+  const wantNextRoute = searchParams?.get("next-route") === "1";
   const requestOpenFromRoute = useTradeWorkOrderStore((s) => s.requestOpenFromRoute);
-  const [tab, setTab] = useState<DashTab>("orders");
+  const [tab, setTab] = useState<DashTab>(wantNextRoute ? "inventory" : "orders");
   const [sessions, setSessions] = useState<WOSession[]>([]);
   const [orders, setOrders] = useState<WorkOrder[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import Header from "@/app/assets/header/Header";
 import { SIDEBAR_ITEMS } from "@/app/assets/header/navigation";
 import MiningLoadoutCalculator from "./MiningLoadoutCalculator";
@@ -13,7 +14,13 @@ import RefineryDataTable from "./RefineryDataTable";
 import MaterialFinder from "./MaterialFinder";
 import { useTranslations } from "next-intl";
 export default function MiningPage() {
-  const [activeTab, setActiveTab] = useState("workorder");
+  // ?next-route=1 (from ActiveRoutePanel "+ Siguiente ruta") jumps straight
+  // to the Dashboard tab so WorkOrderDashboard can then pre-select Inventory.
+  const searchParams = useSearchParams();
+  const wantNextRoute = searchParams?.get("next-route") === "1";
+  const [activeTab, setActiveTab] = useState(
+    wantNextRoute ? "dashboard" : "workorder",
+  );
   const t = useTranslations("PageTitles");
   const tm = useTranslations("Mining.tabs");
   const TABS = [

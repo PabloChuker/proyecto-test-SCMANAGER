@@ -840,6 +840,8 @@
       "eyebrow": "Planificador de ruta",
       "title": "Ruta del día",
       "refresh": "Actualizar",
+      "nextRoute": "Siguiente ruta",
+      "nextRouteHint": "Saltar a Inventario para armar la próxima ruta sin perder la party activa",
       "noActiveRoutes": "No tenés rutas activas en este momento.",
       "noActiveRoutesHint": "Creá una ruta desde Minería → Inventario → «Armar ruta» con varios minerales seleccionados.",
       "noPartyRoutesHint": "Tus rutas activas no están asignadas a una party. Las rutas nuevas que crees desde Minería se etiquetarán automáticamente si tenés una party activa.",

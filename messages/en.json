@@ -840,6 +840,8 @@
       "eyebrow": "Route planner",
       "title": "Today's route",
       "refresh": "Refresh",
+      "nextRoute": "Next route",
+      "nextRouteHint": "Jump to Inventory to build the next route without losing the active party",
       "noActiveRoutes": "You have no active routes right now.",
       "noActiveRoutesHint": "Create a route from Mining → Inventory → 'Build route' with several minerals selected.",
       "noPartyRoutesHint": "Your active routes aren't tagged with a party. New routes from Mining will auto-tag if you have an active party.",

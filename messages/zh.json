@@ -840,6 +840,8 @@
       "eyebrow": "路线规划器",
       "title": "今日路线",
       "refresh": "刷新",
+      "nextRoute": "下一条路线",
+      "nextRouteHint": "跳转到库存，构建下一条路线且不丢失当前队伍",
       "noActiveRoutes": "当前没有活动路线。",
       "noActiveRoutesHint": "从 挖矿 → 库存 → 「构建路线」选择多个矿物来创建路线。",
       "noPartyRoutesHint": "你的活动路线没有关联到任何队伍。当你加入队伍后，从挖矿创建的新路线会自动打上队伍标签。",

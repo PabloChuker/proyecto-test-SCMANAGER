@@ -840,6 +840,8 @@
       "eyebrow": "Planificateur de route",
       "title": "Route du jour",
       "refresh": "Actualiser",
+      "nextRoute": "Route suivante",
+      "nextRouteHint": "Aller à l'Inventaire pour préparer la prochaine route sans perdre l'équipe active",
       "noActiveRoutes": "Vous n'avez aucune route active pour le moment.",
       "noActiveRoutesHint": "Créez une route depuis Minage → Inventaire → « Créer la route » avec plusieurs minéraux sélectionnés.",
       "noPartyRoutesHint": "Vos routes actives ne sont pas liées à une équipe. Les nouvelles routes depuis Minage seront étiquetées automatiquement si vous avez une équipe active.",
