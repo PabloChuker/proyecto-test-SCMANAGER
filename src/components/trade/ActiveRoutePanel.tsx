@@ -33,6 +33,7 @@ import {
   sortBySystem,
   StationType,
 } from "@/lib/routeOptimizer";
+import CobrarStopModal, { type CobrarStopContext } from "./CobrarStopModal";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -208,6 +209,11 @@ export default function ActiveRoutePanel() {
   // endpoint. If non-empty, the banner surfaces it so Pablo knows *why*
   // a route is still stale after auto-repair.
   const [unpricedCommodities, setUnpricedCommodities] = useState<string[]>([]);
+  // Fase D.2 — modal de "Cobrar". null = cerrado.
+  const [cobrarStop, setCobrarStop] = useState<CobrarStopContext | null>(null);
+  // Set de "groupId|stop_index" que el usuario ya cobró (status=pending o
+  // distributed). Se hidrata en background y se actualiza al cerrar el modal.
+  const [cobradoStops, setCobradoStops] = useState<Set<string>>(new Set());
 
   // ── fetch ──
   const refresh = useCallback(async () => {
@@ -540,6 +546,40 @@ export default function ActiveRoutePanel() {
       cancelled = true;
     };
   }, [activeRoutes, repairRoute, refresh]);
+
+  // ── Hidratar set de stops ya cobrados por la ruta seleccionada ───────────
+  // Hacemos un GET liviano al endpoint de distribuciones filtrando por
+  // route_group_id; incluye pending + distributed (no archived) para que el
+  // boton muestre "Recalcular" en vez de "Cobrar" cuando ya se toco. Corre
+  // cuando cambia el groupId seleccionado o cuando el modal se cierra.
+  const refreshCobradoStops = useCallback(
+    async (groupId: string) => {
+      try {
+        const r = await fetch(
+          `/api/mining/distributions?route_group_id=${encodeURIComponent(groupId)}`,
+        );
+        if (!r.ok) return;
+        const json = await r.json();
+        const list = Array.isArray(json?.data) ? json.data : [];
+        setCobradoStops((prev) => {
+          const next = new Set(prev);
+          for (const d of list) {
+            if (!d || d.status === "archived") continue;
+            next.add(`${groupId}|${d.stop_index}`);
+          }
+          return next;
+        });
+      } catch {
+        /* swallow — no molestamos al usuario por esto */
+      }
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (!selectedGroupId) return;
+    refreshCobradoStops(selectedGroupId);
+  }, [selectedGroupId, refreshCobradoStops]);
 
   // Apply the user's custom ordering, if any, to the selected route.
   const orderedStops = useMemo<LogicalStop[]>(() => {
@@ -957,12 +997,37 @@ export default function ActiveRoutePanel() {
                     onDragOver={(e) => onDragOver(e, s.key)}
                     onDragEnd={onDragEnd}
                     onOpenWO={openEdit}
+                    cobrado={cobradoStops.has(`${selected.groupId}|${s.minStop}`)}
+                    canCobrar={s.items.some(
+                      (it) => it.wo.status === "completed",
+                    )}
+                    onCobrar={() =>
+                      setCobrarStop({
+                        routeGroupId: selected.groupId,
+                        stopIndex: s.minStop,
+                        routeTotalStops: selected.total,
+                        station: s.station,
+                        system: s.system,
+                        workOrders: s.items.map((it) => it.wo),
+                      })
+                    }
                   />
                 </div>
               );
             })}
           </div>
         </>
+      )}
+
+      {/* Fase D.2 — Modal de cobrar un stop */}
+      {cobrarStop && (
+        <CobrarStopModal
+          ctx={cobrarStop}
+          onClose={() => setCobrarStop(null)}
+          onSuccess={() => {
+            if (selectedGroupId) refreshCobradoStops(selectedGroupId);
+          }}
+        />
       )}
     </div>
   );
@@ -1086,6 +1151,9 @@ function StopCard({
   onDragOver,
   onDragEnd,
   onOpenWO,
+  cobrado,
+  canCobrar,
+  onCobrar,
 }: {
   stop: LogicalStop;
   index: number;
@@ -1094,6 +1162,9 @@ function StopCard({
   onDragOver: (e: React.DragEvent) => void;
   onDragEnd: () => void;
   onOpenWO: (id: string) => void;
+  cobrado: boolean;
+  canCobrar: boolean;
+  onCobrar: () => void;
 }) {
   const t = useTranslations("Trade.activeRoute");
   const doneItems = stop.items.filter((i) => i.wo.status === "completed").length;
@@ -1192,12 +1263,32 @@ function StopCard({
         })}
       </div>
 
-      {/* Footer: progress */}
+      {/* Footer: progress + cobrar */}
       <div className="px-3 py-1.5 flex items-center justify-between text-[10px] text-zinc-500 font-mono bg-zinc-950/40">
         <span>
           {doneItems}/{stop.items.length} {t("commoditiesDone")}
         </span>
-        <span className="opacity-60">{t("dragToReorder")}</span>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (canCobrar) onCobrar();
+            }}
+            disabled={!canCobrar}
+            title={canCobrar ? undefined : t("cobrar.disabledHint")}
+            className={`px-2 py-0.5 rounded-sm border text-[10px] uppercase tracking-widest transition ${
+              cobrado
+                ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25"
+                : canCobrar
+                  ? "bg-amber-500/15 border-amber-500/40 text-amber-200 hover:bg-amber-500/25"
+                  : "bg-zinc-800/40 border-zinc-800/60 text-zinc-600 cursor-not-allowed"
+            }`}
+          >
+            {cobrado ? t("cobrar.recalc") : t("cobrar.action")}
+          </button>
+          <span className="opacity-60">{t("dragToReorder")}</span>
+        </div>
       </div>
     </div>
   );

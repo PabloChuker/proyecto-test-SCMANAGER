@@ -747,7 +747,42 @@
       "deleteAllStaleHint": "删除所有未分配站点的路线（{count}）",
       "bulkAutoRepair": "正在更新价格 {done}/{total}…",
       "unpricedCommodities": "数据库中未找到以下品项的销售价格：{list}。可能价格导入尚未加载这些代码。",
-      "dismiss": "隐藏"
+      "dismiss": "隐藏",
+      "cobrar": {
+        "action": "结算",
+        "recalc": "重新计算",
+        "disabledHint": "至少将一个品项标记为完成后才能结算",
+        "eyebrow": "分配",
+        "title": "结算第 {stop} 站",
+        "noStation": "未分配站点",
+        "existingWarning": "你已经结算过这一站。确认后将使用当前数值重新计算。",
+        "gross": "总销售额",
+        "buyCost": "购买成本",
+        "expenses": "开销",
+        "net": "净额",
+        "splitModeLabel": "分配模式",
+        "mode": {
+          "equitable": "平均",
+          "manual_pct": "手动百分比",
+          "role_weight": "按角色"
+        },
+        "modeHint": {
+          "equitable": "所有在场成员（开采 + 贸易）平均分配。",
+          "manual_pct": "你为每位成员设定百分比。若总和不是 100% 会按比例缩放。",
+          "role_weight": "每个角色都有固定权重（飞行员、矿工、护航等）。"
+        },
+        "members": "成员",
+        "miningLinked": "已关联开采会话",
+        "noMiningLink": "无开采会话（仅贸易）",
+        "loading": "加载中…",
+        "noMembers": "没有可分配的成员或参与者。",
+        "sumPct": "当前合计：{value}%",
+        "rescaleWarn": "将按比例调整为 100%",
+        "cancel": "取消",
+        "submit": "确认结算",
+        "submitRecalc": "重新计算",
+        "submitting": "保存中…"
+      }
     },
     "commodities": {
       "search": "搜索",

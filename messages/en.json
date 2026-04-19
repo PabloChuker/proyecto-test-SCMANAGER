@@ -747,7 +747,42 @@
       "deleteAllStaleHint": "Removes every route with no assigned stations ({count})",
       "bulkAutoRepair": "Refreshing prices {done}/{total}…",
       "unpricedCommodities": "No sell prices found in the database for: {list}. Likely the price ingest hasn't loaded these codes yet.",
-      "dismiss": "Dismiss"
+      "dismiss": "Dismiss",
+      "cobrar": {
+        "action": "Settle",
+        "recalc": "Recalculate",
+        "disabledHint": "Mark at least one commodity as completed to settle this stop",
+        "eyebrow": "Distribution",
+        "title": "Settle stop #{stop}",
+        "noStation": "No station assigned",
+        "existingWarning": "You already settled this stop. Confirming will recalculate it with the current values.",
+        "gross": "Gross sale",
+        "buyCost": "Buy cost",
+        "expenses": "Expenses",
+        "net": "Net",
+        "splitModeLabel": "Split mode",
+        "mode": {
+          "equitable": "Equitable",
+          "manual_pct": "Manual %",
+          "role_weight": "By role"
+        },
+        "modeHint": {
+          "equitable": "Same amount for every present member (mining + trade).",
+          "manual_pct": "You set each member's %. If it doesn't add up to 100 it gets rescaled.",
+          "role_weight": "Each role has a fixed weight (pilot, miner, escort, etc.)."
+        },
+        "members": "Members",
+        "miningLinked": "Linked to mining session",
+        "noMiningLink": "No mining session (trade only)",
+        "loading": "Loading…",
+        "noMembers": "No members or participants to split.",
+        "sumPct": "Current sum: {value}%",
+        "rescaleWarn": "will be rescaled to 100%",
+        "cancel": "Cancel",
+        "submit": "Confirm settlement",
+        "submitRecalc": "Recalculate",
+        "submitting": "Saving…"
+      }
     },
     "commodities": {
       "search": "Search",

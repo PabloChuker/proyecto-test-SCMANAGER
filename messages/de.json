@@ -747,7 +747,42 @@
       "deleteAllStaleHint": "Entfernt alle Routen ohne zugewiesene Stationen ({count})",
       "bulkAutoRepair": "Preise werden aktualisiert {done}/{total}…",
       "unpricedCommodities": "Keine Verkaufspreise in der Datenbank für: {list}. Vermutlich hat der Preisimport diese Codes noch nicht geladen.",
-      "dismiss": "Ausblenden"
+      "dismiss": "Ausblenden",
+      "cobrar": {
+        "action": "Abrechnen",
+        "recalc": "Neu berechnen",
+        "disabledHint": "Markiere mindestens eine Ware als abgeschlossen, um abzurechnen",
+        "eyebrow": "Verteilung",
+        "title": "Stopp #{stop} abrechnen",
+        "noStation": "Keine Station zugewiesen",
+        "existingWarning": "Du hast diesen Stopp bereits abgerechnet. Mit der Bestätigung wird er mit den aktuellen Werten neu berechnet.",
+        "gross": "Bruttoverkauf",
+        "buyCost": "Einkaufskosten",
+        "expenses": "Ausgaben",
+        "net": "Netto",
+        "splitModeLabel": "Verteilungsmodus",
+        "mode": {
+          "equitable": "Gleichmäßig",
+          "manual_pct": "Manuelles %",
+          "role_weight": "Nach Rolle"
+        },
+        "modeHint": {
+          "equitable": "Gleicher Betrag für jedes anwesende Mitglied (Mining + Trade).",
+          "manual_pct": "Du legst den %-Anteil pro Mitglied fest. Ergibt er nicht 100, wird er neu skaliert.",
+          "role_weight": "Jede Rolle hat ein festes Gewicht (Pilot, Miner, Eskorte usw.)."
+        },
+        "members": "Mitglieder",
+        "miningLinked": "Verknüpft mit Mining-Session",
+        "noMiningLink": "Keine Mining-Session (nur Trade)",
+        "loading": "Lade…",
+        "noMembers": "Keine Mitglieder oder Teilnehmer zum Verteilen.",
+        "sumPct": "Aktuelle Summe: {value}%",
+        "rescaleWarn": "wird auf 100 % neu skaliert",
+        "cancel": "Abbrechen",
+        "submit": "Abrechnung bestätigen",
+        "submitRecalc": "Neu berechnen",
+        "submitting": "Speichere…"
+      }
     },
     "commodities": {
       "search": "Suchen",

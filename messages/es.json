@@ -747,7 +747,42 @@
       "deleteAllStaleHint": "Elimina todas las rutas sin estaciones ({count})",
       "bulkAutoRepair": "Actualizando precios {done}/{total}…",
       "unpricedCommodities": "Sin precios de venta en la base para: {list}. Probablemente el ingest todavía no cargó estos códigos.",
-      "dismiss": "Ocultar"
+      "dismiss": "Ocultar",
+      "cobrar": {
+        "action": "Cobrar",
+        "recalc": "Recalcular",
+        "disabledHint": "Marcá al menos una mercancía como completada para poder cobrar",
+        "eyebrow": "Distribución",
+        "title": "Cobrar parada #{stop}",
+        "noStation": "Sin estación asignada",
+        "existingWarning": "Ya habías cobrado esta parada. Si confirmás, se va a recalcular con los valores actuales.",
+        "gross": "Venta bruta",
+        "buyCost": "Costo de compra",
+        "expenses": "Gastos",
+        "net": "Neto",
+        "splitModeLabel": "Modo de reparto",
+        "mode": {
+          "equitable": "Equitativo",
+          "manual_pct": "% Manual",
+          "role_weight": "Por rol"
+        },
+        "modeHint": {
+          "equitable": "Mismo monto a todos los miembros presentes (mining + trade).",
+          "manual_pct": "Vos definís el % que cobra cada miembro. Si no suma 100 se reescala.",
+          "role_weight": "Cada rol tiene un peso predefinido (piloto, minero, escolta, etc.)."
+        },
+        "members": "Miembros",
+        "miningLinked": "Linkeado a sesión de minería",
+        "noMiningLink": "Sin sesión de minería (solo trade)",
+        "loading": "Cargando…",
+        "noMembers": "No hay miembros ni participantes para repartir.",
+        "sumPct": "Suma actual: {value}%",
+        "rescaleWarn": "se reescalará al 100%",
+        "cancel": "Cancelar",
+        "submit": "Confirmar cobro",
+        "submitRecalc": "Recalcular",
+        "submitting": "Guardando…"
+      }
     },
     "commodities": {
       "search": "Buscar",

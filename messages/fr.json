@@ -747,7 +747,42 @@
       "deleteAllStaleHint": "Supprime toutes les routes sans stations ({count})",
       "bulkAutoRepair": "Mise à jour des prix {done}/{total}…",
       "unpricedCommodities": "Aucun prix de vente en base pour : {list}. L'import n'a probablement pas encore chargé ces codes.",
-      "dismiss": "Masquer"
+      "dismiss": "Masquer",
+      "cobrar": {
+        "action": "Encaisser",
+        "recalc": "Recalculer",
+        "disabledHint": "Marquez au moins une marchandise comme terminée pour encaisser",
+        "eyebrow": "Répartition",
+        "title": "Encaisser l'arrêt #{stop}",
+        "noStation": "Aucune station assignée",
+        "existingWarning": "Vous aviez déjà encaissé cet arrêt. La confirmation va le recalculer avec les valeurs actuelles.",
+        "gross": "Vente brute",
+        "buyCost": "Coût d'achat",
+        "expenses": "Dépenses",
+        "net": "Net",
+        "splitModeLabel": "Mode de partage",
+        "mode": {
+          "equitable": "Équitable",
+          "manual_pct": "% Manuel",
+          "role_weight": "Par rôle"
+        },
+        "modeHint": {
+          "equitable": "Même montant pour chaque membre présent (mining + trade).",
+          "manual_pct": "Vous définissez le % de chaque membre. Si ça ne fait pas 100, on rééchelonne.",
+          "role_weight": "Chaque rôle a un poids fixe (pilote, mineur, escorte, etc.)."
+        },
+        "members": "Membres",
+        "miningLinked": "Lié à la session de minage",
+        "noMiningLink": "Pas de session de minage (trade seul)",
+        "loading": "Chargement…",
+        "noMembers": "Aucun membre ni participant à répartir.",
+        "sumPct": "Somme actuelle : {value}%",
+        "rescaleWarn": "sera rééchelonnée à 100%",
+        "cancel": "Annuler",
+        "submit": "Confirmer l'encaissement",
+        "submitRecalc": "Recalculer",
+        "submitting": "Enregistrement…"
+      }
     },
     "commodities": {
       "search": "Rechercher",
