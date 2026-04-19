@@ -332,8 +332,8 @@ export default function StreamerCardsPage() {
               <p>
                 Pegá la URL en una fuente &quot;Browser&quot; de OBS.
                 {variant === "horizontal"
-                  ? " Dimensiones sugeridas: 1800 × 560."
-                  : " Dimensiones sugeridas: 760 × 1380."}
+                  ? " Dimensiones sugeridas: 1800 × 720."
+                  : " Dimensiones sugeridas: 760 × 1560."}
               </p>
             </div>
           </aside>
@@ -360,19 +360,19 @@ export default function StreamerCardsPage() {
                   style={{
                     width:
                       variant === "vertical"
-                        ? 760 * 0.46
+                        ? 760 * 0.40
                         : 1800 * 0.5,
                     height:
                       variant === "vertical"
-                        ? 1380 * 0.46
-                        : 560 * 0.5,
+                        ? 1560 * 0.40
+                        : 720 * 0.5,
                     position: "relative",
                   }}
                 >
                   <div
                     style={{
                       transform:
-                        variant === "vertical" ? "scale(0.46)" : "scale(0.5)",
+                        variant === "vertical" ? "scale(0.40)" : "scale(0.5)",
                       transformOrigin: "top left",
                     }}
                   >
@@ -389,8 +389,8 @@ export default function StreamerCardsPage() {
             <p className="mt-3 text-[10px] text-zinc-600 font-mono tracking-wider text-center">
               Vista previa escalada. PNG exportado a resolución real
               {variant === "vertical"
-                ? " 1520 × 2760"
-                : " 3600 × 1120"}{" "}
+                ? " 1520 × 3120"
+                : " 3600 × 1440"}{" "}
               (2×).
             </p>
           </section>

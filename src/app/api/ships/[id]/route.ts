@@ -895,7 +895,7 @@ export async function GET(
     const ship = shipRows[0];
 
     // ── 2. Load satellite data in parallel ──
-    const [flightStats, fuelStats, powerRef, poolRows, resistances] = await Promise.all([
+    const [flightStats, fuelStats, powerRef, poolRows, resistances, insurance] = await Promise.all([
       sql.unsafe(`SELECT * FROM ship_flight_stats WHERE ship_id::text = $1 LIMIT 1`, [String(ship.id)])
         .then((rows: any[]) => rows[0] ?? null)
         .catch((e: unknown) => { console.warn("[ships/[id]] Could not load flight stats:", e); return null; }),
@@ -911,6 +911,9 @@ export async function GET(
       sql.unsafe(`SELECT * FROM ship_resistances WHERE ship_id::text = $1 LIMIT 1`, [String(ship.id)])
         .then((rows: any[]) => rows[0] ?? null)
         .catch((e: unknown) => { console.warn("[ships/[id]] Could not load ship resistances:", e); return null; }),
+      sql.unsafe(`SELECT * FROM ship_insurance WHERE ship_id::text = $1 LIMIT 1`, [String(ship.id)])
+        .then((rows: any[]) => rows[0] ?? null)
+        .catch((e: unknown) => { console.warn("[ships/[id]] Could not load insurance:", e); return null; }),
     ]);
 
     // ── 3. Get hardpoints from NEW schema (match by ship reference) ──
@@ -1207,6 +1210,10 @@ export async function GET(
           col(fuelStats, "power_generation", "powerGeneration"),
         ),
         hullHp: numOrNull(col(fuelStats, "hull_hp", "hullHp")) ?? numOrNull(resistances?.armor_hp),
+        // Flight extras — not in original API
+        navSpeed: numOrNull(col(flightStats, "max_speed", "maxSpeed")),
+        boostRampUp: numOrNull(col(flightStats, "zero_to_scm", "zeroToScm")),
+        boostRampDown: numOrNull(col(flightStats, "scm_to_zero", "scmToZero")),
         deflectionPhysical: numOrNull(ship.deflection_physical),
         deflectionEnergy: numOrNull(ship.deflection_energy),
         deflectionDistortion: numOrNull(ship.deflection_distortion),
@@ -1365,8 +1372,15 @@ export async function GET(
       },
     };
 
+    // Insurance
+    const insuranceData = insurance ? {
+      standardClaimTime: numOrNull(insurance.standard_claim_time),
+      expeditedClaimTime: numOrNull(insurance.expedited_claim_time),
+      expeditedCost: numOrNull(insurance.expedited_cost),
+    } : null;
+
     return NextResponse.json(
-      { data, flatHardpoints, computed, shipPower, flightController },
+      { data, flatHardpoints, computed, shipPower, flightController, insurance: insuranceData },
       {
         headers: {
           "Cache-Control":

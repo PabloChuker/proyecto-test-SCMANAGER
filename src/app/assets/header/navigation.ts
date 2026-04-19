@@ -68,6 +68,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Tools",
     items: [
       { label: "Pyro Timers", href: "/timers" },
+      { label: "Streamers",   href: "/streamers" },
     ],
   },
 ];
