@@ -690,6 +690,9 @@ export default function ShipInfoCard({
             rotationAxis="yaw"
             animate
             animationSpeed={0.3}
+            showGrid={false}
+            showAxis={false}
+            transparent
             className="w-full h-full"
           />
         </div>

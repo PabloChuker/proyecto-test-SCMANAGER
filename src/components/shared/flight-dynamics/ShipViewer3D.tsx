@@ -37,6 +37,9 @@ export interface ShipViewer3DProps {
    */
   glbUrl?: string | string[] | null;
   className?: string;
+  showGrid?: boolean;
+  showAxis?: boolean;
+  transparent?: boolean;
 }
 
 // Color de cada línea de eje según la convención de la nave:
@@ -140,6 +143,9 @@ export function ShipViewer3D({
   shipColor,
   glbUrl,
   className = "",
+  showGrid = true,
+  showAxis = true,
+  transparent = false,
 }: ShipViewer3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -152,13 +158,13 @@ export function ShipViewer3D({
     const H = container.clientHeight || 200;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x09090b);
+    if (!transparent) scene.background = new THREE.Color(0x09090b);
 
     const camera = new THREE.PerspectiveCamera(36, W / H, 0.1, 80);
     camera.position.set(1.7, 0.95, 2.1);
     camera.lookAt(0, 0, 0);
 
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: transparent });
     renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -176,9 +182,11 @@ export function ShipViewer3D({
     fillLight.position.set(0, -2, 1);
     scene.add(fillLight);
 
-    const grid = new THREE.GridHelper(7, 14, 0x27272a, 0x18181b);
-    grid.position.y = -0.55;
-    scene.add(grid);
+    if (showGrid) {
+      const grid = new THREE.GridHelper(7, 14, 0x27272a, 0x18181b);
+      grid.position.y = -0.55;
+      scene.add(grid);
+    }
 
     let shipGroup: THREE.Group = buildShipGeometry(shipColor);
     let shipIsGlb = false;
@@ -218,7 +226,7 @@ export function ShipViewer3D({
     }
 
     let axisLine: THREE.Line | null = null;
-    if (rotationAxis !== "free") {
+    if (showAxis && rotationAxis !== "free") {
       const pts =
         rotationAxis === "pitch"
           ? [new THREE.Vector3(-1.6, 0, 0), new THREE.Vector3(1.6, 0, 0)]
