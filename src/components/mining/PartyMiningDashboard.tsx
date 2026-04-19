@@ -8,6 +8,7 @@
 // =============================================================================
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useMiningStore } from "@/store/useMiningStore";
 import { useMiningRealtime, useMiningBroadcast } from "@/store/useMiningRealtime";
@@ -70,7 +71,24 @@ interface SellLocation {
 
 export default function PartyMiningDashboard() {
   const t = useTranslations("Mining.dashboard");
-  const [subTab, setSubTab] = useState<SubTab>("sessions");
+  const searchParams = useSearchParams();
+  // Fase E.E — permitir que una notificación payout_pending / payout_transferred
+  // aterrice directamente en el panel de payouts con una distribución enfocada.
+  // URL: /mining?tab=payouts&dist=<distribution_id>
+  const initialTab = (() => {
+    const t = searchParams?.get("tab");
+    const valid: SubTab[] = [
+      "sessions",
+      "crew",
+      "orders",
+      "inventory",
+      "payouts",
+      "settlement",
+    ];
+    return valid.includes(t as SubTab) ? (t as SubTab) : "sessions";
+  })();
+  const focusDistributionId = searchParams?.get("dist") ?? null;
+  const [subTab, setSubTab] = useState<SubTab>(initialTab);
   const { user } = useAuth();
   const {
     activeSessionId,
@@ -567,6 +585,7 @@ export default function PartyMiningDashboard() {
         <PendingPayoutsPanel
           miningSessionId={activeSessionId}
           currentUserId={user?.id ?? null}
+          focusDistributionId={focusDistributionId}
         />
       )}
 

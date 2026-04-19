@@ -126,9 +126,20 @@ interface Props {
   miningSessionId: string | null;
   /** user_id del user actual (para el indicador "lo que te deben a vos"). */
   currentUserId?: string | null;
+  /**
+   * Fase E.E — Cuando se llega al panel desde una notificación
+   * (payout_pending / payout_transferred) se pasa el id de la
+   * distribución a destacar: se auto-expande y se hace scroll a la
+   * fila correspondiente al montar.
+   */
+  focusDistributionId?: string | null;
 }
 
-export default function PendingPayoutsPanel({ miningSessionId, currentUserId }: Props) {
+export default function PendingPayoutsPanel({
+  miningSessionId,
+  currentUserId,
+  focusDistributionId,
+}: Props) {
   const t = useTranslations("Mining.payouts");
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("pending");
@@ -175,6 +186,38 @@ export default function PendingPayoutsPanel({ miningSessionId, currentUserId }: 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Fase E.E — si venimos con ?dist=<id> desde una notificación, el target
+  // puede estar en cualquier estado (pending / distributed / closed). Ampliamos
+  // el filtro a "all" una vez al montar para asegurar que aparezca en la lista.
+  const [focusApplied, setFocusApplied] = useState(false);
+  useEffect(() => {
+    if (!focusDistributionId || focusApplied) return;
+    // Si no está en la lista actual (p. ej. filtro es "pending" pero el item
+    // ya está en status=distributed), abrir "all" para encontrarlo.
+    const exists = distributions.some((d) => d.id === focusDistributionId);
+    if (!exists && statusFilter !== "all") {
+      setStatusFilter("all");
+      return;
+    }
+    if (exists) {
+      // Expandir la fila focuseada
+      setExpanded((prev) => {
+        if (prev.has(focusDistributionId)) return prev;
+        const next = new Set(prev);
+        next.add(focusDistributionId);
+        return next;
+      });
+      // Scroll — aguardamos un tick para que el DOM pinte la fila.
+      setTimeout(() => {
+        const el = document.getElementById(`dist-${focusDistributionId}`);
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 50);
+      setFocusApplied(true);
+    }
+  }, [focusDistributionId, focusApplied, distributions, statusFilter]);
 
   // -- Derived --------------------------------------------------------------
 
@@ -392,10 +435,17 @@ export default function PendingPayoutsPanel({ miningSessionId, currentUserId }: 
           {filtered.map((d) => {
             const isExpanded = expanded.has(d.id);
             const payouts = d.mining_pending_payouts || [];
+            const isFocused = focusDistributionId === d.id;
             return (
               <div
                 key={d.id}
-                className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg overflow-hidden"
+                id={`dist-${d.id}`}
+                className={
+                  "rounded-lg overflow-hidden transition-colors " +
+                  (isFocused
+                    ? "bg-amber-500/10 border-2 border-amber-500/60 ring-2 ring-amber-400/30"
+                    : "bg-zinc-900/70 border border-zinc-700/60")
+                }
               >
                 {/* Row header */}
                 <button

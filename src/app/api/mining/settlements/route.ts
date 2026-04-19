@@ -135,7 +135,7 @@ export async function PATCH(request: NextRequest) {
               type: "payout_transferred",
               title: `${fromLabel} te transfirió ${amountFmt} aUEC`,
               message: row.notes || undefined,
-              link: "/trade",
+              link: `/mining?tab=payouts&dist=${row.distribution_id}`,
               metadata: {
                 ledger_id: row.id,
                 amount_auec: row.amount_auec,

@@ -497,7 +497,7 @@ export async function PATCH(request: NextRequest) {
                   type: "payout_pending",
                   title: `Pago pendiente: ${amountFmt} aUEC`,
                   message: `${fromLabel} te debe ${amountFmt} aUEC — pendiente de transferencia.`,
-                  link: "/trade",
+                  link: `/mining?tab=payouts&dist=${row.distribution_id}`,
                   metadata: {
                     ledger_id: row.id,
                     amount_auec: row.amount_auec,
