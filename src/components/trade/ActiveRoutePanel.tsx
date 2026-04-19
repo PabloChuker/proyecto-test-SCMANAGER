@@ -246,8 +246,15 @@ export default function ActiveRoutePanel() {
   // commodity_code from the commodity-prices endpoint, and PATCHes each WO
   // with station/system/price. Survives partial failures — we want
   // something > nothing.
+  //
+  // `opts.skipRefresh` is the bulk-loop escape hatch: when we're chaining
+  // many repairs sequentially we don't want each one to re-fetch the WO list
+  // (that re-renders the panel AND mutates `activeRoutes`, which re-fires
+  // the bulk effect, which cancels and restarts itself, which makes the
+  // banner flicker between "0/N" states forever). The bulk effect calls
+  // refresh() exactly once at the end of the loop instead.
   const repairRoute = useCallback(
-    async (route: ActiveRoute) => {
+    async (route: ActiveRoute, opts?: { skipRefresh?: boolean }) => {
       const groupWOs: TradeWorkOrder[] = [];
       for (const s of route.stops) {
         for (const it of s.items) groupWOs.push(it.wo);
@@ -323,7 +330,9 @@ export default function ActiveRoutePanel() {
           }),
         );
 
-        await refresh();
+        if (!opts?.skipRefresh) {
+          await refresh();
+        }
       } finally {
         setRepairingId(null);
       }
@@ -504,20 +513,33 @@ export default function ActiveRoutePanel() {
         // refresh → activeRoutes change) doesn't re-queue this groupId.
         autoRepairedRef.current.add(r.groupId);
         try {
-          await repairRoute(r);
+          // skipRefresh: critical. Refreshing between repairs re-runs this
+          // whole effect (activeRoutes dep), which cancels us and restarts
+          // a fresh "0/N" banner → visible flicker. One refresh at the end
+          // settles everything in a single render.
+          await repairRoute(r, { skipRefresh: true });
         } catch {
           // repairRoute already swallows per-WO errors; this only fires on
           // a catastrophic failure. Skip and keep the bulk pass moving.
         }
         if (!cancelled) setBulkRepair({ done: i + 1, total: pending.length });
       }
-      if (!cancelled) setBulkRepair(null);
+      if (!cancelled) {
+        // Single refresh at the end pulls in all the PATCHed stations/prices
+        // for every route we just repaired.
+        try {
+          await refresh();
+        } catch {
+          // Not fatal — next manual refresh will pick up the changes.
+        }
+        setBulkRepair(null);
+      }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [activeRoutes, repairRoute]);
+  }, [activeRoutes, repairRoute, refresh]);
 
   // Apply the user's custom ordering, if any, to the selected route.
   const orderedStops = useMemo<LogicalStop[]>(() => {
@@ -620,7 +642,12 @@ export default function ActiveRoutePanel() {
   const onDragEnd = () => setDragKey(null);
 
   // ── render ────────────────────────────────────────────────────────────────
-  if (loading) {
+  // Only show skeleton placeholders on the VERY FIRST load (when we have no
+  // data yet). Subsequent refreshes (triggered by bulk auto-repair, manual
+  // REFRESH button, or the pending-groupId handoff) must not unmount the
+  // panel — otherwise the user sees the whole UI blink every time, which
+  // feels like "parpadeo continuo" while the bulk loop is iterating.
+  if (loading && allOrders.length === 0) {
     return (
       <div className="space-y-3">
         {Array.from({ length: 4 }).map((_, i) => (
