@@ -413,6 +413,17 @@ export default function ShipInfoCard({
   // El API devuelve varios campos que no están en el type oficial (mass,
   // hullHp, scmSpeed, accelForward, etc.) — los leemos con cast puntual.
   const specs = (ship.ship ?? {}) as any;
+  // shipPower viene del endpoint pero no está en el type TypeScript oficial.
+  // Contiene datos de shield, fuel y QT calculados desde ship_power_reference.
+  const shipPower = (data as any).shipPower as {
+    totalShieldHp?: number | null;
+    totalShieldRegen?: number | null;
+    fuelHydrogen?: number | null;
+    fuelQuantum?: number | null;
+    qtRangeKm?: number | null;
+    qtSpeedMs?: number | null;
+    qtSpoolTimeS?: number | null;
+  } | null ?? null;
 
   const displayName = ship.localizedName || ship.name;
   const imageUrl = getShipImageUrl(displayName, ship.manufacturer);
@@ -428,6 +439,10 @@ export default function ShipInfoCard({
   const deflPhys = specs.deflectionPhysical ?? null;
   const deflEne = specs.deflectionEnergy ?? null;
   const deflDis = specs.deflectionDistortion ?? null;
+
+  // Signatures base (desde tabla ships, ahora mapeadas en el API)
+  const baseEm = specs.baseEmSignature ?? null;
+  const baseIr = specs.baseIrSignature ?? null;
 
   const scmSpeed = specs.scmSpeed ?? specs.maxSpeed ?? null;
   const boostFwd = specs.boostSpeedForward ?? specs.afterburnerSpeed ?? null;
@@ -445,12 +460,22 @@ export default function ShipInfoCard({
   const accelStr = specs.accelStrafe ?? null;
 
   const cargo = specs.cargo ?? null;
-  const h2 = specs.hydrogenCapacity ?? specs.hydrogenFuelCap ?? null;
-  const qt = specs.quantumFuelCapacity ?? specs.quantumFuelCap ?? null;
+  // H₂ y QT fuel: DB principal → shipPower (ship_power_reference) como fallback
+  const h2 = specs.hydrogenCapacity ?? specs.hydrogenFuelCap ?? shipPower?.fuelHydrogen ?? null;
+  const qt = specs.quantumFuelCapacity ?? specs.quantumFuelCap ?? shipPower?.fuelQuantum ?? null;
   const qtRangeGm = specs.quantumRange ?? null;
+  // QT Speed en Mm/s (shipPower.qtSpeedMs viene en m/s)
+  const qtSpeed = shipPower?.qtSpeedMs != null ? Math.round(shipPower.qtSpeedMs / 1_000_000) : null;
+  const qtSpool = shipPower?.qtSpoolTimeS ?? null;
 
-  const shieldHp = specs.shieldHpTotal ?? computed?.totalShieldHp ?? null;
+  // Shield: cascada ship_fuel → hardpoints calculados → ship_power_reference
+  const shieldHp = specs.shieldHpTotal ?? computed?.totalShieldHp ?? shipPower?.totalShieldHp ?? null;
+  const shieldRegen = computed?.totalShieldRegen ?? shipPower?.totalShieldRegen ?? null;
+
   const pilotDps = computed?.totalDps ?? null;
+  // Conteo de hardpoints desde computed.hardpointSummary
+  const weaponCount = computed?.hardpointSummary?.weapons ?? null;
+  const missileCount = computed?.hardpointSummary?.missiles ?? null;
 
   // Dimensiones string
   const dimsFlight =
@@ -1096,29 +1121,44 @@ export default function ShipInfoCard({
           <DataColumn title="Structure" theme={theme} typo={typo}>
             <Row label="Dimensions" value={dimsFlight} theme={theme} typo={typo} />
             <Row label="Hull HP" value={num(hullHp)} unit="HP" theme={theme} typo={typo} />
-            <div style={{ marginTop:4, display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 10px" }}>
+            <div style={{ fontSize:8, letterSpacing:"0.18em", textTransform:"uppercase", color:theme.accent, marginTop:5, marginBottom:1 }}>Armor Deflection</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 8px" }}>
               <MiniStat label="Physical"   value={deflPhys != null ? `${num(deflPhys)} %` : MISSING} theme={theme} typo={typo} />
-              <MiniStat label="Energy"     value={deflEne  != null ? `${num(deflEne)}  %` : MISSING} theme={theme} typo={typo} />
-              <MiniStat label="Distortion" value={deflDis  != null ? `${num(deflDis)}  %` : MISSING} theme={theme} typo={typo} />
+              <MiniStat label="Energy"     value={deflEne  != null ? `${num(deflEne)} %`  : MISSING} theme={theme} typo={typo} />
+              <MiniStat label="Distortion" value={deflDis  != null ? `${num(deflDis)} %`  : MISSING} theme={theme} typo={typo} />
+            </div>
+            <div style={{ fontSize:8, letterSpacing:"0.18em", textTransform:"uppercase", color:theme.accent, marginTop:5, marginBottom:1 }}>Emissions</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 8px" }}>
+              <MiniStat label="EM"  value={baseEm != null ? num(baseEm) : MISSING} theme={theme} typo={typo} />
+              <MiniStat label="IR"  value={baseIr != null ? num(baseIr) : MISSING} theme={theme} typo={typo} />
             </div>
           </DataColumn>
           <div style={{ backgroundColor:theme.border }} />
 
           {/* Combat */}
           <DataColumn title="Combat" theme={theme} typo={typo}>
-            <Row label="Pilot DPS"       value={pilotDps != null ? num(pilotDps) : MISSING} theme={theme} typo={typo} />
-            <Row label="Crew DPS"        value={MISSING}                                     theme={theme} typo={typo} />
-            <Row label="Shield HP"       value={shieldHp != null ? num(shieldHp) : MISSING}  unit="HP"  theme={theme} typo={typo} />
-            <Row label="Missiles & Bombs" value={MISSING}                                    unit="Dmg" theme={theme} typo={typo} />
+            <Row label="Pilot DPS"    value={pilotDps != null ? num(pilotDps) : MISSING}   theme={theme} typo={typo} />
+            <Row label="Shield HP"    value={shieldHp != null ? num(shieldHp) : MISSING}   unit="HP"   theme={theme} typo={typo} />
+            <Row label="Shield Regen" value={shieldRegen != null ? num(shieldRegen, 1) : MISSING} unit="HP/s" theme={theme} typo={typo} />
+            <div style={{ marginTop:4, display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 8px" }}>
+              <MiniStat label="Weapons"  value={weaponCount  != null ? String(weaponCount)  : MISSING} theme={theme} typo={typo} />
+              <MiniStat label="Missiles" value={missileCount != null ? String(missileCount) : MISSING} theme={theme} typo={typo} />
+            </div>
           </DataColumn>
           <div style={{ backgroundColor:theme.border }} />
 
           {/* Logistics */}
           <DataColumn title="Logistics" theme={theme} typo={typo}>
-            <Row label="Cargo Grid"   value={num(cargo)}                                unit="SCU" theme={theme} typo={typo} />
-            <Row label="H₂ Fuel"      value={h2Str}                                    unit="SCU" theme={theme} typo={typo} />
-            <Row label="Quantum Fuel" value={qtStr}                                    unit="SCU" theme={theme} typo={typo} />
-            <Row label="QT Range"     value={qtRangeGm != null ? num(qtRangeGm,2) : MISSING} unit="Gm" theme={theme} typo={typo} />
+            <Row label="Cargo Grid"   value={num(cargo)}                                        unit="SCU" theme={theme} typo={typo} />
+            <Row label="H₂ Fuel"      value={h2Str}                                             unit="SCU" theme={theme} typo={typo} />
+            <Row label="Quantum Fuel" value={qtStr}                                             unit="SCU" theme={theme} typo={typo} />
+            <Row label="QT Range"     value={qtRangeGm != null ? num(qtRangeGm, 2) : MISSING}  unit="Gm"  theme={theme} typo={typo} />
+            {(qtSpeed != null || qtSpool != null) && (
+              <div style={{ marginTop:4, display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 8px" }}>
+                <MiniStat label="QT Speed" value={qtSpeed != null ? `${qtSpeed} Mm/s` : MISSING} theme={theme} typo={typo} />
+                <MiniStat label="QT Spool" value={qtSpool != null ? `${num(qtSpool, 1)} s` : MISSING} theme={theme} typo={typo} />
+              </div>
+            )}
           </DataColumn>
           <div style={{ backgroundColor:theme.border }} />
 
@@ -1368,17 +1408,26 @@ export default function ShipInfoCard({
           <DataColumn title="Structure" theme={theme} typo={typo}>
             <Row label="Dimensions" value={dimsFlight} theme={theme} typo={typo} />
             <Row label="Hull HP" value={num(hullHp)} unit="HP" theme={theme} typo={typo} />
-            <div style={{ marginTop:4, display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 10px" }}>
+            <div style={{ fontSize:8, letterSpacing:"0.18em", textTransform:"uppercase", color:theme.accent, marginTop:5, marginBottom:1 }}>Armor Deflection</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 8px" }}>
               <MiniStat label="Physical"   value={deflPhys != null ? `${num(deflPhys)} %` : MISSING} theme={theme} typo={typo} />
-              <MiniStat label="Energy"     value={deflEne  != null ? `${num(deflEne)}  %` : MISSING} theme={theme} typo={typo} />
-              <MiniStat label="Distortion" value={deflDis  != null ? `${num(deflDis)}  %` : MISSING} theme={theme} typo={typo} />
+              <MiniStat label="Energy"     value={deflEne  != null ? `${num(deflEne)} %`  : MISSING} theme={theme} typo={typo} />
+              <MiniStat label="Distortion" value={deflDis  != null ? `${num(deflDis)} %`  : MISSING} theme={theme} typo={typo} />
+            </div>
+            <div style={{ fontSize:8, letterSpacing:"0.18em", textTransform:"uppercase", color:theme.accent, marginTop:5, marginBottom:1 }}>Emissions</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 8px" }}>
+              <MiniStat label="EM"  value={baseEm != null ? num(baseEm) : MISSING} theme={theme} typo={typo} />
+              <MiniStat label="IR"  value={baseIr != null ? num(baseIr) : MISSING} theme={theme} typo={typo} />
             </div>
           </DataColumn>
           <DataColumn title="Combat" theme={theme} typo={typo}>
-            <Row label="Pilot DPS"        value={pilotDps != null ? num(pilotDps) : MISSING} theme={theme} typo={typo} />
-            <Row label="Crew DPS"         value={MISSING}                                     theme={theme} typo={typo} />
-            <Row label="Shield HP"        value={shieldHp != null ? num(shieldHp) : MISSING} unit="HP"  theme={theme} typo={typo} />
-            <Row label="Missiles & Bombs" value={MISSING}                                     unit="Dmg" theme={theme} typo={typo} />
+            <Row label="Pilot DPS"    value={pilotDps != null ? num(pilotDps) : MISSING}        theme={theme} typo={typo} />
+            <Row label="Shield HP"    value={shieldHp != null ? num(shieldHp) : MISSING}        unit="HP"   theme={theme} typo={typo} />
+            <Row label="Shield Regen" value={shieldRegen != null ? num(shieldRegen, 1) : MISSING} unit="HP/s" theme={theme} typo={typo} />
+            <div style={{ marginTop:4, display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 8px" }}>
+              <MiniStat label="Weapons"  value={weaponCount  != null ? String(weaponCount)  : MISSING} theme={theme} typo={typo} />
+              <MiniStat label="Missiles" value={missileCount != null ? String(missileCount) : MISSING} theme={theme} typo={typo} />
+            </div>
           </DataColumn>
         </div>
 
@@ -1391,12 +1440,18 @@ export default function ShipInfoCard({
             <Row label="Cargo Grid"   value={num(cargo)}                                        unit="SCU" theme={theme} typo={typo} />
             <Row label="H₂ Fuel"      value={h2Str}                                             unit="SCU" theme={theme} typo={typo} />
             <Row label="Quantum Fuel" value={qtStr}                                             unit="SCU" theme={theme} typo={typo} />
-            <Row label="QT Range"     value={qtRangeGm != null ? num(qtRangeGm,2) : MISSING}   unit="Gm"  theme={theme} typo={typo} />
+            <Row label="QT Range"     value={qtRangeGm != null ? num(qtRangeGm, 2) : MISSING}  unit="Gm"  theme={theme} typo={typo} />
+            {(qtSpeed != null || qtSpool != null) && (
+              <div style={{ marginTop:4, display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 8px" }}>
+                <MiniStat label="QT Speed" value={qtSpeed != null ? `${qtSpeed} Mm/s` : MISSING} theme={theme} typo={typo} />
+                <MiniStat label="QT Spool" value={qtSpool != null ? `${num(qtSpool, 1)} s` : MISSING} theme={theme} typo={typo} />
+              </div>
+            )}
           </DataColumn>
           <DataColumn title="Propulsion" theme={theme} typo={typo}>
             <Row label="SCM / Boost"        value={scmBoostStr}  unit="m/s" theme={theme} typo={typo} />
             <Row label="Pitch / Yaw / Roll" value={pitchYawRoll} unit="°/s" theme={theme} typo={typo} />
-            <div style={{ marginTop:4, display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 10px" }}>
+            <div style={{ marginTop:4, display:"grid", gridTemplateColumns:"1fr 1fr", gap:"0 8px" }}>
               <MiniStat label="Main"   value={`${toG(accelFwd)} G`} theme={theme} typo={typo} />
               <MiniStat label="Retro"  value={`${toG(accelBwd)} G`} theme={theme} typo={typo} />
               <MiniStat label="Up"     value={`${toG(accelUp)} G`}  theme={theme} typo={typo} />
