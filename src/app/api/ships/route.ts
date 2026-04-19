@@ -157,6 +157,7 @@ async function handleShipsQuery(params: ShipsQueryParams) {
       `${dedupCTE}
        SELECT COUNT(*)::int as total
        FROM deduped s
+       LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
        ${whereClause} AND s.__rn = 1`,
       queryParams,
     );
