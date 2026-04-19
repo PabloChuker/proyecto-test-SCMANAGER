@@ -867,20 +867,20 @@ export async function GET(
 
     // ── 1. Find the ship (exact matches prioritized over partial) ──
     const shipRows: any[] = await sql.unsafe(
-      `SELECT *,
+      `SELECT *, class_name AS reference,
          CASE
-           WHEN reference = $1 THEN 0
-           WHEN reference ILIKE $1 THEN 1
+           WHEN class_name = $1 THEN 0
+           WHEN class_name ILIKE $1 THEN 1
            WHEN id::text = $1 THEN 2
            WHEN name ILIKE $1 THEN 3
-           WHEN reference ILIKE '%' || $1 || '%' THEN 4
+           WHEN class_name ILIKE '%' || $1 || '%' THEN 4
          END AS match_rank
        FROM ships
-       WHERE reference = $1
-          OR reference ILIKE $1
+       WHERE class_name = $1
+          OR class_name ILIKE $1
           OR name ILIKE $1
           OR id::text = $1
-          OR reference ILIKE '%' || $1 || '%'
+          OR class_name ILIKE '%' || $1 || '%'
        ORDER BY match_rank ASC
        LIMIT 1`,
       [String(id)],
@@ -1253,7 +1253,7 @@ export async function GET(
     };
 
     // Ship-level power data: prefer DB (ship_power_reference), fallback to static JSON
-    const shipClassName = ship.reference || ship.class_name || "";
+    const shipClassName = ship.reference || "";
 
     // Build pools map from DB
     const poolsMap: Record<string, number> = {};

@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
 
     // ── 1. Load all ships with MSRP ──
     const shipRows: any[] = await sql.unsafe(`
-      SELECT id, reference, name, manufacturer, msrp_usd, warbond_usd,
+      SELECT id, class_name AS reference, name, manufacturer, msrp_usd, warbond_usd,
              COALESCE(is_ccu_eligible, true) AS is_ccu_eligible,
              COALESCE(is_limited, false) AS is_limited,
              COALESCE(flight_status, 'flight_ready') AS flight_status

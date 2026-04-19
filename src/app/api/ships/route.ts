@@ -105,14 +105,14 @@ async function handleShipsQuery(params: ShipsQueryParams) {
 
     // ── Always-on rule: hide BIS / Best in Show / Power Suit ──
     conditions.push(
-      `COALESCE(s.name, '') !~* $${paramIdx} AND COALESCE(s.reference, '') !~* $${paramIdx}`,
+      `COALESCE(s.name, '') !~* $${paramIdx} AND COALESCE(s.class_name, '') !~* $${paramIdx}`,
     );
     queryParams.push(HIDDEN_NAME_REGEX);
     paramIdx++;
 
     if (search) {
       conditions.push(
-        `(s.name ILIKE $${paramIdx} OR s.reference ILIKE $${paramIdx} OR s.manufacturer ILIKE $${paramIdx})`,
+        `(s.name ILIKE $${paramIdx} OR s.class_name ILIKE $${paramIdx} OR s.manufacturer ILIKE $${paramIdx})`,
       );
       queryParams.push(`%${search}%`);
       paramIdx++;
@@ -168,7 +168,7 @@ async function handleShipsQuery(params: ShipsQueryParams) {
     const joinClause = `LEFT JOIN ship_flight_stats fs ON fs.ship_id = s.id`;
     const ships: any[] = await sql.unsafe(
       `${dedupCTE}
-       SELECT s.id, s.reference, s.name, s.manufacturer, s.role, s.size,
+       SELECT s.id, s.class_name AS reference, s.name, s.manufacturer, s.role, s.size,
               s.max_crew, s.mass, s.cargo_capacity, s.game_version,
               s.msrp_usd, s.warbond_usd,
               fs.scm_speed, fs.max_speed as afterburner_speed

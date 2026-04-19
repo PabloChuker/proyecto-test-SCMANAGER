@@ -22,9 +22,9 @@ export async function GET(request: NextRequest) {
     let query = `
       SELECT
         cp.id,
-        cp.from_ship_id, s1.name AS from_ship_name, s1.reference AS from_ship_ref,
+        cp.from_ship_id, s1.name AS from_ship_name, s1.class_name AS from_ship_ref,
         s1.msrp_usd AS from_msrp,
-        cp.to_ship_id, s2.name AS to_ship_name, s2.reference AS to_ship_ref,
+        cp.to_ship_id, s2.name AS to_ship_name, s2.class_name AS to_ship_ref,
         s2.msrp_usd AS to_msrp,
         cp.standard_price, cp.warbond_price,
         cp.is_available, cp.is_warbond_available, cp.is_limited,
@@ -121,8 +121,8 @@ export async function POST(request: NextRequest) {
               source = 'scraped',
               last_verified = NOW(),
               updated_at = NOW()
-          WHERE from_ship_id = (SELECT id FROM ships WHERE reference ILIKE $3 LIMIT 1)
-            AND to_ship_id = (SELECT id FROM ships WHERE reference ILIKE $4 LIMIT 1)
+          WHERE from_ship_id = (SELECT id FROM ships WHERE class_name ILIKE $3 LIMIT 1)
+            AND to_ship_id = (SELECT id FROM ships WHERE class_name ILIKE $4 LIMIT 1)
           RETURNING id
         `, [warbondPrice, isWarbondAvailable, fromShipRef, toShipRef]);
 
