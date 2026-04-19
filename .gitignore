@@ -39,3 +39,10 @@ thermal_update.sql
 
 # Nightly autonomous work logs
 NIGHTLY_LOG_*.md
+
+# Basura que se colo en commits anteriores
+C:\Users\*
+scunpacked/
+data/scunpacked-data/
+scripts/_*.mjs
+scripts/importers/_*.mjs
