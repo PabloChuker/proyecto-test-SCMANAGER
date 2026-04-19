@@ -737,14 +737,17 @@
       "routeItems": "{items, plural, one {# ítem} other {# ítems}}",
       "noPrices": "Sin precios",
       "staleTitle": "Esta ruta no tiene estaciones de venta asignadas",
-      "staleHint": "Los precios no estaban disponibles cuando creaste la ruta. Se reparará automáticamente con los precios actuales del mercado al seleccionarla, o usá los botones de abajo.",
+      "staleHint": "Los precios no estaban disponibles cuando creaste la ruta. Se reparan automáticamente al abrir el panel; si alguna sigue sin precio podés usar los botones de abajo.",
       "repairRoute": "Reparar ruta",
       "autoRepairing": "Actualizando precios…",
       "repairing": "Reparando…",
       "deleteRoute": "Borrar ruta",
       "deleting": "Borrando…",
       "deleteAllStale": "Borrar {count} rutas sin precios",
-      "deleteAllStaleHint": "Elimina todas las rutas sin estaciones ({count})"
+      "deleteAllStaleHint": "Elimina todas las rutas sin estaciones ({count})",
+      "bulkAutoRepair": "Actualizando precios {done}/{total}…",
+      "unpricedCommodities": "Sin precios de venta en la base para: {list}. Probablemente el ingest todavía no cargó estos códigos.",
+      "dismiss": "Ocultar"
     },
     "commodities": {
       "search": "Buscar",

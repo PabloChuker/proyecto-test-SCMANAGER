@@ -737,14 +737,17 @@
       "routeItems": "{items, plural, one {# article} other {# articles}}",
       "noPrices": "Pas de prix",
       "staleTitle": "Cette route n'a pas de stations de vente assignées",
-      "staleHint": "Les prix n'étaient pas disponibles lors de la création. La route sera réparée automatiquement avec les derniers prix du marché lors de sa sélection, ou utilisez les boutons ci-dessous.",
+      "staleHint": "Les prix n'étaient pas disponibles lors de la création. Les routes sont réparées automatiquement à l'ouverture du panneau ; si l'une reste sans prix, utilisez les boutons ci-dessous.",
       "repairRoute": "Réparer la route",
       "autoRepairing": "Mise à jour des prix…",
       "repairing": "Réparation…",
       "deleteRoute": "Supprimer la route",
       "deleting": "Suppression…",
       "deleteAllStale": "Supprimer {count} routes sans prix",
-      "deleteAllStaleHint": "Supprime toutes les routes sans stations ({count})"
+      "deleteAllStaleHint": "Supprime toutes les routes sans stations ({count})",
+      "bulkAutoRepair": "Mise à jour des prix {done}/{total}…",
+      "unpricedCommodities": "Aucun prix de vente en base pour : {list}. L'import n'a probablement pas encore chargé ces codes.",
+      "dismiss": "Masquer"
     },
     "commodities": {
       "search": "Rechercher",

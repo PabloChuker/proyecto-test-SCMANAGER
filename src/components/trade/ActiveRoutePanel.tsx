@@ -198,9 +198,16 @@ export default function ActiveRoutePanel() {
   const [repairingId, setRepairingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  // Bulk auto-repair progress. When non-null the top banner shows
+  // "Actualizando precios {done}/{total}…".
+  const [bulkRepair, setBulkRepair] = useState<{ done: number; total: number } | null>(null);
   // Tracks routes we've already tried to auto-repair this session so we
   // don't re-fire PATCH storms on every re-render / refresh.
   const autoRepairedRef = useRef<Set<string>>(new Set());
+  // Diagnostic: commodity codes that came back empty from the price
+  // endpoint. If non-empty, the banner surfaces it so Pablo knows *why*
+  // a route is still stale after auto-repair.
+  const [unpricedCommodities, setUnpricedCommodities] = useState<string[]>([]);
 
   // ── fetch ──
   const refresh = useCallback(async () => {
@@ -259,6 +266,7 @@ export default function ActiveRoutePanel() {
           string,
           { station: string; system: string; price: number } | null
         > = {};
+        const missing: string[] = [];
         await Promise.all(
           uniqueCommodities.map(async (code) => {
             try {
@@ -267,18 +275,30 @@ export default function ActiveRoutePanel() {
               );
               const json = await r.json();
               const top = (json?.data || [])[0];
-              best[code] = top
-                ? {
-                    station: String(top.station || ""),
-                    system: String(top.system || ""),
-                    price: Number(top.price) || 0,
-                  }
-                : null;
+              if (top && top.station) {
+                best[code] = {
+                  station: String(top.station || ""),
+                  system: String(top.system || ""),
+                  price: Number(top.price) || 0,
+                };
+              } else {
+                // No sell location returned — either the price table is
+                // empty for this abbr or the ingest never wrote it. We
+                // surface these to the user instead of silently giving up.
+                best[code] = null;
+                missing.push(code);
+              }
             } catch {
               best[code] = null;
+              missing.push(code);
             }
           }),
         );
+        if (missing.length > 0) {
+          setUnpricedCommodities((prev) =>
+            Array.from(new Set([...prev, ...missing])).sort(),
+          );
+        }
 
         // PATCH each WO of that route with its commodity's best station.
         await Promise.all(
@@ -455,20 +475,48 @@ export default function ActiveRoutePanel() {
     [activeRoutes, selectedGroupId],
   );
 
-  // ── Auto-repair on selection ────────────────────────────────────────────
-  // Pablo's complaint: "why do I have to click Repair on every zombie
-  // route?". Fair. Whenever a stale route becomes the selected one, fire a
-  // silent repair in the background. autoRepairedRef keeps us from
-  // hammering the API for the same groupId twice in the same session.
+  // ── Bulk auto-repair on mount ───────────────────────────────────────────
+  // Pablo: "seguimos sin precio". Earlier we only auto-repaired the *selected*
+  // route, which meant that with 16 zombie routes only the first one got a
+  // station and the picker still showed NO PRICES for everything else.
+  // Now: whenever the list of routes settles, we iterate every stale route
+  // sequentially and repair it. Sequential (not Promise.all) so we don't
+  // hammer Supabase / the /api/mining/commodity-prices endpoint when the user
+  // has many routes. autoRepairedRef makes us idempotent across re-renders.
   useEffect(() => {
-    if (!selected) return;
-    if (!selected.stops.every((s) => !s.station)) return; // not stale
-    if (autoRepairedRef.current.has(selected.groupId)) return;
-    if (repairingId === selected.groupId) return;
-    autoRepairedRef.current.add(selected.groupId);
-    // fire-and-forget — repairRoute handles its own state + refresh
-    repairRoute(selected);
-  }, [selected, repairingId, repairRoute]);
+    if (activeRoutes.length === 0) return;
+    const stale = activeRoutes.filter((r) =>
+      r.stops.every((s) => !s.station),
+    );
+    const pending = stale.filter(
+      (r) => !autoRepairedRef.current.has(r.groupId),
+    );
+    if (pending.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      setBulkRepair({ done: 0, total: pending.length });
+      for (let i = 0; i < pending.length; i++) {
+        if (cancelled) return;
+        const r = pending[i];
+        // mark BEFORE awaiting so the next effect firing (triggered by
+        // refresh → activeRoutes change) doesn't re-queue this groupId.
+        autoRepairedRef.current.add(r.groupId);
+        try {
+          await repairRoute(r);
+        } catch {
+          // repairRoute already swallows per-WO errors; this only fires on
+          // a catastrophic failure. Skip and keep the bulk pass moving.
+        }
+        if (!cancelled) setBulkRepair({ done: i + 1, total: pending.length });
+      }
+      if (!cancelled) setBulkRepair(null);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRoutes, repairRoute]);
 
   // Apply the user's custom ordering, if any, to the selected route.
   const orderedStops = useMemo<LogicalStop[]>(() => {
@@ -604,6 +652,46 @@ export default function ActiveRoutePanel() {
 
   return (
     <div className="space-y-5">
+      {/* ── Bulk auto-repair progress ───────────────────────────────────────
+           Shows while we're sequentially repairing zombie routes that came
+           in without sell stations. Pablo's mental model: "the app is doing
+           something about it", not "I need to click 17 Repair buttons". */}
+      {bulkRepair && bulkRepair.total > 0 && (
+        <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-sm px-3 py-2 text-[11px] text-cyan-200 flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+          <span className="font-mono">
+            {t("bulkAutoRepair", {
+              done: bulkRepair.done,
+              total: bulkRepair.total,
+            })}
+          </span>
+        </div>
+      )}
+
+      {/* ── Diagnostic: commodities with no sell price in the DB ────────────
+           When a repair attempt finishes but some commodity codes came back
+           empty, we tell the user which ones so they know *why* a specific
+           route is still stale (usually: the price ingest hasn't run for
+           that abbr yet, or the commodity isn't tradeable). */}
+      {unpricedCommodities.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-sm px-3 py-2 text-[11px] text-amber-200 flex items-start gap-2">
+          <span className="text-base leading-none">ℹ</span>
+          <div className="flex-1">
+            <div className="font-mono">
+              {t("unpricedCommodities", {
+                list: unpricedCommodities.join(", "),
+              })}
+            </div>
+            <button
+              onClick={() => setUnpricedCommodities([])}
+              className="text-[10px] uppercase tracking-widest text-amber-300/70 hover:text-amber-200 mt-1"
+            >
+              {t("dismiss")}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── Header: scope + route picker ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>

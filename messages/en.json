@@ -737,14 +737,17 @@
       "routeItems": "{items, plural, one {# item} other {# items}}",
       "noPrices": "No prices",
       "staleTitle": "This route has no sell stations assigned",
-      "staleHint": "Prices weren't available when you created this route. It will auto-repair with the latest market prices when selected, or use the buttons below.",
+      "staleHint": "Prices weren't available when you created this route. They auto-repair whenever the panel opens; if any route still has no price, use the buttons below.",
       "repairRoute": "Repair route",
       "autoRepairing": "Refreshing prices…",
       "repairing": "Repairing…",
       "deleteRoute": "Delete route",
       "deleting": "Deleting…",
       "deleteAllStale": "Delete {count} stale routes",
-      "deleteAllStaleHint": "Removes every route with no assigned stations ({count})"
+      "deleteAllStaleHint": "Removes every route with no assigned stations ({count})",
+      "bulkAutoRepair": "Refreshing prices {done}/{total}…",
+      "unpricedCommodities": "No sell prices found in the database for: {list}. Likely the price ingest hasn't loaded these codes yet.",
+      "dismiss": "Dismiss"
     },
     "commodities": {
       "search": "Search",

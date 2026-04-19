@@ -737,14 +737,17 @@
       "routeItems": "{items, plural, one {# Ware} other {# Waren}}",
       "noPrices": "Keine Preise",
       "staleTitle": "Dieser Route sind keine Verkaufsstationen zugewiesen",
-      "staleHint": "Die Preise waren beim Erstellen nicht verfügbar. Die Route wird beim Auswählen automatisch mit aktuellen Marktpreisen repariert, oder nutze die Schaltflächen unten.",
+      "staleHint": "Die Preise waren beim Erstellen nicht verfügbar. Routen werden beim Öffnen des Panels automatisch repariert; falls eine weiterhin ohne Preis bleibt, nutze die Schaltflächen unten.",
       "repairRoute": "Route reparieren",
       "autoRepairing": "Preise werden aktualisiert…",
       "repairing": "Repariere…",
       "deleteRoute": "Route löschen",
       "deleting": "Lösche…",
       "deleteAllStale": "{count} preislose Routen löschen",
-      "deleteAllStaleHint": "Entfernt alle Routen ohne zugewiesene Stationen ({count})"
+      "deleteAllStaleHint": "Entfernt alle Routen ohne zugewiesene Stationen ({count})",
+      "bulkAutoRepair": "Preise werden aktualisiert {done}/{total}…",
+      "unpricedCommodities": "Keine Verkaufspreise in der Datenbank für: {list}. Vermutlich hat der Preisimport diese Codes noch nicht geladen.",
+      "dismiss": "Ausblenden"
     },
     "commodities": {
       "search": "Suchen",
