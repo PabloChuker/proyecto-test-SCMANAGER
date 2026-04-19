@@ -446,7 +446,12 @@ export default function ActiveRoutePanel() {
     }
     const rows: ActiveRoute[] = [];
     for (const [groupId, entry] of map) {
-      if (entry.completed >= entry.total) continue; // done, skip
+      // Fase E.E3 — si venimos de una notif payout_pending/transferred con
+      // ?settle=<groupId>, la ruta ya suele estar 100% completada (se cobró y
+      // se distribuyó). No la filtramos en ese caso, así el ActiveRoutePanel
+      // puede mostrarla y auto-abrir el CobrarStopModal para cerrar los pagos.
+      const isSettleTarget = settleParamGroupId === groupId;
+      if (entry.completed >= entry.total && !isSettleTarget) continue; // done, skip
       const stops = groupIntoLogicalStops(entry.stops);
       rows.push({
         groupId,
@@ -459,7 +464,7 @@ export default function ActiveRoutePanel() {
     // Newest-first (biggest route at top)
     rows.sort((a, b) => b.totalCount - a.totalCount);
     return rows;
-  }, [scoped]);
+  }, [scoped, settleParamGroupId]);
 
   // Prefer a pending group id pushed by the Mining sell-route flow. We wait
   // until that route actually appears in the fetched list (the POSTs may
