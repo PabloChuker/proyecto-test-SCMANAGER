@@ -416,6 +416,36 @@ export async function PATCH(request: NextRequest) {
     // -- Si marcamos como distributed: flipeamos payouts + escribimos ledger.
     let ledgerEntries: any[] = [];
     if (updates.status === "distributed") {
+      // 0. Fase E.E5 — marcar las trade_work_orders asociadas como
+      //    'completed'. Sin esto las WOs quedan en draft/in_progress para
+      //    siempre y el ActiveRoutePanel acumula rutas fantasma porque su
+      //    filtro `entry.completed >= entry.total` nunca se satisface.
+      //    Best-effort: si falla, no reventamos el PATCH (la deuda ya se
+      //    registra en el ledger igual).
+      try {
+        const { data: bridgeRows, error: bErr } = await supabase
+          .from("mining_stop_distribution_wos")
+          .select("work_order_id")
+          .eq("distribution_id", id);
+        if (!bErr && bridgeRows && bridgeRows.length > 0) {
+          const woIds = bridgeRows
+            .map((r: any) => r.work_order_id)
+            .filter((x: any): x is string => !!x);
+          if (woIds.length > 0) {
+            await supabase
+              .from("trade_work_orders")
+              .update({
+                status: "completed",
+                completed_at: updates.distributed_at,
+              })
+              .in("id", woIds)
+              .neq("status", "completed"); // idempotente — no piso si ya estaba
+          }
+        }
+      } catch {
+        /* best-effort */
+      }
+
       // 1. Marcar pending_payouts como distributed
       await supabase
         .from("mining_pending_payouts")
