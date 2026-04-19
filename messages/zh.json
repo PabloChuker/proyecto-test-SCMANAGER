@@ -901,6 +901,13 @@
       "cobrar": {
         "action": "结算",
         "recalc": "重新计算",
+        "cobradoBadge": "已结算",
+        "closeRouteLabel": "关闭路线并分配",
+        "closeRouteReady": "所有站点已完成 — 可以分配。",
+        "closeRoutePartial": "部分站点仍未完成。你可以用现有的数据进行分配。",
+        "closeRouteNone": "尚未完成任何品项。",
+        "closeRouteAction": "分配收益",
+        "closeRouteRecalc": "重新计算分配",
         "disabledHint": "至少将一个品项标记为完成后才能结算",
         "eyebrow": "分配",
         "title": "结算第 {stop} 站",
@@ -931,7 +938,13 @@
         "cancel": "取消",
         "submit": "确认结算",
         "submitRecalc": "重新计算",
-        "submitting": "保存中…"
+        "submitting": "保存中…",
+        "colMember": "成员",
+        "colShare": "%",
+        "colAmount": "金额",
+        "colPaid": "已付",
+        "paidLabel": "已付",
+        "paidHint": "勾选已用现金支付的成员 — 他们会收到 '款项已收到' 通知。"
       }
     },
     "commodities": {

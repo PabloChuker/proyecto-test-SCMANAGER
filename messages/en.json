@@ -901,6 +901,13 @@
       "cobrar": {
         "action": "Settle",
         "recalc": "Recalculate",
+        "cobradoBadge": "Settled",
+        "closeRouteLabel": "Close route & split",
+        "closeRouteReady": "All stops completed — ready to split.",
+        "closeRoutePartial": "Some stops are still open. You can split now with what you've got.",
+        "closeRouteNone": "No commodities completed yet.",
+        "closeRouteAction": "Split earnings",
+        "closeRouteRecalc": "Recalculate split",
         "disabledHint": "Mark at least one commodity as completed to settle this stop",
         "eyebrow": "Distribution",
         "title": "Settle stop #{stop}",
@@ -931,7 +938,13 @@
         "cancel": "Cancel",
         "submit": "Confirm settlement",
         "submitRecalc": "Recalculate",
-        "submitting": "Saving…"
+        "submitting": "Saving…",
+        "colMember": "Member",
+        "colShare": "%",
+        "colAmount": "Amount",
+        "colPaid": "Paid",
+        "paidLabel": "Paid",
+        "paidHint": "Check the ones you already paid in cash — they'll get a 'payment received' notification."
       }
     },
     "commodities": {

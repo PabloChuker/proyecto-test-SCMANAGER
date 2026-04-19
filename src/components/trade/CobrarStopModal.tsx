@@ -108,6 +108,9 @@ export default function CobrarStopModal({ ctx, onClose, onSuccess }: Props) {
   >([]);
   const [manualShares, setManualShares] = useState<Record<string, number>>({});
   const [existing, setExisting] = useState<ExistingDistribution | null>(null);
+  // Fase E.B — quienes ya fueron pagados en efectivo al momento de cerrar.
+  // identityKey -> paid?
+  const [paidKeys, setPaidKeys] = useState<Set<string>>(new Set());
 
   const miningSessionId = useMemo(
     () => detectMiningSessionId(ctx.workOrders),
@@ -238,11 +241,16 @@ export default function CobrarStopModal({ ctx, onClose, onSuccess }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [splitMode]);
 
-  // ── Submit ─────────────────────────────────────────────────────────────
+  // ── Submit (Fase E.B cascade) ──────────────────────────────────────────
+  // 1. POST distribution (status=pending)
+  // 2. PATCH distribution → status=distributed  (dispara payout_pending a todos)
+  // 3. PATCH settlements (paid=true) para los checkeados en paidKeys
+  //    → dispara payout_transferred a esos mismos.
   async function handleSubmit() {
     setSubmitting(true);
     setError(null);
     try {
+      // Paso 1: crear distribucion pending
       const body = {
         route_group_id: ctx.routeGroupId,
         stop_index: ctx.stopIndex,
@@ -263,8 +271,87 @@ export default function CobrarStopModal({ ctx, onClose, onSuccess }: Props) {
         setSubmitting(false);
         return;
       }
-      const id = json?.data?.id as string | undefined;
-      if (id && onSuccess) onSuccess(id);
+      const distributionId = json?.data?.id as string | undefined;
+      if (!distributionId) {
+        setError("missing_distribution_id");
+        setSubmitting(false);
+        return;
+      }
+
+      // Paso 2: PATCH → distributed (genera ledger + payout_pending notifs)
+      let ledgerEntries: Array<{
+        id: string;
+        to_user_id: string | null;
+        to_display_name: string | null;
+      }> = [];
+      try {
+        const distribRes = await fetch("/api/mining/distributions", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: distributionId, status: "distributed" }),
+        });
+        const distribJson = await distribRes.json().catch(() => ({}));
+        if (!distribRes.ok) {
+          // Falla parcial: distribucion creada pending, pero no llego a distributed.
+          // No reventamos el flujo, solo avisamos.
+          console.warn(
+            "[CobrarStopModal] PATCH distributed failed:",
+            distribJson?.error,
+          );
+        } else if (Array.isArray(distribJson?.ledgerEntries)) {
+          ledgerEntries = distribJson.ledgerEntries;
+        }
+      } catch (e) {
+        console.warn("[CobrarStopModal] PATCH distributed exception:", e);
+      }
+
+      // Paso 3: marcar paid a los checkeados
+      if (paidKeys.size > 0 && ledgerEntries.length > 0) {
+        // Mapear identityKey -> preview row -> encontrar ledger entry
+        const idsToMarkPaid: string[] = [];
+        for (const row of preview.rows) {
+          if (!paidKeys.has(row.identityKey)) continue;
+          // Primero match por user_id si preview row lo tiene; si no, por display name.
+          const match = ledgerEntries.find((le) => {
+            if (row.userId && le.to_user_id && le.to_user_id === row.userId) {
+              return true;
+            }
+            if (
+              le.to_display_name &&
+              le.to_display_name.toLowerCase() ===
+                row.displayName.toLowerCase()
+            ) {
+              return true;
+            }
+            return false;
+          });
+          if (match) idsToMarkPaid.push(match.id);
+        }
+
+        if (idsToMarkPaid.length > 0) {
+          try {
+            const payRes = await fetch("/api/mining/settlements", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ids: idsToMarkPaid, paid: true }),
+            });
+            if (!payRes.ok) {
+              const payJson = await payRes.json().catch(() => ({}));
+              console.warn(
+                "[CobrarStopModal] PATCH settlements paid failed:",
+                payJson?.error,
+              );
+            }
+          } catch (e) {
+            console.warn(
+              "[CobrarStopModal] PATCH settlements paid exception:",
+              e,
+            );
+          }
+        }
+      }
+
+      if (onSuccess) onSuccess(distributionId);
       onClose();
     } catch (e: any) {
       setError(e?.message || "submit_failed");
@@ -377,8 +464,17 @@ export default function CobrarStopModal({ ctx, onClose, onSuccess }: Props) {
               <div className="text-xs text-zinc-500">{t("noMembers")}</div>
             ) : (
               <div className="border border-zinc-800 rounded-sm divide-y divide-zinc-800/60">
+                <div className="px-3 py-1.5 flex items-center gap-3 bg-zinc-900/40 text-[9px] uppercase tracking-[0.2em] text-zinc-500">
+                  <div className="flex-1">{t("colMember")}</div>
+                  <div className="w-14 text-right">{t("colShare")}</div>
+                  <div className="w-24 text-right">{t("colAmount")}</div>
+                  <div className="w-14 text-center" title={t("paidHint")}>
+                    {t("colPaid")}
+                  </div>
+                </div>
                 {preview.rows.map((r) => {
                   const inputVal = manualShares[r.identityKey] ?? r.sharePct;
+                  const isPaid = paidKeys.has(r.identityKey);
                   return (
                     <div
                       key={r.identityKey}
@@ -420,6 +516,24 @@ export default function CobrarStopModal({ ctx, onClose, onSuccess }: Props) {
                       )}
                       <div className="text-sm font-mono text-emerald-300 w-24 text-right">
                         {fmt(r.pendingAuec)} aUEC
+                      </div>
+                      <div className="w-14 flex items-center justify-center">
+                        <label className="inline-flex items-center gap-1.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={isPaid}
+                            onChange={(e) => {
+                              setPaidKeys((prev) => {
+                                const next = new Set(prev);
+                                if (e.target.checked) next.add(r.identityKey);
+                                else next.delete(r.identityKey);
+                                return next;
+                              });
+                            }}
+                            className="h-3.5 w-3.5 accent-emerald-500 cursor-pointer"
+                            aria-label={t("paidLabel")}
+                          />
+                        </label>
                       </div>
                     </div>
                   );

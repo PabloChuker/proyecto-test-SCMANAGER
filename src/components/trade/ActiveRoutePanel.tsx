@@ -992,6 +992,66 @@ export default function ActiveRoutePanel() {
             </span>
           </div>
 
+          {/* ── Route-level settle button (Fase E.A) ── */}
+          {(() => {
+            const anyCompleted = orderedStops.some((s) =>
+              s.items.some((it) => it.wo.status === "completed"),
+            );
+            const allCompleted =
+              orderedStops.length > 0 && orderedStops.every((s) => s.allCompleted);
+            const alreadySettled = orderedStops.some((s) =>
+              cobradoStops.has(`${selected.groupId}|${s.minStop}`),
+            );
+            const lastStop = orderedStops[orderedStops.length - 1];
+            const disabled = !anyCompleted || !lastStop;
+            return (
+              <div className="flex flex-wrap items-center gap-2 px-3 py-2 border border-zinc-800/60 rounded-sm bg-zinc-900/30">
+                <div className="flex-1 min-w-[180px]">
+                  <div className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">
+                    {t("cobrar.closeRouteLabel")}
+                  </div>
+                  <div className="text-[11px] text-zinc-400 mt-0.5">
+                    {allCompleted
+                      ? t("cobrar.closeRouteReady")
+                      : anyCompleted
+                        ? t("cobrar.closeRoutePartial")
+                        : t("cobrar.closeRouteNone")}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  title={disabled ? t("cobrar.disabledHint") : undefined}
+                  onClick={() => {
+                    if (!lastStop) return;
+                    const allWOs = orderedStops.flatMap((s) =>
+                      s.items.map((it) => it.wo),
+                    );
+                    setCobrarStop({
+                      routeGroupId: selected.groupId,
+                      stopIndex: lastStop.minStop,
+                      routeTotalStops: selected.total,
+                      station: lastStop.station,
+                      system: lastStop.system,
+                      workOrders: allWOs,
+                    });
+                  }}
+                  className={`px-3 py-1.5 rounded-sm border text-xs font-mono uppercase tracking-widest transition ${
+                    disabled
+                      ? "bg-zinc-800/40 border-zinc-800/60 text-zinc-600 cursor-not-allowed"
+                      : alreadySettled
+                        ? "bg-cyan-500/15 border-cyan-500/40 text-cyan-200 hover:bg-cyan-500/25"
+                        : "bg-amber-500/15 border-amber-500/40 text-amber-200 hover:bg-amber-500/25"
+                  }`}
+                >
+                  {alreadySettled
+                    ? t("cobrar.closeRouteRecalc")
+                    : t("cobrar.closeRouteAction")}
+                </button>
+              </div>
+            );
+          })()}
+
           {/* ── Stops ── */}
           <div className="space-y-2">
             {orderedStops.map((s, idx) => {
@@ -1033,19 +1093,6 @@ export default function ActiveRoutePanel() {
                     onDragEnd={onDragEnd}
                     onOpenWO={openEdit}
                     cobrado={cobradoStops.has(`${selected.groupId}|${s.minStop}`)}
-                    canCobrar={s.items.some(
-                      (it) => it.wo.status === "completed",
-                    )}
-                    onCobrar={() =>
-                      setCobrarStop({
-                        routeGroupId: selected.groupId,
-                        stopIndex: s.minStop,
-                        routeTotalStops: selected.total,
-                        station: s.station,
-                        system: s.system,
-                        workOrders: s.items.map((it) => it.wo),
-                      })
-                    }
                   />
                 </div>
               );
@@ -1187,8 +1234,6 @@ function StopCard({
   onDragEnd,
   onOpenWO,
   cobrado,
-  canCobrar,
-  onCobrar,
 }: {
   stop: LogicalStop;
   index: number;
@@ -1198,8 +1243,6 @@ function StopCard({
   onDragEnd: () => void;
   onOpenWO: (id: string) => void;
   cobrado: boolean;
-  canCobrar: boolean;
-  onCobrar: () => void;
 }) {
   const t = useTranslations("Trade.activeRoute");
   const doneItems = stop.items.filter((i) => i.wo.status === "completed").length;
@@ -1298,30 +1341,17 @@ function StopCard({
         })}
       </div>
 
-      {/* Footer: progress + cobrar */}
+      {/* Footer: progress */}
       <div className="px-3 py-1.5 flex items-center justify-between text-[10px] text-zinc-500 font-mono bg-zinc-950/40">
         <span>
           {doneItems}/{stop.items.length} {t("commoditiesDone")}
         </span>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (canCobrar) onCobrar();
-            }}
-            disabled={!canCobrar}
-            title={canCobrar ? undefined : t("cobrar.disabledHint")}
-            className={`px-2 py-0.5 rounded-sm border text-[10px] uppercase tracking-widest transition ${
-              cobrado
-                ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25"
-                : canCobrar
-                  ? "bg-amber-500/15 border-amber-500/40 text-amber-200 hover:bg-amber-500/25"
-                  : "bg-zinc-800/40 border-zinc-800/60 text-zinc-600 cursor-not-allowed"
-            }`}
-          >
-            {cobrado ? t("cobrar.recalc") : t("cobrar.action")}
-          </button>
+          {cobrado && (
+            <span className="px-1.5 py-0.5 rounded-sm border text-[10px] uppercase tracking-widest bg-emerald-500/15 border-emerald-500/40 text-emerald-300">
+              ✓ {t("cobrar.cobradoBadge")}
+            </span>
+          )}
           <span className="opacity-60">{t("dragToReorder")}</span>
         </div>
       </div>

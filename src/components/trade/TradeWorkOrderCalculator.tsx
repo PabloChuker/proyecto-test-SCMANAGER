@@ -248,6 +248,73 @@ export default function TradeWorkOrderCalculator() {
         const { data } = await res.json();
         hydrateFromServer(data);
         setServerId(data.id);
+
+        // Fase E.C — si la WO pertenece a una ruta (tiene routeMarker) y no
+        // tiene participantes cargados, precargar la party desde una WO
+        // hermana de la misma ruta. Evita tener que rearmar la crew en cada
+        // parada.
+        const serverNotes = (data.notes || "") as string;
+        const rMarker = parseRouteMarker(serverNotes);
+        const currentParticipants =
+          Array.isArray(data.trade_wo_participants)
+            ? data.trade_wo_participants
+            : [];
+        if (rMarker && currentParticipants.length === 0) {
+          try {
+            const list = await fetch(`/api/trade/work-orders`);
+            if (list.ok) {
+              const json = await list.json();
+              const rows = Array.isArray(json?.data) ? json.data : [];
+              // Buscar hermana con el mismo groupId y con participantes.
+              let sibling: any = null;
+              for (const w of rows) {
+                if (!w || w.id === data.id) continue;
+                const sm = parseRouteMarker((w.notes as string) || "");
+                if (!sm || sm.groupId !== rMarker.groupId) continue;
+                const parts = Array.isArray(w.trade_wo_participants)
+                  ? w.trade_wo_participants
+                  : [];
+                if (parts.length > 0) {
+                  sibling = w;
+                  break;
+                }
+              }
+              if (sibling) {
+                const siblingParts = Array.isArray(sibling.trade_wo_participants)
+                  ? sibling.trade_wo_participants
+                  : [];
+                const now = Date.now();
+                // Marcar isNew=true para que al guardar se INSERTen como filas
+                // propias de esta WO (no estamos transfiriendo filas, sino
+                // copiando identidades: userId + displayName + role).
+                setParticipants(
+                  siblingParts.map((p: TradeWOParticipant, i: number) => ({
+                    id: "",
+                    localKey: `route-prefill-${now}-${i}`,
+                    user_id: p.user_id ?? null,
+                    display_name: p.display_name,
+                    avatar_url: p.avatar_url ?? null,
+                    role: p.role || "crew",
+                    role_pct: Number(p.role_pct) || 0,
+                    contribution_uec: 0,
+                    contribution_note: null,
+                    payout_uec: 0,
+                    paid: false,
+                    isNew: true,
+                    dirty: true,
+                  })),
+                );
+                // Copiar party_id si la hermana lo tenia
+                if (sibling.party_id) setPartyId(sibling.party_id);
+                setPartyMsg(
+                  `${siblingParts.length} miembro${siblingParts.length === 1 ? "" : "s"} precargado${siblingParts.length === 1 ? "" : "s"} desde la parada anterior de esta ruta.`,
+                );
+              }
+            }
+          } catch {
+            /* swallow — el prefill de ruta es best-effort */
+          }
+        }
       } catch (e: any) {
         setError(e.message);
       } finally {

@@ -901,6 +901,13 @@
       "cobrar": {
         "action": "Abrechnen",
         "recalc": "Neu berechnen",
+        "cobradoBadge": "Abgerechnet",
+        "closeRouteLabel": "Route abschließen & aufteilen",
+        "closeRouteReady": "Alle Stopps abgeschlossen — bereit zur Aufteilung.",
+        "closeRoutePartial": "Einige Stopps sind noch offen. Du kannst jetzt mit dem aufteilen, was du hast.",
+        "closeRouteNone": "Noch keine Ware abgeschlossen.",
+        "closeRouteAction": "Gewinne aufteilen",
+        "closeRouteRecalc": "Aufteilung neu berechnen",
         "disabledHint": "Markiere mindestens eine Ware als abgeschlossen, um abzurechnen",
         "eyebrow": "Verteilung",
         "title": "Stopp #{stop} abrechnen",
@@ -931,7 +938,13 @@
         "cancel": "Abbrechen",
         "submit": "Abrechnung bestätigen",
         "submitRecalc": "Neu berechnen",
-        "submitting": "Speichere…"
+        "submitting": "Speichere…",
+        "colMember": "Mitglied",
+        "colShare": "%",
+        "colAmount": "Betrag",
+        "colPaid": "Bezahlt",
+        "paidLabel": "Bezahlt",
+        "paidHint": "Markiere die, die du bereits in bar bezahlt hast — sie erhalten eine 'Zahlung eingegangen'-Benachrichtigung."
       }
     },
     "commodities": {

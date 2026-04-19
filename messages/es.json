@@ -901,6 +901,13 @@
       "cobrar": {
         "action": "Cobrar",
         "recalc": "Recalcular",
+        "cobradoBadge": "Cobrado",
+        "closeRouteLabel": "Cerrar ruta y repartir",
+        "closeRouteReady": "Todas las paradas completadas — listo para repartir.",
+        "closeRoutePartial": "Hay paradas sin completar. Podés repartir ahora con lo que llevás.",
+        "closeRouteNone": "Todavía no completaste ninguna mercancía.",
+        "closeRouteAction": "Repartir ganancias",
+        "closeRouteRecalc": "Recalcular reparto",
         "disabledHint": "Marcá al menos una mercancía como completada para poder cobrar",
         "eyebrow": "Distribución",
         "title": "Cobrar parada #{stop}",
@@ -931,7 +938,13 @@
         "cancel": "Cancelar",
         "submit": "Confirmar cobro",
         "submitRecalc": "Recalcular",
-        "submitting": "Guardando…"
+        "submitting": "Guardando…",
+        "colMember": "Miembro",
+        "colShare": "%",
+        "colAmount": "Monto",
+        "colPaid": "Pagado",
+        "paidLabel": "Pagado",
+        "paidHint": "Marcá a los que ya pagaste en efectivo — les llega una notificación de 'transferencia recibida'."
       }
     },
     "commodities": {

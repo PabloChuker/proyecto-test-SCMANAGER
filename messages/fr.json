@@ -901,6 +901,13 @@
       "cobrar": {
         "action": "Encaisser",
         "recalc": "Recalculer",
+        "cobradoBadge": "Encaissé",
+        "closeRouteLabel": "Clore la route et répartir",
+        "closeRouteReady": "Toutes les étapes sont terminées — prêt à répartir.",
+        "closeRoutePartial": "Certaines étapes restent ouvertes. Tu peux répartir avec ce que tu as.",
+        "closeRouteNone": "Aucune marchandise terminée pour l'instant.",
+        "closeRouteAction": "Répartir les gains",
+        "closeRouteRecalc": "Recalculer la répartition",
         "disabledHint": "Marquez au moins une marchandise comme terminée pour encaisser",
         "eyebrow": "Répartition",
         "title": "Encaisser l'arrêt #{stop}",
@@ -931,7 +938,13 @@
         "cancel": "Annuler",
         "submit": "Confirmer l'encaissement",
         "submitRecalc": "Recalculer",
-        "submitting": "Enregistrement…"
+        "submitting": "Enregistrement…",
+        "colMember": "Membre",
+        "colShare": "%",
+        "colAmount": "Montant",
+        "colPaid": "Payé",
+        "paidLabel": "Payé",
+        "paidHint": "Coche ceux que tu as déjà payés en liquide — ils recevront une notification de 'paiement reçu'."
       }
     },
     "commodities": {
