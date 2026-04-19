@@ -896,6 +896,8 @@
       "discardCardHint": "Diese Route verwerfen",
       "deleteAllStale": "{count} preislose Routen löschen",
       "deleteAllStaleHint": "Entfernt alle Routen ohne zugewiesene Stationen ({count})",
+      "clearAll": "Alles löschen ({count})",
+      "clearAllHint": "Löscht ALLE aktiven Routen im Panel ({count}). Zerstörerisch — fragt nach Bestätigung.",
       "bulkAutoRepair": "Preise werden aktualisiert {done}/{total}…",
       "unpricedCommodities": "Keine Verkaufspreise in der Datenbank für: {list}. Vermutlich hat der Preisimport diese Codes noch nicht geladen.",
       "dismiss": "Ausblenden",

@@ -896,6 +896,8 @@
       "discardCardHint": "Discard this route",
       "deleteAllStale": "Delete {count} stale routes",
       "deleteAllStaleHint": "Removes every route with no assigned stations ({count})",
+      "clearAll": "Clear all ({count})",
+      "clearAllHint": "Removes EVERY active route in the panel ({count}). Destructive — asks for confirmation.",
       "bulkAutoRepair": "Refreshing prices {done}/{total}…",
       "unpricedCommodities": "No sell prices found in the database for: {list}. Likely the price ingest hasn't loaded these codes yet.",
       "dismiss": "Dismiss",

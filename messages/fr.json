@@ -896,6 +896,8 @@
       "discardCardHint": "Ignorer cette route",
       "deleteAllStale": "Supprimer {count} routes sans prix",
       "deleteAllStaleHint": "Supprime toutes les routes sans stations ({count})",
+      "clearAll": "Tout effacer ({count})",
+      "clearAllHint": "Supprime TOUTES les routes actives du panneau ({count}). Destructif — demande confirmation.",
       "bulkAutoRepair": "Mise à jour des prix {done}/{total}…",
       "unpricedCommodities": "Aucun prix de vente en base pour : {list}. L'import n'a probablement pas encore chargé ces codes.",
       "dismiss": "Masquer",

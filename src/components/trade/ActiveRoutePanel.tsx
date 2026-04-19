@@ -409,6 +409,42 @@ export default function ActiveRoutePanel() {
     [refresh],
   );
 
+  // ── Fase E.E7: nuke EVERY active route in the current scope ──────────────
+  // Más agresivo que deleteAllStale (que solo toca rutas sin estación). Esta
+  // función limpia TODO lo que el panel está mostrando, sin importar si está
+  // a la mitad o ya cobrada. Usa confirm() porque es destructivo.
+  const deleteAllRoutes = useCallback(
+    async (routes: ActiveRoute[]) => {
+      if (routes.length === 0) return;
+      const woIds: string[] = [];
+      for (const r of routes) {
+        for (const s of r.stops) for (const it of s.items) woIds.push(it.wo.id);
+      }
+      if (woIds.length === 0) return;
+      const ok =
+        typeof window !== "undefined"
+          ? window.confirm(
+              `¿Borrar TODAS las rutas activas (${routes.length})? Esta acción no se puede deshacer.`,
+            )
+          : true;
+      if (!ok) return;
+      setBulkBusy(true);
+      try {
+        await Promise.all(
+          woIds.map((id) =>
+            fetch(`/api/trade/work-orders/${id}`, { method: "DELETE" }).catch(
+              () => undefined,
+            ),
+          ),
+        );
+        await refresh();
+      } finally {
+        setBulkBusy(false);
+      }
+    },
+    [refresh],
+  );
+
   // Scope-filter (mirrors TradeDashboard logic)
   const scoped = useMemo(() => {
     if (scope === "all") return allOrders;
@@ -876,6 +912,22 @@ export default function ActiveRoutePanel() {
               </button>
             );
           })()}
+          {/* Fase E.E7 — Botón "Limpiar todo": borra TODAS las rutas activas
+              del scope. Aparece cuando hay al menos 1 ruta y es un escape
+              hatch para los casos en que Pablo tiene el panel lleno de
+              rutas huérfanas que nunca se llegaron a cobrar. */}
+          {activeRoutes.length > 0 && (
+            <button
+              onClick={() => deleteAllRoutes(activeRoutes)}
+              disabled={bulkBusy}
+              className="px-3 py-1 text-[10px] uppercase tracking-widest font-mono bg-red-600/20 border border-red-600/50 rounded-sm text-red-100 hover:bg-red-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={t("clearAllHint", { count: activeRoutes.length })}
+            >
+              {bulkBusy
+                ? t("deleting")
+                : t("clearAll", { count: activeRoutes.length })}
+            </button>
+          )}
           <button
             onClick={refresh}
             className="px-3 py-1 text-[10px] uppercase tracking-widest font-mono bg-zinc-900/50 border border-zinc-800/60 rounded-sm text-zinc-300 hover:bg-zinc-800"

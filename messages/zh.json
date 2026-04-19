@@ -896,6 +896,8 @@
       "discardCardHint": "丢弃此路线",
       "deleteAllStale": "删除 {count} 条无价格路线",
       "deleteAllStaleHint": "删除所有未分配站点的路线（{count}）",
+      "clearAll": "清除全部 ({count})",
+      "clearAllHint": "删除面板中的所有活动路线（{count}）。具有破坏性 — 将请求确认。",
       "bulkAutoRepair": "正在更新价格 {done}/{total}…",
       "unpricedCommodities": "数据库中未找到以下品项的销售价格：{list}。可能价格导入尚未加载这些代码。",
       "dismiss": "隐藏",

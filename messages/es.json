@@ -896,6 +896,8 @@
       "discardCardHint": "Descartar esta ruta",
       "deleteAllStale": "Borrar {count} rutas sin precios",
       "deleteAllStaleHint": "Elimina todas las rutas sin estaciones ({count})",
+      "clearAll": "Limpiar todo ({count})",
+      "clearAllHint": "Borra TODAS las rutas activas del panel ({count}). Acción destructiva — pedirá confirmación.",
       "bulkAutoRepair": "Actualizando precios {done}/{total}…",
       "unpricedCommodities": "Sin precios de venta en la base para: {list}. Probablemente el ingest todavía no cargó estos códigos.",
       "dismiss": "Ocultar",
