@@ -241,7 +241,7 @@ export default function StreamerCardsPage() {
               <div className="text-[10px] tracking-[0.18em] uppercase font-mono text-amber-500 mb-2">
                 ➋ Orientación
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => setVariant("horizontal")}
                   className={`py-2 text-[10px] tracking-widest uppercase font-mono rounded transition-colors border ${
@@ -250,7 +250,7 @@ export default function StreamerCardsPage() {
                       : "bg-zinc-900/60 border-zinc-800 text-zinc-500 hover:text-zinc-300"
                   }`}
                 >
-                  ▭ Horiz.
+                  ▭ Horizontal
                 </button>
                 <button
                   onClick={() => setVariant("vertical")}
@@ -260,17 +260,7 @@ export default function StreamerCardsPage() {
                       : "bg-zinc-900/60 border-zinc-800 text-zinc-500 hover:text-zinc-300"
                   }`}
                 >
-                  ▯ Vert.
-                </button>
-                <button
-                  onClick={() => setVariant("banner")}
-                  className={`py-2 text-[10px] tracking-widest uppercase font-mono rounded transition-colors border ${
-                    variant === "banner"
-                      ? "bg-amber-500/15 border-amber-500/40 text-amber-300"
-                      : "bg-zinc-900/60 border-zinc-800 text-zinc-500 hover:text-zinc-300"
-                  }`}
-                >
-                  ⬛ Banner
+                  ▯ Vertical
                 </button>
               </div>
             </div>
