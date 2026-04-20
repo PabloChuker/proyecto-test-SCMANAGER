@@ -40,10 +40,10 @@ export interface ShipViewer3DProps {
   showGrid?: boolean;
   showAxis?: boolean;
   transparent?: boolean;
-  /** Desplaza el punto al que mira la cámara — [x, y, z] — default [0,0,0].
-   *  Útil para reencuadrar la nave sin mover la geometría:
-   *  lookAt x+ → nave aparece a la izquierda · lookAt y- → nave aparece arriba */
-  cameraLookAt?: [number, number, number];
+  /** Activa rotación automática en modo "free" (OrbitControls). Default false. */
+  autoRotate?: boolean;
+  /** Velocidad de autoRotate (default 1.0 = ~30s/vuelta). Valores negativos invierten sentido. */
+  autoRotateSpeed?: number;
 }
 
 // Color de cada línea de eje según la convención de la nave:
@@ -150,7 +150,8 @@ export function ShipViewer3D({
   showGrid = true,
   showAxis = true,
   transparent = false,
-  cameraLookAt = [0, 0, 0],
+  autoRotate = false,
+  autoRotateSpeed = 1.0,
 }: ShipViewer3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -167,7 +168,7 @@ export function ShipViewer3D({
 
     const camera = new THREE.PerspectiveCamera(36, W / H, 0.1, 80);
     camera.position.set(1.7, 0.95, 2.1);
-    camera.lookAt(cameraLookAt[0], cameraLookAt[1], cameraLookAt[2]);
+    camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: transparent });
     renderer.setSize(W, H);
@@ -256,10 +257,12 @@ export function ShipViewer3D({
       import("three/examples/jsm/controls/OrbitControls.js").then(({ OrbitControls }) => {
         if (cancelled) return;
         const ctrl = new OrbitControls(camera, renderer.domElement);
-        ctrl.enableDamping = true;
-        ctrl.dampingFactor = 0.07;
-        ctrl.minDistance   = 1.5;
-        ctrl.maxDistance   = 14;
+        ctrl.enableDamping    = true;
+        ctrl.dampingFactor    = 0.07;
+        ctrl.minDistance      = 1.5;
+        ctrl.maxDistance      = 14;
+        ctrl.autoRotate       = autoRotate;
+        ctrl.autoRotateSpeed  = autoRotateSpeed;
         controls  = ctrl;
         ctrlReady = true;
       });

@@ -11,7 +11,6 @@
 // =============================================================================
 
 import Image from "next/image";
-import { useState, useRef } from "react";
 import type { ShipDetailResponseV2 } from "@/types/ships";
 import { getTheme, type CardVariant } from "./ship-card-themes";
 import { ShipViewer3D } from "@/components/shared/flight-dynamics/ShipViewer3D";
@@ -271,14 +270,11 @@ function BrandMark({ theme, size = 40, labelSize = 18, subSize = 10 }: {
   );
 }
 
-// ─── Showcase — componente con estado propio para drag/resize ────────────────
+// ─── Showcase ─────────────────────────────────────────────────────────────────
 
 const SC_W = 1800;
 const SC_H = 900;
 const SC_PANEL_H = 130;
-const SC_USABLE_H = SC_H - SC_PANEL_H; // 770
-const SC_MIN_W = 300;
-const SC_MIN_H = 220;
 
 interface ShowcaseCardInnerProps {
   captureId: string;
@@ -300,72 +296,6 @@ function ShowcaseCardInner({
   captureId, theme, displayName, manufacturer, shipType, shipRole,
   glbCandidates, cargo, hullHp, scmSpeed, shieldHp, maxCrew, mass,
 }: ShowcaseCardInnerProps) {
-  // Posición y tamaño de la nave (en px del card a escala real)
-  const [viewer, setViewer] = useState({ x: 0, y: 0, w: 1080, h: SC_USABLE_H });
-  const [hovered, setHovered] = useState(false);
-
-  const interactionRef = useRef<{
-    type: "move" | "resize";
-    startCX: number; startCY: number;
-    origX: number; origY: number;
-    origW: number; origH: number;
-  } | null>(null);
-
-  /** Obtiene el factor de escala CSS aplicado al card (para corregir coordenadas) */
-  const getScale = () => {
-    const el = document.getElementById(captureId);
-    if (!el) return 1;
-    return el.getBoundingClientRect().width / SC_W;
-  };
-
-  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
-
-  const startInteraction = (e: React.MouseEvent, type: "move" | "resize") => {
-    e.preventDefault();
-    e.stopPropagation();
-    const scale = getScale();
-    interactionRef.current = {
-      type,
-      startCX: e.clientX / scale,
-      startCY: e.clientY / scale,
-      origX: viewer.x, origY: viewer.y,
-      origW: viewer.w, origH: viewer.h,
-    };
-
-    const onMove = (ev: MouseEvent) => {
-      const ia = interactionRef.current;
-      if (!ia) return;
-      const sc = getScale();
-      const dx = ev.clientX / sc - ia.startCX;
-      const dy = ev.clientY / sc - ia.startCY;
-
-      setViewer(v => {
-        if (ia.type === "move") {
-          return {
-            ...v,
-            x: clamp(ia.origX + dx, 0, SC_W - v.w),
-            y: clamp(ia.origY + dy, 0, SC_USABLE_H - v.h),
-          };
-        } else {
-          return {
-            ...v,
-            w: clamp(ia.origW + dx, SC_MIN_W, SC_W - v.x),
-            h: clamp(ia.origH + dy, SC_MIN_H, SC_USABLE_H - v.y),
-          };
-        }
-      });
-    };
-
-    const onUp = () => {
-      interactionRef.current = null;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  };
-
   const nameFontSize = Math.max(48, Math.min(130, Math.floor(880 / Math.max(displayName.length, 4))));
 
   const showcaseStats = [
@@ -409,57 +339,22 @@ function ShowcaseCardInner({
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 220, background: "linear-gradient(to bottom, #000000b0 0%, transparent 100%)", zIndex: 3, pointerEvents: "none" }} />
       <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 300, background: "linear-gradient(to top, #000000a0 0%, transparent 100%)", zIndex: 3, pointerEvents: "none" }} />
 
-      {/* ── Nave 3D — draggable + resizable ── */}
-      <div
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        onMouseDown={(e) => startInteraction(e, "move")}
-        style={{
-          position: "absolute",
-          left: viewer.x, top: viewer.y,
-          width: viewer.w, height: viewer.h,
-          zIndex: 2,
-          cursor: "grab",
-          outline: hovered ? "1px dashed rgba(255,255,255,0.25)" : "none",
-          boxSizing: "border-box",
-        }}
-      >
+      {/* Nave 3D — OrbitControls: arrastrar=orbitar, scroll=zoom, autoRotate suave */}
+      <div style={{ position: "absolute", inset: 0, zIndex: 2 }}>
         <ShipViewer3D
           glbUrl={glbCandidates}
-          rotationAxis="yaw"
-          animate
-          animationSpeed={0.18}
+          rotationAxis="free"
           showGrid={false}
           showAxis={false}
           transparent
+          autoRotate
+          autoRotateSpeed={0.6}
           className="w-full h-full"
         />
-
-        {/* Handle de resize — esquina inferior derecha */}
-        <div
-          title="Redimensionar"
-          onMouseDown={(e) => { e.stopPropagation(); startInteraction(e, "resize"); }}
-          style={{
-            position: "absolute", bottom: 0, right: 0,
-            width: 28, height: 28,
-            cursor: "se-resize",
-            display: "flex", alignItems: "flex-end", justifyContent: "flex-end",
-            padding: 4,
-            opacity: hovered ? 1 : 0,
-            transition: "opacity 0.15s",
-          }}
-        >
-          {/* Icono ↘ con tres líneas diagonales */}
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <line x1="2" y1="14" x2="14" y2="2" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round"/>
-            <line x1="7" y1="14" x2="14" y2="7" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round"/>
-            <line x1="12" y1="14" x2="14" y2="12" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-        </div>
       </div>
 
       {/* Brand mark — top-left */}
-      <div style={{ position: "absolute", top: 28, left: 36, zIndex: 10 }}>
+      <div style={{ position: "absolute", top: 28, left: 36, zIndex: 10, pointerEvents: "none" }}>
         <BrandMark theme={{ ...theme, text: "#ffffff", textMuted: "rgba(255,255,255,0.55)" }} size={36} labelSize={13} subSize={8} />
       </div>
 
