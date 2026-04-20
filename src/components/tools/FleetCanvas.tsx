@@ -6,11 +6,15 @@ import {
   X, Plus, ZoomIn, ZoomOut, Search,
   ChevronLeft, ChevronRight, Crosshair,
 } from "lucide-react";
-import { useHangarStore, type HangarShip } from "@/store/useHangarStore";
+import { useHangarStore } from "@/store/useHangarStore";
+import type { HangarShip } from "@/store/useHangarStore";
 import { shipGlbCandidates } from "@/lib/shipGlb";
 
+// ShipViewer3D is a named export — dynamic() needs the default wrapper
 const ShipViewer3D = dynamic(
-  () => import("@/components/shared/flight-dynamics/ShipViewer3D"),
+  () => import("@/components/shared/flight-dynamics/ShipViewer3D").then(
+    (m) => ({ default: m.ShipViewer3D }),
+  ),
   { ssr: false },
 );
 
@@ -19,27 +23,28 @@ const ShipViewer3D = dynamic(
 const NODE_W = 200;
 const NODE_H = 160;
 const VIEWER_H = 116;
-const ZOOM_MIN = 0.06;
-const ZOOM_MAX = 3;
+const ZOOM_MIN  = 0.06;
+const ZOOM_MAX  = 3;
 const ZOOM_STEP = 0.12;
-const STORAGE_KEY = "sc-labs-fleet-canvas-v1";
+const STORAGE_KEY  = "sc-labs-fleet-canvas-v1";
+const MAX_GL_CONTEXTS = 8; // browsers cap at ~8-16; keep headroom for other tabs
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
 interface CanvasNode {
-  id: string;
-  reference: string;
-  name: string;
+  id:           string;
+  reference:    string;
+  name:         string;
   manufacturer: string;
-  imageUrl?: string;
+  imageUrl?:    string;
   x: number;
   y: number;
 }
 
 interface ApiShip {
-  id: number;
-  reference: string;
-  name: string;
+  id:           number;
+  reference:    string;
+  name:         string;
   manufacturer: string;
 }
 
@@ -57,47 +62,45 @@ function isShipItem(s: HangarShip) {
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function FleetCanvas() {
-  const [nodes, setNodes] = useState<CanvasNode[]>([]);
-  const [view, setView] = useState<ViewState>({ panX: 0, panY: 0, zoom: 1 });
-  const viewRef = useRef<ViewState>(view);
+  // Hydration guard — Zustand persist hasn't fired yet on first server render
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState<"hangar" | "catalog">("hangar");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [catalogShips, setCatalogShips] = useState<ApiShip[]>([]);
-  const [loadingCatalog, setLoadingCatalog] = useState(false);
+  // Standard Zustand selector (same pattern as HangarDashboard)
+  const allShips = useHangarStore((state) => state.ships);
 
-  // Read hangar ships directly from store after mount to avoid hydration timing issues
-  const [hangarShipList, setHangarShipList] = useState<HangarShip[]>([]);
+  const hangarShipList = useMemo(
+    () => (mounted ? allShips.filter((s) => isShipItem(s) && s.shipReference && s.location === "hangar") : []),
+    [mounted, allShips],
+  );
+
+  const [nodes,  setNodes] = useState<CanvasNode[]>([]);
+  const [view,   setView]  = useState<ViewState>({ panX: 0, panY: 0, zoom: 1 });
+  const viewRef  = useRef<ViewState>(view);
+
+  // Track which nodes have an active WebGL context (LRU, max MAX_GL_CONTEXTS)
+  const [activeGlIds, setActiveGlIds] = useState<string[]>([]);
+
+  const [sidebarOpen,   setSidebarOpen]   = useState(true);
+  const [activeTab,     setActiveTab]     = useState<"hangar" | "catalog">("hangar");
+  const [searchQuery,   setSearchQuery]   = useState("");
+  const [catalogShips,  setCatalogShips]  = useState<ApiShip[]>([]);
+  const [loadingCatalog,setLoadingCatalog]= useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef({
+  const dragRef   = useRef({
     active: false,
     type: "pan" as "pan" | "ship",
     shipId: null as string | null,
-    startClientX: 0,
-    startClientY: 0,
-    startPanX: 0,
-    startPanY: 0,
-    startNodeX: 0,
-    startNodeY: 0,
+    startClientX: 0, startClientY: 0,
+    startPanX:    0, startPanY:    0,
+    startNodeX:   0, startNodeY:   0,
   });
 
   const applyView = useCallback((updates: Partial<ViewState>) => {
     const next = { ...viewRef.current, ...updates };
     viewRef.current = next;
     setView(next);
-  }, []);
-
-  // ─── Hangar ships — subscribe directly to avoid SSR/hydration timing ────────
-
-  useEffect(() => {
-    const readShips = () => {
-      const state = useHangarStore.getState();
-      setHangarShipList(state.ships.filter((s) => isShipItem(s) && s.shipReference));
-    };
-    readShips(); // read immediately on mount
-    return useHangarStore.subscribe(readShips); // re-read on any store change
   }, []);
 
   // ─── Persistence ───────────────────────────────────────────────────────────
@@ -107,7 +110,13 @@ export default function FleetCanvas() {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const saved = JSON.parse(raw);
-      if (Array.isArray(saved.nodes)) setNodes(saved.nodes);
+      if (Array.isArray(saved.nodes)) {
+        setNodes(saved.nodes);
+        // Give each restored node a GL context slot (up to the cap)
+        setActiveGlIds(
+          (saved.nodes as CanvasNode[]).slice(0, MAX_GL_CONTEXTS).map((n) => n.id),
+        );
+      }
       if (saved.view?.panX !== undefined) { viewRef.current = saved.view; setView(saved.view); }
     } catch { /* ignore */ }
   }, []);
@@ -121,13 +130,13 @@ export default function FleetCanvas() {
 
   useEffect(() => {
     if (activeTab !== "catalog") return;
-    const q = searchQuery.trim();
+    const q    = searchQuery.trim();
     const ctrl = new AbortController();
     const timer = setTimeout(async () => {
       setLoadingCatalog(true);
       try {
         const url = `/api/ships?limit=40${q ? `&search=${encodeURIComponent(q)}` : ""}`;
-        const res = await fetch(url, { signal: ctrl.signal });
+        const res  = await fetch(url, { signal: ctrl.signal });
         const json = await res.json();
         setCatalogShips(json.data ?? []);
       } catch { /* aborted */ }
@@ -143,19 +152,19 @@ export default function FleetCanvas() {
     if (!canvas) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const rect = canvas.getBoundingClientRect();
-      const mx = e.clientX - rect.left;
-      const my = e.clientY - rect.top;
+      const rect  = canvas.getBoundingClientRect();
+      const mx    = e.clientX - rect.left;
+      const my    = e.clientY - rect.top;
       const { panX, panY, zoom } = viewRef.current;
       const newZoom = clampZoom(zoom + (e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP));
-      const ratio = newZoom / zoom;
+      const ratio   = newZoom / zoom;
       applyView({ zoom: newZoom, panX: mx - (mx - panX) * ratio, panY: my - (my - panY) * ratio });
     };
     canvas.addEventListener("wheel", onWheel, { passive: false });
     return () => canvas.removeEventListener("wheel", onWheel);
   }, [applyView]);
 
-  // ─── Global pointer move/up — avoids pointer-capture routing issues ─────────
+  // ─── Global pointer move/up (avoids setPointerCapture routing issues) ──────
 
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
@@ -174,10 +183,10 @@ export default function FleetCanvas() {
     };
     const onUp = () => { dragRef.current.active = false; };
     window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointerup",   onUp);
     return () => {
       window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointerup",   onUp);
     };
   }, [applyView]);
 
@@ -186,13 +195,21 @@ export default function FleetCanvas() {
   const addShip = useCallback((reference: string, name: string, manufacturer: string, imageUrl?: string) => {
     const canvas = canvasRef.current;
     const { panX, panY, zoom } = viewRef.current;
-    const cx = canvas ? (canvas.clientWidth / 2 - panX) / zoom : 400;
+    const cx = canvas ? (canvas.clientWidth  / 2 - panX) / zoom : 400;
     const cy = canvas ? (canvas.clientHeight / 2 - panY) / zoom : 300;
     const jitter = () => (Math.random() - 0.5) * 200;
+    const id = uid();
+
     setNodes((prev) => [
       ...prev,
-      { id: uid(), reference, name, manufacturer, imageUrl, x: cx - NODE_W / 2 + jitter(), y: cy - NODE_H / 2 + jitter() },
+      { id, reference, name, manufacturer, imageUrl, x: cx - NODE_W / 2 + jitter(), y: cy - NODE_H / 2 + jitter() },
     ]);
+
+    // Give this new node a GL context slot, evicting the oldest if over cap
+    setActiveGlIds((prev) => {
+      const next = [...prev.filter((i) => i !== id), id];
+      return next.length > MAX_GL_CONTEXTS ? next.slice(next.length - MAX_GL_CONTEXTS) : next;
+    });
   }, []);
 
   // ─── Pointer down (canvas = pan, ship = drag) ──────────────────────────────
@@ -200,13 +217,23 @@ export default function FleetCanvas() {
   const onCanvasPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     const { panX, panY } = viewRef.current;
-    dragRef.current = { active: true, type: "pan", shipId: null, startClientX: e.clientX, startClientY: e.clientY, startPanX: panX, startPanY: panY, startNodeX: 0, startNodeY: 0 };
+    dragRef.current = {
+      active: true, type: "pan", shipId: null,
+      startClientX: e.clientX, startClientY: e.clientY,
+      startPanX: panX, startPanY: panY,
+      startNodeX: 0, startNodeY: 0,
+    };
   }, []);
 
   const onShipPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>, node: CanvasNode) => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    dragRef.current = { active: true, type: "ship", shipId: node.id, startClientX: e.clientX, startClientY: e.clientY, startPanX: 0, startPanY: 0, startNodeX: node.x, startNodeY: node.y };
+    dragRef.current = {
+      active: true, type: "ship", shipId: node.id,
+      startClientX: e.clientX, startClientY: e.clientY,
+      startPanX: 0, startPanY: 0,
+      startNodeX: node.x, startNodeY: node.y,
+    };
   }, []);
 
   // ─── Zoom buttons ──────────────────────────────────────────────────────────
@@ -214,11 +241,11 @@ export default function FleetCanvas() {
   const doZoom = useCallback((direction: 1 | -1) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const cx = canvas.clientWidth / 2;
+    const cx = canvas.clientWidth  / 2;
     const cy = canvas.clientHeight / 2;
     const { panX, panY, zoom } = viewRef.current;
     const newZoom = clampZoom(zoom + direction * ZOOM_STEP);
-    const ratio = newZoom / zoom;
+    const ratio   = newZoom / zoom;
     applyView({ zoom: newZoom, panX: cx - (cx - panX) * ratio, panY: cy - (cy - panY) * ratio });
   }, [applyView]);
 
@@ -226,6 +253,7 @@ export default function FleetCanvas() {
 
   const { panX, panY, zoom } = view;
   const gridSize = Math.max(8, 40 * zoom);
+  const activeGlSet = useMemo(() => new Set(activeGlIds), [activeGlIds]);
 
   return (
     <div className="flex h-full overflow-hidden bg-zinc-950">
@@ -255,14 +283,16 @@ export default function FleetCanvas() {
 
         <div className="flex-1 overflow-y-auto min-h-0">
           {activeTab === "hangar" && (
-            hangarShipList.length === 0
-              ? <EmptyHint text={"No ships in hangar.\nImport your fleet first."} />
-              : <div className="divide-y divide-zinc-800/40">
-                  {hangarShipList.map((s) => (
-                    <SidebarRow key={s.id} name={s.shipName} sub={s.insuranceType.replace(/_/g, " ")}
-                      onAdd={() => addShip(s.shipReference, s.shipName, "", s.imageUrl)} />
-                  ))}
-                </div>
+            !mounted
+              ? <EmptyHint text="Loading…" />
+              : hangarShipList.length === 0
+                ? <EmptyHint text={"No ships in hangar.\nImport your fleet first."} />
+                : <div className="divide-y divide-zinc-800/40">
+                    {hangarShipList.map((s) => (
+                      <SidebarRow key={s.id} name={s.shipName} sub={s.insuranceType.replace(/_/g, " ")}
+                        onAdd={() => addShip(s.shipReference, s.shipName, "", s.imageUrl)} />
+                    ))}
+                  </div>
           )}
           {activeTab === "catalog" && (
             loadingCatalog
@@ -279,7 +309,7 @@ export default function FleetCanvas() {
         </div>
 
         <div className="p-2 border-t border-zinc-800 shrink-0">
-          <button onClick={() => setNodes([])}
+          <button onClick={() => { setNodes([]); setActiveGlIds([]); }}
             className="w-full text-xs text-zinc-600 hover:text-red-400 transition-colors py-1">
             Clear canvas
           </button>
@@ -298,7 +328,7 @@ export default function FleetCanvas() {
         className="flex-1 relative overflow-hidden select-none cursor-grab active:cursor-grabbing"
         style={{
           backgroundImage: `radial-gradient(circle, rgba(113,113,122,0.18) 1px, transparent 1px)`,
-          backgroundSize: `${gridSize}px ${gridSize}px`,
+          backgroundSize:     `${gridSize}px ${gridSize}px`,
           backgroundPosition: `${panX % gridSize}px ${panY % gridSize}px`,
         }}
         onPointerDown={onCanvasPointerDown}
@@ -310,8 +340,12 @@ export default function FleetCanvas() {
             <ShipNode
               key={node.id}
               node={node}
+              showGl={activeGlSet.has(node.id)}
               onPointerDown={(e) => onShipPointerDown(e, node)}
-              onRemove={() => setNodes((prev) => prev.filter((n) => n.id !== node.id))}
+              onRemove={() => {
+                setNodes((prev) => prev.filter((n) => n.id !== node.id));
+                setActiveGlIds((prev) => prev.filter((i) => i !== node.id));
+              }}
             />
           ))}
         </div>
@@ -329,8 +363,8 @@ export default function FleetCanvas() {
 
         {/* Zoom controls */}
         <div className="absolute bottom-4 right-4 flex flex-col gap-1.5 z-10">
-          <CanvasBtn title="Zoom in" onClick={() => doZoom(1)}><ZoomIn className="w-4 h-4" /></CanvasBtn>
-          <CanvasBtn title="Zoom out" onClick={() => doZoom(-1)}><ZoomOut className="w-4 h-4" /></CanvasBtn>
+          <CanvasBtn title="Zoom in"    onClick={() => doZoom(1)}><ZoomIn    className="w-4 h-4" /></CanvasBtn>
+          <CanvasBtn title="Zoom out"   onClick={() => doZoom(-1)}><ZoomOut   className="w-4 h-4" /></CanvasBtn>
           <CanvasBtn title="Reset view" onClick={() => applyView({ panX: 0, panY: 0, zoom: 1 })}><Crosshair className="w-4 h-4" /></CanvasBtn>
         </div>
 
@@ -359,7 +393,7 @@ function SidebarRow({ name, sub, onAdd }: { name: string; sub: string; onAdd: ()
     <button onClick={onAdd}
       className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-zinc-800/60 transition-colors group">
       <div className="flex-1 min-w-0">
-        <p className="text-xs text-zinc-200 truncate leading-tight">{name}</p>
+        <p className="text-xs   text-zinc-200 truncate leading-tight">{name}</p>
         <p className="text-[10px] text-zinc-500 truncate leading-tight mt-0.5">{sub}</p>
       </div>
       <Plus className="w-3.5 h-3.5 text-zinc-600 group-hover:text-amber-400 shrink-0 transition-colors" />
@@ -368,13 +402,13 @@ function SidebarRow({ name, sub, onAdd }: { name: string; sub: string; onAdd: ()
 }
 
 function ShipNode({
-  node, onPointerDown, onRemove,
+  node, showGl, onPointerDown, onRemove,
 }: {
   node: CanvasNode;
+  showGl: boolean;
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
   onRemove: () => void;
 }) {
-  // Stable GLB candidates — only recomputed when ship reference changes
   const glbUrls = useMemo(() => shipGlbCandidates(node.reference), [node.reference]);
 
   return (
@@ -384,15 +418,28 @@ function ShipNode({
       onPointerDown={onPointerDown}
     >
       <div className="w-full h-full rounded-xl overflow-hidden border border-zinc-700/60 hover:border-amber-500/50 transition-colors shadow-2xl bg-zinc-900/90">
-        {/* 3D model */}
-        <div style={{ height: VIEWER_H }} className="pointer-events-none">
-          <ShipViewer3D
-            glbUrl={glbUrls.length ? glbUrls : null}
-            rotationAxis="yaw"
-            animate
-            animationSpeed={0.4}
-            className="w-full h-full"
-          />
+
+        {/* 3D viewer or thumbnail placeholder */}
+        <div style={{ height: VIEWER_H }} className="pointer-events-none relative overflow-hidden">
+          {showGl ? (
+            <ShipViewer3D
+              glbUrl={glbUrls.length ? glbUrls : null}
+              rotationAxis="yaw"
+              animate
+              animationSpeed={0.4}
+              showGrid={false}
+              showAxis={false}
+              className="w-full h-full"
+            />
+          ) : node.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={node.imageUrl} alt={node.name}
+              className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center">
+              <span className="text-zinc-600 text-[10px] uppercase tracking-widest">3D</span>
+            </div>
+          )}
         </div>
 
         {/* Label */}
