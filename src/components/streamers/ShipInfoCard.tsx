@@ -275,30 +275,105 @@ function BrandMark({ theme, size = 40, labelSize = 18, subSize = 10 }: {
 const SC_W = 1800;
 const SC_H = 900;
 const SC_PANEL_H = 130;
+const SC_TABLE_W = 420; // ancho del panel de datos derecho
 
 interface ShowcaseCardInnerProps {
   captureId: string;
   theme: ReturnType<typeof getTheme>;
-  displayName: string;
-  manufacturer: string | null;
-  shipType: string | null;
-  shipRole: string | null;
-  glbCandidates: string[];
-  cargo: number | null;
-  hullHp: number | null;
-  scmSpeed: number | null;
-  shieldHp: number | null;
-  maxCrew: number | null;
-  mass: number | null;
+  data: ShipDetailResponseV2;
 }
 
-function ShowcaseCardInner({
-  captureId, theme, displayName, manufacturer, shipType, shipRole,
-  glbCandidates, cargo, hullHp, scmSpeed, shieldHp, maxCrew, mass,
-}: ShowcaseCardInnerProps) {
-  const nameFontSize = Math.max(48, Math.min(130, Math.floor(880 / Math.max(displayName.length, 4))));
+/** Fila compacta para el panel de datos del showcase */
+function ScRow({ label, value, unit, accent }: { label: string; value: string; unit?: string; accent: string }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "2.5px 0", gap: 8 }}>
+      <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.92)", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+        {value}
+        {unit && <span style={{ fontSize: 10, color: "rgba(255,255,255,0.35)", marginLeft: 3 }}>{unit}</span>}
+      </span>
+    </div>
+  );
+}
 
-  const showcaseStats = [
+/** Cabecera de sección compacta */
+function ScSection({ title, accent }: { title: string; accent: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 12, marginBottom: 4, paddingBottom: 3, borderBottom: `1px solid ${accent}40` }}>
+      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.22em", textTransform: "uppercase", color: accent }}>{title}</span>
+    </div>
+  );
+}
+
+function ShowcaseCardInner({ captureId, theme, data }: ShowcaseCardInnerProps) {
+  const ship = data.data;
+  const computed = data.computed;
+  const specs = (ship.ship ?? {}) as any;
+  const shipPower = (data as any).shipPower as {
+    totalShieldHp?: number | null; totalShieldRegen?: number | null;
+    fuelHydrogen?: number | null; fuelQuantum?: number | null;
+    qtRangeKm?: number | null; qtSpeedMs?: number | null; qtSpoolTimeS?: number | null;
+  } | null ?? null;
+  const insuranceData = (data as any).insurance as {
+    standardClaimTime?: number | null;
+    expeditedClaimTime?: number | null;
+    expeditedCost?: number | null;
+  } | null ?? null;
+  const res = specs.resistances as {
+    dmgMultPhysical?: number | null; dmgMultEnergy?: number | null; dmgMultDistortion?: number | null;
+  } | null ?? null;
+
+  const displayName   = ship.localizedName || ship.name;
+  const glbCandidates = shipGlbCandidates((ship as any).reference ?? null);
+
+  // ── KPIs barra inferior ──
+  const cargo    = specs.cargo ?? null;
+  const hullHp   = specs.hullHp ?? null;
+  const mass     = specs.mass ?? null;
+  const scmSpeed = specs.scmSpeed ?? specs.maxSpeed ?? null;
+  const shieldHp = specs.shieldHpTotal ?? computed?.totalShieldHp ?? shipPower?.totalShieldHp ?? null;
+  const maxCrew  = specs.maxCrew ?? null;
+
+  // ── Datos panel derecho (no duplicar barra inferior) ──
+  const lengthM   = specs.lengthMeters ?? null;
+  const beamM     = specs.beamMeters ?? null;
+  const heightM   = specs.heightMeters ?? null;
+  const size      = specs.size ?? null;
+  const dimsStr   = lengthM != null && beamM != null && heightM != null
+    ? `${size ? `S${size} · ` : ""}${num(lengthM)} × ${num(beamM)} × ${num(heightM)} m`
+    : MISSING;
+
+  const deflPhys  = specs.deflectionPhysical ?? null;
+  const deflEne   = specs.deflectionEnergy ?? null;
+  const deflDis   = specs.deflectionDistortion ?? null;
+
+  const pilotDps    = computed?.totalDps ?? null;
+  const shieldRegen = computed?.totalShieldRegen ?? shipPower?.totalShieldRegen ?? null;
+  const weapons     = computed?.hardpointSummary?.weapons ?? null;
+  const missiles    = computed?.hardpointSummary?.missiles ?? null;
+
+  const boostFwd  = specs.boostSpeedForward ?? specs.afterburnerSpeed ?? null;
+  const navSpeed  = specs.navSpeed ?? null;
+  const pitch     = specs.pitchRate ?? null;
+  const yaw       = specs.yawRate ?? null;
+  const roll      = specs.rollRate ?? null;
+
+  const h2        = specs.hydrogenCapacity ?? specs.hydrogenFuelCap ?? shipPower?.fuelHydrogen ?? null;
+  const qt        = specs.quantumFuelCapacity ?? specs.quantumFuelCap ?? shipPower?.fuelQuantum ?? null;
+  const qtRangeGm = specs.quantumRange ?? null;
+  const qtSpeed   = shipPower?.qtSpeedMs != null ? Math.round(shipPower.qtSpeedMs / 1_000_000) : null;
+
+  const insClaim    = insuranceData?.standardClaimTime ?? null;
+  const insExpedite = insuranceData?.expeditedClaimTime ?? null;
+  const insExpCost  = insuranceData?.expeditedCost ?? null;
+
+  const manufacturer = ship.manufacturer ?? null;
+  const shipType     = ship.type ?? null;
+  const shipRole     = specs.role ?? null;
+
+  const nameFontSize = Math.max(40, Math.min(100, Math.floor(580 / Math.max(displayName.length, 4))));
+
+  const bottomStats = [
     cargo    != null ? { label: "Cargo",     value: num(cargo),         unit: "SCU"  } : null,
     hullHp   != null ? { label: "Hull HP",   value: num(hullHp),        unit: "HP"   } : null,
     scmSpeed != null ? { label: "SCM Speed", value: num(scmSpeed),      unit: "m/s"  } : null,
@@ -335,9 +410,12 @@ function ShowcaseCardInner({
         onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
       />
 
-      {/* Viñetas */}
+      {/* Viñeta superior */}
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 220, background: "linear-gradient(to bottom, #000000b0 0%, transparent 100%)", zIndex: 3, pointerEvents: "none" }} />
+      {/* Viñeta inferior */}
       <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 300, background: "linear-gradient(to top, #000000a0 0%, transparent 100%)", zIndex: 3, pointerEvents: "none" }} />
+      {/* Viñeta izquierda (para legibilidad del nombre) */}
+      <div style={{ position: "absolute", top: 0, left: 0, width: "55%", bottom: SC_PANEL_H, background: "linear-gradient(to right, #00000088 0%, transparent 100%)", zIndex: 3, pointerEvents: "none" }} />
 
       {/* Nave 3D — OrbitControls: arrastrar=orbitar, scroll=zoom, autoRotate suave */}
       <div style={{ position: "absolute", inset: 0, zIndex: 2 }}>
@@ -359,7 +437,7 @@ function ShowcaseCardInner({
       </div>
 
       {/* Nombre de nave — bottom-left, sobre el panel */}
-      <div style={{ position: "absolute", bottom: SC_PANEL_H + 20, left: 36, right: "48%", zIndex: 10, pointerEvents: "none" }}>
+      <div style={{ position: "absolute", bottom: SC_PANEL_H + 22, left: 36, right: SC_TABLE_W + 40, zIndex: 10, pointerEvents: "none" }}>
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.38em", textTransform: "uppercase", color: theme.accent, marginBottom: 8, lineHeight: 1 }}>
           {manufacturer ?? "—"}
         </div>
@@ -373,19 +451,68 @@ function ShowcaseCardInner({
         )}
       </div>
 
+      {/* ── Panel glassmorphism derecho — datos complementarios ── */}
+      <div style={{
+        position: "absolute", top: 0, right: 0, width: SC_TABLE_W, bottom: SC_PANEL_H,
+        background: "rgba(0,0,0,0.62)",
+        backdropFilter: "blur(20px)", WebkitBackdropFilter: "blur(20px)",
+        borderLeft: "1px solid rgba(255,255,255,0.07)",
+        zIndex: 10,
+        padding: "24px 20px 18px 20px",
+        overflowY: "hidden",
+        boxSizing: "border-box",
+      }}>
+        {/* Sección: Dimensiones */}
+        <ScSection title="Dimensions" accent={theme.accent} />
+        <ScRow label="L × W × H" value={dimsStr} accent={theme.accent} />
+
+        {/* Sección: Deflexión */}
+        <ScSection title="Armor Deflection" accent={theme.accent} />
+        <ScRow label="Physical"   value={deflPhys != null ? num(deflPhys) : MISSING} accent={theme.accent} />
+        <ScRow label="Energy"     value={deflEne  != null ? num(deflEne)  : MISSING} accent={theme.accent} />
+        <ScRow label="Distortion" value={deflDis  != null ? num(deflDis)  : MISSING} accent={theme.accent} />
+
+        {/* Sección: Armamento */}
+        <ScSection title="Weaponry" accent={theme.accent} />
+        <ScRow label="Pilot DPS"    value={pilotDps    != null ? num(pilotDps, 1)     : MISSING} unit="DPS"   accent={theme.accent} />
+        <ScRow label="Shield Regen" value={shieldRegen != null ? num(shieldRegen, 1)  : MISSING} unit="HP/s"  accent={theme.accent} />
+        <ScRow label="Weapons"      value={weapons     != null ? String(weapons)      : MISSING}              accent={theme.accent} />
+        <ScRow label="Missiles"     value={missiles    != null ? String(missiles)     : MISSING}              accent={theme.accent} />
+
+        {/* Sección: Vuelo */}
+        <ScSection title="Flight" accent={theme.accent} />
+        <ScRow label="Boost Fwd"       value={boostFwd  != null ? num(boostFwd)  : MISSING} unit="m/s"  accent={theme.accent} />
+        <ScRow label="NAV Speed"       value={navSpeed  != null ? num(navSpeed)  : MISSING} unit="m/s"  accent={theme.accent} />
+        <ScRow label="Pitch / Yaw"     value={pitch != null || yaw != null ? `${num(pitch)} / ${num(yaw)}` : MISSING} unit="°/s" accent={theme.accent} />
+        <ScRow label="Roll"            value={roll      != null ? num(roll)      : MISSING} unit="°/s"  accent={theme.accent} />
+
+        {/* Sección: Combustible */}
+        <ScSection title="Fuel" accent={theme.accent} />
+        <ScRow label="Hydrogen"  value={h2        != null ? num(h2, 0)        : MISSING} unit="SCU"  accent={theme.accent} />
+        <ScRow label="Quantum"   value={qt        != null ? num(qt, 2)        : MISSING} unit="SCU"  accent={theme.accent} />
+        <ScRow label="QT Range"  value={qtRangeGm != null ? num(qtRangeGm, 2) : MISSING} unit="Gm"   accent={theme.accent} />
+        <ScRow label="QT Speed"  value={qtSpeed   != null ? String(qtSpeed)   : MISSING} unit="Mm/s" accent={theme.accent} />
+
+        {/* Sección: Seguro */}
+        <ScSection title="Insurance" accent={theme.accent} />
+        <ScRow label="Standard Claim" value={insClaim    != null ? fmtTime(insClaim)    : MISSING} accent={theme.accent} />
+        <ScRow label="Expedited"      value={insExpedite != null ? fmtTime(insExpedite) : MISSING} accent={theme.accent} />
+        <ScRow label="Expedite Cost"  value={insExpCost  != null ? num(insExpCost)      : MISSING} unit="aUEC" accent={theme.accent} />
+      </div>
+
       {/* Panel glassmorphism — stats en la base */}
       <div style={{
         position: "absolute", bottom: 0, left: 0, right: 0, height: SC_PANEL_H,
-        background: "rgba(0,0,0,0.60)",
+        background: "rgba(0,0,0,0.65)",
         backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
         borderTop: "1px solid rgba(255,255,255,0.07)",
         display: "flex", alignItems: "center",
-        zIndex: 10,
+        zIndex: 11,
       }}>
-        {showcaseStats.map((s, i) => (
-          <div key={i} style={{ flex: 1, textAlign: "center", borderRight: i < showcaseStats.length - 1 ? "1px solid rgba(255,255,255,0.07)" : undefined, padding: "0 16px" }}>
+        {bottomStats.map((s, i) => (
+          <div key={i} style={{ flex: 1, textAlign: "center", borderRight: i < bottomStats.length - 1 ? "1px solid rgba(255,255,255,0.07)" : undefined, padding: "0 16px" }}>
             <div style={{ fontSize: 10, letterSpacing: "0.24em", textTransform: "uppercase", color: "rgba(255,255,255,0.40)", marginBottom: 5, lineHeight: 1 }}>{s.label}</div>
-            <div style={{ fontSize: 38, fontWeight: 800, color: theme.accent, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{s.value}</div>
+            <div style={{ fontSize: 36, fontWeight: 800, color: theme.accent, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{s.value}</div>
             <div style={{ fontSize: 10, color: "rgba(255,255,255,0.30)", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 4 }}>{s.unit}</div>
           </div>
         ))}
@@ -762,17 +889,7 @@ export default function ShipInfoCard({
       <ShowcaseCardInner
         captureId={captureId}
         theme={theme}
-        displayName={displayName}
-        manufacturer={ship.manufacturer ?? null}
-        shipType={ship.type ?? null}
-        shipRole={specs.role ?? null}
-        glbCandidates={shipGlbCandidates((ship as any).reference ?? null)}
-        cargo={cargo}
-        hullHp={hullHp}
-        scmSpeed={scmSpeed}
-        shieldHp={shieldHp}
-        maxCrew={specs.maxCrew ?? null}
-        mass={mass}
+        data={data}
       />
     );
   }
