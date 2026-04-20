@@ -72,6 +72,7 @@ interface ShipsQueryParams {
   search: string;
   manufacturer: string;
   role: string;
+  reference: string;
   page: number;
   limit: number;
   sortBy: string;
@@ -130,6 +131,12 @@ async function handleShipsQuery(params: ShipsQueryParams) {
       paramIdx++;
     }
 
+    if (params.reference) {
+      conditions.push(`s.class_name = $${paramIdx}`);
+      queryParams.push(params.reference);
+      paramIdx++;
+    }
+
     const whereClause = "WHERE " + conditions.join(" AND ");
 
     // Dedup CTE: collapse duplicates by (lower(name), lower(manufacturer)),
@@ -173,7 +180,10 @@ async function handleShipsQuery(params: ShipsQueryParams) {
        SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer, s.role, s.size,
               s.crew, s.mass_total_kg AS mass, s.cargo_capacity, s.game_version,
               sp.msrp_usd, sp.warbond_usd,
-              fs.scm_speed, fs.max_speed as afterburner_speed
+              fs.scm_speed, fs.max_speed as afterburner_speed,
+              COALESCE(s.length_meters, s.length) AS length_meters,
+              COALESCE(s.beam_meters,   s.beam)   AS beam_meters,
+              COALESCE(s.height_meters, s.height) AS height_meters
        FROM deduped s
        ${joinClause}
        ${whereClause} AND s.__rn = 1
@@ -222,6 +232,9 @@ async function handleShipsQuery(params: ShipsQueryParams) {
         role: s.role,
         focus: null,
         career: null,
+        lengthMeters: s.length_meters != null ? Number(s.length_meters) : null,
+        beamMeters:   s.beam_meters   != null ? Number(s.beam_meters)   : null,
+        heightMeters: s.height_meters != null ? Number(s.height_meters) : null,
       },
       };
     });
@@ -250,13 +263,14 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
 
     const params: ShipsQueryParams = {
-      search: searchParams.get("search") || "",
+      search:       searchParams.get("search")       || "",
       manufacturer: searchParams.get("manufacturer") || "",
-      role: searchParams.get("role") || "",
-      page: parseInt(searchParams.get("page") || "1", 10),
-      limit: parseInt(searchParams.get("limit") || "24", 10),
-      sortBy: searchParams.get("sortBy") || "name",
-      sortOrder: (searchParams.get("sortOrder") === "desc" ? "DESC" : "ASC") as "ASC" | "DESC",
+      role:         searchParams.get("role")         || "",
+      reference:    searchParams.get("reference")    || "",
+      page:         parseInt(searchParams.get("page")  || "1",  10),
+      limit:        parseInt(searchParams.get("limit") || "24", 10),
+      sortBy:       searchParams.get("sortBy")  || "name",
+      sortOrder:    (searchParams.get("sortOrder") === "desc" ? "DESC" : "ASC") as "ASC" | "DESC",
     };
 
     const result = await handleShipsQuery(params);
@@ -288,13 +302,14 @@ export async function POST(request: NextRequest) {
     }
 
     const params: ShipsQueryParams = {
-      search: body.search || "",
+      search:       body.search       || "",
       manufacturer: body.manufacturer || "",
-      role: body.role || "",
-      page: body.page || 1,
-      limit: body.limit || 24,
-      sortBy: body.sortBy || "name",
-      sortOrder: (body.sortOrder === "DESC" ? "DESC" : "ASC") as "ASC" | "DESC",
+      role:         body.role         || "",
+      reference:    body.reference    || "",
+      page:         body.page  || 1,
+      limit:        body.limit || 24,
+      sortBy:       body.sortBy    || "name",
+      sortOrder:    (body.sortOrder === "DESC" ? "DESC" : "ASC") as "ASC" | "DESC",
     };
 
     const result = await handleShipsQuery(params);
