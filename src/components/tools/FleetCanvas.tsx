@@ -189,9 +189,9 @@ export default function FleetCanvas() {
     rim.position.set(-6, 3, -6);
     scene.add(rim);
 
-    scene.add(Object.assign(new THREE.DirectionalLight(0x818cf8, 0.2), {
-      position: new THREE.Vector3(0, -1, 4),
-    }));
+    const fill = new THREE.DirectionalLight(0x818cf8, 0.2);
+    fill.position.set(0, -1, 4);
+    scene.add(fill);
 
     // Ground
     const ground = new THREE.Mesh(

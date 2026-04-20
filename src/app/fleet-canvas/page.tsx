@@ -1,9 +1,12 @@
 import Header from "@/app/assets/header/Header";
-import FleetCanvas from "@/components/tools/FleetCanvas";
+import dynamic from "next/dynamic";
+
+// ssr: false — prevents THREE.js from being imported during server-side render
+const FleetCanvas = dynamic(() => import("@/components/tools/FleetCanvas"), { ssr: false });
 
 export const metadata = {
   title: "Fleet Canvas — SC Labs",
-  description: "Visualize and arrange your Star Citizen fleet on an infinite canvas with 3D models.",
+  description: "Visualize and arrange your Star Citizen fleet in a shared 3D scene.",
 };
 
 export default function FleetCanvasPage() {
