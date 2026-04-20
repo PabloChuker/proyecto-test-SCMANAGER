@@ -4,12 +4,11 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import dynamic from "next/dynamic";
 import {
   X, Plus, ZoomIn, ZoomOut, Search,
-  ChevronLeft, ChevronRight, Crosshair, Box,
+  ChevronLeft, ChevronRight, Crosshair,
 } from "lucide-react";
-import { useHangarStore } from "@/store/useHangarStore";
+import { useHangarStore, type HangarShip } from "@/store/useHangarStore";
 import { shipGlbCandidates } from "@/lib/shipGlb";
 
-// Single shared 3D viewer instance — only one WebGL context alive at any time
 const ShipViewer3D = dynamic(
   () => import("@/components/shared/flight-dynamics/ShipViewer3D"),
   { ssr: false },
@@ -17,8 +16,9 @@ const ShipViewer3D = dynamic(
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
-const NODE_W = 180;
-const NODE_H = 90;
+const NODE_W = 200;
+const NODE_H = 160;
+const VIEWER_H = 116;
 const ZOOM_MIN = 0.06;
 const ZOOM_MAX = 3;
 const ZOOM_STEP = 0.12;
@@ -50,6 +50,10 @@ interface ViewState { panX: number; panY: number; zoom: number; }
 function uid() { return Math.random().toString(36).slice(2, 11); }
 function clampZoom(z: number) { return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z)); }
 
+function isShipItem(s: HangarShip) {
+  return s.itemCategory === "standalone_ship" || s.itemCategory === "game_package";
+}
+
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function FleetCanvas() {
@@ -63,17 +67,10 @@ export default function FleetCanvas() {
   const [catalogShips, setCatalogShips] = useState<ApiShip[]>([]);
   const [loadingCatalog, setLoadingCatalog] = useState(false);
 
-  // Single floating 3D preview
-  const [hoveredNode, setHoveredNode] = useState<CanvasNode | null>(null);
-  const isDraggingRef = useRef(false);
-  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Zustand persist hydrates after mount — guard to avoid showing stale empty list
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  // Read hangar ships directly from store after mount to avoid hydration timing issues
+  const [hangarShipList, setHangarShipList] = useState<HangarShip[]>([]);
 
   const canvasRef = useRef<HTMLDivElement>(null);
-
   const dragRef = useRef({
     active: false,
     type: "pan" as "pan" | "ship",
@@ -92,12 +89,16 @@ export default function FleetCanvas() {
     setView(next);
   }, []);
 
-  // Stable GLB candidates for the currently hovered ship
-  const hoveredGlbUrls = useMemo(
-    () => hoveredNode?.reference ? shipGlbCandidates(hoveredNode.reference) : null,
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [hoveredNode?.reference],
-  );
+  // ─── Hangar ships — subscribe directly to avoid SSR/hydration timing ────────
+
+  useEffect(() => {
+    const readShips = () => {
+      const state = useHangarStore.getState();
+      setHangarShipList(state.ships.filter((s) => isShipItem(s) && s.shipReference));
+    };
+    readShips(); // read immediately on mount
+    return useHangarStore.subscribe(readShips); // re-read on any store change
+  }, []);
 
   // ─── Persistence ───────────────────────────────────────────────────────────
 
@@ -154,11 +155,7 @@ export default function FleetCanvas() {
     return () => canvas.removeEventListener("wheel", onWheel);
   }, [applyView]);
 
-  // ─── Global pointer move/up (avoids pointer-capture issues on ship nodes) ──
-  //
-  // Previously, setPointerCapture on ship nodes redirected events away from the
-  // canvas onPointerMove. Window-level listeners receive all events regardless
-  // of which element captured the pointer.
+  // ─── Global pointer move/up — avoids pointer-capture routing issues ─────────
 
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
@@ -175,10 +172,7 @@ export default function FleetCanvas() {
         ));
       }
     };
-    const onUp = () => {
-      dragRef.current.active = false;
-      isDraggingRef.current = false;
-    };
+    const onUp = () => { dragRef.current.active = false; };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     return () => {
@@ -201,46 +195,18 @@ export default function FleetCanvas() {
     ]);
   }, []);
 
-  // ─── Hover (debounced + disabled during drag) ──────────────────────────────
-
-  const handleHoverEnter = useCallback((node: CanvasNode) => {
-    if (isDraggingRef.current) return;
-    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-    hoverTimerRef.current = setTimeout(() => setHoveredNode(node), 60);
-  }, []);
-
-  const handleHoverLeave = useCallback((nodeId: string) => {
-    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-    hoverTimerRef.current = setTimeout(() => {
-      setHoveredNode((h) => (h?.id === nodeId ? null : h));
-    }, 120);
-  }, []);
-
-  // ─── Pointer down handlers ─────────────────────────────────────────────────
+  // ─── Pointer down (canvas = pan, ship = drag) ──────────────────────────────
 
   const onCanvasPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
     const { panX, panY } = viewRef.current;
-    isDraggingRef.current = true;
-    dragRef.current = {
-      active: true, type: "pan", shipId: null,
-      startClientX: e.clientX, startClientY: e.clientY,
-      startPanX: panX, startPanY: panY, startNodeX: 0, startNodeY: 0,
-    };
+    dragRef.current = { active: true, type: "pan", shipId: null, startClientX: e.clientX, startClientY: e.clientY, startPanX: panX, startPanY: panY, startNodeX: 0, startNodeY: 0 };
   }, []);
 
   const onShipPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>, node: CanvasNode) => {
     if (e.button !== 0) return;
     e.stopPropagation();
-    // Clear hover immediately when dragging starts — prevents rapid ShipViewer3D remounts
-    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
-    setHoveredNode(null);
-    isDraggingRef.current = true;
-    dragRef.current = {
-      active: true, type: "ship", shipId: node.id,
-      startClientX: e.clientX, startClientY: e.clientY,
-      startPanX: 0, startPanY: 0, startNodeX: node.x, startNodeY: node.y,
-    };
+    dragRef.current = { active: true, type: "ship", shipId: node.id, startClientX: e.clientX, startClientY: e.clientY, startPanX: 0, startPanY: 0, startNodeX: node.x, startNodeY: node.y };
   }, []);
 
   // ─── Zoom buttons ──────────────────────────────────────────────────────────
@@ -255,15 +221,6 @@ export default function FleetCanvas() {
     const ratio = newZoom / zoom;
     applyView({ zoom: newZoom, panX: cx - (cx - panX) * ratio, panY: cy - (cy - panY) * ratio });
   }, [applyView]);
-
-  // ─── Hangar ships ──────────────────────────────────────────────────────────
-
-  const allHangarShips = useHangarStore((s) => s.ships);
-  const hangarShipList = mounted
-    ? allHangarShips.filter(
-        (s) => (s.itemCategory === "standalone_ship" || s.itemCategory === "game_package") && s.shipReference,
-      )
-    : [];
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -298,16 +255,14 @@ export default function FleetCanvas() {
 
         <div className="flex-1 overflow-y-auto min-h-0">
           {activeTab === "hangar" && (
-            !mounted
-              ? <EmptyHint text="Loading…" />
-              : hangarShipList.length === 0
-                ? <EmptyHint text={"No ships in hangar.\nImport your hangar first."} />
-                : <div className="divide-y divide-zinc-800/40">
-                    {hangarShipList.map((s) => (
-                      <SidebarRow key={s.id} name={s.shipName} sub={s.insuranceType.replace(/_/g, " ")}
-                        onAdd={() => addShip(s.shipReference, s.shipName, "", s.imageUrl)} />
-                    ))}
-                  </div>
+            hangarShipList.length === 0
+              ? <EmptyHint text={"No ships in hangar.\nImport your fleet first."} />
+              : <div className="divide-y divide-zinc-800/40">
+                  {hangarShipList.map((s) => (
+                    <SidebarRow key={s.id} name={s.shipName} sub={s.insuranceType.replace(/_/g, " ")}
+                      onAdd={() => addShip(s.shipReference, s.shipName, "", s.imageUrl)} />
+                  ))}
+                </div>
           )}
           {activeTab === "catalog" && (
             loadingCatalog
@@ -357,8 +312,6 @@ export default function FleetCanvas() {
               node={node}
               onPointerDown={(e) => onShipPointerDown(e, node)}
               onRemove={() => setNodes((prev) => prev.filter((n) => n.id !== node.id))}
-              onHoverEnter={() => handleHoverEnter(node)}
-              onHoverLeave={() => handleHoverLeave(node.id)}
             />
           ))}
         </div>
@@ -369,33 +322,7 @@ export default function FleetCanvas() {
             <div className="text-center space-y-3">
               <div className="text-zinc-800 text-5xl font-thin">◇</div>
               <p className="text-zinc-600 text-sm">Add ships from the sidebar to begin</p>
-              <p className="text-zinc-700 text-xs">Drag to pan · Scroll to zoom · Hover for 3D</p>
-            </div>
-          </div>
-        )}
-
-        {/* ── Floating 3D panel — one WebGL context, shown on hover ──────── */}
-        {hoveredNode && hoveredGlbUrls && (
-          <div className="absolute bottom-16 right-4 z-20 pointer-events-none" style={{ width: 220, height: 200 }}>
-            <div className="w-full h-full bg-zinc-900 border border-zinc-700/80 rounded-xl overflow-hidden shadow-2xl">
-              <div className="w-full h-40">
-                <ShipViewer3D
-                  key={hoveredNode.reference}
-                  glbUrl={hoveredGlbUrls}
-                  rotationAxis="yaw"
-                  animate
-                  animationSpeed={0.5}
-                  className="w-full h-full"
-                />
-              </div>
-              <div className="px-3 py-2 border-t border-zinc-800">
-                <p className="text-xs text-zinc-100 font-medium truncate">{hoveredNode.name}</p>
-                {hoveredNode.manufacturer && (
-                  <p className="text-[10px] text-zinc-500 truncate uppercase tracking-wider mt-0.5">
-                    {hoveredNode.manufacturer}
-                  </p>
-                )}
-              </div>
+              <p className="text-zinc-700 text-xs">Drag to pan · Scroll to zoom</p>
             </div>
           </div>
         )}
@@ -424,9 +351,7 @@ export default function FleetCanvas() {
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
 function EmptyHint({ text }: { text: string }) {
-  return (
-    <div className="p-6 text-center text-zinc-600 text-xs whitespace-pre-line leading-relaxed">{text}</div>
-  );
+  return <div className="p-6 text-center text-zinc-600 text-xs whitespace-pre-line leading-relaxed">{text}</div>;
 }
 
 function SidebarRow({ name, sub, onAdd }: { name: string; sub: string; onAdd: () => void }) {
@@ -443,43 +368,45 @@ function SidebarRow({ name, sub, onAdd }: { name: string; sub: string; onAdd: ()
 }
 
 function ShipNode({
-  node, onPointerDown, onRemove, onHoverEnter, onHoverLeave,
+  node, onPointerDown, onRemove,
 }: {
   node: CanvasNode;
   onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
   onRemove: () => void;
-  onHoverEnter: () => void;
-  onHoverLeave: () => void;
 }) {
+  // Stable GLB candidates — only recomputed when ship reference changes
+  const glbUrls = useMemo(() => shipGlbCandidates(node.reference), [node.reference]);
+
   return (
     <div
       className="absolute group"
       style={{ left: node.x, top: node.y, width: NODE_W, height: NODE_H, cursor: "grab" }}
       onPointerDown={onPointerDown}
-      onPointerEnter={onHoverEnter}
-      onPointerLeave={onHoverLeave}
     >
-      <div className="w-full h-full rounded-xl overflow-hidden border border-zinc-700/60 hover:border-amber-500/50 transition-colors shadow-xl bg-zinc-900">
-        {node.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={node.imageUrl} alt={node.name} draggable={false}
-            className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-1.5 bg-gradient-to-br from-zinc-800 to-zinc-900">
-            <Box className="w-6 h-6 text-zinc-600" />
-            <span className="text-[10px] text-zinc-600 uppercase tracking-widest">Hover for 3D</span>
-          </div>
-        )}
-        <div className="absolute bottom-0 left-0 right-0 px-2 py-1.5 bg-gradient-to-t from-zinc-950/90 to-transparent">
+      <div className="w-full h-full rounded-xl overflow-hidden border border-zinc-700/60 hover:border-amber-500/50 transition-colors shadow-2xl bg-zinc-900/90">
+        {/* 3D model */}
+        <div style={{ height: VIEWER_H }} className="pointer-events-none">
+          <ShipViewer3D
+            glbUrl={glbUrls.length ? glbUrls : null}
+            rotationAxis="yaw"
+            animate
+            animationSpeed={0.4}
+            className="w-full h-full"
+          />
+        </div>
+
+        {/* Label */}
+        <div className="px-2.5 py-2 border-t border-zinc-800/80">
           <p className="text-[11px] text-zinc-100 truncate font-medium leading-tight">{node.name}</p>
           {node.manufacturer && (
-            <p className="text-[9px] text-zinc-500 truncate uppercase tracking-wider leading-tight">
+            <p className="text-[9px] text-zinc-500 truncate uppercase tracking-wider leading-tight mt-0.5">
               {node.manufacturer}
             </p>
           )}
         </div>
       </div>
 
+      {/* Remove button */}
       <button
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => { e.stopPropagation(); onRemove(); }}
@@ -491,9 +418,7 @@ function ShipNode({
   );
 }
 
-function CanvasBtn({ children, onClick, title }: {
-  children: React.ReactNode; onClick: () => void; title: string;
-}) {
+function CanvasBtn({ children, onClick, title }: { children: React.ReactNode; onClick: () => void; title: string }) {
   return (
     <button onClick={onClick} title={title}
       className="w-8 h-8 flex items-center justify-center bg-zinc-900/90 backdrop-blur border border-zinc-700 rounded text-zinc-400 hover:text-amber-400 hover:border-amber-500/40 transition-colors shadow-lg">
