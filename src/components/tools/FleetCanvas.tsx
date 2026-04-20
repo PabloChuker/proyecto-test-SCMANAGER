@@ -1,44 +1,26 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
-import dynamic from "next/dynamic";
-import {
-  X, Plus, ZoomIn, ZoomOut, Search,
-  ChevronLeft, ChevronRight, Crosshair,
-} from "lucide-react";
+import * as THREE from "three";
+import { X, Plus, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { useHangarStore } from "@/store/useHangarStore";
 import type { HangarShip } from "@/store/useHangarStore";
 import { shipGlbCandidates } from "@/lib/shipGlb";
 
-// ShipViewer3D is a named export — dynamic() needs the default wrapper
-const ShipViewer3D = dynamic(
-  () => import("@/components/shared/flight-dynamics/ShipViewer3D").then(
-    (m) => ({ default: m.ShipViewer3D }),
-  ),
-  { ssr: false },
-);
-
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
-const NODE_W = 200;
-const NODE_H = 160;
-const VIEWER_H = 116;
-const ZOOM_MIN  = 0.06;
-const ZOOM_MAX  = 3;
-const ZOOM_STEP = 0.12;
-const STORAGE_KEY  = "sc-labs-fleet-canvas-v1";
-const MAX_GL_CONTEXTS = 8; // browsers cap at ~8-16; keep headroom for other tabs
+const STORAGE_KEY = "sc-labs-fleet-scene-v1";
+const SHIP_NORM   = 3.0;   // longest axis normalized to this many units
+const SHIP_GAP    = 1.8;   // gap between adjacent ships
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
-interface CanvasNode {
+interface FleetShip {
   id:           string;
   reference:    string;
   name:         string;
   manufacturer: string;
   imageUrl?:    string;
-  x: number;
-  y: number;
 }
 
 interface ApiShip {
@@ -48,95 +30,341 @@ interface ApiShip {
   manufacturer: string;
 }
 
-interface ViewState { panX: number; panY: number; zoom: number; }
-
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function uid() { return Math.random().toString(36).slice(2, 11); }
-function clampZoom(z: number) { return Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, z)); }
-
 function isShipItem(s: HangarShip) {
   return s.itemCategory === "standalone_ship" || s.itemCategory === "game_package";
+}
+
+// ─── GLB loader (LRU cache, shared across additions) ───────────────────────────
+
+class LRU<K, V> {
+  private max: number; private map = new Map<K, V>();
+  constructor(max: number) { this.max = max; }
+  get(k: K) {
+    const v = this.map.get(k); if (v === undefined) return undefined;
+    this.map.delete(k); this.map.set(k, v); return v;
+  }
+  set(k: K, v: V) {
+    if (this.map.has(k)) this.map.delete(k);
+    else if (this.map.size >= this.max) this.map.delete(this.map.keys().next().value!);
+    this.map.set(k, v);
+  }
+  has(k: K) { return this.map.has(k); }
+}
+const glbCache = new LRU<string, Promise<THREE.Group>>(30);
+
+function loadGlbRaw(url: string): Promise<THREE.Group> {
+  if (!glbCache.has(url)) {
+    const p = import("three/examples/jsm/loaders/GLTFLoader.js")
+      .then(({ GLTFLoader }) => new GLTFLoader().loadAsync(url))
+      .then((gltf) => gltf.scene as THREE.Group);
+    glbCache.set(url, p);
+  }
+  return glbCache.get(url)!;
+}
+
+async function tryLoadGlb(candidates: string[]): Promise<THREE.Group | null> {
+  for (const url of candidates) {
+    try { return await loadGlbRaw(url); } catch { /* next */ }
+  }
+  return null;
+}
+
+// Normalize source GLB: longest axis → SHIP_NORM, bottom at Y=0, centered XZ
+function buildShipPivot(source: THREE.Group): { pivot: THREE.Group; halfWidth: number } {
+  const clone = source.clone(true);
+  clone.traverse((obj) => {
+    if (!(obj instanceof THREE.Mesh)) return;
+    obj.castShadow = true;
+    obj.material = Array.isArray(obj.material)
+      ? obj.material.map((m) => m.clone())
+      : obj.material?.clone() ?? obj.material;
+  });
+
+  // Pre-scale bounding box
+  const box0 = new THREE.Box3().setFromObject(clone);
+  const size0 = new THREE.Vector3(); box0.getSize(size0);
+  const scale = SHIP_NORM / (Math.max(size0.x, size0.y, size0.z) || 1);
+  clone.scale.setScalar(scale);
+  clone.updateMatrixWorld(true);
+
+  // Post-scale bounding box for grounding and sizing
+  const box1 = new THREE.Box3().setFromObject(clone);
+  const ctr  = new THREE.Vector3(); box1.getCenter(ctr);
+  const sz1  = new THREE.Vector3(); box1.getSize(sz1);
+
+  clone.position.set(-ctr.x, -box1.min.y, -ctr.z);
+
+  const pivot = new THREE.Group();
+  pivot.add(clone);
+  return { pivot, halfWidth: Math.max(sz1.x / 2, 0.5) };
+}
+
+function buildFallbackPivot(): { pivot: THREE.Group; halfWidth: number } {
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1.6, 0.5, 3.8),
+    new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.5, roughness: 0.5 }),
+  );
+  mesh.castShadow = true;
+  mesh.position.y = 0.25;
+  const pivot = new THREE.Group(); pivot.add(mesh);
+  return { pivot, halfWidth: 0.8 };
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export default function FleetCanvas() {
-  // Hydration guard — Zustand persist hasn't fired yet on first server render
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  // Standard Zustand selector (same pattern as HangarDashboard)
   const allShips = useHangarStore((state) => state.ships);
-
   const hangarShipList = useMemo(
-    () => (mounted ? allShips.filter((s) => isShipItem(s) && s.shipReference && s.location === "hangar") : []),
+    () => mounted
+      ? allShips.filter((s) => isShipItem(s) && s.shipReference && s.location === "hangar")
+      : [],
     [mounted, allShips],
   );
 
-  const [nodes,  setNodes] = useState<CanvasNode[]>([]);
-  const [view,   setView]  = useState<ViewState>({ panX: 0, panY: 0, zoom: 1 });
-  const viewRef  = useRef<ViewState>(view);
+  const [fleet,          setFleet]          = useState<FleetShip[]>([]);
+  const [sidebarOpen,    setSidebarOpen]    = useState(true);
+  const [activeTab,      setActiveTab]      = useState<"hangar" | "catalog">("hangar");
+  const [searchQuery,    setSearchQuery]    = useState("");
+  const [catalogShips,   setCatalogShips]   = useState<ApiShip[]>([]);
+  const [loadingCatalog, setLoadingCatalog] = useState(false);
 
-  // Track which nodes have an active WebGL context (LRU, max MAX_GL_CONTEXTS)
-  const [activeGlIds, setActiveGlIds] = useState<string[]>([]);
+  const mountRef = useRef<HTMLDivElement>(null);
 
-  const [sidebarOpen,   setSidebarOpen]   = useState(true);
-  const [activeTab,     setActiveTab]     = useState<"hangar" | "catalog">("hangar");
-  const [searchQuery,   setSearchQuery]   = useState("");
-  const [catalogShips,  setCatalogShips]  = useState<ApiShip[]>([]);
-  const [loadingCatalog,setLoadingCatalog]= useState(false);
+  // Three.js refs — never in React state
+  const threeRef = useRef<{
+    scene:    THREE.Scene;
+    camera:   THREE.PerspectiveCamera;
+    renderer: THREE.WebGLRenderer;
+    controls: { update(): void; dispose(): void; target: THREE.Vector3 } | null;
+    raf:      number;
+    ships:    Map<string, { pivot: THREE.Group; halfWidth: number }>;
+    order:    string[];   // insertion order for layout
+  } | null>(null);
 
-  const canvasRef = useRef<HTMLDivElement>(null);
-  const dragRef   = useRef({
-    active: false,
-    type: "pan" as "pan" | "ship",
-    shipId: null as string | null,
-    startClientX: 0, startClientY: 0,
-    startPanX:    0, startPanY:    0,
-    startNodeX:   0, startNodeY:   0,
-  });
+  const loadingRef = useRef(new Set<string>());  // ids currently loading
 
-  const applyView = useCallback((updates: Partial<ViewState>) => {
-    const next = { ...viewRef.current, ...updates };
-    viewRef.current = next;
-    setView(next);
+  // ─── Scene init (once) ───────────────────────────────────────────────────
+
+  useEffect(() => {
+    const el = mountRef.current;
+    if (!el) return;
+
+    const W = el.clientWidth  || 800;
+    const H = el.clientHeight || 600;
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x08080e);
+    scene.fog        = new THREE.FogExp2(0x08080e, 0.016);
+
+    const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 200);
+    camera.position.set(0, 5, 14);
+    camera.lookAt(0, 1, 0);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(W, H);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+    el.appendChild(renderer.domElement);
+
+    // Lighting
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+    const key = new THREE.DirectionalLight(0xffffff, 2.5);
+    key.position.set(8, 14, 6);
+    key.castShadow = true;
+    key.shadow.mapSize.set(2048, 2048);
+    key.shadow.camera.left = -20; key.shadow.camera.right  = 20;
+    key.shadow.camera.top  = 20;  key.shadow.camera.bottom = -20;
+    key.shadow.camera.far  = 80;
+    scene.add(key);
+
+    const rim = new THREE.DirectionalLight(0x22d3ee, 0.65);
+    rim.position.set(-6, 3, -6);
+    scene.add(rim);
+
+    scene.add(Object.assign(new THREE.DirectionalLight(0x818cf8, 0.2), {
+      position: new THREE.Vector3(0, -1, 4),
+    }));
+
+    // Ground
+    const ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(200, 200),
+      new THREE.MeshStandardMaterial({ color: 0x0c0c14, roughness: 1 }),
+    );
+    ground.rotation.x    = -Math.PI / 2;
+    ground.receiveShadow = true;
+    ground.position.y    = -0.005;
+    scene.add(ground);
+
+    scene.add(new THREE.GridHelper(100, 100, 0x18182a, 0x10101a));
+
+    // Render loop
+    let raf = 0;
+    const loop = () => {
+      raf = requestAnimationFrame(loop);
+      threeRef.current?.controls?.update();
+      renderer.render(scene, camera);
+    };
+    loop();
+
+    // OrbitControls (async import)
+    import("three/examples/jsm/controls/OrbitControls.js").then(({ OrbitControls }) => {
+      if (!threeRef.current) return;
+      const ctrl = new OrbitControls(camera, renderer.domElement);
+      ctrl.enableDamping = true;
+      ctrl.dampingFactor = 0.07;
+      ctrl.minDistance   = 2;
+      ctrl.maxDistance   = 100;
+      ctrl.maxPolarAngle = Math.PI * 0.48;
+      ctrl.target.set(0, 1, 0);
+      ctrl.update();
+      threeRef.current.controls = ctrl;
+    });
+
+    const ro = new ResizeObserver(() => {
+      const w = el.clientWidth; const h = el.clientHeight;
+      if (!w || !h) return;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    });
+    ro.observe(el);
+
+    threeRef.current = { scene, camera, renderer, controls: null, raf, ships: new Map(), order: [] };
+
+    return () => {
+      cancelAnimationFrame(raf);
+      threeRef.current?.controls?.dispose();
+      ro.disconnect();
+      renderer.dispose();
+      if (el.contains(renderer.domElement)) el.removeChild(renderer.domElement);
+      threeRef.current = null;
+    };
   }, []);
 
-  // ─── Persistence ───────────────────────────────────────────────────────────
+  // ─── Layout: arrange ships side-by-side + fit camera ─────────────────────
+
+  const relayout = useCallback(() => {
+    const t = threeRef.current;
+    if (!t || t.ships.size === 0) return;
+
+    const ordered = t.order
+      .filter((id) => t.ships.has(id))
+      .map((id) => t.ships.get(id)!);
+
+    const totalSpan = ordered.reduce((s, e) => s + e.halfWidth * 2, 0)
+      + SHIP_GAP * Math.max(ordered.length - 1, 0);
+
+    let x = -totalSpan / 2;
+    for (const { pivot, halfWidth } of ordered) {
+      pivot.position.set(x + halfWidth, 0, 0);
+      x += halfWidth * 2 + SHIP_GAP;
+    }
+
+    // Fit camera
+    const dist = Math.max(totalSpan * 0.65, 10);
+    t.camera.position.set(0, dist * 0.35, dist);
+    t.camera.lookAt(0, 1, 0);
+    if (t.controls) {
+      t.controls.target.set(0, 1, 0);
+      t.controls.update();
+    }
+  }, []);
+
+  // ─── Add ship to scene (async GLB load) ───────────────────────────────────
+
+  const addShipToScene = useCallback(async (ship: FleetShip) => {
+    const raw = await tryLoadGlb(shipGlbCandidates(ship.reference));
+    if (!threeRef.current) return;
+
+    const { pivot, halfWidth } = raw ? buildShipPivot(raw) : buildFallbackPivot();
+    pivot.userData.shipId = ship.id;
+    threeRef.current.scene.add(pivot);
+    threeRef.current.ships.set(ship.id, { pivot, halfWidth });
+    relayout();
+  }, [relayout]);
+
+  // ─── Remove ship from scene ───────────────────────────────────────────────
+
+  const removeShipFromScene = useCallback((id: string) => {
+    const t = threeRef.current;
+    if (!t) return;
+    const entry = t.ships.get(id);
+    if (!entry) return;
+    t.scene.remove(entry.pivot);
+    entry.pivot.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        if (Array.isArray(obj.material)) obj.material.forEach((m) => m.dispose());
+        else (obj.material as THREE.Material)?.dispose();
+      }
+    });
+    t.ships.delete(id);
+    t.order = t.order.filter((i) => i !== id);
+    relayout();
+  }, [relayout]);
+
+  // ─── Sync fleet state → Three.js scene ───────────────────────────────────
+
+  useEffect(() => {
+    const t = threeRef.current;
+    if (!t) return;
+
+    const fleetIds = new Set(fleet.map((s) => s.id));
+
+    // Remove ships no longer in fleet
+    for (const id of [...t.ships.keys()]) {
+      if (!fleetIds.has(id)) {
+        loadingRef.current.delete(id);
+        removeShipFromScene(id);
+      }
+    }
+    for (const id of [...loadingRef.current]) {
+      if (!fleetIds.has(id)) loadingRef.current.delete(id);
+    }
+
+    // Add new ships
+    for (const ship of fleet) {
+      if (!t.ships.has(ship.id) && !loadingRef.current.has(ship.id)) {
+        loadingRef.current.add(ship.id);
+        t.order.push(ship.id);
+        addShipToScene(ship).finally(() => loadingRef.current.delete(ship.id));
+      }
+    }
+  }, [fleet, addShipToScene, removeShipFromScene]);
+
+  // ─── Persistence ──────────────────────────────────────────────────────────
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return;
       const saved = JSON.parse(raw);
-      if (Array.isArray(saved.nodes)) {
-        setNodes(saved.nodes);
-        // Give each restored node a GL context slot (up to the cap)
-        setActiveGlIds(
-          (saved.nodes as CanvasNode[]).slice(0, MAX_GL_CONTEXTS).map((n) => n.id),
-        );
-      }
-      if (saved.view?.panX !== undefined) { viewRef.current = saved.view; setView(saved.view); }
+      if (Array.isArray(saved.fleet)) setFleet(saved.fleet);
     } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes, view })); }
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify({ fleet })); }
     catch { /* ignore */ }
-  }, [nodes, view]);
+  }, [fleet]);
 
-  // ─── Catalog search ────────────────────────────────────────────────────────
+  // ─── Catalog search ───────────────────────────────────────────────────────
 
   useEffect(() => {
     if (activeTab !== "catalog") return;
-    const q    = searchQuery.trim();
+    const q = searchQuery.trim();
     const ctrl = new AbortController();
     const timer = setTimeout(async () => {
       setLoadingCatalog(true);
       try {
-        const url = `/api/ships?limit=40${q ? `&search=${encodeURIComponent(q)}` : ""}`;
-        const res  = await fetch(url, { signal: ctrl.signal });
+        const res  = await fetch(`/api/ships?limit=40${q ? `&search=${encodeURIComponent(q)}` : ""}`, { signal: ctrl.signal });
         const json = await res.json();
         setCatalogShips(json.data ?? []);
       } catch { /* aborted */ }
@@ -145,115 +373,17 @@ export default function FleetCanvas() {
     return () => { clearTimeout(timer); ctrl.abort(); };
   }, [searchQuery, activeTab]);
 
-  // ─── Wheel zoom ────────────────────────────────────────────────────────────
+  // ─── Fleet actions ────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const rect  = canvas.getBoundingClientRect();
-      const mx    = e.clientX - rect.left;
-      const my    = e.clientY - rect.top;
-      const { panX, panY, zoom } = viewRef.current;
-      const newZoom = clampZoom(zoom + (e.deltaY < 0 ? ZOOM_STEP : -ZOOM_STEP));
-      const ratio   = newZoom / zoom;
-      applyView({ zoom: newZoom, panX: mx - (mx - panX) * ratio, panY: my - (my - panY) * ratio });
-    };
-    canvas.addEventListener("wheel", onWheel, { passive: false });
-    return () => canvas.removeEventListener("wheel", onWheel);
-  }, [applyView]);
-
-  // ─── Global pointer move/up (avoids setPointerCapture routing issues) ──────
-
-  useEffect(() => {
-    const onMove = (e: PointerEvent) => {
-      const d = dragRef.current;
-      if (!d.active) return;
-      const dx = e.clientX - d.startClientX;
-      const dy = e.clientY - d.startClientY;
-      if (d.type === "pan") {
-        applyView({ panX: d.startPanX + dx, panY: d.startPanY + dy });
-      } else if (d.type === "ship" && d.shipId) {
-        const z = viewRef.current.zoom;
-        setNodes((prev) => prev.map((n) =>
-          n.id === d.shipId ? { ...n, x: d.startNodeX + dx / z, y: d.startNodeY + dy / z } : n,
-        ));
-      }
-    };
-    const onUp = () => { dragRef.current.active = false; };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup",   onUp);
-    return () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup",   onUp);
-    };
-  }, [applyView]);
-
-  // ─── Add ship ──────────────────────────────────────────────────────────────
-
-  const addShip = useCallback((reference: string, name: string, manufacturer: string, imageUrl?: string) => {
-    const canvas = canvasRef.current;
-    const { panX, panY, zoom } = viewRef.current;
-    const cx = canvas ? (canvas.clientWidth  / 2 - panX) / zoom : 400;
-    const cy = canvas ? (canvas.clientHeight / 2 - panY) / zoom : 300;
-    const jitter = () => (Math.random() - 0.5) * 200;
-    const id = uid();
-
-    setNodes((prev) => [
-      ...prev,
-      { id, reference, name, manufacturer, imageUrl, x: cx - NODE_W / 2 + jitter(), y: cy - NODE_H / 2 + jitter() },
-    ]);
-
-    // Give this new node a GL context slot, evicting the oldest if over cap
-    setActiveGlIds((prev) => {
-      const next = [...prev.filter((i) => i !== id), id];
-      return next.length > MAX_GL_CONTEXTS ? next.slice(next.length - MAX_GL_CONTEXTS) : next;
-    });
+  const addToFleet = useCallback((reference: string, name: string, manufacturer: string, imageUrl?: string) => {
+    setFleet((prev) => [...prev, { id: uid(), reference, name, manufacturer, imageUrl }]);
   }, []);
 
-  // ─── Pointer down (canvas = pan, ship = drag) ──────────────────────────────
-
-  const onCanvasPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    const { panX, panY } = viewRef.current;
-    dragRef.current = {
-      active: true, type: "pan", shipId: null,
-      startClientX: e.clientX, startClientY: e.clientY,
-      startPanX: panX, startPanY: panY,
-      startNodeX: 0, startNodeY: 0,
-    };
+  const removeFromFleet = useCallback((id: string) => {
+    setFleet((prev) => prev.filter((s) => s.id !== id));
   }, []);
 
-  const onShipPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>, node: CanvasNode) => {
-    if (e.button !== 0) return;
-    e.stopPropagation();
-    dragRef.current = {
-      active: true, type: "ship", shipId: node.id,
-      startClientX: e.clientX, startClientY: e.clientY,
-      startPanX: 0, startPanY: 0,
-      startNodeX: node.x, startNodeY: node.y,
-    };
-  }, []);
-
-  // ─── Zoom buttons ──────────────────────────────────────────────────────────
-
-  const doZoom = useCallback((direction: 1 | -1) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const cx = canvas.clientWidth  / 2;
-    const cy = canvas.clientHeight / 2;
-    const { panX, panY, zoom } = viewRef.current;
-    const newZoom = clampZoom(zoom + direction * ZOOM_STEP);
-    const ratio   = newZoom / zoom;
-    applyView({ zoom: newZoom, panX: cx - (cx - panX) * ratio, panY: cy - (cy - panY) * ratio });
-  }, [applyView]);
-
-  // ─── Render ────────────────────────────────────────────────────────────────
-
-  const { panX, panY, zoom } = view;
-  const gridSize = Math.max(8, 40 * zoom);
-  const activeGlSet = useMemo(() => new Set(activeGlIds), [activeGlIds]);
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <div className="flex h-full overflow-hidden bg-zinc-950">
@@ -290,7 +420,7 @@ export default function FleetCanvas() {
                 : <div className="divide-y divide-zinc-800/40">
                     {hangarShipList.map((s) => (
                       <SidebarRow key={s.id} name={s.shipName} sub={s.insuranceType.replace(/_/g, " ")}
-                        onAdd={() => addShip(s.shipReference, s.shipName, "", s.imageUrl)} />
+                        onAdd={() => addToFleet(s.shipReference, s.shipName, "", s.imageUrl)} />
                     ))}
                   </div>
           )}
@@ -302,18 +432,38 @@ export default function FleetCanvas() {
                 : <div className="divide-y divide-zinc-800/40">
                     {catalogShips.map((s) => (
                       <SidebarRow key={s.id} name={s.name} sub={s.manufacturer}
-                        onAdd={() => addShip(s.reference, s.name, s.manufacturer)} />
+                        onAdd={() => addToFleet(s.reference, s.name, s.manufacturer)} />
                     ))}
                   </div>
           )}
         </div>
 
-        <div className="p-2 border-t border-zinc-800 shrink-0">
-          <button onClick={() => { setNodes([]); setActiveGlIds([]); }}
-            className="w-full text-xs text-zinc-600 hover:text-red-400 transition-colors py-1">
-            Clear canvas
-          </button>
-        </div>
+        {fleet.length > 0 && (
+          <>
+            <div className="border-t border-zinc-800 shrink-0">
+              <p className="px-3 pt-2.5 pb-1 text-[10px] uppercase tracking-widest text-zinc-600">
+                In scene ({fleet.length})
+              </p>
+              <div className="max-h-44 overflow-y-auto divide-y divide-zinc-800/30">
+                {fleet.map((s) => (
+                  <div key={s.id} className="flex items-center gap-2 px-3 py-1.5 hover:bg-zinc-800/40">
+                    <span className="flex-1 text-xs text-zinc-300 truncate">{s.name}</span>
+                    <button onClick={() => removeFromFleet(s.id)}
+                      className="text-zinc-600 hover:text-red-400 shrink-0 transition-colors p-0.5">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="p-2 border-t border-zinc-800 shrink-0">
+              <button onClick={() => setFleet([])}
+                className="w-full text-xs text-zinc-600 hover:text-red-400 transition-colors py-1">
+                Clear scene
+              </button>
+            </div>
+          </>
+        )}
       </aside>
 
       {/* Sidebar toggle */}
@@ -323,61 +473,20 @@ export default function FleetCanvas() {
         {sidebarOpen ? <ChevronLeft className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
       </button>
 
-      {/* ── Canvas ───────────────────────────────────────────────────────── */}
-      <div ref={canvasRef}
-        className="flex-1 relative overflow-hidden select-none cursor-grab active:cursor-grabbing"
-        style={{
-          backgroundImage: `radial-gradient(circle, rgba(113,113,122,0.18) 1px, transparent 1px)`,
-          backgroundSize:     `${gridSize}px ${gridSize}px`,
-          backgroundPosition: `${panX % gridSize}px ${panY % gridSize}px`,
-        }}
-        onPointerDown={onCanvasPointerDown}
-      >
-        {/* Transform layer */}
-        <div className="absolute top-0 left-0 origin-top-left will-change-transform"
-          style={{ transform: `translate(${panX}px,${panY}px) scale(${zoom})` }}>
-          {nodes.map((node) => (
-            <ShipNode
-              key={node.id}
-              node={node}
-              showGl={activeGlSet.has(node.id)}
-              onPointerDown={(e) => onShipPointerDown(e, node)}
-              onRemove={() => {
-                setNodes((prev) => prev.filter((n) => n.id !== node.id));
-                setActiveGlIds((prev) => prev.filter((i) => i !== node.id));
-              }}
-            />
-          ))}
-        </div>
+      {/* Three.js mount point — fills remaining width */}
+      <div ref={mountRef} className="flex-1 relative overflow-hidden" />
 
-        {/* Empty state */}
-        {nodes.length === 0 && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="text-center space-y-3">
-              <div className="text-zinc-800 text-5xl font-thin">◇</div>
-              <p className="text-zinc-600 text-sm">Add ships from the sidebar to begin</p>
-              <p className="text-zinc-700 text-xs">Drag to pan · Scroll to zoom</p>
-            </div>
+      {/* Empty state overlay */}
+      {fleet.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none"
+          style={{ left: sidebarOpen ? 256 : 0 }}>
+          <div className="text-center space-y-3">
+            <div className="text-zinc-800 text-5xl font-thin">◇</div>
+            <p className="text-zinc-600 text-sm">Add ships from the sidebar to begin</p>
+            <p className="text-zinc-700 text-xs">Drag to orbit · Scroll to zoom · Right-click to pan</p>
           </div>
-        )}
-
-        {/* Zoom controls */}
-        <div className="absolute bottom-4 right-4 flex flex-col gap-1.5 z-10">
-          <CanvasBtn title="Zoom in"    onClick={() => doZoom(1)}><ZoomIn    className="w-4 h-4" /></CanvasBtn>
-          <CanvasBtn title="Zoom out"   onClick={() => doZoom(-1)}><ZoomOut   className="w-4 h-4" /></CanvasBtn>
-          <CanvasBtn title="Reset view" onClick={() => applyView({ panX: 0, panY: 0, zoom: 1 })}><Crosshair className="w-4 h-4" /></CanvasBtn>
         </div>
-
-        <div className="absolute bottom-5 right-16 text-zinc-600 text-[11px] z-10 pointer-events-none tabular-nums">
-          {Math.round(zoom * 100)}%
-        </div>
-
-        {nodes.length > 0 && (
-          <div className="absolute top-3 right-4 text-zinc-600 text-xs z-10 pointer-events-none">
-            {nodes.length} ship{nodes.length !== 1 ? "s" : ""}
-          </div>
-        )}
-      </div>
+      )}
     </div>
   );
 }
@@ -393,83 +502,10 @@ function SidebarRow({ name, sub, onAdd }: { name: string; sub: string; onAdd: ()
     <button onClick={onAdd}
       className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-zinc-800/60 transition-colors group">
       <div className="flex-1 min-w-0">
-        <p className="text-xs   text-zinc-200 truncate leading-tight">{name}</p>
+        <p className="text-xs    text-zinc-200 truncate leading-tight">{name}</p>
         <p className="text-[10px] text-zinc-500 truncate leading-tight mt-0.5">{sub}</p>
       </div>
       <Plus className="w-3.5 h-3.5 text-zinc-600 group-hover:text-amber-400 shrink-0 transition-colors" />
-    </button>
-  );
-}
-
-function ShipNode({
-  node, showGl, onPointerDown, onRemove,
-}: {
-  node: CanvasNode;
-  showGl: boolean;
-  onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
-  onRemove: () => void;
-}) {
-  const glbUrls = useMemo(() => shipGlbCandidates(node.reference), [node.reference]);
-
-  return (
-    <div
-      className="absolute group"
-      style={{ left: node.x, top: node.y, width: NODE_W, height: NODE_H, cursor: "grab" }}
-      onPointerDown={onPointerDown}
-    >
-      <div className="w-full h-full rounded-xl overflow-hidden border border-zinc-700/60 hover:border-amber-500/50 transition-colors shadow-2xl bg-zinc-900/90">
-
-        {/* 3D viewer or thumbnail placeholder */}
-        <div style={{ height: VIEWER_H }} className="pointer-events-none relative overflow-hidden">
-          {showGl ? (
-            <ShipViewer3D
-              glbUrl={glbUrls.length ? glbUrls : null}
-              rotationAxis="yaw"
-              animate
-              animationSpeed={0.4}
-              showGrid={false}
-              showAxis={false}
-              className="w-full h-full"
-            />
-          ) : node.imageUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={node.imageUrl} alt={node.name}
-              className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center">
-              <span className="text-zinc-600 text-[10px] uppercase tracking-widest">3D</span>
-            </div>
-          )}
-        </div>
-
-        {/* Label */}
-        <div className="px-2.5 py-2 border-t border-zinc-800/80">
-          <p className="text-[11px] text-zinc-100 truncate font-medium leading-tight">{node.name}</p>
-          {node.manufacturer && (
-            <p className="text-[9px] text-zinc-500 truncate uppercase tracking-wider leading-tight mt-0.5">
-              {node.manufacturer}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Remove button */}
-      <button
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => { e.stopPropagation(); onRemove(); }}
-        className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-500 hover:text-red-400 hover:border-red-500/60 opacity-0 group-hover:opacity-100 transition-all z-10"
-      >
-        <X className="w-3 h-3" />
-      </button>
-    </div>
-  );
-}
-
-function CanvasBtn({ children, onClick, title }: { children: React.ReactNode; onClick: () => void; title: string }) {
-  return (
-    <button onClick={onClick} title={title}
-      className="w-8 h-8 flex items-center justify-center bg-zinc-900/90 backdrop-blur border border-zinc-700 rounded text-zinc-400 hover:text-amber-400 hover:border-amber-500/40 transition-colors shadow-lg">
-      {children}
     </button>
   );
 }
