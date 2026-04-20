@@ -117,11 +117,16 @@ export default function StreamerCardsPage() {
       const { toPng } = await import("html-to-image");
       const node = document.getElementById("sclabs-ship-card");
       if (!node) throw new Error("Card node not found");
+      // Showcase: ya está a resolución nativa 1800×800, pixelRatio=1.
+      // Horizontal/Vertical: 2× para mayor calidad.
+      const isShowcase = variant === "showcase";
       const dataUrl = await toPng(node, {
         cacheBust: true,
-        pixelRatio: 2,
-        backgroundColor:
-          CARD_THEMES.find((t) => t.key === themeKey)?.bg ?? "#000000",
+        pixelRatio: isShowcase ? 1 : 2,
+        ...(isShowcase ? {} : {
+          backgroundColor:
+            CARD_THEMES.find((t) => t.key === themeKey)?.bg ?? "#000000",
+        }),
       });
       // Trigger download
       const link = document.createElement("a");
@@ -345,7 +350,7 @@ export default function StreamerCardsPage() {
                   ? " Dimensiones sugeridas: 1800 × 720."
                   : variant === "vertical"
                   ? " Dimensiones sugeridas: 760 × 1560."
-                  : " Dimensiones sugeridas: 1800 × 900. La nave rota en tiempo real."}
+                  : " Dimensiones sugeridas: 1800 × 800. La nave rota en tiempo real."}
               </p>
             </div>
           </aside>
@@ -380,7 +385,7 @@ export default function StreamerCardsPage() {
                       variant === "vertical"
                         ? 1560 * 0.40
                         : variant === "showcase"
-                        ? 900 * 0.44
+                        ? 800 * 0.44
                         : 720 * 0.5,
                     position: "relative",
                   }}
@@ -407,9 +412,9 @@ export default function StreamerCardsPage() {
             </div>
 
             <p className="mt-3 text-[10px] text-zinc-600 font-mono tracking-wider text-center">
-              {variant === "showcase"
-                ? "Vista previa en vivo — Showcase usa 3D WebGL. Usá la URL de OBS para el resultado final."
-                : `Vista previa escalada. PNG exportado a resolución real${variant === "vertical" ? " 1520 × 3120" : " 3600 × 1440"} (2×).`}
+              {`Vista previa escalada. PNG exportado a resolución real${
+                variant === "vertical" ? " 760 × 1560" : variant === "showcase" ? " 1800 × 800" : " 1800 × 720"
+              }.`}
             </p>
           </section>
         </div>

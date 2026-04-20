@@ -44,6 +44,11 @@ export interface ShipViewer3DProps {
   autoRotate?: boolean;
   /** Velocidad de autoRotate (default 1.0 = ~30s/vuelta). Valores negativos invierten sentido. */
   autoRotateSpeed?: number;
+  /**
+   * Mantiene el backbuffer del renderer entre frames (necesario para exportar
+   * PNG con html-to-image). Tiene coste de memoria/perf mínimo. Default false.
+   */
+  preserveDrawingBuffer?: boolean;
 }
 
 // Color de cada línea de eje según la convención de la nave:
@@ -152,6 +157,7 @@ export function ShipViewer3D({
   transparent = false,
   autoRotate = false,
   autoRotateSpeed = 1.0,
+  preserveDrawingBuffer = false,
 }: ShipViewer3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -170,7 +176,7 @@ export function ShipViewer3D({
     camera.position.set(1.7, 0.95, 2.1);
     camera.lookAt(0, 0, 0);
 
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: transparent });
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: transparent, preserveDrawingBuffer });
     renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
@@ -361,7 +367,7 @@ export function ShipViewer3D({
       renderer.dispose();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rotationAxis, animate, animationSpeed, shipColor, glbUrl, autoRotate, autoRotateSpeed]);
+  }, [rotationAxis, animate, animationSpeed, shipColor, JSON.stringify(glbUrl), autoRotate, autoRotateSpeed, preserveDrawingBuffer]);
 
   return (
     <div className={`relative w-full h-full${className ? ` ${className}` : ""}`}>

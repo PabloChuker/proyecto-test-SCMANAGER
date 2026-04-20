@@ -273,8 +273,8 @@ function BrandMark({ theme, size = 40, labelSize = 18, subSize = 10 }: {
 // ─── Showcase ─────────────────────────────────────────────────────────────────
 
 const SC_W = 1800;
-const SC_H = 900;
-const SC_PANEL_H = 130;
+const SC_H = 800;
+const SC_PANEL_H = 120;
 const SC_TABLE_W = 420; // ancho del panel de datos derecho
 
 interface ShowcaseCardInnerProps {
@@ -283,8 +283,9 @@ interface ShowcaseCardInnerProps {
   data: ShipDetailResponseV2;
 }
 
-/** Fila compacta para el panel de datos del showcase */
+/** Fila compacta para el panel de datos del showcase. Devuelve null si no hay valor. */
 function ScRow({ label, value, unit, accent }: { label: string; value: string; unit?: string; accent: string }) {
+  if (!value || value === "—") return null;
   return (
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "2.5px 0", gap: 8 }}>
       <span style={{ fontSize: 11, color: "rgba(255,255,255,0.45)", flexShrink: 0 }}>{label}</span>
@@ -427,6 +428,7 @@ function ShowcaseCardInner({ captureId, theme, data }: ShowcaseCardInnerProps) {
           transparent
           autoRotate
           autoRotateSpeed={0.18}
+          preserveDrawingBuffer
           className="w-full h-full"
         />
       </div>
