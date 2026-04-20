@@ -11,6 +11,7 @@
 // =============================================================================
 
 import Image from "next/image";
+import { useState, useRef } from "react";
 import type { ShipDetailResponseV2 } from "@/types/ships";
 import { getTheme, type CardVariant } from "./ship-card-themes";
 import { ShipViewer3D } from "@/components/shared/flight-dynamics/ShipViewer3D";
@@ -265,6 +266,238 @@ function BrandMark({ theme, size = 40, labelSize = 18, subSize = 10 }: {
         <span style={{ fontSize: subSize, letterSpacing: "0.2em", textTransform: "uppercase", color: theme.textMuted, marginTop: 3 }}>
           Star Citizen Intelligence
         </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Showcase — componente con estado propio para drag/resize ────────────────
+
+const SC_W = 1800;
+const SC_H = 900;
+const SC_PANEL_H = 130;
+const SC_USABLE_H = SC_H - SC_PANEL_H; // 770
+const SC_MIN_W = 300;
+const SC_MIN_H = 220;
+
+interface ShowcaseCardInnerProps {
+  captureId: string;
+  theme: ReturnType<typeof getTheme>;
+  displayName: string;
+  manufacturer: string | null;
+  shipType: string | null;
+  shipRole: string | null;
+  glbCandidates: string[];
+  cargo: number | null;
+  hullHp: number | null;
+  scmSpeed: number | null;
+  shieldHp: number | null;
+  maxCrew: number | null;
+  mass: number | null;
+}
+
+function ShowcaseCardInner({
+  captureId, theme, displayName, manufacturer, shipType, shipRole,
+  glbCandidates, cargo, hullHp, scmSpeed, shieldHp, maxCrew, mass,
+}: ShowcaseCardInnerProps) {
+  // Posición y tamaño de la nave (en px del card a escala real)
+  const [viewer, setViewer] = useState({ x: 0, y: 0, w: 1080, h: SC_USABLE_H });
+  const [hovered, setHovered] = useState(false);
+
+  const interactionRef = useRef<{
+    type: "move" | "resize";
+    startCX: number; startCY: number;
+    origX: number; origY: number;
+    origW: number; origH: number;
+  } | null>(null);
+
+  /** Obtiene el factor de escala CSS aplicado al card (para corregir coordenadas) */
+  const getScale = () => {
+    const el = document.getElementById(captureId);
+    if (!el) return 1;
+    return el.getBoundingClientRect().width / SC_W;
+  };
+
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+  const startInteraction = (e: React.MouseEvent, type: "move" | "resize") => {
+    e.preventDefault();
+    e.stopPropagation();
+    const scale = getScale();
+    interactionRef.current = {
+      type,
+      startCX: e.clientX / scale,
+      startCY: e.clientY / scale,
+      origX: viewer.x, origY: viewer.y,
+      origW: viewer.w, origH: viewer.h,
+    };
+
+    const onMove = (ev: MouseEvent) => {
+      const ia = interactionRef.current;
+      if (!ia) return;
+      const sc = getScale();
+      const dx = ev.clientX / sc - ia.startCX;
+      const dy = ev.clientY / sc - ia.startCY;
+
+      setViewer(v => {
+        if (ia.type === "move") {
+          return {
+            ...v,
+            x: clamp(ia.origX + dx, 0, SC_W - v.w),
+            y: clamp(ia.origY + dy, 0, SC_USABLE_H - v.h),
+          };
+        } else {
+          return {
+            ...v,
+            w: clamp(ia.origW + dx, SC_MIN_W, SC_W - v.x),
+            h: clamp(ia.origH + dy, SC_MIN_H, SC_USABLE_H - v.y),
+          };
+        }
+      });
+    };
+
+    const onUp = () => {
+      interactionRef.current = null;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const nameFontSize = Math.max(48, Math.min(130, Math.floor(880 / Math.max(displayName.length, 4))));
+
+  const showcaseStats = [
+    cargo    != null ? { label: "Cargo",     value: num(cargo),         unit: "SCU"  } : null,
+    hullHp   != null ? { label: "Hull HP",   value: num(hullHp),        unit: "HP"   } : null,
+    scmSpeed != null ? { label: "SCM Speed", value: num(scmSpeed),      unit: "m/s"  } : null,
+    shieldHp != null ? { label: "Shield",    value: num(shieldHp),      unit: "HP"   } : null,
+    maxCrew  != null ? { label: "Crew",      value: String(maxCrew),    unit: "crew" } : null,
+    mass     != null ? { label: "Mass",      value: num(mass),          unit: "kg"   } : null,
+  ].filter(Boolean) as { label: string; value: string; unit: string }[];
+
+  return (
+    <div
+      id={captureId}
+      style={{
+        position: "relative", width: SC_W, height: SC_H,
+        overflow: "hidden",
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+      }}
+    >
+      {/* Fondo CSS fallback */}
+      <div style={{
+        position: "absolute", inset: 0, zIndex: 0,
+        background: [
+          "radial-gradient(ellipse 140% 60% at 50% 132%, #1a5080 0%, #0c3259 22%, transparent 52%)",
+          "radial-gradient(circle 200px at 72% 13%, #ffe066cc 0%, #f59e0b55 22%, transparent 42%)",
+          "linear-gradient(170deg, #000005 0%, #000a1c 40%, #00132e 75%, #000814 100%)",
+        ].join(", "),
+      }} />
+
+      {/* Imagen de fondo real */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/media/images/pyrostarsystem.webp" alt=""
+        crossOrigin="anonymous"
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 1 }}
+        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+      />
+
+      {/* Viñetas */}
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 220, background: "linear-gradient(to bottom, #000000b0 0%, transparent 100%)", zIndex: 3, pointerEvents: "none" }} />
+      <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 300, background: "linear-gradient(to top, #000000a0 0%, transparent 100%)", zIndex: 3, pointerEvents: "none" }} />
+
+      {/* ── Nave 3D — draggable + resizable ── */}
+      <div
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        onMouseDown={(e) => startInteraction(e, "move")}
+        style={{
+          position: "absolute",
+          left: viewer.x, top: viewer.y,
+          width: viewer.w, height: viewer.h,
+          zIndex: 2,
+          cursor: "grab",
+          outline: hovered ? "1px dashed rgba(255,255,255,0.25)" : "none",
+          boxSizing: "border-box",
+        }}
+      >
+        <ShipViewer3D
+          glbUrl={glbCandidates}
+          rotationAxis="yaw"
+          animate
+          animationSpeed={0.18}
+          showGrid={false}
+          showAxis={false}
+          transparent
+          className="w-full h-full"
+        />
+
+        {/* Handle de resize — esquina inferior derecha */}
+        <div
+          title="Redimensionar"
+          onMouseDown={(e) => { e.stopPropagation(); startInteraction(e, "resize"); }}
+          style={{
+            position: "absolute", bottom: 0, right: 0,
+            width: 28, height: 28,
+            cursor: "se-resize",
+            display: "flex", alignItems: "flex-end", justifyContent: "flex-end",
+            padding: 4,
+            opacity: hovered ? 1 : 0,
+            transition: "opacity 0.15s",
+          }}
+        >
+          {/* Icono ↘ con tres líneas diagonales */}
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <line x1="2" y1="14" x2="14" y2="2" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round"/>
+            <line x1="7" y1="14" x2="14" y2="7" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round"/>
+            <line x1="12" y1="14" x2="14" y2="12" stroke="rgba(255,255,255,0.7)" strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+        </div>
+      </div>
+
+      {/* Brand mark — top-left */}
+      <div style={{ position: "absolute", top: 28, left: 36, zIndex: 10 }}>
+        <BrandMark theme={{ ...theme, text: "#ffffff", textMuted: "rgba(255,255,255,0.55)" }} size={36} labelSize={13} subSize={8} />
+      </div>
+
+      {/* Nombre de nave — bottom-left, sobre el panel */}
+      <div style={{ position: "absolute", bottom: SC_PANEL_H + 20, left: 36, right: "48%", zIndex: 10, pointerEvents: "none" }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.38em", textTransform: "uppercase", color: theme.accent, marginBottom: 8, lineHeight: 1 }}>
+          {manufacturer ?? "—"}
+        </div>
+        <div style={{ fontSize: nameFontSize, fontWeight: 800, lineHeight: 0.88, letterSpacing: "-0.03em", textTransform: "uppercase", color: "#ffffff", textShadow: `0 0 80px ${theme.accent}99, 0 3px 12px #000` }}>
+          {displayName}
+        </div>
+        {(shipType || shipRole) && (
+          <span style={{ display: "inline-block", marginTop: 14, fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "#000", backgroundColor: theme.accent, padding: "5px 16px", lineHeight: 1.5 }}>
+            {[shipType, shipRole].filter(Boolean).join(" · ")}
+          </span>
+        )}
+      </div>
+
+      {/* Panel glassmorphism — stats en la base */}
+      <div style={{
+        position: "absolute", bottom: 0, left: 0, right: 0, height: SC_PANEL_H,
+        background: "rgba(0,0,0,0.60)",
+        backdropFilter: "blur(24px)", WebkitBackdropFilter: "blur(24px)",
+        borderTop: "1px solid rgba(255,255,255,0.07)",
+        display: "flex", alignItems: "center",
+        zIndex: 10,
+      }}>
+        {showcaseStats.map((s, i) => (
+          <div key={i} style={{ flex: 1, textAlign: "center", borderRight: i < showcaseStats.length - 1 ? "1px solid rgba(255,255,255,0.07)" : undefined, padding: "0 16px" }}>
+            <div style={{ fontSize: 10, letterSpacing: "0.24em", textTransform: "uppercase", color: "rgba(255,255,255,0.40)", marginBottom: 5, lineHeight: 1 }}>{s.label}</div>
+            <div style={{ fontSize: 38, fontWeight: 800, color: theme.accent, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{s.value}</div>
+            <div style={{ fontSize: 10, color: "rgba(255,255,255,0.30)", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 4 }}>{s.unit}</div>
+          </div>
+        ))}
+        <div style={{ padding: "0 28px", borderLeft: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+          <Image src="/sclabs-logo.png" alt="SC LABS" width={34} height={34} style={{ borderRadius: 5 }} crossOrigin="anonymous" unoptimized />
+          <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.20em", textTransform: "uppercase", color: "rgba(255,255,255,0.45)" }}>SCLABS.SPACE</div>
+        </div>
       </div>
     </div>
   );
@@ -627,121 +860,25 @@ export default function ShipInfoCard({
   }
 
   // ══════════════════════════════════════════════════════════════════════
-  // SHOWCASE — 1800 × 900 — "Showroom espacial"
+  // SHOWCASE — 1800 × 900 — "Showroom espacial" (nave drag+resize)
   // ══════════════════════════════════════════════════════════════════════
   if (variant === "showcase") {
-    const SW = 1800;
-    const SH = 900;
-    const PANEL_H = 130;
-
-    const glbCandidates = shipGlbCandidates((ship as any).reference ?? null);
-
-    const nameFontSize = Math.max(48, Math.min(130, Math.floor(880 / Math.max(displayName.length, 4))));
-
-    const showcaseStats = [
-      cargo    != null ? { label: "Cargo",     value: num(cargo),            unit: "SCU" } : null,
-      hullHp   != null ? { label: "Hull HP",   value: num(hullHp),           unit: "HP"  } : null,
-      scmSpeed != null ? { label: "SCM Speed", value: num(scmSpeed),         unit: "m/s" } : null,
-      shieldHp != null ? { label: "Shield",    value: num(shieldHp),         unit: "HP"  } : null,
-      specs.maxCrew != null ? { label: "Crew", value: String(specs.maxCrew), unit: "crew"} : null,
-      mass     != null ? { label: "Mass",      value: num(mass),             unit: "kg"  } : null,
-    ].filter(Boolean) as { label: string; value: string; unit: string }[];
-
     return (
-      <div
-        id={captureId}
-        style={{
-          position: "relative", width: SW, height: SH,
-          overflow: "hidden",
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
-        }}
-      >
-        {/* Fondo CSS: simula horizonte espacial. Se oculta si showcase-bg.jpg carga. */}
-        <div style={{
-          position: "absolute", inset: 0,
-          background: [
-            "radial-gradient(ellipse 140% 60% at 50% 132%, #1a5080 0%, #0c3259 22%, transparent 52%)",
-            "radial-gradient(circle 200px at 72% 13%, #ffe066cc 0%, #f59e0b55 22%, transparent 42%)",
-            "linear-gradient(170deg, #000005 0%, #000a1c 40%, #00132e 75%, #000814 100%)",
-          ].join(", "),
-          zIndex: 0,
-        }} />
-
-        {/* Imagen de fondo real — se muestra si el archivo existe */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/media/images/pyrostarsystem.webp"
-          alt=""
-          crossOrigin="anonymous"
-          style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", objectPosition: "center center", zIndex: 1 }}
-          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-        />
-
-        {/* Vignette superior */}
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 220, background: "linear-gradient(to bottom, #000000b0 0%, transparent 100%)", zIndex: 3, pointerEvents: "none" }} />
-
-        {/* Vignette inferior — funde con el panel */}
-        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 300, background: "linear-gradient(to top, #000000a0 0%, transparent 100%)", zIndex: 3, pointerEvents: "none" }} />
-
-        {/* 3D Ship Viewer — ocupa toda la tarjeta, fondo transparente */}
-        <div style={{ position: "absolute", inset: 0, zIndex: 2 }}>
-          <ShipViewer3D
-            glbUrl={glbCandidates}
-            rotationAxis="yaw"
-            animate
-            animationSpeed={0.18}
-            showGrid={false}
-            showAxis={false}
-            transparent
-            cameraLookAt={[0.45, -0.18, 0]}
-            className="w-full h-full"
-          />
-        </div>
-
-        {/* Brand mark — top-left */}
-        <div style={{ position: "absolute", top: 28, left: 36, zIndex: 10 }}>
-          <BrandMark theme={{ ...theme, text: "#ffffff", textMuted: "rgba(255,255,255,0.55)" }} size={36} labelSize={13} subSize={8} />
-        </div>
-
-        {/* Nombre de nave — bottom-left, sobre el panel */}
-        <div style={{ position: "absolute", bottom: PANEL_H + 20, left: 36, right: "48%", zIndex: 10 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.38em", textTransform: "uppercase", color: theme.accent, marginBottom: 8, lineHeight: 1 }}>
-            {ship.manufacturer ?? "—"}
-          </div>
-          <div style={{ fontSize: nameFontSize, fontWeight: 800, lineHeight: 0.88, letterSpacing: "-0.03em", textTransform: "uppercase", color: "#ffffff", textShadow: `0 0 80px ${theme.accent}99, 0 3px 12px #000` }}>
-            {displayName}
-          </div>
-          {(ship.type || specs.role) && (
-            <span style={{ display: "inline-block", marginTop: 14, fontSize: 11, fontWeight: 700, letterSpacing: "0.18em", textTransform: "uppercase", color: "#000", backgroundColor: theme.accent, padding: "5px 16px", lineHeight: 1.5 }}>
-              {[ship.type, specs.role].filter(Boolean).join(" · ")}
-            </span>
-          )}
-        </div>
-
-        {/* Panel glassmorphism — stats en la base */}
-        <div style={{
-          position: "absolute", bottom: 0, left: 0, right: 0, height: PANEL_H,
-          background: "rgba(0, 0, 0, 0.60)",
-          backdropFilter: "blur(24px)",
-          WebkitBackdropFilter: "blur(24px)",
-          borderTop: "1px solid rgba(255,255,255,0.07)",
-          display: "flex", alignItems: "center",
-          zIndex: 10,
-        }}>
-          {showcaseStats.map((s, i) => (
-            <div key={i} style={{ flex: 1, textAlign: "center", borderRight: i < showcaseStats.length - 1 ? "1px solid rgba(255,255,255,0.07)" : undefined, padding: "0 16px" }}>
-              <div style={{ fontSize: 10, letterSpacing: "0.24em", textTransform: "uppercase", color: "rgba(255,255,255,0.40)", marginBottom: 5, lineHeight: 1 }}>{s.label}</div>
-              <div style={{ fontSize: 38, fontWeight: 800, color: theme.accent, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>{s.value}</div>
-              <div style={{ fontSize: 10, color: "rgba(255,255,255,0.30)", letterSpacing: "0.12em", textTransform: "uppercase", marginTop: 4 }}>{s.unit}</div>
-            </div>
-          ))}
-          {/* Brand slot final */}
-          <div style={{ padding: "0 28px", borderLeft: "1px solid rgba(255,255,255,0.07)", display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
-            <Image src="/sclabs-logo.png" alt="SC LABS" width={34} height={34} style={{ borderRadius: 5 }} crossOrigin="anonymous" unoptimized />
-            <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.20em", textTransform: "uppercase", color: "rgba(255,255,255,0.45)" }}>SCLABS.SPACE</div>
-          </div>
-        </div>
-      </div>
+      <ShowcaseCardInner
+        captureId={captureId}
+        theme={theme}
+        displayName={displayName}
+        manufacturer={ship.manufacturer ?? null}
+        shipType={ship.type ?? null}
+        shipRole={specs.role ?? null}
+        glbCandidates={shipGlbCandidates((ship as any).reference ?? null)}
+        cargo={cargo}
+        hullHp={hullHp}
+        scmSpeed={scmSpeed}
+        shieldHp={shieldHp}
+        maxCrew={specs.maxCrew ?? null}
+        mass={mass}
+      />
     );
   }
 
