@@ -357,7 +357,7 @@ export function ShipViewer3D({
       renderer.dispose();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rotationAxis, animate, animationSpeed, shipColor, glbUrl, cameraLookAt[0], cameraLookAt[1], cameraLookAt[2]]);
+  }, [rotationAxis, animate, animationSpeed, shipColor, glbUrl, autoRotate, autoRotateSpeed]);
 
   return (
     <div className={`relative w-full h-full${className ? ` ${className}` : ""}`}>
