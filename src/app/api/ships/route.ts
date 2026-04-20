@@ -181,9 +181,9 @@ async function handleShipsQuery(params: ShipsQueryParams) {
               s.crew, s.mass_total_kg AS mass, s.cargo_capacity, s.game_version,
               sp.msrp_usd, sp.warbond_usd,
               fs.scm_speed, fs.max_speed as afterburner_speed,
-              COALESCE(s.length_meters, s.length) AS length_meters,
-              COALESCE(s.beam_meters,   s.beam)   AS beam_meters,
-              COALESCE(s.height_meters, s.height) AS height_meters
+              s.length_m AS length_m,
+              s.width_m  AS width_m,
+              s.height_m AS height_m
        FROM deduped s
        ${joinClause}
        ${whereClause} AND s.__rn = 1
@@ -232,9 +232,9 @@ async function handleShipsQuery(params: ShipsQueryParams) {
         role: s.role,
         focus: null,
         career: null,
-        lengthMeters: s.length_meters != null ? Number(s.length_meters) : null,
-        beamMeters:   s.beam_meters   != null ? Number(s.beam_meters)   : null,
-        heightMeters: s.height_meters != null ? Number(s.height_meters) : null,
+        lengthMeters: s.length_m != null ? Number(s.length_m) : null,
+        beamMeters:   s.width_m  != null ? Number(s.width_m)  : null,
+        heightMeters: s.height_m != null ? Number(s.height_m) : null,
       },
       };
     });
