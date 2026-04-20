@@ -419,7 +419,8 @@ function ShowcaseCardInner({ captureId, theme, data }: ShowcaseCardInnerProps) {
       <div style={{ position: "absolute", top: 0, left: 0, width: "55%", bottom: SC_PANEL_H, background: "linear-gradient(to right, #00000088 0%, transparent 100%)", zIndex: 3, pointerEvents: "none" }} />
 
       {/* Nave 3D — OrbitControls: arrastrar=orbitar, scroll=zoom, autoRotate suave */}
-      <div style={{ position: "absolute", inset: 0, zIndex: 2 }}>
+      {/* drop-shadow traza el alpha del canvas → glow sigue la nave donde quiera que esté */}
+      <div style={{ position: "absolute", inset: 0, zIndex: 2, filter: `drop-shadow(0 0 55px ${theme.accent}cc)` }}>
         <ShipViewer3D
           glbUrl={glbCandidates}
           rotationAxis="free"
