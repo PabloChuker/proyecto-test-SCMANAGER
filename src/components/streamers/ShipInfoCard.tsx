@@ -420,8 +420,8 @@ function ShowcaseCardInner({ captureId, theme, data }: ShowcaseCardInnerProps) {
 
       {/* Nave 3D — OrbitControls: arrastrar=orbitar, scroll=zoom, autoRotate suave */}
       {/* drop-shadow traza el alpha del canvas → glow sigue la nave donde quiera que esté */}
-      {/* Glow fijo cyan — queda bien con cualquier tema sobre el fondo espacial azul */}
-      <div style={{ position: "absolute", inset: 0, zIndex: 2, filter: "drop-shadow(0 0 55px #22d3eeaa)" }}>
+      {/* Glow fijo navy — #3b82f6 queda natural sobre el fondo espacial sea cual sea el tema */}
+      <div style={{ position: "absolute", inset: 0, zIndex: 2, filter: "drop-shadow(0 0 55px #3b82f6bb)" }}>
         <ShipViewer3D
           glbUrl={glbCandidates}
           rotationAxis="free"
