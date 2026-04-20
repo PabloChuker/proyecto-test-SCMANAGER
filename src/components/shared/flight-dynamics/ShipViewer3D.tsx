@@ -40,6 +40,10 @@ export interface ShipViewer3DProps {
   showGrid?: boolean;
   showAxis?: boolean;
   transparent?: boolean;
+  /** Desplaza el punto al que mira la cámara — [x, y, z] — default [0,0,0].
+   *  Útil para reencuadrar la nave sin mover la geometría:
+   *  lookAt x+ → nave aparece a la izquierda · lookAt y- → nave aparece arriba */
+  cameraLookAt?: [number, number, number];
 }
 
 // Color de cada línea de eje según la convención de la nave:
@@ -146,6 +150,7 @@ export function ShipViewer3D({
   showGrid = true,
   showAxis = true,
   transparent = false,
+  cameraLookAt = [0, 0, 0],
 }: ShipViewer3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -162,7 +167,7 @@ export function ShipViewer3D({
 
     const camera = new THREE.PerspectiveCamera(36, W / H, 0.1, 80);
     camera.position.set(1.7, 0.95, 2.1);
-    camera.lookAt(0, 0, 0);
+    camera.lookAt(cameraLookAt[0], cameraLookAt[1], cameraLookAt[2]);
 
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: transparent });
     renderer.setSize(W, H);
@@ -349,7 +354,7 @@ export function ShipViewer3D({
       renderer.dispose();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rotationAxis, animate, animationSpeed, shipColor, glbUrl]);
+  }, [rotationAxis, animate, animationSpeed, shipColor, glbUrl, cameraLookAt[0], cameraLookAt[1], cameraLookAt[2]]);
 
   return (
     <div className={`relative w-full h-full${className ? ` ${className}` : ""}`}>

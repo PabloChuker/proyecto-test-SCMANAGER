@@ -689,10 +689,11 @@ export default function ShipInfoCard({
             glbUrl={glbCandidates}
             rotationAxis="yaw"
             animate
-            animationSpeed={0.3}
+            animationSpeed={0.18}
             showGrid={false}
             showAxis={false}
             transparent
+            cameraLookAt={[0.45, -0.18, 0]}
             className="w-full h-full"
           />
         </div>
