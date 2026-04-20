@@ -1,8 +1,5 @@
 import Header from "@/app/assets/header/Header";
-import dynamic from "next/dynamic";
-
-// ssr: false — prevents THREE.js from being imported during server-side render
-const FleetCanvas = dynamic(() => import("@/components/tools/FleetCanvas"), { ssr: false });
+import FleetCanvasClient from "@/components/tools/FleetCanvasClient";
 
 export const metadata = {
   title: "Fleet Canvas — SC Labs",
@@ -14,7 +11,7 @@ export default function FleetCanvasPage() {
     <main className="h-screen bg-zinc-950 text-zinc-100 flex flex-col overflow-hidden">
       <Header subtitle="Fleet Canvas" />
       <div className="flex-1 min-h-0">
-        <FleetCanvas />
+        <FleetCanvasClient />
       </div>
     </main>
   );
