@@ -67,6 +67,7 @@ export const NAV_SECTIONS: NavSection[] = [
     key: "tools",
     label: "Tools",
     items: [
+      { label: "Fleet Canvas", href: "/fleet-canvas" },
       { label: "Pyro Timers", href: "/timers" },
       { label: "Streamers",   href: "/streamers" },
     ],
