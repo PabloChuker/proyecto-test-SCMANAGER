@@ -348,7 +348,7 @@ function ShowcaseCardInner({
           showAxis={false}
           transparent
           autoRotate
-          autoRotateSpeed={0.6}
+          autoRotateSpeed={0.18}
           className="w-full h-full"
         />
       </div>

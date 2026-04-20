@@ -261,8 +261,8 @@ export function ShipViewer3D({
         ctrl.dampingFactor    = 0.07;
         ctrl.minDistance      = 1.5;
         ctrl.maxDistance      = 14;
-        ctrl.autoRotate       = autoRotate;
-        ctrl.autoRotateSpeed  = autoRotateSpeed;
+        // autoRotate del OrbitControls mueve la cámara, no la nave — lo desactivamos.
+        // La rotación de la nave la manejamos en el loop directamente.
         controls  = ctrl;
         ctrlReady = true;
       });
@@ -286,6 +286,10 @@ export function ShipViewer3D({
           case "yaw":   shipGroup.rotation.y += animationSpeed * dt; break;
           case "roll":  shipGroup.rotation.z += animationSpeed * dt; break;
         }
+      }
+      // En modo free: rotar la nave (no la cámara) para efecto turntable
+      if (autoRotate && rotationAxis === "free") {
+        shipGroup.rotation.y += autoRotateSpeed * dt;
       }
 
       if (ctrlReady) controls!.update();
