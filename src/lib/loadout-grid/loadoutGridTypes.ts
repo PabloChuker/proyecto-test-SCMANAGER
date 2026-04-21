@@ -47,8 +47,10 @@ export const MAX_UNIT_PX         = 390;
 // Gap vertical entre tarjetas dentro de la misma columna (px fijo)
 export const CARD_GAP_PX         = 4;
 
-// v18 (Fase G.1): se unificaron Strafe/Turning/G-Forces en `flight-dynamics`.
-// Bump para forzar a que todos los usuarios carguen el default nuevo (sidebar
-// recibe `flight-dynamics` en vez de los 3 widgets pequeños dispersos).
-export const LAYOUT_STORAGE_KEY      = "al-filo-loadout-layout-v18";
+// v19 (Fase G.3 — layout default validado por Pablo 2026-04-21):
+// ship-card se mueve a col0 (hero arriba-izquierda w=2), quantum+radar bajan a
+// col1, power-grid sube al tope de col2. Bump de v18 → v19 para que TODOS los
+// usuarios carguen el default nuevo (el layout custom guardado en v18 se
+// descarta — si lo querían, pueden re-arrastrar).
+export const LAYOUT_STORAGE_KEY      = "al-filo-loadout-layout-v19";
 export const LAYOUT_CHECKPOINT_KEY   = "al-filo-loadout-layout-checkpoint-v1";

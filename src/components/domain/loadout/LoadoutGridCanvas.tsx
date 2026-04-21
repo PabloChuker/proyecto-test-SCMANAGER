@@ -29,9 +29,10 @@ const TWO_COL_IDS = new Set<string>([
   "flight-dynamics",
 ]);
 
-// v2: añadido flight-dynamics a TWO_COL_IDS → invalidamos cache para que los
-// usuarios con layout v1 persistido no se queden con la tarjeta en w=1.
-const RGL_KEY = "al-filo-rgl-v2";
+// v3 (Fase G.3): default layout reordenado (ship-card → col0 hero, quantum+radar
+// → col1, power-grid → tope col2). Bumpeamos RGL_KEY así el merge no resucita
+// las coordenadas viejas para usuarios que ya tenían v2 guardado.
+const RGL_KEY = "al-filo-rgl-v3";
 const ROW_H = 1;                               // 1 px por fila → alto preciso
 const MARGIN: [number, number] = [4, 4];        // gap entre tarjetas
 const MARGIN_Y = MARGIN[1];

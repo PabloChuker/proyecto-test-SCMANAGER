@@ -257,24 +257,29 @@ function getWidgetBlocks(
 // Zone B — 2-col widgets "hero" apilados en cols 3..4 (sidebar de ship info).
 // Cada zona ordena sus widgets en la lista del plan; widgets ocultos se
 // saltan sin rebalanceo para conservar la identidad visual de cada columna.
+// v14 (Fase G.3 — layout validado por Pablo en captura 2026-04-21):
+// ship-card se mueve al TOPE de col0 (w=2 → hace hero arriba-izquierda cubriendo
+// cols 0-1). quantum + radar bajan de col2 → col1 (nav+sensors al lado de
+// defense/power). col2 queda liviana: power-grid arriba, loadout-detail debajo.
+// Resultado: sidebar = solo search + flight-dynamics (3D + unified), todo el
+// ship info vive arriba-izquierda, analíticas del lado derecho.
 const COLUMN_PLAN_1COL: WidgetId[][] = [
-  // Col 0 — OFFENSE + INDUSTRY (mining/salvage viven acá: son las "armas"
-  // de una nave industrial, y cuando aparecen reemplazan visualmente al rol
-  // de combate de esa columna).
-  ["weapons", "mining", "salvage", "missiles"],
-  // Col 1 — DEFENSE & POWER
-  ["shields", "powerplants", "coolers"],
-  // Col 2 — NAV & SENSORS + flight stats
-  ["loadout-detail", "quantum", "radar", "utility", "power-grid"],
+  // Col 0 — SHIP HERO + OFFENSE + INDUSTRY. ship-card (w=2) ocupa cols 0-1 en
+  // la primera fila; las siguientes tarjetas (weapons, mining, salvage, missiles)
+  // caen abajo en col 0 (w=1). mining/salvage reemplazan visualmente a weapons
+  // cuando la nave es industrial.
+  ["ship-card", "weapons", "mining", "salvage", "missiles"],
+  // Col 1 — DEFENSE + POWER + NAV/SENSORS
+  ["shields", "powerplants", "coolers", "quantum", "radar"],
+  // Col 2 — ANALYTICS: power grid + combat summary + utility hardpoints
+  ["power-grid", "loadout-detail", "utility"],
 ];
 
-// Sidebar 2-col (cols 3-4). Widgets hero de ship info apilados vertical.
-// flight-dynamics (Fase G.1) vive acá — unifica Strafe/Turning/G-Forces en un
-// solo bloque comparativo.
+// Sidebar 2-col (cols 3-4). Widgets hero apilados vertical.
+// ship-card ya NO vive acá (se mudó a col0 en v14).
 const COLUMN_PLAN_2COL_START = 3;
 const COLUMN_PLAN_2COL: WidgetId[] = [
   "ship-selector",     // search
-  "ship-card",
   "flight-dynamics-3d",
   "flight-dynamics",
 ];
