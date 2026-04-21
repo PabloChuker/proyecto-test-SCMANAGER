@@ -171,24 +171,33 @@ export default function PartyPage() {
   // ═════════════════════════════════════════════════════════════════════════
   // Session-tied lifecycle
   //
-  // Cuando Pablo cierra la pestaña / browser / navega fuera, la party debería
-  // cerrarse automáticamente.  Usamos dos mecanismos complementarios:
+  // Cuando el usuario cierra la pestaña / browser, la party debería cerrarse
+  // automáticamente. Usamos dos mecanismos complementarios:
   //
-  //   1. beforeunload / pagehide → navigator.sendBeacon('/api/party/leave').
-  //      El beacon es fire-and-forget, resiste el cierre inmediato del tab, y
-  //      manda cookies same-origin (auth funciona).
+  //   1. beforeunload → navigator.sendBeacon('/api/party/leave').
+  //      Es el ÚNICO evento que dispara SÓLO cuando el tab se cierra /
+  //      navega fuera del sitio / recarga. No dispara en minimizar, Alt+Tab,
+  //      cambio de workspace, ni cuando la tab queda en segundo plano.
   //
   //   2. Heartbeat cada 60s → POST /api/party/heartbeat.  Si el browser
   //      crashea o pierde la red antes del beacon, el `last_seen_at` no se
   //      actualiza y los filtros de staleness (aplicados en /mining y en el
   //      propio /party) dejan de precargar la party.
   //
-  // NO escuchamos `visibilitychange`: Alt+Tab / minimizar / cambiar de pestaña
-  // NO deben matar la party (es lo típico mientras jugás Star Citizen con
-  // SC Labs de referencia en otro tab). El heartbeat + staleness cubren
-  // crashes reales.
+  // NO escuchamos `visibilitychange` NI `pagehide`:
+  //   - `visibilitychange → hidden` dispara al Alt+Tab / minimizar / cambiar
+  //      tab. Antes mataba la party instantáneamente (Fase H.9).
+  //   - `pagehide` también dispara al minimizar en varios browsers modernos
+  //      (bfcache entry, memory pressure, Chrome task-switcher, etc.) —
+  //      Pablo reportó un compañero siendo expulsado al minimizar la
+  //      ventana. Fase H.10 lo saca definitivamente.
   //
-  // El efecto se adhiere al `myParty.id`: si Pablo cambia de party, el
+  // Trade-off: si el browser crashea de verdad sin disparar `beforeunload`
+  // (raro pero pasa), el heartbeat para y la party queda "zombie" en DB
+  // hasta que alguien la abandona con el botón Leave o entre el sweep
+  // server-side por staleness. Preferimos zombie over expulsado-por-error.
+  //
+  // El efecto se adhiere al `myParty.id`: si el usuario cambia de party, el
   // cleanup remonta todo y engancha los handlers al nuevo id.
   // ═════════════════════════════════════════════════════════════════════════
   useEffect(() => {
@@ -216,19 +225,12 @@ export default function PartyPage() {
     };
 
     const handleBeforeUnload = () => { sendLeaveBeacon(); };
-    const handlePageHide = () => { sendLeaveBeacon(); };
 
-    // Fase H.9 — NO disparar el beacon en `visibilitychange → hidden`.
-    // El código anterior promocionaba un delay de 30s en el comentario pero
-    // nunca lo implementó: cualquier Alt+Tab, minimizar ventana o cambio de
-    // pestaña mataba la party al instante si el usuario era el último
-    // conectado (o el único, típico al crearla). Pablo lo notó como "las
-    // parties duran segundos". El heartbeat cada 60s + el check de
-    // `last_seen_at` server-side ya cubren el caso crash/red caída; el
-    // cierre REAL del tab lo cubren beforeunload + pagehide.
-
+    // Fase H.10 — sólo `beforeunload`. Ni visibilitychange ni pagehide,
+    // porque ambos pueden dispararse al minimizar la ventana o pasar al
+    // background sin que el usuario quiera salirse de la party (Pablo
+    // reportó un compañero siendo echado del party sólo por minimizar).
     window.addEventListener("beforeunload", handleBeforeUnload);
-    window.addEventListener("pagehide", handlePageHide);
 
     const heartbeat = window.setInterval(() => {
       fetch("/api/party/heartbeat", {
@@ -250,7 +252,6 @@ export default function PartyPage() {
 
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      window.removeEventListener("pagehide", handlePageHide);
       window.clearInterval(heartbeat);
     };
   }, [user, myParty?.id]);
