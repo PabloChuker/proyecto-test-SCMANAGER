@@ -81,6 +81,8 @@ export default function TradeDashboard() {
   const [orders, setOrders] = useState<TradeWorkOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Fase E.E8 — mark-all-paid bulk action busy flag
+  const [clearingPending, setClearingPending] = useState(false);
 
   // Filters / scope
   const [scope, setScope] = useState<Scope>("me");
@@ -207,6 +209,39 @@ export default function TradeDashboard() {
     () => pendingPayouts.reduce((s, r) => s + (r.participant.payout_uec || 0), 0),
     [pendingPayouts],
   );
+
+  // Fase E.E8 — bulk-mark every pending participant as paid=true. Sirve cuando
+  // Pablo terminó de transferir todos los aUEC fuera de la app y solo quiere
+  // limpiar la cola de pending payouts del dashboard de un saque. Pide confirm()
+  // porque dispara notifs payout_transferred a cada destinatario y no se puede
+  // deshacer en bulk.
+  const markAllPendingAsPaid = useCallback(async () => {
+    if (pendingPayouts.length === 0) return;
+    const ok =
+      typeof window !== "undefined"
+        ? window.confirm(
+            `¿Marcar como pagados los ${pendingPayouts.length} pending payouts (${fmt(
+              pendingTotal,
+            )} aUEC en total)? Esta acción no se puede deshacer y notifica a cada destinatario.`,
+          )
+        : true;
+    if (!ok) return;
+    setClearingPending(true);
+    try {
+      await Promise.all(
+        pendingPayouts.map(({ wo, participant }) =>
+          fetch(`/api/trade/work-orders/${wo.id}/participants`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: participant.id, paid: true }),
+          }).catch(() => undefined),
+        ),
+      );
+      await load();
+    } finally {
+      setClearingPending(false);
+    }
+  }, [pendingPayouts, pendingTotal, load]);
 
   // ── Top routes (buy→sell pair) ─────────────────────────────────────────
   const topRoutes = useMemo(() => {
@@ -417,16 +452,33 @@ export default function TradeDashboard() {
 
       {/* ── Pending payouts ── */}
       <div className="bg-zinc-900/60 border border-zinc-800/60 rounded-sm p-4">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 gap-3">
           <div>
             <div className="text-[9px] uppercase tracking-[0.2em] text-zinc-500">{td("pendingPayouts")}</div>
             <div className="text-[11px] text-zinc-400 mt-0.5">
               {td("pendingHintBefore")} <span className="text-emerald-400">{td("pendingHintPaid")}</span> {td("pendingHintAfter")}
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-[9px] uppercase tracking-widest text-zinc-500">{td("totalToTransfer")}</div>
-            <div className="text-lg font-mono text-amber-300">{fmt(pendingTotal)} aUEC</div>
+          <div className="flex items-center gap-3">
+            {/* Fase E.E8 — Limpia la cola completa: marca cada participant
+                como paid=true y dispara notif payout_transferred. */}
+            {pendingPayouts.length > 0 && (
+              <button
+                type="button"
+                onClick={markAllPendingAsPaid}
+                disabled={clearingPending}
+                className="px-3 py-1.5 text-[10px] uppercase tracking-widest font-mono bg-red-600/20 border border-red-600/50 rounded-sm text-red-100 hover:bg-red-600/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={td("clearAllHint", { count: pendingPayouts.length })}
+              >
+                {clearingPending
+                  ? td("clearingAll")
+                  : td("clearAll", { count: pendingPayouts.length })}
+              </button>
+            )}
+            <div className="text-right">
+              <div className="text-[9px] uppercase tracking-widest text-zinc-500">{td("totalToTransfer")}</div>
+              <div className="text-lg font-mono text-amber-300">{fmt(pendingTotal)} aUEC</div>
+            </div>
           </div>
         </div>
         {pendingPayouts.length === 0 ? (
