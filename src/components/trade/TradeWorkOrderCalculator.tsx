@@ -763,6 +763,84 @@ export default function TradeWorkOrderCalculator() {
     setExpenses((es) => es.filter((e) => e.localKey !== localKey));
   }
 
+  // ── Mining → Trade inventory bridge helper ────────────────────────────────
+  // Extracted so saveAll() AND the manual "Apply to inventory" button can
+  // both trigger it. Idempotent on the server side as long as we pass a
+  // unique destination_ref per WO — the client-side guard just avoids
+  // obvious double-fire.
+  const applyInventoryDiscount = useCallback(
+    async (woId: string, qty: number): Promise<boolean> => {
+      if (!miningMarker || qty <= 0) return false;
+      try {
+        const res = await fetch("/api/mining/inventory", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: miningMarker.sessionId,
+            mineral_id: miningMarker.mineralId,
+            mineral_name: miningMarker.mineralName,
+            quantity: qty,
+            reason: "sell",
+            work_order_id: null, // FK is on mining_work_orders, not trade
+            destination_ref: `trade_wo:${woId}`,
+          }),
+        });
+        if (!res.ok) {
+          // eslint-disable-next-line no-console
+          console.warn("[mining-trade bridge] inventory POST failed", res.status);
+          return false;
+        }
+        setInventoryDiscountedAt(new Date().toISOString());
+        return true;
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn("[mining-trade bridge] inventory discount failed", err);
+        return false;
+      }
+    },
+    [miningMarker],
+  );
+
+  // On hydrate (once serverId + miningMarker are set), check mining_movements
+  // for a prior `trade_wo:<id>` entry so we don't double-deduct on reload AND
+  // so the chip correctly flips to emerald ✓ after a page refresh.
+  useEffect(() => {
+    if (!serverId || !miningMarker) return;
+    if (inventoryDiscountedAt) return;
+    const ctrl = new AbortController();
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/mining/inventory?session_id=${encodeURIComponent(miningMarker.sessionId)}`,
+          { signal: ctrl.signal },
+        );
+        if (!res.ok) return;
+        const j = await res.json();
+        const movements: Array<{ destination_ref: string | null; created_at: string }> =
+          j.movements || [];
+        const hit = movements.find(
+          (m) => m.destination_ref === `trade_wo:${serverId}`,
+        );
+        if (hit) setInventoryDiscountedAt(hit.created_at);
+      } catch {
+        /* ignore — bridge is best-effort */
+      }
+    })();
+    return () => ctrl.abort();
+  }, [serverId, miningMarker, inventoryDiscountedAt]);
+
+  // Manual trigger exposed to the "Apply to inventory" button. Used when the
+  // auto-bridge didn't fire (e.g. pre-existing WO completed before this code
+  // landed, or a previous network error swallowed the call).
+  const handleManualApplyInventory = useCallback(async () => {
+    if (!serverId) return;
+    setSaving(true);
+    setError(null);
+    const ok = await applyInventoryDiscount(serverId, scuSold);
+    if (!ok) setError(t("bridgeRetryFailed"));
+    setSaving(false);
+  }, [serverId, scuSold, applyInventoryDiscount, t]);
+
   // ── Save flow ──
   const saveAll = useCallback(
     async (targetStatus?: TradeWorkOrder["status"]) => {
@@ -837,6 +915,15 @@ export default function TradeWorkOrderCalculator() {
             if (r2.ok) {
               const { data: d2 } = await r2.json();
               hydrateFromServer(d2);
+            }
+            // Mining → Trade bridge: brand-new WO created directly in
+            // "completed" state (one-click "Complete Solo" path from a
+            // Sell Route stop). Discount the SCU from mining_inventory now,
+            // because the early `return` below skips the bridge block in
+            // the update branch. Deduplication is enforced server-side by
+            // `destination_ref = trade_wo:<id>`.
+            if (miningMarker && scuSold > 0 && woId) {
+              await applyInventoryDiscount(woId, scuSold);
             }
           }
           // Route to edit mode so the store knows we're editing this id
@@ -919,35 +1006,21 @@ export default function TradeWorkOrderCalculator() {
 
         // 5.5) Mining → Trade bridge: when this WO was sourced from a Mining
         // Inventory row AND we just transitioned to "completed", discount the
-        // sold SCU from `mining_inventory`. Guarded by `status !== completed`
+        // sold SCU from `mining_inventory`. Guarded by `!inventoryDiscountedAt`
+        // (client-side) AND by `destination_ref = trade_wo:<id>` (server-side)
         // so re-saving an already-completed WO doesn't double-deduct.
         if (
           targetStatus === "completed" &&
           status !== "completed" &&
           miningMarker &&
-          scuSold > 0
+          scuSold > 0 &&
+          woId &&
+          !inventoryDiscountedAt
         ) {
-          try {
-            await fetch("/api/mining/inventory", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                session_id: miningMarker.sessionId,
-                mineral_id: miningMarker.mineralId,
-                mineral_name: miningMarker.mineralName,
-                quantity: scuSold,
-                reason: "sell",
-                work_order_id: null, // FK is on mining_work_orders, not trade
-                destination_ref: `trade_wo:${woId}`,
-              }),
-            });
-            setInventoryDiscountedAt(new Date().toISOString());
-          } catch (err) {
-            // Don't fail the whole save if the inventory ping misfires —
-            // the Trade WO is already completed. Surface a soft warning.
-            // eslint-disable-next-line no-console
-            console.warn("[mining-trade bridge] inventory discount failed", err);
-          }
+          // Best-effort: any failure is logged inside the helper and won't
+          // throw, so an inventory blip can't abort the WO save. If it does
+          // fail, the manual "Apply to inventory" button is still available.
+          await applyInventoryDiscount(woId, scuSold);
         }
 
         // 6) Refresh
@@ -968,6 +1041,7 @@ export default function TradeWorkOrderCalculator() {
       buyStation, buySystem, sellStation, sellSystem,
       scuBought, scuSold, scuLost, buyPrice, sellPrice,
       notes, miningMarker, routeMarker, participants, expenses, serverId,
+      inventoryDiscountedAt, applyInventoryDiscount,
     ],
   );
 
@@ -1154,13 +1228,36 @@ export default function TradeWorkOrderCalculator() {
               {t("delete")}
             </button>
           )}
-          <button
-            onClick={() => saveAll()}
-            disabled={saving}
-            className="px-3 py-1.5 text-[10px] uppercase tracking-widest bg-zinc-800/60 hover:bg-zinc-700/60 border border-zinc-700/60 rounded-sm text-zinc-300 transition-colors"
-          >
-            {saving ? t("saving") : t("save")}
-          </button>
+          {/* Bug H.5 — hide SAVE button once the WO is completed. The
+              "Complete / Complete & Split" button already runs saveAll("completed")
+              internally, so Pablo was seeing two buttons for what felt like the
+              same action. After completion there's nothing the user can save
+              that isn't available via the manual "Apply to inventory" fallback
+              (for mining-sourced WOs) or via Delete. */}
+          {status !== "completed" && (
+            <button
+              onClick={() => saveAll()}
+              disabled={saving}
+              className="px-3 py-1.5 text-[10px] uppercase tracking-widest bg-zinc-800/60 hover:bg-zinc-700/60 border border-zinc-700/60 rounded-sm text-zinc-300 transition-colors"
+            >
+              {saving ? t("saving") : t("save")}
+            </button>
+          )}
+          {/* Bug H.5 — manual "Apply to inventory" fallback. Visible when this
+              WO is sourced from a mining inventory row (miningMarker present),
+              already persisted (serverId), has SCU sold, and the bridge
+              hasn't already run for this WO. Covers legacy WOs completed
+              before the auto-bridge landed AND any one-off network glitch. */}
+          {serverId && miningMarker && scuSold > 0 && !inventoryDiscountedAt && (
+            <button
+              onClick={handleManualApplyInventory}
+              disabled={saving}
+              title={t("applyToInventoryTooltip")}
+              className="px-3 py-1.5 text-[10px] uppercase tracking-widest bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 rounded-sm text-amber-300 transition-colors disabled:opacity-40"
+            >
+              {t("applyToInventory")}
+            </button>
+          )}
           {hasNextStop && routeMarker && (
             <button
               onClick={saveAndJumpToNext}
