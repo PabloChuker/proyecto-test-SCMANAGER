@@ -447,13 +447,25 @@ function GForcePanel({ view, shipData }: { view: View; shipData: any }) {
 
 // =============================================================================
 // View toggle + 3-col layout
+//
+// Fase G.2 (Pablo, 2026-04-21): el toggle 3D/Radar/Bars se movió del cuerpo
+// del widget al header (al lado del título "FLIGHT DYNAMICS") para ganar
+// altura vertical en el sidebar 2-col. Para compartir el estado entre toolbar
+// (que vive en el header del WidgetShell) y body (que vive como children),
+// se expone:
+//
+//   - useFlightDynamicsView()     → hook que devuelve [view, setView]
+//   - FlightDynamicsToolbar       → botones que se inyectan en el header del shell
+//   - FlightDynamicsBody          → los 3 sub-paneles, controlados desde fuera
+//   - FlightDynamicsContent       → versión "todo en uno" para contextos legacy
 // =============================================================================
 function ToggleButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
-      onClick={onClick}
-      className={`px-2 py-0.5 text-[8px] font-mono rounded transition-colors ${
-        active ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      className={`rgl-no-drag px-2 py-0.5 text-[9px] font-mono rounded transition-colors cursor-pointer ${
+        active ? "bg-zinc-700 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
       }`}
     >
       {children}
@@ -469,20 +481,37 @@ function SubPanelHeader({ title }: { title: string }) {
   );
 }
 
-function FlightDynamicsTabs({ shipData }: { shipData: any }) {
-  const [view, setView] = useState<View>("radar");
+// ── Shared view state hook ────────────────────────────────────────────────────
+// Se usa desde el componente que compone el shell (LoadoutBuilder renderWidget)
+// para mantener la single-source-of-truth del toggle entre header y body.
+export function useFlightDynamicsView(initial: View = "radar") {
+  return useState<View>(initial);
+}
+
+// ── Toolbar (para inyectar en el header del WidgetShell) ─────────────────────
+export function FlightDynamicsToolbar({
+  view,
+  setView,
+}: {
+  view: View;
+  setView: (v: View) => void;
+}) {
+  return (
+    <div className="flex gap-0.5 bg-zinc-800/60 rounded p-0.5">
+      <ToggleButton active={view === "3d"}    onClick={() => setView("3d")}>3D</ToggleButton>
+      <ToggleButton active={view === "radar"} onClick={() => setView("radar")}>Radar</ToggleButton>
+      <ToggleButton active={view === "bars"}  onClick={() => setView("bars")}>Bars</ToggleButton>
+    </div>
+  );
+}
+
+// ── Body: 3 sub-paneles en grid 3-cols, controlado desde fuera ───────────────
+export const FlightDynamicsBody = memo(function FlightDynamicsBody({ view }: { view: View }) {
+  const shipInfo = useLoadoutStore(s => s.shipInfo);
+  if (!shipInfo) return null;
+  const shipData = shipInfo as any;
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
-      {/* View toggle (compartido entre los 3 sub-paneles) */}
-      <div className="flex justify-end mb-2">
-        <div className="flex gap-0.5 bg-zinc-800/60 rounded p-0.5">
-          <ToggleButton active={view === "3d"}    onClick={() => setView("3d")}>3D</ToggleButton>
-          <ToggleButton active={view === "radar"} onClick={() => setView("radar")}>Radar</ToggleButton>
-          <ToggleButton active={view === "bars"}  onClick={() => setView("bars")}>Bars</ToggleButton>
-        </div>
-      </div>
-
-      {/* 3 sub-paneles en columnas iguales */}
       <div className="grid grid-cols-3 gap-2">
         <div className="flex flex-col">
           <SubPanelHeader title="Strafe" />
@@ -505,10 +534,26 @@ function FlightDynamicsTabs({ shipData }: { shipData: any }) {
       </div>
     </div>
   );
+});
+
+// ── Legacy all-in-one: toolbar + body dentro del mismo bloque ────────────────
+// Se mantiene para contextos que no usan headerActions. El toggle queda sobre
+// el body (como en Fase G.1).
+function FlightDynamicsTabs({ shipData }: { shipData: any }) {
+  const [view, setView] = useState<View>("radar");
+  void shipData; // el body lee la store directamente
+  return (
+    <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
+      <div className="flex justify-end mb-2">
+        <FlightDynamicsToolbar view={view} setView={setView} />
+      </div>
+      <FlightDynamicsBody view={view} />
+    </div>
+  );
 }
 
 // =============================================================================
-// Store-connected export
+// Store-connected export (legacy — toolbar embebido en el body)
 // =============================================================================
 export const FlightDynamicsContent = memo(function FlightDynamicsContent() {
   const shipInfo = useLoadoutStore(s => s.shipInfo);

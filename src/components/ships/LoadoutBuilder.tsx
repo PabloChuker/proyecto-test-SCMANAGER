@@ -33,7 +33,15 @@ import { fmtStat, fmtDps } from "./loadout-utils";
 // una sola tarjeta 2-col con toggle 3D/Radar/Bars. Las importaciones viejas
 // quedan como refs muertas — los archivos se conservan por si alguien quiere
 // revivir el widget individual.
-import { FlightDynamicsContent }   from "./widgets/FlightDynamicsWidget";
+// FlightDynamicsWidget: Fase G.2 separó toolbar (va en el header del shell) de
+// body (los 3 sub-paneles). El componente `FlightDynamicsCard` (abajo) compone
+// ambos. `FlightDynamicsContent` sigue exportado en el widget para contextos
+// legacy pero ya no se consume acá.
+import {
+  FlightDynamicsBody,
+  FlightDynamicsToolbar,
+  useFlightDynamicsView,
+} from "./widgets/FlightDynamicsWidget";
 import { FlightDynamics3dContent } from "./widgets/FlightDynamics3dWidget";
 import { ShipCardContent }        from "./widgets/ShipCardWidget";
 import { LoadoutDetailContent }   from "./widgets/LoadoutDetailWidget";
@@ -347,11 +355,13 @@ function savePositions(positions: SavedPos[]) {
 // vecinos sin clip.
 const collapsedSet = new Set<WidgetId>();
 
-function WidgetShell({ id, label, icon, badge, children, overflow = "hidden" }: {
+function WidgetShell({ id, label, icon, badge, headerActions, children, overflow = "hidden" }: {
   id: WidgetId;
   label: string;
   icon?: string;
   badge?: string | number;
+  /** Fase G.2: slot para controles custom en el header (ej. toggle 3D/Radar/Bars). */
+  headerActions?: React.ReactNode;
   children: React.ReactNode;
   overflow?: "hidden" | "visible";
 }) {
@@ -370,6 +380,14 @@ function WidgetShell({ id, label, icon, badge, children, overflow = "hidden" }: 
         {icon && <Image src={icon} alt="" width={16} height={16} className="brightness-125" />}
         <span className="text-[11px] font-mono font-bold text-zinc-300 tracking-[0.12em] group-hover:text-zinc-100 transition-colors uppercase">{label}</span>
         <span className="flex-1" />
+        {headerActions && (
+          <div
+            className="rgl-no-drag flex items-center"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            {headerActions}
+          </div>
+        )}
         {badge != null && <span className="text-[10px] font-mono font-semibold text-zinc-500">{badge}</span>}
         <button
           onMouseDown={(e) => e.stopPropagation()}
@@ -387,6 +405,23 @@ function WidgetShell({ id, label, icon, badge, children, overflow = "hidden" }: 
         </div>
       )}
     </div>
+  );
+}
+
+// ── FlightDynamicsCard (Fase G.2) ───────────────────────────────────────────
+// Component dedicado: maneja el estado `view` compartido entre el toolbar
+// (en el header del shell) y el body (los 3 sub-paneles). Viene acá (fuera
+// de renderWidget) porque necesita usar hooks.
+function FlightDynamicsCard() {
+  const [view, setView] = useFlightDynamicsView();
+  return (
+    <WidgetShell
+      id="flight-dynamics"
+      label={WIDGET_LABELS["flight-dynamics"]}
+      headerActions={<FlightDynamicsToolbar view={view} setView={setView} />}
+    >
+      <FlightDynamicsBody view={view} />
+    </WidgetShell>
   );
 }
 
@@ -421,7 +456,10 @@ function renderWidget(
       return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.COOLER.icon, badge: hps.length }) : null;
     }
     case "flight-dynamics":
-      return W(<FlightDynamicsContent />);
+      // Fase G.2: FlightDynamicsCard maneja su propio WidgetShell con el
+      // toggle (3D/Radar/Bars) inyectado en el header. No pasamos por W()
+      // porque necesitamos `headerActions` + estado compartido.
+      return <FlightDynamicsCard />;
     case "flight-dynamics-3d":
       return W(<FlightDynamics3dContent />);
     case "quantum": {
