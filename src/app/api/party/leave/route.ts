@@ -94,6 +94,22 @@ export async function POST(request: NextRequest) {
         .update({ status: "ended", ended_at: new Date().toISOString() })
         .eq("id", party_id);
 
+      // 4a-bis. Auto-cerrar mining_sessions linked a esta party.
+      //
+      // Sin esto, `/mining` queda con sesiones fantasma: party ended pero
+      // mining_session still 'active' → `PartyMiningDashboard` auto-selecciona
+      // la sesión vieja y precarga su crew. Fix aplicado junto con migración
+      // 055 que hizo el backfill one-shot. Mismo criterio que party: no
+      // borramos la fila (se conserva el historial de WOs / inventory).
+      await supabase
+        .from("mining_sessions")
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+        })
+        .eq("party_id", party_id)
+        .eq("status", "active");
+
       return NextResponse.json({ ok: true, state: "ended" });
     }
 

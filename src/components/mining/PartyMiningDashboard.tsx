@@ -13,6 +13,7 @@ import { useTranslations } from "next-intl";
 import { useMiningStore } from "@/store/useMiningStore";
 import { useMiningRealtime, useMiningBroadcast } from "@/store/useMiningRealtime";
 import { useAuth } from "@/contexts/AuthContext";
+import { createClient } from "@/lib/supabase/client";
 import SessionManager from "./SessionManager";
 import CrewPanel from "./CrewPanel";
 import PendingPayoutsPanel from "./PendingPayoutsPanel";
@@ -160,14 +161,52 @@ export default function PartyMiningDashboard() {
   const broadcast = useMiningBroadcast();
 
   // ── Auto-detect & load Supabase session for logged-in users ──
+  //
+  // 2026-04-21 (Fase F.2): antes auto-seleccionábamos la PRIMERA mining_session
+  // con `status='active'` sin verificar si su party seguía viva.  Resultado:
+  // al cerrar la pestaña, la party quedaba `ended` pero la mining_session
+  // seguía `active`, y al volver a `/mining` se auto-cargaba la sesión vieja
+  // con su crew fantasma.
+  //
+  // Ahora: solo auto-seleccionamos sesiones linked a una party en la que el
+  // user sigue siendo miembro activo, o sesiones solo (`party_id IS NULL`)
+  // que el user posee.  Si no hay match, dejamos `activeSessionId = null` y
+  // el user ve el empty state limpio.
   useEffect(() => {
     if (activeSessionId) return;
-    fetchSessions().then(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      await fetchSessions();
+      if (cancelled) return;
       const allSessions = useMiningStore.getState().sessions;
-      const active = allSessions.find((s) => s.status === "active") || allSessions[0];
-      if (active) setActiveSession(active.id);
-    });
-  }, [activeSessionId, fetchSessions, setActiveSession]);
+      const activeSessions = allSessions.filter((s) => s.status === "active");
+      if (activeSessions.length === 0) return;
+
+      // Determinar cuál sesión es válida AHORA.
+      const supabase = createClient();
+      const { data: myMemberships } = await supabase
+        .from("party_members")
+        .select("party_id, parties!inner(status)")
+        .eq("user_id", user.id)
+        .eq("parties.status", "active");
+      if (cancelled) return;
+
+      const myActivePartyIds = new Set(
+        (myMemberships ?? []).map((m: any) => m.party_id as string),
+      );
+
+      const valid = activeSessions.find((s) => {
+        // Sesiones solo (sin party) → OK si el user es dueño.
+        if (!s.party_id) return s.owner_id === user.id;
+        // Sesiones con party → OK solo si sigue siendo miembro de esa party.
+        return myActivePartyIds.has(s.party_id);
+      });
+
+      if (valid) setActiveSession(valid.id);
+    })();
+    return () => { cancelled = true; };
+  }, [activeSessionId, fetchSessions, setActiveSession, user]);
 
   // ── Sell price modal state ──
   const [sellModalItem, setSellModalItem] = useState<string | null>(null); // mineral_id (abbr)
