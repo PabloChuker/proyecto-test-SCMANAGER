@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -13,6 +13,8 @@ import RockCalculator from "./RockCalculator";
 import RefineryDataTable from "./RefineryDataTable";
 import MaterialFinder from "./MaterialFinder";
 import { useTranslations } from "next-intl";
+import { useAuth } from "@/contexts/AuthContext";
+import { useMiningStore } from "@/store/useMiningStore";
 export default function MiningPage() {
   // ?next-route=1 (from ActiveRoutePanel "+ Siguiente ruta") jumps straight
   // to the Dashboard tab so WorkOrderDashboard can then pre-select Inventory.
@@ -21,6 +23,18 @@ export default function MiningPage() {
   const [activeTab, setActiveTab] = useState(
     wantNextRoute ? "dashboard" : "workorder",
   );
+
+  // Fase H.13 — single bootstrap for the whole mining module.  Detects active
+  // party, auto-creates solo + party mining_sessions if missing, and restores
+  // the user's last scope preference so Calculator, Dashboard e Inventory
+  // arrancan todos sincronizados.  Se corre una sola vez por mount de /mining
+  // — NO en cada tab switch (los tabs son condicionales, el page persiste).
+  const { user } = useAuth();
+  const ensureScopedSessions = useMiningStore((s) => s.ensureScopedSessions);
+  useEffect(() => {
+    if (!user) return;
+    ensureScopedSessions(user.id);
+  }, [user, ensureScopedSessions]);
   const t = useTranslations("PageTitles");
   const tm = useTranslations("Mining.tabs");
   const TABS = [

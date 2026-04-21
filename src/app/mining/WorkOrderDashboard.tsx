@@ -176,10 +176,13 @@ export default function WorkOrderDashboard() {
     deleteWorkOrder: sbDeleteOrder,
     clearInventory: sbClearInventory,
     recordInventoryAction: sbRecordInventoryAction,
-    fetchSessions: sbFetchSessions,
     setActiveSession: sbSetActiveSession,
     deleteSession: sbDeleteSession,
-    createSession: sbCreateSession,
+    scope: storeScope,
+    setScope: setStoreScope,
+    soloSessionId: storeSoloSessionId,
+    partySessionId: storePartySessionId,
+    scopeReady,
   } = useMiningStore();
 
   // ── Active-party membership check (Fase H.6) ────────────────────────────
@@ -238,26 +241,10 @@ export default function WorkOrderDashboard() {
     ? sessionScope.get(sbSessionId) ?? null
     : null;
 
-  // ── Auto-detect & load Supabase session for logged-in users ──
-  // Fase H.7 — si el usuario no tiene ninguna session (caso típico justo
-  // después de Reset All, que borra todas las sessions), auto-creamos una
-  // "Default" solo session (party_id = null) para que las WOs que cree el
-  // Calculator tengan destino en Supabase y aparezcan acá sin que Pablo tenga
-  // que crear una session a mano desde el panel Sessions.
-  useEffect(() => {
-    if (!user || sbSessionId) return;
-    sbFetchSessions().then(async () => {
-      const sessions = useMiningStore.getState().sessions;
-      const active = sessions.find((s) => s.status === "active") || sessions[0];
-      if (active) {
-        sbSetActiveSession(active.id);
-        return;
-      }
-      // No sessions exist — seed a Default solo session.
-      const fresh = await sbCreateSession("Default", null);
-      if (fresh) sbSetActiveSession(fresh.id);
-    });
-  }, [user, sbSessionId, sbFetchSessions, sbSetActiveSession, sbCreateSession]);
+  // Fase H.13 — el bootstrap de scope vive ahora en /mining/page.tsx
+  // (ensureScopedSessions).  Antes este effect duplicaba la lógica de
+  // auto-create de H.7 y competía con la del Calculator, dejando el
+  // activeSessionId oscilando entre solo y party al cambiar de tab.
 
   // ── Clear inventory confirmation ──
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -825,6 +812,45 @@ export default function WorkOrderDashboard() {
             {connLabel}
           </span>
         </div>
+
+        {/* Fase H.13 — scope toggle (SOLO / PARTY) compartido con Calculator.
+            Cambia el activeSessionId del store → Dashboard e Inventory
+            refetchean automáticamente.  PARTY queda disabled si no hay
+            party activa. */}
+        {user && scopeReady && (
+          <div
+            className="inline-flex rounded overflow-hidden border border-zinc-700/60 flex-shrink-0"
+            role="group"
+            aria-label="Scope toggle"
+          >
+            <button
+              onClick={() => setStoreScope("solo")}
+              disabled={!storeSoloSessionId}
+              className={
+                "px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-40 " +
+                (storeScope === "solo"
+                  ? "bg-amber-500 text-zinc-900"
+                  : "bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800")
+              }
+              title="Trabajar en tu solo session"
+            >
+              SOLO
+            </button>
+            <button
+              onClick={() => setStoreScope("party")}
+              disabled={!storePartySessionId}
+              className={
+                "px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors disabled:opacity-40 " +
+                (storeScope === "party"
+                  ? "bg-emerald-500 text-zinc-900"
+                  : "bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800")
+              }
+              title={storePartySessionId ? "Trabajar con la party" : "No tenés una party activa"}
+            >
+              PARTY
+            </button>
+          </div>
+        )}
 
         {/* Reset All button */}
         <button

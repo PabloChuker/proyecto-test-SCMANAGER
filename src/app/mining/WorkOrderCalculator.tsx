@@ -195,6 +195,11 @@ export default function WorkOrderCalculator() {
     activeSessionId: supabaseSessionId,
     createWorkOrder,
     createSession: sbCreateSession,
+    scope: storeScope,
+    setScope: setStoreScope,
+    soloSessionId: storeSoloSessionId,
+    partySessionId: storePartySessionId,
+    scopeReady,
   } = useMiningStore();
   const broadcast = useMiningBroadcast();
 
@@ -228,38 +233,20 @@ export default function WorkOrderCalculator() {
   const [loadingCrew, setLoadingCrew] = useState(false);
   const [loadingSessions, setLoadingSessions] = useState(false);
 
-  // ── Crew mode toggle (Fase H.4) ─────────────────────────────────────────
-  // Pablo reportó: "cargue una orden como Solo me sigue trayendo una party
-  // fantasma, Clear All no la saca, tengo que borrar uno por uno".
-  // Root cause: el auto-load de sessionCrew → crew estaba SIEMPRE activo
-  // cuando había supabaseSessionId, y `clearCrew` dejaba un loop donde
-  // `crewLoaded=false && sessionCrew.length>0` disparaba la recarga.
+  // ── Crew mode toggle — Fase H.13: scope global del store ─────────────────
+  // Historia:
+  //   - H.4 metió el toggle como useState local + localStorage.
+  //   - H.13 lo subió al store (`scope`) para que Calculator, Dashboard e
+  //     Inventory compartan un único source of truth.  Al cambiar el toggle,
+  //     `setStoreScope` también retargetea el `activeSessionId` a la
+  //     solo/party session correspondiente → Dashboard e Inventory siguen
+  //     sin refrescar nada a mano.
   //
-  // Con este toggle el usuario manda: "solo" = crew en blanco (You + lo que
-  // agregue manual), "party" = autoload como hasta ahora.  La preferencia
-  // persiste en localStorage para que el calculator siga en el modo que
-  // dejaste la última vez.
-  const CREW_MODE_STORAGE_KEY = "sc-labs-wo-crew-mode";
-  const [crewMode, setCrewMode] = useState<"solo" | "party">(() => {
-    if (typeof window === "undefined") return "solo";
-    try {
-      const raw = window.localStorage.getItem(CREW_MODE_STORAGE_KEY);
-      return raw === "party" ? "party" : "solo";
-    } catch {
-      return "solo";
-    }
-  });
-
-  // Persist mode changes.
-  useEffect(() => {
-    try {
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(CREW_MODE_STORAGE_KEY, crewMode);
-      }
-    } catch {
-      /* non-fatal */
-    }
-  }, [crewMode]);
+  //   - `crewMode` y `setCrewMode` siguen siendo los nombres locales para no
+  //     tener que tocar 40+ referencias en este archivo.  Son aliases sobre
+  //     el store.
+  const crewMode = storeScope;
+  const setCrewMode = setStoreScope;
 
   // ── Crew persistence (solo mode) ──────────────────────────────────────────
   // When the user ISN'T in a Supabase party session, their manual crew would
@@ -426,72 +413,19 @@ export default function WorkOrderCalculator() {
 
   // ── Auto-load available sessions for crew ──
   //
-  // 2026-04-20 (Fase F): filtrar por `status='active'` así el dropdown no
-  // muestra sesiones cerradas.  Antes listaba TODO y era la fuente del bug
-  // "me carga la última party por defecto" — cualquier mining_session vieja
-  // linked a una party terminada igual aparecía aquí.
-  //
-  // Fase H.12 (2026-04-21): si el user está en una party activa, nos
-  // aseguramos de que exista una `mining_session` con `party_id` = la party.
-  // Si no existe, la auto-creamos vía POST /api/mining/sessions (el endpoint
-  // ya hace todo: trae party_members, enriquece con profiles y los inserta
-  // como mining_members).  Antes de este fix, el dropdown "Load crew from
-  // session" sólo mostraba la solo-session "Default" y Pablo no podía
-  // seleccionar su party para cargar a Xoliii / kuzuribot / Sr_Frost.
+  // Fase H.13: `ensureScopedSessions` (llamado desde /mining/page.tsx al
+  // mount) ya garantiza que existen la solo session y —si hay party— la
+  // party session; además rehidrata el `scope` persistido.  Acá solo
+  // refrescamos el dropdown "Load crew from session" esperando a que el
+  // scope esté listo.
   useEffect(() => {
     if (!user) return;
+    if (!scopeReady) return;
     setLoadingSessions(true);
     const supabase = createClient();
     let cancelled = false;
 
     (async () => {
-      // 1. ¿El user está en una party activa?
-      const { data: membership } = await supabase
-        .from("party_members")
-        .select("party_id, parties!inner(id, name, status)")
-        .eq("user_id", user.id)
-        .eq("parties.status", "active")
-        .limit(1)
-        .maybeSingle();
-
-      if (cancelled) return;
-
-      const partyId = membership?.party_id as string | undefined;
-      const partyName = (membership?.parties as any)?.name as string | undefined;
-
-      if (partyId) {
-        // 2. ¿Ya hay una mining_session activa linked a esa party?
-        const { data: linkedSession } = await supabase
-          .from("mining_sessions")
-          .select("id")
-          .eq("party_id", partyId)
-          .eq("status", "active")
-          .limit(1)
-          .maybeSingle();
-
-        if (cancelled) return;
-
-        // 3. Si no hay, auto-crearla.  El endpoint hace el heavy lifting
-        //    (party_members → profiles → mining_members).
-        if (!linkedSession) {
-          try {
-            await fetch("/api/mining/sessions", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                name: partyName || "Party",
-                party_id: partyId,
-              }),
-            });
-          } catch {
-            /* si falla, igual seguimos y cargamos lo que haya */
-          }
-        }
-      }
-
-      if (cancelled) return;
-
-      // 4. Ahora sí, cargar el dropdown con todas las active sessions
       const { data } = await supabase
         .from("mining_sessions")
         .select("id, name, status, mining_members(count)")
@@ -507,8 +441,13 @@ export default function WorkOrderCalculator() {
             memberCount: s.mining_members?.[0]?.count || 0,
           }))
         );
-        // Auto-select the active Supabase session if available
-        if (supabaseSessionId) {
+        // Auto-select: preferimos la session del scope actual.  Si no hay,
+        // caemos a la activa.
+        const preferred =
+          crewMode === "party" ? storePartySessionId : storeSoloSessionId;
+        if (preferred) {
+          setSelectedSessionId(preferred);
+        } else if (supabaseSessionId) {
           setSelectedSessionId(supabaseSessionId);
         }
       }
@@ -516,7 +455,14 @@ export default function WorkOrderCalculator() {
     })();
 
     return () => { cancelled = true; };
-  }, [user, supabaseSessionId]);
+  }, [
+    user,
+    scopeReady,
+    supabaseSessionId,
+    crewMode,
+    storePartySessionId,
+    storeSoloSessionId,
+  ]);
 
   // Auto-load crew when a session is selected
   const handleSessionSelect = useCallback(async (sessionId: string) => {

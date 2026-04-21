@@ -22,6 +22,8 @@ import { autoBalanceShares } from "@/types/mining";
 
 // ─── State shape ────────────────────────────────────────────────────────────
 
+export type MiningScope = "solo" | "party";
+
 interface MiningState {
   // Data
   sessions: MiningSession[];
@@ -36,6 +38,19 @@ interface MiningState {
   isLoading: boolean;
   error: string | null;
   lockedShareIds: Set<string>;   // members whose share_pct was manually set
+
+  // ── Scope (Fase H.13) ───────────────────────────────────────────────────
+  // Single source of truth compartido por Calculator, Dashboard e Inventory.
+  // Cuando el user elige "party", toda la cadena apunta a la party session;
+  // cuando elige "solo", toda la cadena apunta a la solo session.  Evita el
+  // drift entre tabs donde cada componente montaba su propio toggle.
+  scope: MiningScope;
+  soloSessionId: string | null;   // cached: mining_sessions.party_id IS NULL
+  partySessionId: string | null;  // cached: mining_sessions.party_id = <active party>
+  activePartyId: string | null;   // cached: parties.id where user is active member
+  scopeReady: boolean;            // true after first ensureScopedSessions call
+  setScope: (scope: MiningScope) => void;
+  ensureScopedSessions: (userId: string) => Promise<void>;
 
   // ── Session actions ─────────────────────────────────────────────────────
   fetchSessions: () => Promise<void>;
@@ -96,6 +111,27 @@ async function api<T>(url: string, options?: RequestInit): Promise<T> {
 
 // ─── Store ──────────────────────────────────────────────────────────────────
 
+const SCOPE_STORAGE_KEY = "sc-labs-mining-scope";
+
+function readStoredScope(): MiningScope {
+  if (typeof window === "undefined") return "solo";
+  try {
+    const raw = window.localStorage.getItem(SCOPE_STORAGE_KEY);
+    return raw === "party" ? "party" : "solo";
+  } catch {
+    return "solo";
+  }
+}
+
+function writeStoredScope(scope: MiningScope) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(SCOPE_STORAGE_KEY, scope);
+  } catch {
+    /* storage quota / private mode — non-fatal */
+  }
+}
+
 export const useMiningStore = create<MiningState>((set, get) => ({
   // Initial state
   sessions: [],
@@ -108,6 +144,110 @@ export const useMiningStore = create<MiningState>((set, get) => ({
   isLoading: false,
   error: null,
   lockedShareIds: new Set(),
+
+  // Scope defaults (persisted preference, will be applied once sessions load)
+  scope: readStoredScope(),
+  soloSessionId: null,
+  partySessionId: null,
+  activePartyId: null,
+  scopeReady: false,
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // Scope (Fase H.13)
+  // ══════════════════════════════════════════════════════════════════════════
+
+  setScope: (scope) => {
+    writeStoredScope(scope);
+    const { soloSessionId, partySessionId } = get();
+    const targetId = scope === "party" ? partySessionId : soloSessionId;
+    set({ scope });
+    // Side-effect: retarget activeSessionId so Dashboard/Inventory refetch
+    // inventory + workOrders against the right session.
+    if (targetId) {
+      get().setActiveSession(targetId);
+    }
+  },
+
+  ensureScopedSessions: async (userId) => {
+    // Idempotente: siempre refresca `sessions` desde el backend, detecta la
+    // party activa del user, asegura que existe una solo session y —si hay
+    // party— una party session, y rehidrata el activeSessionId desde el
+    // scope persistido.
+    set({ isLoading: true, error: null });
+    try {
+      // 1. Refresh sessions
+      await get().fetchSessions();
+
+      // 2. Detect active party membership (directly via API to avoid coupling
+      //    to any Supabase client here).
+      let activePartyId: string | null = null;
+      let activePartyName: string | null = null;
+      try {
+        const partyRes = await fetch("/api/party/active", {
+          credentials: "include",
+        });
+        if (partyRes.ok) {
+          const json = await partyRes.json();
+          activePartyId = json?.party?.id ?? null;
+          activePartyName = json?.party?.name ?? null;
+        }
+      } catch {
+        /* endpoint puede no existir todavía — se hace fallback abajo */
+      }
+
+      // 3. Find (or create) solo + party mining_sessions
+      let sessions = get().sessions.filter((s) => s.status === "active");
+      let solo = sessions.find((s) => !s.party_id) || null;
+      if (!solo) {
+        solo = await get().createSession("Default", null);
+        if (solo) {
+          // createSession prepends and sets activeSessionId — refresh sessions
+          sessions = get().sessions.filter((s) => s.status === "active");
+        }
+      }
+
+      let party = activePartyId
+        ? sessions.find((s) => s.party_id === activePartyId) || null
+        : null;
+      if (activePartyId && !party) {
+        party = await get().createSession(
+          activePartyName || "Party",
+          activePartyId,
+        );
+      }
+
+      const soloSessionId = solo?.id ?? null;
+      const partySessionId = party?.id ?? null;
+
+      // 4. Apply persisted scope (fallback to 'solo' if party missing).
+      const storedScope = readStoredScope();
+      const effectiveScope: MiningScope =
+        storedScope === "party" && partySessionId ? "party" : "solo";
+      const targetId =
+        effectiveScope === "party" ? partySessionId : soloSessionId;
+
+      set({
+        soloSessionId,
+        partySessionId,
+        activePartyId,
+        scope: effectiveScope,
+        scopeReady: true,
+        isLoading: false,
+      });
+      if (effectiveScope !== storedScope) writeStoredScope(effectiveScope);
+
+      if (targetId) {
+        // Only re-target if it differs from the current active session, to
+        // avoid clobbering fetch side-effects when the user is already on
+        // the correct session.
+        if (get().activeSessionId !== targetId) {
+          get().setActiveSession(targetId);
+        }
+      }
+    } catch (e: any) {
+      set({ error: e.message, isLoading: false, scopeReady: true });
+    }
+  },
 
   // ══════════════════════════════════════════════════════════════════════════
   // Sessions
