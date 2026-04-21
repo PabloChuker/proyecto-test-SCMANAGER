@@ -430,30 +430,92 @@ export default function WorkOrderCalculator() {
   // muestra sesiones cerradas.  Antes listaba TODO y era la fuente del bug
   // "me carga la última party por defecto" — cualquier mining_session vieja
   // linked a una party terminada igual aparecía aquí.
+  //
+  // Fase H.12 (2026-04-21): si el user está en una party activa, nos
+  // aseguramos de que exista una `mining_session` con `party_id` = la party.
+  // Si no existe, la auto-creamos vía POST /api/mining/sessions (el endpoint
+  // ya hace todo: trae party_members, enriquece con profiles y los inserta
+  // como mining_members).  Antes de este fix, el dropdown "Load crew from
+  // session" sólo mostraba la solo-session "Default" y Pablo no podía
+  // seleccionar su party para cargar a Xoliii / kuzuribot / Sr_Frost.
   useEffect(() => {
     if (!user) return;
     setLoadingSessions(true);
     const supabase = createClient();
-    supabase
-      .from("mining_sessions")
-      .select("id, name, status, mining_members(count)")
-      .eq("status", "active")
-      .then(({ data }) => {
-        if (data) {
-          setAvailableSessions(
-            data.map((s: any) => ({
-              id: s.id,
-              name: s.name || "Unnamed",
-              memberCount: s.mining_members?.[0]?.count || 0,
-            }))
-          );
-          // Auto-select the active Supabase session if available
-          if (supabaseSessionId) {
-            setSelectedSessionId(supabaseSessionId);
+    let cancelled = false;
+
+    (async () => {
+      // 1. ¿El user está en una party activa?
+      const { data: membership } = await supabase
+        .from("party_members")
+        .select("party_id, parties!inner(id, name, status)")
+        .eq("user_id", user.id)
+        .eq("parties.status", "active")
+        .limit(1)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      const partyId = membership?.party_id as string | undefined;
+      const partyName = (membership?.parties as any)?.name as string | undefined;
+
+      if (partyId) {
+        // 2. ¿Ya hay una mining_session activa linked a esa party?
+        const { data: linkedSession } = await supabase
+          .from("mining_sessions")
+          .select("id")
+          .eq("party_id", partyId)
+          .eq("status", "active")
+          .limit(1)
+          .maybeSingle();
+
+        if (cancelled) return;
+
+        // 3. Si no hay, auto-crearla.  El endpoint hace el heavy lifting
+        //    (party_members → profiles → mining_members).
+        if (!linkedSession) {
+          try {
+            await fetch("/api/mining/sessions", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                name: partyName || "Party",
+                party_id: partyId,
+              }),
+            });
+          } catch {
+            /* si falla, igual seguimos y cargamos lo que haya */
           }
         }
-        setLoadingSessions(false);
-      });
+      }
+
+      if (cancelled) return;
+
+      // 4. Ahora sí, cargar el dropdown con todas las active sessions
+      const { data } = await supabase
+        .from("mining_sessions")
+        .select("id, name, status, mining_members(count)")
+        .eq("status", "active");
+
+      if (cancelled) return;
+
+      if (data) {
+        setAvailableSessions(
+          data.map((s: any) => ({
+            id: s.id,
+            name: s.name || "Unnamed",
+            memberCount: s.mining_members?.[0]?.count || 0,
+          }))
+        );
+        // Auto-select the active Supabase session if available
+        if (supabaseSessionId) {
+          setSelectedSessionId(supabaseSessionId);
+        }
+      }
+      setLoadingSessions(false);
+    })();
+
+    return () => { cancelled = true; };
   }, [user, supabaseSessionId]);
 
   // Auto-load crew when a session is selected
