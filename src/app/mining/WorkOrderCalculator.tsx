@@ -224,6 +224,39 @@ export default function WorkOrderCalculator() {
   const [loadingCrew, setLoadingCrew] = useState(false);
   const [loadingSessions, setLoadingSessions] = useState(false);
 
+  // ── Crew mode toggle (Fase H.4) ─────────────────────────────────────────
+  // Pablo reportó: "cargue una orden como Solo me sigue trayendo una party
+  // fantasma, Clear All no la saca, tengo que borrar uno por uno".
+  // Root cause: el auto-load de sessionCrew → crew estaba SIEMPRE activo
+  // cuando había supabaseSessionId, y `clearCrew` dejaba un loop donde
+  // `crewLoaded=false && sessionCrew.length>0` disparaba la recarga.
+  //
+  // Con este toggle el usuario manda: "solo" = crew en blanco (You + lo que
+  // agregue manual), "party" = autoload como hasta ahora.  La preferencia
+  // persiste en localStorage para que el calculator siga en el modo que
+  // dejaste la última vez.
+  const CREW_MODE_STORAGE_KEY = "sc-labs-wo-crew-mode";
+  const [crewMode, setCrewMode] = useState<"solo" | "party">(() => {
+    if (typeof window === "undefined") return "solo";
+    try {
+      const raw = window.localStorage.getItem(CREW_MODE_STORAGE_KEY);
+      return raw === "party" ? "party" : "solo";
+    } catch {
+      return "solo";
+    }
+  });
+
+  // Persist mode changes.
+  useEffect(() => {
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(CREW_MODE_STORAGE_KEY, crewMode);
+      }
+    } catch {
+      /* non-fatal */
+    }
+  }, [crewMode]);
+
   // ── Crew persistence (solo mode) ──────────────────────────────────────────
   // When the user ISN'T in a Supabase party session, their manual crew would
   // otherwise reset on every page refresh. We persist it to localStorage so
@@ -433,12 +466,15 @@ export default function WorkOrderCalculator() {
     setLoadingCrew(false);
   }, []);
 
-  // Auto-load crew when supabaseSessionId matches
+  // Auto-load crew when supabaseSessionId matches.
+  // Fase H.4: solo corre en modo "party". En "solo" el panel crew queda
+  // a cargo del usuario sin intervención automática.
   useEffect(() => {
+    if (crewMode !== "party") return;
     if (supabaseSessionId && selectedSessionId === supabaseSessionId && sessionCrew.length === 0 && !crewLoaded) {
       handleSessionSelect(supabaseSessionId);
     }
-  }, [supabaseSessionId, selectedSessionId, sessionCrew.length, crewLoaded, handleSessionSelect]);
+  }, [crewMode, supabaseSessionId, selectedSessionId, sessionCrew.length, crewLoaded, handleSessionSelect]);
 
   const loadSessionCrew = useCallback(() => {
     if (sessionCrew.length === 0) return;
@@ -452,12 +488,27 @@ export default function WorkOrderCalculator() {
     setCrewLoaded(true);
   }, [sessionCrew]);
 
-  // Auto-load crew when session crew is fetched
+  // Auto-load crew when session crew is fetched.
+  // Fase H.4: gated por crewMode para que "Solo" no repueble el crew ni
+  // cree el loop que reportó Pablo tras darle a Clear All.
   useEffect(() => {
+    if (crewMode !== "party") return;
     if (sessionCrew.length > 0 && !crewLoaded) {
       loadSessionCrew();
     }
-  }, [sessionCrew, crewLoaded, loadSessionCrew]);
+  }, [crewMode, sessionCrew, crewLoaded, loadSessionCrew]);
+
+  // Fase H.4 — cuando el user pasa a modo "solo" limpiamos TODO rastro de
+  // party: sessionCrew, selectedSessionId y el flag crewLoaded, más el
+  // propio `crew` vuelve al default [You]. Sin esto, cambiar a solo dejaba
+  // los miembros fantasma hasta que se los borraba uno por uno.
+  useEffect(() => {
+    if (crewMode !== "solo") return;
+    setSessionCrew([]);
+    setSelectedSessionId("");
+    setCrewLoaded(false);
+    setCrew([{ id: "crew1", name: "You", shareType: "equal", share: 1 }]);
+  }, [crewMode]);
 
   const addCrewMember = () => {
     const name = newMemberName.trim() || `Crew ${crew.length + 1}`;
@@ -469,8 +520,17 @@ export default function WorkOrderCalculator() {
     if (crew.length > 1) setCrew(crew.filter((m) => m.id !== id));
   };
 
+  // Fase H.4 — Clear All "de verdad". Antes `clearCrew` solo tocaba `crew`
+  // y ponía `crewLoaded=false`, pero dejaba `sessionCrew` con los N miembros
+  // de la party. El useEffect de auto-load veía `sessionCrew.length>0 &&
+  // !crewLoaded` y re-poblaba el crew al instante → Pablo tenía que borrar
+  // uno por uno. Ahora ponemos TODO en blanco, además de apagar el auto-load
+  // vaciando `selectedSessionId` (si el user quiere volver a cargar la
+  // party, puede seleccionarla desde el dropdown otra vez).
   const clearCrew = () => {
     setCrew([{ id: "crew1", name: "You", shareType: "equal", share: 1 }]);
+    setSessionCrew([]);
+    setSelectedSessionId("");
     setCrewLoaded(false);
   };
 
@@ -917,12 +977,48 @@ export default function WorkOrderCalculator() {
             <h3 className="text-sm font-bold tracking-[0.1em] uppercase text-zinc-300">
               {t("crewParty")}
             </h3>
-            <span className="text-zinc-600 cursor-help text-lg" title={t("crewHelpTip")}>👥</span>
+            {/* Fase H.4 — toggle explícito SOLO / PARTY. "Solo" no
+                auto-carga crew y deja el panel limpio; "Party" mantiene el
+                autoload del dropdown de sesiones como hasta ahora. */}
+            <div
+              className="flex items-center gap-0 rounded-md overflow-hidden border border-zinc-700/60"
+              role="group"
+              aria-label={t("crewModeToggleAria")}
+            >
+              <button
+                type="button"
+                onClick={() => setCrewMode("solo")}
+                className={
+                  "px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors " +
+                  (crewMode === "solo"
+                    ? "bg-amber-500 text-zinc-900"
+                    : "bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800")
+                }
+                title={t("crewModeSoloTip")}
+              >
+                {t("crewModeSolo")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCrewMode("party")}
+                className={
+                  "px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider transition-colors " +
+                  (crewMode === "party"
+                    ? "bg-emerald-500 text-zinc-900"
+                    : "bg-zinc-800/60 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800")
+                }
+                title={t("crewModePartyTip")}
+              >
+                {t("crewModeParty")}
+              </button>
+            </div>
           </div>
 
           <div className="p-4 space-y-4">
-            {/* Session crew selector */}
-            {user && availableSessions.length > 0 && (
+            {/* Session crew selector — solo visible en modo "party" (H.4).
+                En solo mode escondemos este bloque para que el usuario no
+                tenga forma de disparar el autoload por accidente. */}
+            {crewMode === "party" && user && availableSessions.length > 0 && (
               <div className="border border-cyan-500/20 rounded-lg p-3 bg-cyan-500/5 space-y-2">
                 <div className="text-[10px] tracking-[0.1em] uppercase text-cyan-400 font-bold">
                   {t("loadCrewFromSession")}
