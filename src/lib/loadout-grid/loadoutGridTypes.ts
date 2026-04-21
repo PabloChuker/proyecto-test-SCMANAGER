@@ -7,14 +7,16 @@
 // =============================================================================
 
 // ── WidgetId ──────────────────────────────────────────────────────────────────
+// Fase G.1: `strafe-profile` / `turning-profile` / `maneuver-radar` se unificaron
+// en `flight-dynamics` (tarjeta 2-col con toggle 3D/Radar/Bars).
 export type WidgetId =
-  | "weapons" | "missiles" | "strafe-profile" | "turning-profile"
-  | "shields" | "powerplants" | "coolers" | "maneuver-radar"
+  | "weapons" | "missiles"
+  | "shields" | "powerplants" | "coolers"
   | "quantum" | "radar" | "utility"
   | "mining" | "salvage"
   | "power-grid"
   | "ship-selector" | "ship-card" | "loadout-detail"
-  | "flight-dynamics-3d";
+  | "flight-dynamics" | "flight-dynamics-3d";
 
 // ── Ancho de tarjeta en columnas (1 ó 2) ─────────────────────────────────────
 export type CardWidth = 1 | 2;
@@ -45,5 +47,8 @@ export const MAX_UNIT_PX         = 390;
 // Gap vertical entre tarjetas dentro de la misma columna (px fijo)
 export const CARD_GAP_PX         = 4;
 
-export const LAYOUT_STORAGE_KEY      = "al-filo-loadout-layout-v17";
+// v18 (Fase G.1): se unificaron Strafe/Turning/G-Forces en `flight-dynamics`.
+// Bump para forzar a que todos los usuarios carguen el default nuevo (sidebar
+// recibe `flight-dynamics` en vez de los 3 widgets pequeños dispersos).
+export const LAYOUT_STORAGE_KEY      = "al-filo-loadout-layout-v18";
 export const LAYOUT_CHECKPOINT_KEY   = "al-filo-loadout-layout-checkpoint-v1";

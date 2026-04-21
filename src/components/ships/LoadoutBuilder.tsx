@@ -9,7 +9,7 @@
 //
 // Panels: weapons, missiles, shields, power-plants, coolers, quantum, radar,
 //   utility, combat-summary, power-grid, signatures, balance, ship-selector,
-//   ship-card, loadout-detail, strafe-profile, turning-profile, maneuver-radar,
+//   ship-card, loadout-detail, flight-dynamics (unified 3D/Radar/Bars),
 //   flight-dynamics-3d.
 // =============================================================================
 
@@ -29,9 +29,11 @@ import { PowerManagementPanel } from "./PowerManagementPanel";
 import { ShipSelector } from "./ShipSelector";
 import { fmtStat, fmtDps } from "./loadout-utils";
 // ── Widget modules (each subscribes directly to the store) ───────────────────
-import { StrafeProfileContent }   from "./widgets/StrafeProfileWidget";
-import { TurningProfileContent }  from "./widgets/TurningProfileWidget";
-import { ManeuverRadarContent }   from "./widgets/ManeuverRadarWidget";
+// Strafe / Turning / G-Forces se unificaron en `FlightDynamicsWidget` (Fase G.1):
+// una sola tarjeta 2-col con toggle 3D/Radar/Bars. Las importaciones viejas
+// quedan como refs muertas — los archivos se conservan por si alguien quiere
+// revivir el widget individual.
+import { FlightDynamicsContent }   from "./widgets/FlightDynamicsWidget";
 import { FlightDynamics3dContent } from "./widgets/FlightDynamics3dWidget";
 import { ShipCardContent }        from "./widgets/ShipCardWidget";
 import { LoadoutDetailContent }   from "./widgets/LoadoutDetailWidget";
@@ -70,14 +72,16 @@ const CAT_CONFIG: Record<string, { label: string; icon: string; accent: string }
 };
 
 // ── Widget System (free absolute positioning) ──────────────────────────────
+// "flight-dynamics" (2-col, Fase G.1) reemplaza a strafe-profile / turning-profile
+// / maneuver-radar — las 3 visualizaciones viven dentro con un toggle compartido.
 type WidgetId =
-  | "weapons" | "missiles" | "strafe-profile" | "turning-profile"
-  | "shields" | "powerplants" | "coolers" | "maneuver-radar"
+  | "weapons" | "missiles"
+  | "shields" | "powerplants" | "coolers"
   | "quantum" | "radar" | "utility"
   | "mining" | "salvage"
   | "power-grid"
   | "ship-selector" | "ship-card" | "loadout-detail"
-  | "flight-dynamics-3d";
+  | "flight-dynamics" | "flight-dynamics-3d";
 
 // ── Industrial ship detection (Pablo, 2026-04-17) ────────────────────────────
 // Solo estas naves muestran los widgets MINING / SALVAGE para no sobrecargar
@@ -126,35 +130,37 @@ const MAX_UNIT_PX         = 390;        // clamp superior del UNIT (+50% desde 2
 // stats derivadas.
 type CardWidth = 1 | 2;
 const WIDGET_WIDTH: Record<WidgetId, CardWidth> = {
-  weapons: 1, missiles: 1, "strafe-profile": 1, "turning-profile": 1,
-  shields: 1, powerplants: 1, coolers: 1, "maneuver-radar": 1,
+  weapons: 1, missiles: 1,
+  shields: 1, powerplants: 1, coolers: 1,
   quantum: 1, radar: 1, utility: 1,
   mining: 1, salvage: 1,
   "power-grid": 1,
   "ship-selector": 2,           // search → 2-col
   "ship-card": 2,               // ship card → 2-col
-  "loadout-detail": 1,              // stays 1-col
+  "loadout-detail": 1,          // stays 1-col
+  "flight-dynamics": 2,         // unified 3-en-1 card (Fase G.1) → 2-col
   "flight-dynamics-3d": 2,      // 3D viewer → 2-col
 };
 
 const WIDGET_LABELS: Record<WidgetId, string> = {
-  weapons: "WEAPONS", missiles: "MISSILES & BOMBS", "strafe-profile": "STRAFE PROFILE", "turning-profile": "TURNING PROFILE",
-  shields: "SHIELDS", powerplants: "POWER PLANTS", coolers: "COOLERS", "maneuver-radar": "G-FORCES",
+  weapons: "WEAPONS", missiles: "MISSILES & BOMBS",
+  shields: "SHIELDS", powerplants: "POWER PLANTS", coolers: "COOLERS",
   quantum: "QT DRIVES", radar: "RADAR", utility: "UTILITY",
   mining: "MINING LASERS", salvage: "SALVAGE & TRACTOR",
   "power-grid": "POWER GRID",
   "ship-selector": "SEARCH", "ship-card": "SHIP CARD", "loadout-detail": "LOADOUT DETAIL",
+  "flight-dynamics": "FLIGHT DYNAMICS",
   "flight-dynamics-3d": "FLIGHT DYNAMICS 3D",
 };
 
 const ALL_WIDGET_IDS: WidgetId[] = [
-  "weapons", "missiles", "strafe-profile", "turning-profile",
-  "shields", "powerplants", "coolers", "maneuver-radar",
+  "weapons", "missiles",
+  "shields", "powerplants", "coolers",
   "quantum", "radar", "utility",
   "mining", "salvage",
   "power-grid",
   "ship-selector", "ship-card", "loadout-detail",
-  "flight-dynamics-3d",
+  "flight-dynamics", "flight-dynamics-3d",
 ];
 
 // ─── Geometric helpers ──────────────────────────────────────────────────────
@@ -228,12 +234,12 @@ function getWidgetBlocks(
     case "mining":             return hpBlocks(counts.mining);
     case "salvage":            return hpBlocks(counts.salvage);
     case "power-grid":         return 4;
-    case "strafe-profile":     return 4;
-    case "turning-profile":    return 4;
-    case "maneuver-radar":     return 4;
     case "ship-selector":      return 2;
     case "ship-card":          return 3;
     case "loadout-detail":         return 7;
+    // flight-dynamics (Fase G.1): 3 sub-paneles lado a lado + header/toggle.
+    // Necesita alto suficiente para el radar 6-ejes y los labels perimetrales.
+    case "flight-dynamics":    return 6;
     case "flight-dynamics-3d": return 5;
   }
 }
@@ -247,19 +253,22 @@ const COLUMN_PLAN_1COL: WidgetId[][] = [
   // Col 0 — OFFENSE + INDUSTRY (mining/salvage viven acá: son las "armas"
   // de una nave industrial, y cuando aparecen reemplazan visualmente al rol
   // de combate de esa columna).
-  ["weapons", "mining", "salvage", "missiles", "strafe-profile"],
+  ["weapons", "mining", "salvage", "missiles"],
   // Col 1 — DEFENSE & POWER
-  ["shields", "powerplants", "coolers", "turning-profile"],
+  ["shields", "powerplants", "coolers"],
   // Col 2 — NAV & SENSORS + flight stats
-  ["loadout-detail", "quantum", "radar", "utility", "power-grid", "maneuver-radar"],
+  ["loadout-detail", "quantum", "radar", "utility", "power-grid"],
 ];
 
 // Sidebar 2-col (cols 3-4). Widgets hero de ship info apilados vertical.
+// flight-dynamics (Fase G.1) vive acá — unifica Strafe/Turning/G-Forces en un
+// solo bloque comparativo.
 const COLUMN_PLAN_2COL_START = 3;
 const COLUMN_PLAN_2COL: WidgetId[] = [
   "ship-selector",     // search
   "ship-card",
   "flight-dynamics-3d",
+  "flight-dynamics",
 ];
 
 // Posiciones default en coordenadas (col, row). Pass 1: Zone A (1-col, cols
@@ -294,12 +303,13 @@ function buildDefaultPositions(
   return result;
 }
 
-// ─── localStorage (v12: add mining / salvage widgets for industrial ships) ──
-// Bump porque se agregaron widgets condicionales `mining` y `salvage` visibles
-// solo en naves industriales (Mole/Moth/Prospector/Golem para mining;
-// Reclaimer/Fortune/Salvation para salvage). Las posiciones guardadas de v11
-// no contemplan estas ids y dejarían los widgets nuevos mal posicionados.
-const LAYOUT_STORAGE_KEY = "al-filo-layout-v12";
+// ─── localStorage (v13: unify Strafe/Turning/G-Forces en flight-dynamics) ──
+// Fase G.1 — pedido de Pablo (profesional 20k+ horas): las 3 tarjetas pequeñas
+// de flight dynamics se fusionaron en una 2-col con toggle 3D/Radar/Bars. Los
+// IDs `strafe-profile` / `turning-profile` / `maneuver-radar` desaparecieron
+// del plan por defecto y posiciones guardadas en v12 que los referenciaban
+// dejarían huecos en el layout → bump a v13 para forzar reset del default.
+const LAYOUT_STORAGE_KEY = "al-filo-layout-v13";
 
 type SavedPos = { i: string; col: number; row: number };
 
@@ -398,10 +408,6 @@ function renderWidget(
       return weaponHps.length > 0 ? W(<HpGroup hps={weaponHps} onClickHp={setPickerHp} weaponAllocatedPips={weaponAllocatedPips} weaponMaxPips={weaponMaxPips} />, { icon: "/icons/weapons.png", badge: weaponHps.length }) : null;
     case "missiles":
       return missileHps.length > 0 ? W(<HpGroup hps={missileHps} onClickHp={setPickerHp} />, { icon: "/icons/missile.png", badge: missileHps.length }) : null;
-    case "strafe-profile":
-      return W(<StrafeProfileContent />);
-    case "turning-profile":
-      return W(<TurningProfileContent />);
     case "shields": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "SHIELD");
       return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.SHIELD.icon, badge: hps.length }) : null;
@@ -414,8 +420,8 @@ function renderWidget(
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "COOLER");
       return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.COOLER.icon, badge: hps.length }) : null;
     }
-    case "maneuver-radar":
-      return W(<ManeuverRadarContent />);
+    case "flight-dynamics":
+      return W(<FlightDynamicsContent />);
     case "flight-dynamics-3d":
       return W(<FlightDynamics3dContent />);
     case "quantum": {
