@@ -191,7 +191,11 @@ export default function WorkOrderCalculator() {
 
   // ── Auth & Supabase ──
   const { user } = useAuth();
-  const { activeSessionId: supabaseSessionId, createWorkOrder } = useMiningStore();
+  const {
+    activeSessionId: supabaseSessionId,
+    createWorkOrder,
+    createSession: sbCreateSession,
+  } = useMiningStore();
   const broadcast = useMiningBroadcast();
 
   // ── Tab state ──
@@ -559,10 +563,21 @@ export default function WorkOrderCalculator() {
     timer.reset();
   };
 
-  const submitOrder = (opts?: { continueAfter?: boolean }) => {
+  const submitOrder = async (opts?: { continueAfter?: boolean }) => {
     const continueAfter = !!opts?.continueAfter;
-    // Determine save target: Supabase (party) or localStorage (solo)
-    const useSupabase = !!(supabaseSessionId && user);
+    // Fase H.7 — los usuarios loggeados SIEMPRE guardan en Supabase. Antes de
+    // H.7, si `supabaseSessionId` era null (caso típico post-Reset-All o primer
+    // login después de borrar la default), el Calculator caía al branch
+    // localStorage silenciosamente y el Dashboard en SOLO CLOUD nunca veía la
+    // WO (lee sólo de Supabase). Ahora si hay `user` y no hay session activa
+    // en el store, auto-creamos una "Default" solo session (party_id = null)
+    // aquí mismo y la usamos como destino.
+    let effectiveSbSessionId = supabaseSessionId;
+    if (user && !effectiveSbSessionId) {
+      const autoSess = await sbCreateSession("Default", null);
+      if (autoSess) effectiveSbSessionId = autoSess.id;
+    }
+    const useSupabase = !!(effectiveSbSessionId && user);
 
     // Only create/use localStorage session when NOT in Supabase mode
     let sessionId = "";
@@ -636,7 +651,7 @@ export default function WorkOrderCalculator() {
     // Save to Supabase if connected to a party session (shared with all members)
     if (useSupabase) {
       createWorkOrder({
-        session_id: supabaseSessionId,
+        session_id: effectiveSbSessionId!,
         order_type: mode,
         refinery_name: mode === "ship" ? refinery?.name || null : null,
         refining_method: mode === "ship" ? method?.name || null : null,

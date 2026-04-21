@@ -179,6 +179,7 @@ export default function WorkOrderDashboard() {
     fetchSessions: sbFetchSessions,
     setActiveSession: sbSetActiveSession,
     deleteSession: sbDeleteSession,
+    createSession: sbCreateSession,
   } = useMiningStore();
 
   // ── Active-party membership check (Fase H.6) ────────────────────────────
@@ -238,16 +239,25 @@ export default function WorkOrderDashboard() {
     : null;
 
   // ── Auto-detect & load Supabase session for logged-in users ──
+  // Fase H.7 — si el usuario no tiene ninguna session (caso típico justo
+  // después de Reset All, que borra todas las sessions), auto-creamos una
+  // "Default" solo session (party_id = null) para que las WOs que cree el
+  // Calculator tengan destino en Supabase y aparezcan acá sin que Pablo tenga
+  // que crear una session a mano desde el panel Sessions.
   useEffect(() => {
     if (!user || sbSessionId) return;
-    sbFetchSessions().then(() => {
+    sbFetchSessions().then(async () => {
       const sessions = useMiningStore.getState().sessions;
       const active = sessions.find((s) => s.status === "active") || sessions[0];
       if (active) {
         sbSetActiveSession(active.id);
+        return;
       }
+      // No sessions exist — seed a Default solo session.
+      const fresh = await sbCreateSession("Default", null);
+      if (fresh) sbSetActiveSession(fresh.id);
     });
-  }, [user, sbSessionId, sbFetchSessions, sbSetActiveSession]);
+  }, [user, sbSessionId, sbFetchSessions, sbSetActiveSession, sbCreateSession]);
 
   // ── Clear inventory confirmation ──
   const [showClearConfirm, setShowClearConfirm] = useState(false);
