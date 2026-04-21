@@ -183,6 +183,11 @@ export default function PartyPage() {
   //      actualiza y los filtros de staleness (aplicados en /mining y en el
   //      propio /party) dejan de precargar la party.
   //
+  // NO escuchamos `visibilitychange`: Alt+Tab / minimizar / cambiar de pestaña
+  // NO deben matar la party (es lo típico mientras jugás Star Citizen con
+  // SC Labs de referencia en otro tab). El heartbeat + staleness cubren
+  // crashes reales.
+  //
   // El efecto se adhiere al `myParty.id`: si Pablo cambia de party, el
   // cleanup remonta todo y engancha los handlers al nuevo id.
   // ═════════════════════════════════════════════════════════════════════════
@@ -212,17 +217,18 @@ export default function PartyPage() {
 
     const handleBeforeUnload = () => { sendLeaveBeacon(); };
     const handlePageHide = () => { sendLeaveBeacon(); };
-    const handleVisibility = () => {
-      // En mobile Safari, `beforeunload` no siempre dispara; `pagehide` sí,
-      // pero si el usuario backgroundea la app por mucho tiempo tampoco.
-      // Mandamos el beacon también cuando la pestaña queda oculta >30s,
-      // reconectando si el usuario vuelve (el heartbeat lo resucita en DB).
-      if (document.visibilityState === "hidden") sendLeaveBeacon();
-    };
+
+    // Fase H.9 — NO disparar el beacon en `visibilitychange → hidden`.
+    // El código anterior promocionaba un delay de 30s en el comentario pero
+    // nunca lo implementó: cualquier Alt+Tab, minimizar ventana o cambio de
+    // pestaña mataba la party al instante si el usuario era el último
+    // conectado (o el único, típico al crearla). Pablo lo notó como "las
+    // parties duran segundos". El heartbeat cada 60s + el check de
+    // `last_seen_at` server-side ya cubren el caso crash/red caída; el
+    // cierre REAL del tab lo cubren beforeunload + pagehide.
 
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("pagehide", handlePageHide);
-    document.addEventListener("visibilitychange", handleVisibility);
 
     const heartbeat = window.setInterval(() => {
       fetch("/api/party/heartbeat", {
@@ -245,7 +251,6 @@ export default function PartyPage() {
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("pagehide", handlePageHide);
-      document.removeEventListener("visibilitychange", handleVisibility);
       window.clearInterval(heartbeat);
     };
   }, [user, myParty?.id]);
