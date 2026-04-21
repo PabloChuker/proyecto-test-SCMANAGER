@@ -16,6 +16,7 @@ import { useMiningStore } from "@/store/useMiningStore";
 import { useMiningRealtime, useMiningBroadcast } from "@/store/useMiningRealtime";
 import { useTradeWorkOrderStore } from "@/store/useTradeWorkOrderStore";
 import { useAuth } from "@/contexts/AuthContext";
+import { createClient } from "@/lib/supabase/client";
 import { getCommodityForMineral } from "@/data/mining/mineral-commodity-map";
 import SellRoutePreviewModal, {
   type SellRouteInput,
@@ -177,7 +178,44 @@ export default function WorkOrderDashboard() {
     recordInventoryAction: sbRecordInventoryAction,
     fetchSessions: sbFetchSessions,
     setActiveSession: sbSetActiveSession,
+    deleteSession: sbDeleteSession,
   } = useMiningStore();
+
+  // ── Active-party membership check (Fase H.6) ────────────────────────────
+  // Source of truth for the "PARTY CONNECTED" vs "SOLO MODE" chip. The
+  // mining_session.party_id alone isn't enough — a session created while in
+  // a party keeps that party_id even after the party ends, which would
+  // falsely pin the chip to "PARTY". So we verify the user is a member of
+  // an active party RIGHT NOW; if not, we force the chip to solo-cloud.
+  const [hasActiveParty, setHasActiveParty] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!user) { setHasActiveParty(false); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data: memberships } = await supabase
+          .from("party_members")
+          .select("party_id")
+          .eq("user_id", user.id)
+          .limit(1);
+        if (!memberships || memberships.length === 0) {
+          if (!cancelled) setHasActiveParty(false);
+          return;
+        }
+        const { data: party } = await supabase
+          .from("parties")
+          .select("id")
+          .eq("id", memberships[0].party_id)
+          .eq("status", "active")
+          .maybeSingle();
+        if (!cancelled) setHasActiveParty(!!party);
+      } catch {
+        if (!cancelled) setHasActiveParty(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
 
   useMiningRealtime();
   const broadcast = useMiningBroadcast();
@@ -498,14 +536,18 @@ export default function WorkOrderDashboard() {
   };
 
   const handleResetAll = async () => {
-    if (user && sbSessionId) {
-      // Logged in: clear ONLY Supabase data — zero localStorage
-      for (const order of sbWorkOrders) {
-        await sbDeleteOrder(order.id);
+    if (user) {
+      // Fase H.6 — Reset All ahora borra TODAS las sesiones del usuario, no
+      // solo la activa. DELETE /api/mining/sessions cascadea a mining_movements,
+      // mining_inventory, mining_work_orders, mining_members y ledger, así
+      // que después de esto no queda basura ni "recent movements" huérfanos.
+      // Antes: solo limpiaba la session activa → Pablo veía movements de otras
+      // sessions persistir después del Reset.
+      for (const sess of sbSessions) {
+        await sbDeleteSession(sess.id);
       }
-      await sbClearInventory(sbSessionId);
       broadcast("full_sync");
-    } else if (!user) {
+    } else {
       // Not logged in: clear only localStorage
       clearAllData();
       setSessions([]);
@@ -704,13 +746,17 @@ export default function WorkOrderDashboard() {
     setSelectedMineralIds(new Set());
   }, []);
 
-  // Connection status indicator — 3 estados (Fase H.1)
-  //   offline: sin `user`      → localStorage (solo)
-  //   solo:    `user` + sesión cloud con party_id=null
-  //   party:   `user` + sesión cloud con party_id≠null
+  // Connection status indicator — 3 estados (Fase H.1, revisado H.6)
+  //   offline:    sin `user`                              → localStorage (solo)
+  //   solo-cloud: `user` sin party activa                 → cloud pero solo
+  //   party:      `user` + party activa Y sesión party    → multi-user
+  //
+  // Fase H.6: un mining_session con party_id pero cuya party terminó no es
+  // "party" — ese chip solo se enciende si el user está actualmente en una
+  // party con status='active'.
   const connectionState: "offline" | "solo-cloud" | "party" =
     !user ? "offline"
-    : activeSbScope === "party" ? "party"
+    : (activeSbScope === "party" && hasActiveParty === true) ? "party"
     : "solo-cloud";
   const connLabel =
     connectionState === "party" ? t("partyConnected")
@@ -1132,12 +1178,10 @@ export default function WorkOrderDashboard() {
                       {bestPrice ? `${bestPrice.price.toLocaleString()} aUEC` : "—"}
                     </span>
                     <div className="flex gap-1">
-                      <button
-                        onClick={() => openSellModal(item.mineralId, item.mineralName)}
-                        className="px-2 py-1 bg-amber-500/10 border border-amber-500/30 rounded text-[9px] font-bold text-amber-400 hover:bg-amber-500/20"
-                      >
-                        {t("sell")}
-                      </button>
+                      {/* Fase H.6 — removimos el botón "Sell" individual porque
+                          solapaba con "Sell on route" y confundía. El flujo
+                          canónico ahora es: tildar checkboxes + Build Route, o
+                          bien "Sell on route" single-click por mineral. */}
                       {(() => {
                         const match = getCommodityForMineral(item.mineralId);
                         const disabled = !match || item.quantity <= 0;

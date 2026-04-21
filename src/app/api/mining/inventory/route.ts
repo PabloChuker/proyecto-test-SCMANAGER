@@ -58,6 +58,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
+    // Fase H.6 — idempotency guard. If the caller passes a `destination_ref`
+    // (e.g. `trade_wo:<uuid>`), ensure we haven't already recorded a movement
+    // with the same ref for this session + mineral. This is what prevents
+    // the "double discount" Pablo saw when the bridge fired twice for the
+    // same Trade WO (auto on Complete + manual "Apply to Inventory"). Without
+    // this, two movements with the same trade_wo ref would both mutate the
+    // inventory quantity and push it into negative territory.
+    if (destination_ref) {
+      const { data: existingMv } = await supabase
+        .from("mining_movements")
+        .select("id, created_at, delta")
+        .eq("session_id", session_id)
+        .eq("mineral_id", mineral_id)
+        .eq("destination_ref", destination_ref)
+        .maybeSingle();
+      if (existingMv) {
+        // Idempotent: return the prior movement, no-op the inventory.
+        return NextResponse.json(
+          { data: existingMv, deduped: true },
+          { status: 200 },
+        );
+      }
+    }
+
     // Determine delta sign based on reason
     const outgoing = ["sell", "craft", "distribute", "transfer_out", "manual_remove"];
     const delta = outgoing.includes(reason) ? -Math.abs(quantity) : Math.abs(quantity);
