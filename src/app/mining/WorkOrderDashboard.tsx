@@ -100,6 +100,24 @@ function oreLineWithQuality(ores: { id: string; name: string; yieldQty: number; 
   );
 }
 
+// ─── Scope chip ──────────────────────────────────────────────────────────────
+// Fase H.1: etiqueta SOLO (amber) vs PARTY (emerald) para dejar claro el
+// origen del dato en filas compartidas (inventario, órdenes, movimientos).
+function ScopeChip({ scope, label }: { scope: "solo" | "party" | null; label: string }) {
+  if (!scope) return null;
+  const cls =
+    scope === "party"
+      ? "bg-emerald-500/20 text-emerald-400"
+      : "bg-amber-500/20 text-amber-400";
+  return (
+    <span
+      className={`text-[8px] px-1 py-0.5 rounded uppercase tracking-wider ${cls}`}
+    >
+      {label}
+    </span>
+  );
+}
+
 // ─── Tabs ────────────────────────────────────────────────────────────────────
 
 type DashTab = "sessions" | "orders" | "inventory" | "crew" | "stats";
@@ -163,6 +181,23 @@ export default function WorkOrderDashboard() {
 
   useMiningRealtime();
   const broadcast = useMiningBroadcast();
+
+  // ── Scope (solo vs party) derivations ────────────────────────────────────
+  // Fase H.1: la diferencia NO es localStorage vs Supabase — los usuarios
+  // logueados también pueden tener sesiones "solo" (party_id = null). Scope se
+  // determina por `MiningSession.party_id`:
+  //   - party_id === null → solo   (amber)
+  //   - party_id !== null → party  (emerald)
+  // Offline (sin `user`) es siempre solo (localStorage).
+  type Scope = "solo" | "party";
+  const sessionScope = useMemo(() => {
+    const map = new Map<string, Scope>();
+    for (const s of sbSessions) map.set(s.id, s.party_id ? "party" : "solo");
+    return map;
+  }, [sbSessions]);
+  const activeSbScope: Scope | null = sbSessionId
+    ? sessionScope.get(sbSessionId) ?? null
+    : null;
 
   // ── Auto-detect & load Supabase session for logged-in users ──
   useEffect(() => {
@@ -669,8 +704,28 @@ export default function WorkOrderDashboard() {
     setSelectedMineralIds(new Set());
   }, []);
 
-  // Connection status indicator
-  const isPartyMode = user && sbSessionId;
+  // Connection status indicator — 3 estados (Fase H.1)
+  //   offline: sin `user`      → localStorage (solo)
+  //   solo:    `user` + sesión cloud con party_id=null
+  //   party:   `user` + sesión cloud con party_id≠null
+  const connectionState: "offline" | "solo-cloud" | "party" =
+    !user ? "offline"
+    : activeSbScope === "party" ? "party"
+    : "solo-cloud";
+  const connLabel =
+    connectionState === "party" ? t("partyConnected")
+    : connectionState === "solo-cloud" ? t("soloCloudMode")
+    : t("soloMode");
+  const connTooltip =
+    connectionState === "party" ? t("partyModeTooltip")
+    : connectionState === "solo-cloud" ? t("soloCloudTooltip")
+    : t("soloModeTooltip");
+  const connCls =
+    connectionState === "party"
+      ? { wrap: "bg-emerald-500/10 border-emerald-500/30", dot: "bg-emerald-400 animate-pulse", text: "text-emerald-400" }
+    : connectionState === "solo-cloud"
+      ? { wrap: "bg-amber-500/10 border-amber-500/30", dot: "bg-amber-400 animate-pulse", text: "text-amber-400" }
+      : { wrap: "bg-zinc-800/50 border-zinc-700/50", dot: "bg-zinc-600", text: "text-zinc-500" };
 
   // ═════════════════════════════════════════════════════════════════════════
 
@@ -691,24 +746,14 @@ export default function WorkOrderDashboard() {
           ))}
         </div>
 
-        {/* Connection status indicator */}
+        {/* Connection status indicator — offline / solo-cloud / party (Fase H.1) */}
         <div
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border flex-shrink-0 ${
-            isPartyMode
-              ? "bg-emerald-500/10 border-emerald-500/30"
-              : "bg-zinc-800/50 border-zinc-700/50"
-          }`}
-          title={isPartyMode ? t("partyModeTooltip") : t("soloModeTooltip")}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border flex-shrink-0 ${connCls.wrap}`}
+          title={connTooltip}
         >
-          <span
-            className={`w-2 h-2 rounded-full ${
-              isPartyMode ? "bg-emerald-400 animate-pulse" : "bg-zinc-600"
-            }`}
-          />
-          <span className={`text-[9px] tracking-[0.15em] uppercase font-bold ${
-            isPartyMode ? "text-emerald-400" : "text-zinc-500"
-          }`}>
-            {isPartyMode ? t("partyConnected") : t("soloMode")}
+          <span className={`w-2 h-2 rounded-full ${connCls.dot}`} />
+          <span className={`text-[9px] tracking-[0.15em] uppercase font-bold ${connCls.text}`}>
+            {connLabel}
           </span>
         </div>
 
@@ -799,29 +844,35 @@ export default function WorkOrderDashboard() {
           </div>
           )}
 
-          {/* Supabase Sessions (Party Sessions) */}
+          {/* Cloud Sessions — Supabase. Cada una puede ser solo (party_id=null)
+              o party (party_id≠null) — Fase H.1. */}
           {sbSessions.length > 0 && (
             <div>
-              <div className="text-xs tracking-[0.1em] uppercase text-emerald-500 font-bold mb-2">{t("partySessions")}</div>
+              <div className="text-xs tracking-[0.1em] uppercase text-cyan-500 font-bold mb-2">{t("yourCloudSessions")}</div>
               {sbSessions.map((session) => {
                 const oc = sbWorkOrders.filter((o) => o.session_id === session.id).length;
                 const tg = sbWorkOrders.filter((o) => o.session_id === session.id).reduce((s, o) => s + o.gross_value, 0);
                 const isA = session.id === sbSessionId;
+                const scope: Scope = session.party_id ? "party" : "solo";
+                const isParty = scope === "party";
+                const borderActive = isParty ? "border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.1)]" : "border-amber-500/50 shadow-[0_0_10px_rgba(245,158,11,0.1)]";
+                const activeChipCls = isParty ? "bg-emerald-500/20 text-emerald-400" : "bg-amber-500/20 text-amber-400";
+                const icon = isParty ? "👥" : "🧍";
                 return (
                   <div
                     key={session.id}
                     onClick={() => sbSetActiveSession(session.id)}
                     className={`bg-zinc-900/70 border rounded-lg p-4 flex items-center justify-between cursor-pointer transition-all mb-2
-                      ${isA ? "border-emerald-500/50 shadow-[0_0_10px_rgba(16,185,129,0.1)]" : "border-zinc-700/60 hover:border-zinc-600"}`}
+                      ${isA ? borderActive : "border-zinc-700/60 hover:border-zinc-600"}`}
                   >
                     <div>
                       <div className="text-sm font-bold text-zinc-200 flex items-center gap-2">
-                        👥 {session.name}
-                        {isA && <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">{t("active")}</span>}
-                        <span className="text-[9px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-400 rounded">{t("party")}</span>
+                        {icon} {session.name}
+                        {isA && <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase tracking-wider ${activeChipCls}`}>{t("active")}</span>}
+                        <ScopeChip scope={scope} label={isParty ? t("party") : t("solo")} />
                       </div>
                       <div className="text-[11px] text-zinc-500 mt-1">
-                        {fmtDate(session.created_at)} · {t("ordersCount", { n: oc })} · {fmtAuec(tg)} aUEC · {t("membersCount", { n: session.member_count })}
+                        {fmtDate(session.created_at)} · {t("ordersCount", { n: oc })} · {fmtAuec(tg)} aUEC{isParty && (session as any).member_count ? ` · ${t("membersCount", { n: (session as any).member_count })}` : ""}
                       </div>
                     </div>
                   </div>
@@ -866,7 +917,10 @@ export default function WorkOrderDashboard() {
                       : pct >= 50
                         ? { border: "border-amber-500/40", barBg: "bg-amber-500", text: "text-amber-400", glow: "" }
                         : { border: "border-cyan-500/40", barBg: "bg-cyan-500", text: "text-cyan-400", glow: "" };
-                  const isParty = (order as any)._source === "supabase";
+                  // Fase H.1: scope viene del party_id de la sesión, no del _source
+                  const rowScope: Scope | null = (order as any)._source === "supabase"
+                    ? sessionScope.get(order.sessionId) ?? activeSbScope
+                    : null; // local/offline: no chip
                   return (
                     <div key={order.id} className={`bg-zinc-900/70 border ${tier.border} rounded-lg p-4 ${tier.glow}`}>
                       <div className="flex items-center justify-between mb-3">
@@ -875,7 +929,7 @@ export default function WorkOrderDashboard() {
                           <div>
                             <div className="text-sm text-zinc-200 font-bold flex items-center gap-2">
                               {order.refinery || typeLabel(t, order.type)}
-                              {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">{t("party")}</span>}
+                              <ScopeChip scope={rowScope} label={rowScope === "party" ? t("party") : t("solo")} />
                             </div>
                             <div className="text-[11px] text-zinc-500">{oreLineWithQuality(order.ores)} · {fmtAuec(order.grossValue)} aUEC</div>
                           </div>
@@ -912,7 +966,9 @@ export default function WorkOrderDashboard() {
               <div className="text-xs tracking-[0.1em] uppercase text-emerald-500 font-bold mb-2">✓ {t("status.readyToCollect")}</div>
               <div className="space-y-2">
                 {completed.map((order) => {
-                  const isParty = (order as any)._source === "supabase";
+                  const rowScope: Scope | null = (order as any)._source === "supabase"
+                    ? sessionScope.get(order.sessionId) ?? activeSbScope
+                    : null;
                   return (
                     <div key={order.id} className="bg-zinc-900/70 border border-emerald-500/30 rounded-lg p-4 flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -920,7 +976,7 @@ export default function WorkOrderDashboard() {
                         <div>
                           <div className="text-sm text-zinc-200 font-bold flex items-center gap-2">
                             {order.refinery || typeLabel(t, order.type)}
-                            {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">{t("party")}</span>}
+                            <ScopeChip scope={rowScope} label={rowScope === "party" ? t("party") : t("solo")} />
                           </div>
                           <div className="text-[11px] text-zinc-500">
                             {oreLineWithQuality(order.ores)}
@@ -1038,7 +1094,11 @@ export default function WorkOrderDashboard() {
               {mergedInventory.filter((i) => i.quantity > 0 || i.totalReceived > 0).map((item) => {
                 const q = (item as any).quality as number | undefined;
                 const bestPrice = bestPrices[item.mineralId];
-                const isParty = (item as any)._source === "supabase";
+                // Fase H.1: el scope del item = scope de la sesión activa (sbInventory
+                // solo trae la activa). En offline no hay scope → no chip.
+                const itemScope: Scope | null = (item as any)._source === "supabase"
+                  ? activeSbScope
+                  : null;
                 const commodityMatch = getCommodityForMineral(item.mineralId);
                 const canSelect = item.quantity > 0 && !!commodityMatch;
                 const isSelected = selectedMineralIds.has(item.mineralId);
@@ -1061,7 +1121,7 @@ export default function WorkOrderDashboard() {
                     </span>
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-bold text-zinc-200 uppercase">{item.mineralName}</span>
-                      {isParty && <span className="text-[8px] px-1 py-0.5 bg-emerald-500/20 text-emerald-400 rounded uppercase tracking-wider">{t("party")}</span>}
+                      <ScopeChip scope={itemScope} label={itemScope === "party" ? t("party") : t("solo")} />
                     </div>
                     <span className="text-center min-w-[60px]">{qualityBadge(q) || <span className="text-xs text-zinc-600">—</span>}</span>
                     <span className={`text-sm font-mono text-right font-bold ${item.quantity > 0 ? "text-emerald-400" : "text-zinc-600"}`}>
@@ -1114,19 +1174,25 @@ export default function WorkOrderDashboard() {
             <div>
               <div className="text-xs tracking-[0.1em] uppercase text-zinc-500 font-bold mb-2">{t("recentMovements")}</div>
               <div className="bg-zinc-900/70 border border-zinc-700/60 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
-                {mergedMovements.slice(0, 30).map((mv) => (
-                  <div key={mv.id} className="flex items-center justify-between px-4 py-2 border-b border-zinc-800/30 text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className={`font-mono font-bold ${mv.delta > 0 ? "text-emerald-400" : "text-red-400"}`}>
-                        {mv.delta > 0 ? "+" : ""}{mv.delta.toFixed(1)}
-                      </span>
-                      <span className="text-zinc-300 uppercase">{mv.mineralName}</span>
-                      <span className="text-zinc-600">— {mvReasonLabel(t, mv.reason)}</span>
-                      {mv.crewMember && <span className="text-zinc-500">→ {mv.crewMember}</span>}
+                {mergedMovements.slice(0, 30).map((mv) => {
+                  // Fase H.1: mergedMovements (logged-in) solo contiene la sesión
+                  // activa → usar activeSbScope. Offline = sin chip.
+                  const mvScope: Scope | null = user ? activeSbScope : null;
+                  return (
+                    <div key={mv.id} className="flex items-center justify-between px-4 py-2 border-b border-zinc-800/30 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className={`font-mono font-bold ${mv.delta > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                          {mv.delta > 0 ? "+" : ""}{mv.delta.toFixed(1)}
+                        </span>
+                        <span className="text-zinc-300 uppercase">{mv.mineralName}</span>
+                        <ScopeChip scope={mvScope} label={mvScope === "party" ? t("party") : t("solo")} />
+                        <span className="text-zinc-600">— {mvReasonLabel(t, mv.reason)}</span>
+                        {mv.crewMember && <span className="text-zinc-500">→ {mv.crewMember}</span>}
+                      </div>
+                      <span className="text-[10px] text-zinc-600">{fmtDate(mv.createdAt)}</span>
                     </div>
-                    <span className="text-[10px] text-zinc-600">{fmtDate(mv.createdAt)}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -1478,9 +1544,18 @@ export default function WorkOrderDashboard() {
       )}
 
       {/* ═══ Sell Route Preview Modal (Fase B — multi-sell) ═══ */}
+      {/* sourceSessionPartyId propagates the mining session's scope down to
+          the batch-create logic so a SOLO mining session always produces a
+          SOLO sell route — even if the user also belongs to a party. Local
+          (localStorage) sessions are always solo. */}
       <SellRoutePreviewModal
         open={routeModalOpen}
         sessionId={sbSessionId || activeId || null}
+        sourceSessionPartyId={
+          sbSessionId
+            ? (sbSessions.find((s) => s.id === sbSessionId)?.party_id ?? null)
+            : null
+        }
         items={routeModalItems}
         onClose={closeRouteModal}
       />

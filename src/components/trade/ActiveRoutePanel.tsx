@@ -1368,6 +1368,22 @@ function StopCard({
   const t = useTranslations("Trade.activeRoute");
   const doneItems = stop.items.filter((i) => i.wo.status === "completed").length;
 
+  // Fase H.2 — Scope del stop según party_id de las WOs.
+  // Si TODAS son solo (null) → "solo"; si TODAS party → "party";
+  // si están mezcladas → "mixed" (rojo, banderín para llamar atención).
+  const hasParty = stop.items.some((i) => !!i.wo.party_id);
+  const hasSolo  = stop.items.some((i) => !i.wo.party_id);
+  const stopScope: "solo" | "party" | "mixed" =
+    hasParty && hasSolo ? "mixed" : hasParty ? "party" : "solo";
+  const scopeChipCls =
+    stopScope === "party" ? "bg-emerald-500/20 text-emerald-400"
+    : stopScope === "solo" ? "bg-amber-500/20 text-amber-400"
+    : "bg-red-500/20 text-red-400";
+  const scopeLabel =
+    stopScope === "party" ? t("scopeChip.party")
+    : stopScope === "solo" ? t("scopeChip.solo")
+    : t("scopeChip.mixed");
+
   return (
     <div
       draggable
@@ -1410,6 +1426,10 @@ function StopCard({
                 {t("statusInProgress")}
               </span>
             )}
+            {/* Fase H.2 — Chip SOLO/PARTY/MIXED */}
+            <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider ${scopeChipCls}`}>
+              {scopeLabel}
+            </span>
           </div>
           <div className="text-sm text-zinc-100 font-medium truncate">
             {stop.station || t("noStation")}

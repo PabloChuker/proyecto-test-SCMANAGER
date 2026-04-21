@@ -56,6 +56,19 @@ export interface SellRoutePreviewModalProps {
   sessionId: string | null;
   items: SellRouteInput[];
   onClose: () => void;
+  /**
+   * party_id of the source mining session. Determines the scope of every WO
+   * created by this batch:
+   *   - `null`           → solo sell route (WO.party_id = null)
+   *   - `string` (uuid)  → party sell route (WO.party_id = that uuid)
+   *   - `undefined`      → legacy fallback: use the user's first-listed
+   *                        party_members row (previous behavior).
+   *
+   * This prop is the fix for "solo mining session → party sell route"
+   * leakage that happened when a logged-in user with an active party sold
+   * from a solo session.
+   */
+  sourceSessionPartyId?: string | null;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -98,6 +111,7 @@ export default function SellRoutePreviewModal({
   sessionId,
   items,
   onClose,
+  sourceSessionPartyId,
 }: SellRoutePreviewModalProps) {
   const t = useTranslations("Mining.routePreview");
   const router = useRouter();
@@ -120,13 +134,27 @@ export default function SellRoutePreviewModal({
   // UI: which commodity row has its alt-options panel open.
   const [altOpenFor, setAltOpenFor] = useState<string | null>(null);
 
-  // Active party for the signed-in user. When present, every draft WO the
-  // batch creates gets tagged with party_id so ActiveRoutePanel's "party"
-  // scope filter (o.party_id != null) can find them. Without this, mining
-  // -> trade bridge routes were always solo (party_id = null), which made
-  // the "Party" tab always read as empty.
+  // Active party for the signed-in user. Only loaded when the caller did
+  // NOT pass `sourceSessionPartyId` (legacy fallback). When the caller does
+  // pass a source scope, we honor it verbatim — a solo mining session must
+  // produce a solo sell route, even if the user is also in a party.
   const [activePartyId, setActivePartyId] = useState<string | null>(null);
   const [partyLoading, setPartyLoading] = useState(false);
+
+  /** True when the caller handed us an explicit source-session scope. */
+  const hasSourceScope = sourceSessionPartyId !== undefined;
+
+  /**
+   * The party_id that every batch-created WO will be tagged with.
+   * - If caller provided `sourceSessionPartyId`, use that (null = solo).
+   * - Otherwise fall back to the legacy behavior (user's active party).
+   */
+  const effectivePartyId: string | null = hasSourceScope
+    ? (sourceSessionPartyId ?? null)
+    : activePartyId;
+
+  /** UI scope derived from whatever we'll actually write to WOs. */
+  const uiScope: "solo" | "party" = effectivePartyId ? "party" : "solo";
 
   // Compute the unified + aggregated route. Recomputes when the modal opens,
   // when the underlying item list changes, or when the user overrides a
@@ -142,12 +170,18 @@ export default function SellRoutePreviewModal({
     setProgress(null);
   }, [open, items, overrides]);
 
-  // Load the user's active party membership so batch-created WOs can be
-  // scoped to it. We only need to know party_id — the ActiveRoutePanel
-  // filter is `!!o.party_id`, so any non-null value is enough to land in
-  // the Party tab. Pattern mirrors TradeWorkOrderCalculator.loadFromParty().
+  // Load the user's active party membership ONLY when the caller did not
+  // tell us the source scope (legacy fallback). With `sourceSessionPartyId`
+  // provided, we skip this entirely — the source mining session is the
+  // source of truth and we must not override it with "user happens to be
+  // in a party" signal.
   useEffect(() => {
     if (!open) return;
+    if (hasSourceScope) {
+      // Explicit scope was handed down — nothing to load.
+      setPartyLoading(false);
+      return;
+    }
     let cancelled = false;
     (async () => {
       setPartyLoading(true);
@@ -178,7 +212,7 @@ export default function SellRoutePreviewModal({
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, hasSourceScope]);
 
   /** Pick an alternative station for a single commodity. */
   function pickStation(mineralId: string, opt: PriceOption) {
@@ -272,10 +306,11 @@ export default function SellRoutePreviewModal({
           const body = {
             title: `${t("woTitlePrefix")} ${stopNumber}/${totalStops} — ${stop.commodityName || stop.commodityCode}`,
             status: "draft",
-            // Tag every batch-created WO with the user's active party_id so
-            // ActiveRoutePanel's "Party" scope actually finds these routes.
-            // Null is fine for solo users — the API accepts it.
-            party_id: activePartyId || null,
+            // Tag every batch-created WO with the SOURCE mining session's
+            // scope when the caller provided one (solo → null, party → uuid).
+            // If no source scope was passed, fall back to the legacy behavior
+            // of using the user's first-listed active party.
+            party_id: effectivePartyId,
             commodity_code: stop.commodityCode || null,
             commodity_name: stop.commodityName || null,
             buy_station: null,
@@ -328,23 +363,25 @@ export default function SellRoutePreviewModal({
             <p className="text-[11px] text-zinc-500 mt-1">{t("subtitle")}</p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Party / solo indicator — shows the user *up front* whether
-                these routes will land in the Party tab of Active Route.  */}
-            {partyLoading ? (
+            {/* Party / solo indicator — reflects the SOURCE mining session's
+                scope when the caller provided it, so a solo mining session
+                shows "Solo" even if the user is also in a party. Loading
+                state only shows during the legacy party_members lookup.  */}
+            {partyLoading && !hasSourceScope ? (
               <span className="text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-mono px-2 py-1 rounded border border-zinc-700/60 bg-zinc-800/40">
                 …
               </span>
-            ) : activePartyId ? (
+            ) : uiScope === "party" ? (
               <span
-                title="Routes will be tagged with your active party"
+                title="Party sell route — inherits scope from the source mining session"
                 className="text-[10px] uppercase tracking-[0.18em] text-emerald-300 font-mono font-bold px-2 py-1 rounded border border-emerald-500/40 bg-emerald-500/10"
               >
                 ● Party
               </span>
             ) : (
               <span
-                title="Solo run — routes will not be tagged with a party"
-                className="text-[10px] uppercase tracking-[0.18em] text-zinc-400 font-mono font-bold px-2 py-1 rounded border border-zinc-700/60 bg-zinc-800/40"
+                title="Solo sell route — the source mining session is solo"
+                className="text-[10px] uppercase tracking-[0.18em] text-amber-300 font-mono font-bold px-2 py-1 rounded border border-amber-500/40 bg-amber-500/10"
               >
                 ○ Solo
               </span>

@@ -460,6 +460,25 @@ export default function PendingPayoutsPanel({
                     <span className={`text-[9px] px-1.5 py-0.5 border rounded uppercase tracking-wider font-bold ${splitModeColors(d.split_mode)}`}>
                       {t(`mode.${d.split_mode}`)}
                     </span>
+                    {/* Fase H.2 — scope chip so pending payouts read as
+                        solo/party at a glance, matching WorkOrderDashboard
+                        and ActiveRoutePanel. A distribution is "party" iff
+                        it carries a mining or trade party_id. */}
+                    {(() => {
+                      const isPartyDist = !!(d.mining_party_id || d.trade_party_id);
+                      return (
+                        <span
+                          className={
+                            "text-[9px] px-1.5 py-0.5 border rounded uppercase tracking-wider font-bold " +
+                            (isPartyDist
+                              ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
+                              : "bg-amber-500/20 text-amber-400 border-amber-500/40")
+                          }
+                        >
+                          {isPartyDist ? t("scopeChip.party") : t("scopeChip.solo")}
+                        </span>
+                      );
+                    })()}
                   </div>
                   <div>
                     <div className="text-sm font-bold text-zinc-200 font-mono">

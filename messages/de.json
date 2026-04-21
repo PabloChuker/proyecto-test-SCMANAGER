@@ -592,10 +592,14 @@
         "payouts": "AUSZAHLUNGEN",
         "settlement": "ABRECHNUNG"
       },
-      "partyModeTooltip": "Party-Modus — mit Supabase verbunden",
-      "soloModeTooltip": "Solo-Modus — nur localStorage",
+      "partyModeTooltip": "Party-Modus — geteilt mit der Party",
+      "soloModeTooltip": "Solo offline — nur localStorage",
+      "soloCloudTooltip": "Solo — cloud-synchronisiert, privat",
       "partyConnected": "Party verbunden",
-      "soloMode": "Solo-Modus",
+      "soloMode": "Solo (Offline)",
+      "soloCloudMode": "Solo (Cloud)",
+      "solo": "Solo",
+      "yourCloudSessions": "Deine Cloud-Sitzungen",
       "resetAllTooltip": "Alle Abbaudaten zurücksetzen",
       "resetAll": "Alles zurücksetzen",
       "session": "Sitzung",
@@ -798,6 +802,10 @@
         "mining": "Mining",
         "trade": "Trade",
         "both": "Beides"
+      },
+      "scopeChip": {
+        "solo": "Solo",
+        "party": "Party"
       }
     },
     "settlement": {
@@ -859,6 +867,11 @@
         "me": "Ich",
         "party": "Party",
         "all": "Alle"
+      },
+      "scopeChip": {
+        "solo": "Solo",
+        "party": "Party",
+        "mixed": "Gemischt"
       },
       "totalStops": "Stopps",
       "stopsHint": "{items, plural, one {# Ware} other {# Waren}}",

@@ -592,10 +592,14 @@
         "payouts": "结算",
         "settlement": "清算"
       },
-      "partyModeTooltip": "队伍模式 — 已连接 Supabase",
-      "soloModeTooltip": "单人模式 — 仅 localStorage",
+      "partyModeTooltip": "队伍模式 — 与队伍共享",
+      "soloModeTooltip": "离线单人 — 仅 localStorage",
+      "soloCloudTooltip": "单人 — 云同步,私有",
       "partyConnected": "队伍已连接",
-      "soloMode": "单人模式",
+      "soloMode": "单人(离线)",
+      "soloCloudMode": "单人(云)",
+      "solo": "单人",
+      "yourCloudSessions": "你的云会话",
       "resetAllTooltip": "重置所有采矿数据",
       "resetAll": "全部重置",
       "session": "会话",
@@ -798,6 +802,10 @@
         "mining": "采矿",
         "trade": "贸易",
         "both": "两者"
+      },
+      "scopeChip": {
+        "solo": "单人",
+        "party": "组队"
       }
     },
     "settlement": {
@@ -859,6 +867,11 @@
         "me": "我",
         "party": "队伍",
         "all": "全部"
+      },
+      "scopeChip": {
+        "solo": "单人",
+        "party": "队伍",
+        "mixed": "混合"
       },
       "totalStops": "停靠点",
       "stopsHint": "{items, plural, other {# 项商品}}",
