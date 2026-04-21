@@ -597,6 +597,19 @@ export default function WorkOrderDashboard() {
     refresh();
   };
 
+  // Fase H.8 — Force re-fetch inventory whenever the user enters the Inventory
+  // tab. The realtime subscription normally keeps this in sync, but when the
+  // discount is applied from the Trade module (e.g. user completes a trade WO
+  // while on another page/tab) the postgres_changes event can arrive while
+  // this component is unmounted; landing on Inventory afterwards would show
+  // the stale "available" qty until the user hit F5. This effect closes that
+  // gap without full reloads.
+  useEffect(() => {
+    if (tab !== "inventory") return;
+    if (!user || !sbSessionId) return;
+    useMiningStore.getState().fetchInventory(sbSessionId);
+  }, [tab, user, sbSessionId]);
+
   // Fetch best sell price for each inventory item.
   //
   // Important: the /api/mining/commodity-prices endpoint queries by
@@ -1158,11 +1171,20 @@ export default function WorkOrderDashboard() {
                 const commodityMatch = getCommodityForMineral(item.mineralId);
                 const canSelect = item.quantity > 0 && !!commodityMatch;
                 const isSelected = selectedMineralIds.has(item.mineralId);
+                // Fase H.8 — item ya vendido / gastado (qty <= 0) → mostrar
+                // tachado con línea roja, opacity baja y sin poder tildarlo.
+                // Preservamos la fila (en lugar de ocultarla) para que Pablo
+                // vea la traza de lo que ya pasó por ese inventario.
+                const isDepleted = item.quantity <= 0;
                 return (
                   <div
                     key={item.mineralId}
                     className={`grid grid-cols-[auto_2fr_auto_1fr_1fr_auto_auto] gap-2 px-4 py-3 border-b border-zinc-800/30 items-center ${
-                      isSelected ? "bg-cyan-500/5" : ""
+                      isDepleted
+                        ? "opacity-60 bg-red-950/20 line-through decoration-red-500/80 decoration-2"
+                        : isSelected
+                          ? "bg-cyan-500/5"
+                          : ""
                     }`}
                   >
                     <span className="flex items-center">
@@ -1176,11 +1198,16 @@ export default function WorkOrderDashboard() {
                       />
                     </span>
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-bold text-zinc-200 uppercase">{item.mineralName}</span>
+                      <span className={`text-sm font-bold uppercase ${isDepleted ? "text-red-400/80" : "text-zinc-200"}`}>{item.mineralName}</span>
+                      {isDepleted && (
+                        <span className="no-underline text-[9px] px-1.5 py-0.5 bg-red-500/20 border border-red-500/40 rounded font-bold text-red-400 tracking-wider">
+                          SOLD OUT
+                        </span>
+                      )}
                       <ScopeChip scope={itemScope} label={itemScope === "party" ? t("party") : t("solo")} />
                     </div>
-                    <span className="text-center min-w-[60px]">{qualityBadge(q) || <span className="text-xs text-zinc-600">—</span>}</span>
-                    <span className={`text-sm font-mono text-right font-bold ${item.quantity > 0 ? "text-emerald-400" : "text-zinc-600"}`}>
+                    <span className="text-center min-w-[60px] no-underline">{qualityBadge(q) || <span className="text-xs text-zinc-600">—</span>}</span>
+                    <span className={`text-sm font-mono text-right font-bold ${isDepleted ? "text-red-500/80" : "text-emerald-400"}`}>
                       {item.quantity.toFixed(1)}
                     </span>
                     <span className="text-xs font-mono text-zinc-500 text-right">{item.totalReceived.toFixed(1)}</span>
