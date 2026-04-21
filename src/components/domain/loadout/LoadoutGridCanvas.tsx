@@ -22,9 +22,16 @@ const AutoGrid = WidthProvider(GridLayout);
 
 const COLUMN_KEYS: ColumnKey[] = ["col0", "col1", "col2", "sidebar"];
 const COL_X: Record<ColumnKey, number> = { col0: 0, col1: 1, col2: 2, sidebar: 3 };
-const TWO_COL_IDS = new Set<string>(["ship-card", "flight-dynamics-3d", "ship-selector"]);
+const TWO_COL_IDS = new Set<string>([
+  "ship-card",
+  "flight-dynamics-3d",
+  "ship-selector",
+  "flight-dynamics",
+]);
 
-const RGL_KEY = "al-filo-rgl-v1";
+// v2: añadido flight-dynamics a TWO_COL_IDS → invalidamos cache para que los
+// usuarios con layout v1 persistido no se queden con la tarjeta en w=1.
+const RGL_KEY = "al-filo-rgl-v2";
 const ROW_H = 1;                               // 1 px por fila → alto preciso
 const MARGIN: [number, number] = [4, 4];        // gap entre tarjetas
 const MARGIN_Y = MARGIN[1];
