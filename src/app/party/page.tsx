@@ -102,11 +102,28 @@ export default function PartyPage() {
     }
 
     const partyId = membership[0].party_id;
+    // Solo traemos la party si sigue activa. Si quedó como `ended` (p.ej.
+    // porque el beacon de otro miembro ya la cerró), limpiamos el membership
+    // huérfano y mostramos el estado "sin party". Así el /mining y el stats
+    // nunca ven parties fantasma.
     const { data: party } = await supabase
       .from("parties")
       .select("*")
       .eq("id", partyId)
-      .single();
+      .eq("status", "active")
+      .maybeSingle();
+
+    if (!party) {
+      // Membership apunta a una party ya cerrada → limpiar y salir.
+      await supabase
+        .from("party_members")
+        .delete()
+        .eq("party_id", partyId)
+        .eq("user_id", user.id);
+      setMyParty(null);
+      setPartyMembers([]);
+      return;
+    }
 
     if (party) {
       setMyParty(party as Party);
@@ -151,6 +168,88 @@ export default function PartyPage() {
     return () => { supabase.removeChannel(channel); };
   }, [user, supabase, loadMyParty, loadOnlineFriends]);
 
+  // ═════════════════════════════════════════════════════════════════════════
+  // Session-tied lifecycle
+  //
+  // Cuando Pablo cierra la pestaña / browser / navega fuera, la party debería
+  // cerrarse automáticamente.  Usamos dos mecanismos complementarios:
+  //
+  //   1. beforeunload / pagehide → navigator.sendBeacon('/api/party/leave').
+  //      El beacon es fire-and-forget, resiste el cierre inmediato del tab, y
+  //      manda cookies same-origin (auth funciona).
+  //
+  //   2. Heartbeat cada 60s → POST /api/party/heartbeat.  Si el browser
+  //      crashea o pierde la red antes del beacon, el `last_seen_at` no se
+  //      actualiza y los filtros de staleness (aplicados en /mining y en el
+  //      propio /party) dejan de precargar la party.
+  //
+  // El efecto se adhiere al `myParty.id`: si Pablo cambia de party, el
+  // cleanup remonta todo y engancha los handlers al nuevo id.
+  // ═════════════════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!user || !myParty?.id) return;
+    const partyId = myParty.id;
+
+    const sendLeaveBeacon = () => {
+      if (typeof navigator === "undefined" || !navigator.sendBeacon) return;
+      try {
+        const blob = new Blob(
+          [JSON.stringify({ party_id: partyId })],
+          { type: "application/json" },
+        );
+        navigator.sendBeacon("/api/party/leave", blob);
+      } catch {
+        /* beacon es best-effort, si falla no hay nada que hacer */
+      }
+      // Limpiar cache solo-mode también al cierre abrupto: si Pablo vuelve a
+      // abrir /mining mañana, no va a ver los miembros de la party fantasma.
+      try {
+        if (typeof window !== "undefined") {
+          window.localStorage.removeItem("sc-labs-wo-crew-solo");
+        }
+      } catch { /* noop */ }
+    };
+
+    const handleBeforeUnload = () => { sendLeaveBeacon(); };
+    const handlePageHide = () => { sendLeaveBeacon(); };
+    const handleVisibility = () => {
+      // En mobile Safari, `beforeunload` no siempre dispara; `pagehide` sí,
+      // pero si el usuario backgroundea la app por mucho tiempo tampoco.
+      // Mandamos el beacon también cuando la pestaña queda oculta >30s,
+      // reconectando si el usuario vuelve (el heartbeat lo resucita en DB).
+      if (document.visibilityState === "hidden") sendLeaveBeacon();
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handlePageHide);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    const heartbeat = window.setInterval(() => {
+      fetch("/api/party/heartbeat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ party_id: partyId }),
+        keepalive: true,
+      }).catch(() => undefined);
+    }, 60_000);
+
+    // Heartbeat inicial inmediato para marcar la party como viva apenas
+    // arranca la sesión.
+    fetch("/api/party/heartbeat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ party_id: partyId }),
+      keepalive: true,
+    }).catch(() => undefined);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handlePageHide);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.clearInterval(heartbeat);
+    };
+  }, [user, myParty?.id]);
+
   // Create party — volatile session, no name needed
   const createParty = useCallback(async () => {
     if (!user) return;
@@ -179,34 +278,33 @@ export default function PartyPage() {
 
   const leaveParty = useCallback(async () => {
     if (!user || !myParty) return;
-    await supabase.from("party_members").delete().eq("party_id", myParty.id).eq("user_id", user.id);
-
-    // Check remaining members
-    const { count } = await supabase
-      .from("party_members")
-      .select("*", { count: "exact", head: true })
-      .eq("party_id", myParty.id);
-
-    // If no one left, delete the party (volatile)
-    if (!count || count === 0) {
-      await supabase.from("parties").delete().eq("id", myParty.id);
-    } else if (myParty.leader_id === user.id) {
-      // Transfer leadership to first remaining member
-      const { data: next } = await supabase
-        .from("party_members")
-        .select("user_id")
-        .eq("party_id", myParty.id)
-        .limit(1)
-        .single();
-      if (next) {
-        await supabase.from("parties").update({ leader_id: next.user_id }).eq("id", myParty.id);
-        await supabase.from("party_members").update({ role: "leader" }).eq("party_id", myParty.id).eq("user_id", next.user_id);
-      }
+    // Delegamos al endpoint para que la lógica (transferencia de liderazgo,
+    // marcar ended + ended_at si es el último miembro, preservar historial)
+    // viva en un solo lugar — el mismo que usa el beacon de beforeunload.
+    try {
+      await fetch("/api/party/leave", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ party_id: myParty.id }),
+        keepalive: true,
+      });
+    } catch {
+      /* si el endpoint falla, el realtime igual va a refrescar al rato */
     }
-
+    // Limpiar el cache de crew solo-mode para que `/mining` no precargue los
+    // miembros de la party que acabamos de dejar.  Pablo reportó que
+    // `WorkOrderCalculator` mostraba "la última party por defecto" — esto
+    // corta la raíz.
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem("sc-labs-wo-crew-solo");
+      }
+    } catch {
+      /* storage no disponible (modo privado) — ignorar */
+    }
     setMyParty(null);
     setPartyMembers([]);
-  }, [user, myParty, supabase]);
+  }, [user, myParty]);
 
   const removeMember = useCallback(async (userId: string) => {
     if (!myParty) return;

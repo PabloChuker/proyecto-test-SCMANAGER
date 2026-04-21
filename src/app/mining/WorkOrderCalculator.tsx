@@ -235,28 +235,64 @@ export default function WorkOrderCalculator() {
   const didHydrateCrewRef = useRef(false);
 
   // Hydrate once on mount.
+  //
+  // 2026-04-20 (Fase F): antes de hidratar, preguntamos a Supabase si el user
+  // sigue en alguna party `active`.  Si NO hay party activa donde sea miembro
+  // (ni una sesión Supabase seleccionada), limpiamos el cache y dejamos el
+  // crew default — evita el bug que reportó Pablo donde `/mining` precargaba
+  // los miembros de la última party cerrada.  Mantenemos el cache para modo
+  // solo real (sin party): si el user está en una party activa Y se
+  // desconecta, el beacon / leaveParty ya lo limpia.
   useEffect(() => {
     if (didHydrateCrewRef.current) return;
     if (supabaseSessionId) return; // party mode handles its own crew
-    try {
-      const raw = typeof window !== "undefined"
-        ? window.localStorage.getItem(CREW_STORAGE_KEY)
-        : null;
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0 &&
-          parsed.every((m) => m && typeof m.name === "string")) {
-        setCrew(parsed as CrewMember[]);
+    if (!user) return;             // wait until we know who the user is
+
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const { data: activeMembership } = await supabase
+        .from("party_members")
+        .select("party_id, parties!inner(status)")
+        .eq("user_id", user.id)
+        .eq("parties.status", "active")
+        .limit(1)
+        .maybeSingle();
+
+      if (cancelled) return;
+
+      const hasActiveParty = !!activeMembership;
+
+      try {
+        if (!hasActiveParty) {
+          // Sin party activa → el cache solo-mode puede estar contaminado con
+          // miembros de la última party.  Lo borramos y dejamos el crew default.
+          if (typeof window !== "undefined") {
+            window.localStorage.removeItem(CREW_STORAGE_KEY);
+          }
+        } else {
+          // Con party activa → hidratar cache como siempre.
+          const raw = typeof window !== "undefined"
+            ? window.localStorage.getItem(CREW_STORAGE_KEY)
+            : null;
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0 &&
+                parsed.every((m) => m && typeof m.name === "string")) {
+              setCrew(parsed as CrewMember[]);
+            }
+          }
+        }
+      } catch {
+        /* ignore malformed cache */
+      } finally {
+        didHydrateCrewRef.current = true;
       }
-    } catch {
-      /* ignore malformed cache */
-    } finally {
-      didHydrateCrewRef.current = true;
-    }
-    // We intentionally depend only on supabaseSessionId: we want to run this
-    // exactly once after we know whether we're solo or party.
+    })();
+
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabaseSessionId]);
+  }, [supabaseSessionId, user]);
 
   // Persist whenever crew changes in solo mode.
   useEffect(() => {
@@ -352,13 +388,19 @@ export default function WorkOrderCalculator() {
   }, [mode]);
 
   // ── Auto-load available sessions for crew ──
+  //
+  // 2026-04-20 (Fase F): filtrar por `status='active'` así el dropdown no
+  // muestra sesiones cerradas.  Antes listaba TODO y era la fuente del bug
+  // "me carga la última party por defecto" — cualquier mining_session vieja
+  // linked a una party terminada igual aparecía aquí.
   useEffect(() => {
     if (!user) return;
     setLoadingSessions(true);
     const supabase = createClient();
     supabase
       .from("mining_sessions")
-      .select("id, name, mining_members(count)")
+      .select("id, name, status, mining_members(count)")
+      .eq("status", "active")
       .then(({ data }) => {
         if (data) {
           setAvailableSessions(
