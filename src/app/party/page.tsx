@@ -169,68 +169,39 @@ export default function PartyPage() {
   }, [user, supabase, loadMyParty, loadOnlineFriends]);
 
   // ═════════════════════════════════════════════════════════════════════════
-  // Session-tied lifecycle
+  // Session-tied lifecycle  (Fase H.11 — "solo Leave Party")
   //
-  // Cuando el usuario cierra la pestaña / browser, la party debería cerrarse
-  // automáticamente. Usamos dos mecanismos complementarios:
+  // REGLA ABSOLUTA: la party se cierra SÓLO cuando el usuario toca el botón
+  // "Leave Party" (o cuando el leader transfiere liderazgo al último miembro
+  // y ese último se va).  Nada de beacons, nada de `beforeunload`, nada de
+  // `pagehide`, nada de `visibilitychange`.
   //
-  //   1. beforeunload → navigator.sendBeacon('/api/party/leave').
-  //      Es el ÚNICO evento que dispara SÓLO cuando el tab se cierra /
-  //      navega fuera del sitio / recarga. No dispara en minimizar, Alt+Tab,
-  //      cambio de workspace, ni cuando la tab queda en segundo plano.
+  // Historia:
+  //   - Fase H.9 quitó `visibilitychange` (mataba al Alt+Tab).
+  //   - Fase H.10 quitó `pagehide` (mataba al minimizar por bfcache/memory
+  //     pressure en browsers modernos).
+  //   - Fase H.11 quita `beforeunload` + `sendBeacon('/api/party/leave')`.
+  //     Pablo reportó que aún así al minimizar caía la party; cualquier
+  //     listener que mande leave automático es demasiado frágil.
   //
-  //   2. Heartbeat cada 60s → POST /api/party/heartbeat.  Si el browser
-  //      crashea o pierde la red antes del beacon, el `last_seen_at` no se
-  //      actualiza y los filtros de staleness (aplicados en /mining y en el
-  //      propio /party) dejan de precargar la party.
+  // Qué queda:
+  //   - Heartbeat cada 60s → POST /api/party/heartbeat, sólo para que el
+  //     filtro de staleness en `/party` y `WorkOrderCalculator` vea la party
+  //     viva.  Si el browser se cierra / crashea, el heartbeat para y la
+  //     party eventualmente queda fuera del scope de esos filtros (zombie
+  //     en DB, pero invisible en UI).  El sweep server-side la limpia cuando
+  //     haga falta.
   //
-  // NO escuchamos `visibilitychange` NI `pagehide`:
-  //   - `visibilitychange → hidden` dispara al Alt+Tab / minimizar / cambiar
-  //      tab. Antes mataba la party instantáneamente (Fase H.9).
-  //   - `pagehide` también dispara al minimizar en varios browsers modernos
-  //      (bfcache entry, memory pressure, Chrome task-switcher, etc.) —
-  //      Pablo reportó un compañero siendo expulsado al minimizar la
-  //      ventana. Fase H.10 lo saca definitivamente.
+  // Trade-off asumido: si alguien cierra la pestaña sin pulsar Leave, la
+  // party queda "viva" un rato en la DB.  Es mucho mejor que expulsar a un
+  // compañero por minimizar el browser.
   //
-  // Trade-off: si el browser crashea de verdad sin disparar `beforeunload`
-  // (raro pero pasa), el heartbeat para y la party queda "zombie" en DB
-  // hasta que alguien la abandona con el botón Leave o entre el sweep
-  // server-side por staleness. Preferimos zombie over expulsado-por-error.
-  //
-  // El efecto se adhiere al `myParty.id`: si el usuario cambia de party, el
-  // cleanup remonta todo y engancha los handlers al nuevo id.
+  // El efecto se adhiere a `myParty.id`: si el usuario cambia de party, el
+  // cleanup remonta el heartbeat contra el nuevo id.
   // ═════════════════════════════════════════════════════════════════════════
   useEffect(() => {
     if (!user || !myParty?.id) return;
     const partyId = myParty.id;
-
-    const sendLeaveBeacon = () => {
-      if (typeof navigator === "undefined" || !navigator.sendBeacon) return;
-      try {
-        const blob = new Blob(
-          [JSON.stringify({ party_id: partyId })],
-          { type: "application/json" },
-        );
-        navigator.sendBeacon("/api/party/leave", blob);
-      } catch {
-        /* beacon es best-effort, si falla no hay nada que hacer */
-      }
-      // Limpiar cache solo-mode también al cierre abrupto: si Pablo vuelve a
-      // abrir /mining mañana, no va a ver los miembros de la party fantasma.
-      try {
-        if (typeof window !== "undefined") {
-          window.localStorage.removeItem("sc-labs-wo-crew-solo");
-        }
-      } catch { /* noop */ }
-    };
-
-    const handleBeforeUnload = () => { sendLeaveBeacon(); };
-
-    // Fase H.10 — sólo `beforeunload`. Ni visibilitychange ni pagehide,
-    // porque ambos pueden dispararse al minimizar la ventana o pasar al
-    // background sin que el usuario quiera salirse de la party (Pablo
-    // reportó un compañero siendo echado del party sólo por minimizar).
-    window.addEventListener("beforeunload", handleBeforeUnload);
 
     const heartbeat = window.setInterval(() => {
       fetch("/api/party/heartbeat", {
@@ -251,7 +222,6 @@ export default function PartyPage() {
     }).catch(() => undefined);
 
     return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
       window.clearInterval(heartbeat);
     };
   }, [user, myParty?.id]);
@@ -286,7 +256,8 @@ export default function PartyPage() {
     if (!user || !myParty) return;
     // Delegamos al endpoint para que la lógica (transferencia de liderazgo,
     // marcar ended + ended_at si es el último miembro, preservar historial)
-    // viva en un solo lugar — el mismo que usa el beacon de beforeunload.
+    // viva en un solo lugar. Fase H.11: este es el ÚNICO camino desde el
+    // cliente para cerrar/abandonar la party — ya no hay beacon automático.
     try {
       await fetch("/api/party/leave", {
         method: "POST",
