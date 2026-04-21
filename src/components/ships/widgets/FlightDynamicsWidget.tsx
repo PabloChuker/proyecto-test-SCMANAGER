@@ -484,7 +484,10 @@ function SubPanelHeader({ title }: { title: string }) {
 // ── Shared view state hook ────────────────────────────────────────────────────
 // Se usa desde el componente que compone el shell (LoadoutBuilder renderWidget)
 // para mantener la single-source-of-truth del toggle entre header y body.
-export function useFlightDynamicsView(initial: View = "radar") {
+// Default: "bars" — elegido por Pablo (2026-04-21) porque las barras dan el
+// contraste SCM vs AFB más leíble de un vistazo. Podés pasar otro valor al
+// hook si un contexto específico prefiere arrancar en radar o 3D.
+export function useFlightDynamicsView(initial: View = "bars") {
   return useState<View>(initial);
 }
 
