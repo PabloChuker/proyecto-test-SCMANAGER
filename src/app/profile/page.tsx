@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   X, Lock, ChevronDown, Shield,
-  Settings, CreditCard, Heart, Globe, Bell, Eye, Check, Link2,
+  Settings, CreditCard, Heart, Bell, Eye, Check, Link2,
 } from "lucide-react";
 import Header from "@/app/assets/header/Header";
 import { SIDEBAR_ITEMS } from "@/app/assets/header/navigation";
@@ -22,7 +22,6 @@ type SectionId = "config" | "subs" | "org";
 
 function ConfigPanel({ onClose }: { onClose: () => void }) {
   const t = useTranslations("Profile.config");
-  const [lang, setLang] = useState("es");
   const [notifOn, setNotifOn] = useState(true);
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [privacy, setPrivacy] = useState<"everyone" | "organization" | "friends" | "nobody">("everyone");
@@ -40,43 +39,6 @@ function ConfigPanel({ onClose }: { onClose: () => void }) {
       </div>
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(245,158,11,0.3) transparent" }}>
-        {/* Language */}
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center gap-2">
-              <Globe size={12} className="text-zinc-600" />
-              <span className="text-[10px] font-mono tracking-[0.15em] uppercase text-zinc-500">{t("languageLabel")}</span>
-            </div>
-          </div>
-          <p className="text-[11px] text-zinc-600 mb-3">{t("languageDesc")}</p>
-          <div className="grid grid-cols-3 gap-1.5">
-            {[
-              { code: "es", flagCode: "es", label: "Spanish" },
-              { code: "en", flagCode: "gb", label: "English" },
-              { code: "de", flagCode: "de", label: "Deutsch" },
-              { code: "fr", flagCode: "fr", label: "Français" },
-              { code: "it", flagCode: "it", label: "Italiano" },
-              { code: "zh", flagCode: "cn", label: "中文" },
-            ].map(l => (
-              <button key={l.code} onClick={() => setLang(l.code)}
-                className={`flex items-center gap-2 px-2.5 py-2 rounded-lg text-xs border transition-all ${
-                  lang === l.code
-                    ? "border-amber-500/60 bg-amber-500/10 text-amber-400"
-                    : "border-zinc-800/60 text-zinc-500 hover:border-zinc-600 hover:text-zinc-300"
-                }`}>
-                <img
-                  src={`https://flagcdn.com/20x15/${l.flagCode}.png`}
-                  alt={l.label}
-                  className="w-5 h-auto rounded-[2px] flex-shrink-0"
-                />
-                <span>{l.label}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="h-px bg-zinc-800/40" />
-
         {/* Notificaciones — toggle */}
         <div className="flex items-center gap-3 py-3 border-b border-zinc-800/20">
           <div className="w-8 h-8 rounded-lg bg-zinc-800/50 flex items-center justify-center text-zinc-400 flex-shrink-0"><Bell size={14} /></div>
