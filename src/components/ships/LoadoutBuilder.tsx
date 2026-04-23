@@ -438,27 +438,27 @@ function renderWidget(
   wId: WidgetId,
   ctx: any,
 ): React.ReactNode {
-  const { weaponHps, missileHps, useful, setPickerHp, stats, flightMode, setFlightMode, weaponAllocatedPips, weaponMaxPips } = ctx;
+  const { weaponHps, missileHps, useful, setPickerHp, handleClickHp, stats, flightMode, setFlightMode, weaponAllocatedPips, weaponMaxPips } = ctx;
   const W = (children: React.ReactNode, opts?: { icon?: string; badge?: string | number }) => (
     <WidgetShell id={wId} label={WIDGET_LABELS[wId]} icon={opts?.icon} badge={opts?.badge}>{children}</WidgetShell>
   );
 
   switch (wId) {
     case "weapons":
-      return weaponHps.length > 0 ? W(<HpGroup hps={weaponHps} onClickHp={setPickerHp} weaponAllocatedPips={weaponAllocatedPips} weaponMaxPips={weaponMaxPips} />, { icon: "/icons/weapons.png", badge: weaponHps.length }) : null;
+      return weaponHps.length > 0 ? W(<HpGroup hps={weaponHps} onClickHp={handleClickHp} weaponAllocatedPips={weaponAllocatedPips} weaponMaxPips={weaponMaxPips} />, { icon: "/icons/weapons.png", badge: weaponHps.length }) : null;
     case "missiles":
-      return missileHps.length > 0 ? W(<HpGroup hps={missileHps} onClickHp={setPickerHp} />, { icon: "/icons/missile.png", badge: missileHps.length }) : null;
+      return missileHps.length > 0 ? W(<HpGroup hps={missileHps} onClickHp={handleClickHp} />, { icon: "/icons/missile.png", badge: missileHps.length }) : null;
     case "shields": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "SHIELD");
-      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.SHIELD.icon, badge: hps.length }) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: CAT_CONFIG.SHIELD.icon, badge: hps.length }) : null;
     }
     case "powerplants": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "POWER_PLANT");
-      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.POWER_PLANT.icon, badge: hps.length }) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: CAT_CONFIG.POWER_PLANT.icon, badge: hps.length }) : null;
     }
     case "coolers": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "COOLER");
-      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.COOLER.icon, badge: hps.length }) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: CAT_CONFIG.COOLER.icon, badge: hps.length }) : null;
     }
     case "flight-dynamics":
       // Fase G.2: FlightDynamicsCard maneja su propio WidgetShell con el
@@ -469,29 +469,29 @@ function renderWidget(
       return W(<FlightDynamics3dContent />);
     case "quantum": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "QUANTUM_DRIVE");
-      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.QUANTUM_DRIVE.icon, badge: hps.length }) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: CAT_CONFIG.QUANTUM_DRIVE.icon, badge: hps.length }) : null;
     }
     case "radar": {
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "RADAR");
-      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: CAT_CONFIG.RADAR.icon, badge: hps.length }) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: CAT_CONFIG.RADAR.icon, badge: hps.length }) : null;
     }
     case "utility": {
       // Puramente UTILITY (tractor beam, EMP, etc). MINING y SALVAGE tienen
       // widgets propios que aparecen solo en naves industriales.
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "UTILITY");
-      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: "/icons/tractor_beam.png", badge: hps.length }) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: "/icons/tractor_beam.png", badge: hps.length }) : null;
     }
     case "mining": {
       // Solo naves mineras: ARGO Mole/Moth, MISC Prospector, Drake Golem.
       // Muestra láser minero + accesorios (módulos minería).
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "MINING");
-      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: "/icons/mining_lasers.png", badge: hps.length }) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: "/icons/mining_lasers.png", badge: hps.length }) : null;
     }
     case "salvage": {
       // Solo naves salvage: Aegis Reclaimer, MISC Fortune, RSI Salvation.
       // Incluye láser de salvage + tractor beam + cargo accessories asociados.
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "SALVAGE");
-      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={setPickerHp} />, { icon: "/icons/tractor_beam.png", badge: hps.length }) : null;
+      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: "/icons/tractor_beam.png", badge: hps.length }) : null;
     }
     case "power-grid":
       return W(<PowerManagementPanel stats={stats} flightMode={flightMode} onModeChange={setFlightMode} />);
@@ -544,6 +544,16 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const setFlightMode = useLoadoutStore(s => s.setFlightMode);
 
   const [pickerHp, setPickerHp] = useState<ResolvedHardpoint | null>(null);
+  // Algunos ships (Sabre Firebird, Perseus, Polaris, F8, etc.) tienen racks
+  // de misiles integrados al fuselaje que NO son intercambiables — solo se
+  // pueden cambiar los misiles que van adentro. La data los marca con
+  // `isFixed=true` en el hardpoint MISSILE_RACK. Interceptamos el click para
+  // no abrir el picker del padre; los slots hijos (MISSILE) siguen clickables
+  // porque pasan por otro handler (onClickChild).
+  const handleClickHp = useCallback((hp: ResolvedHardpoint) => {
+    if (hp.resolvedCategory === "MISSILE_RACK" && hp.isFixed) return;
+    setPickerHp(hp);
+  }, []);
   // Share
   const [copied, setCopied] = useState(false);
   // Save Loadout modal
@@ -787,7 +797,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const weaponMaxPips = stats.weaponMaxPips ?? 0;
 
   const ctx = {
-    weaponHps, missileHps, useful, setPickerHp,
+    weaponHps, missileHps, useful, setPickerHp, handleClickHp,
     stats, flightMode, setFlightMode,
     weaponAllocatedPips, weaponMaxPips,
   };
@@ -932,61 +942,4 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 function HpGroup({ hps, onClickHp, weaponAllocatedPips, weaponMaxPips }: { hps: ResolvedHardpoint[]; onClickHp: (hp: ResolvedHardpoint) => void; weaponAllocatedPips?: number; weaponMaxPips?: number }) {
   if (hps.length === 0) return null;
   const { getEffectiveItem, overrides, isComponentOn, toggleComponent } = useLoadoutStore(
-    useShallow(s => ({
-      getEffectiveItem: s.getEffectiveItem,
-      overrides: s.overrides,
-      isComponentOn: s.isComponentOn,
-      toggleComponent: s.toggleComponent,
-    }))
-  );
-  // Convert a ResolvedChild into a synthetic ResolvedHardpoint so the picker can open for it
-  const handleClickChild = useCallback((child: ResolvedChild) => {
-    const synthetic: ResolvedHardpoint = {
-      id: child.id,
-      hardpointName: child.hardpointName,
-      originalCategory: child.category,
-      resolvedCategory: child.category || "WEAPON",
-      minSize: child.minSize,
-      maxSize: child.maxSize,
-      isFixed: child.isFixed,
-      defaultItem: child.equippedItem,
-      children: [],
-    };
-    onClickHp(synthetic);
-  }, [onClickHp]);
-  // Para brazos MINING: generar module slots dinámicos según el `moduleSlots`
-  // del laser equipado. Ej: Helix I=2, Arbor MH1=1, Klein-S1=0, Impact II=3.
-  // Los IDs de los slots son estables (parentId:module:i), así cambiar de laser
-  // preserva los módulos en los slots que siguen existiendo.
-  const resolveChildSlots = useCallback(
-    (hp: ResolvedHardpoint): ResolvedChild[] => {
-      if (hp.resolvedCategory !== "MINING") return hp.children;
-      const laser = getEffectiveItem(hp.id);
-      const n = Number(laser?.componentStats?.moduleSlots ?? 0);
-      if (!n || n <= 0) return [];
-      const slots: ResolvedChild[] = [];
-      for (let i = 1; i <= n; i++) {
-        const childId = `${hp.id}:module:${i}`;
-        slots.push({
-          id: childId,
-          hardpointName: `${hp.hardpointName}_module_${i}`,
-          category: "MINING_MODULE",
-          minSize: 0,
-          maxSize: 0,
-          isFixed: false,
-          equippedItem: null,
-        });
-      }
-      return slots;
-    },
-    [getEffectiveItem],
-  );
-
-  return (
-    <div className="bg-zinc-900/80 border border-zinc-800/60">
-      {hps.map(hp => (
-        <HardpointSlot key={hp.id} hp={hp} item={getEffectiveItem(hp.id)} isOverridden={overrides.has(hp.id)} isOn={isComponentOn(hp.hardpointName)} onClick={() => onClickHp(hp)} onTogglePower={() => toggleComponent(hp.hardpointName)} childSlots={resolveChildSlots(hp)} isComponentOn={isComponentOn} toggleComponent={toggleComponent} onClickChild={handleClickChild} getEffectiveItem={getEffectiveItem} weaponAllocatedPips={weaponAllocatedPips} weaponMaxPips={weaponMaxPips} />
-      ))}
-    </div>
-  );
-}
+    useShallow(s 
