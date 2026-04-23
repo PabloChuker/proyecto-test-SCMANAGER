@@ -20,6 +20,7 @@ import {
   TradeWOParticipant,
   TradeWOExpense,
 } from "@/store/useTradeWorkOrderStore";
+import { useMiningStore } from "@/store/useMiningStore";
 import { createClient } from "@/lib/supabase/client";
 import {
   composeNotesWithMarker,
@@ -109,6 +110,13 @@ export default function TradeWorkOrderCalculator() {
   const requestActiveRouteTabSwitch = useTradeWorkOrderStore(
     (s) => s.requestActiveRouteTabSwitch,
   );
+
+  // Fase H.14 — si el jugador ya está en modo PARTY en /mining, al llegar aquí
+  // desde el Inventory ("Vender en ruta") queremos que la party se cargue sola
+  // — menos clicks, misma cadena SOLO/PARTY que en el WorkOrderCalculator de
+  // mining. Leemos el scope del store de mining, no una prop, porque el
+  // Calculator se monta independiente del resto de la cadena.
+  const miningScope = useMiningStore((s) => s.scope);
 
   // Header / main fields
   const [title, setTitle] = useState("Trade Run");
@@ -206,6 +214,14 @@ export default function TradeWorkOrderCalculator() {
         if (typeof p.scu_available === "number") setScuAvailable(p.scu_available);
         // Fresh prefill — wipe any stale draft so we don't overlay old data
         try { localStorage.removeItem(DRAFT_KEY); } catch {}
+        // Fase H.14 — si el jugador venía en modo PARTY en /mining (típicamente
+        // desde "Vender en ruta" en Inventory), cargar la party automáticamente
+        // para ahorrar un click. La función `loadFromParty` está declarada más
+        // abajo pero es una function declaration → queda hoisted en el scope
+        // del componente, así que la podemos invocar acá.
+        if (miningScope === "party") {
+          void loadFromParty();
+        }
       } else {
         // 2) Otherwise, try to restore an unsaved draft from localStorage
         try {
