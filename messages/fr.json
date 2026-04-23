@@ -694,7 +694,7 @@
       "close": "Fermer",
       "sellLocations": "Lieux de vente",
       "sellLocationsHint": "Triés par meilleur prix d'achat (idéal pour vendre). Prix par SCU.",
-      "loadingPrices": "Chargement des prix...",
+      "loadingPrices": "Chargement des prix…",
       "noSellLocations": "Aucun lieu de vente trouvé pour ce bien.",
       "best": "Meilleur",
       "total": "Total",
@@ -720,8 +720,7 @@
       "selectedCount": "{n, plural, one {# sélectionné} other {# sélectionnés}}",
       "clearSelection": "Effacer la sélection",
       "buildRoute": "Créer la route ({n})",
-      "selectAllSellable": "Tout sélectionner",
-      "loadingPrices": "Chargement des prix…"
+      "selectAllSellable": "Tout sélectionner"
     },
     "routePreview": {
       "title": "Route de vente",
@@ -1312,5 +1311,12 @@
     "tierVeryRare": "Très rare",
     "source": "Données communautaires — gstool.org (v{version})",
     "fallbackWarn": "⚠ Tables non peuplées en prod. Lancez les migrations 049/050 sur Supabase."
+  },
+  "PerformanceToggle": {
+    "labelFull": "Complet",
+    "labelLight": "Léger",
+    "titleFull": "Mode performance : Complet (animations et 3D activés). Cliquez pour passer en Léger.",
+    "titleLight": "Mode performance : Léger (optimisé pour les équipements modestes). Cliquez pour passer en Complet.",
+    "aria": "Basculer mode léger"
   }
 }

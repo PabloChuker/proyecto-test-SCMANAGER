@@ -694,7 +694,7 @@
       "close": "关闭",
       "sellLocations": "出售地点",
       "sellLocationsHint": "按最高收购价排序（对卖家最优）。价格以每 SCU 计。",
-      "loadingPrices": "正在加载价格...",
+      "loadingPrices": "正在加载价格…",
       "noSellLocations": "未找到此商品的出售地点。",
       "best": "最佳",
       "total": "总计",
@@ -720,8 +720,7 @@
       "selectedCount": "{n, plural, other {已选 # 项}}",
       "clearSelection": "清除选择",
       "buildRoute": "构建路线 ({n})",
-      "selectAllSellable": "全选",
-      "loadingPrices": "正在加载价格…"
+      "selectAllSellable": "全选"
     },
     "routePreview": {
       "title": "销售路线",
@@ -1312,5 +1311,12 @@
     "tierVeryRare": "极稀有",
     "source": "社区数据 — gstool.org (v{version})",
     "fallbackWarn": "⚠ 生产环境表尚未填充。请在 Supabase 中执行迁移 049/050。"
+  },
+  "PerformanceToggle": {
+    "labelFull": "完整",
+    "labelLight": "轻量",
+    "titleFull": "性能模式：完整（启用动画和 3D）。点击切换为轻量。",
+    "titleLight": "性能模式：轻量（针对低配置优化）。点击切换为完整。",
+    "aria": "切换轻量模式"
   }
 }

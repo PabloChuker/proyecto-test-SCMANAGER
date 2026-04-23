@@ -694,7 +694,7 @@
       "close": "Close",
       "sellLocations": "Sell Locations",
       "sellLocationsHint": "Sorted by highest buy price (best for you to sell). Prices are per SCU.",
-      "loadingPrices": "Loading prices...",
+      "loadingPrices": "Loading prices…",
       "noSellLocations": "No sell locations found for this commodity.",
       "best": "Best",
       "total": "Total",
@@ -720,8 +720,7 @@
       "selectedCount": "{n, plural, one {# selected} other {# selected}}",
       "clearSelection": "Clear selection",
       "buildRoute": "Build route ({n})",
-      "selectAllSellable": "Select all",
-      "loadingPrices": "Loading prices…"
+      "selectAllSellable": "Select all"
     },
     "routePreview": {
       "title": "Sell route",
@@ -1312,5 +1311,12 @@
     "tierVeryRare": "Very Rare",
     "source": "Community data — gstool.org (v{version})",
     "fallbackWarn": "⚠ Tables not populated in prod yet. Run migrations 049/050 in Supabase."
+  },
+  "PerformanceToggle": {
+    "labelFull": "Full",
+    "labelLight": "Light",
+    "titleFull": "Performance mode: Full (animations and 3D enabled). Click to switch to Light.",
+    "titleLight": "Performance mode: Light (optimized for modest hardware). Click to switch to Full.",
+    "aria": "Toggle Light Mode"
   }
 }

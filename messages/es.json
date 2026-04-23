@@ -694,7 +694,7 @@
       "close": "Cerrar",
       "sellLocations": "Lugares de venta",
       "sellLocationsHint": "Ordenado por mejor precio de compra (mejor para vender). Precios por SCU.",
-      "loadingPrices": "Cargando precios...",
+      "loadingPrices": "Cargando precios…",
       "noSellLocations": "No se encontraron lugares de venta para este commodity.",
       "best": "Mejor",
       "total": "Total",
@@ -720,8 +720,7 @@
       "selectedCount": "{n, plural, one {# seleccionado} other {# seleccionados}}",
       "clearSelection": "Limpiar selección",
       "buildRoute": "Armar ruta ({n})",
-      "selectAllSellable": "Seleccionar todos",
-      "loadingPrices": "Cargando precios…"
+      "selectAllSellable": "Seleccionar todos"
     },
     "routePreview": {
       "title": "Ruta de venta",
@@ -1312,5 +1311,12 @@
     "tierVeryRare": "Muy raro",
     "source": "Datos: comunidad — gstool.org (v{version})",
     "fallbackWarn": "⚠ Tablas aún no pobladas en prod. Corré las migraciones 049/050 en Supabase."
+  },
+  "PerformanceToggle": {
+    "labelFull": "Completo",
+    "labelLight": "Ligero",
+    "titleFull": "Modo rendimiento: Completo (animaciones y 3D activos). Clic para pasar a Ligero.",
+    "titleLight": "Modo rendimiento: Ligero (optimizado para equipos modestos). Clic para pasar a Completo.",
+    "aria": "Alternar modo ligero"
   }
 }

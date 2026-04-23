@@ -694,7 +694,7 @@
       "close": "Schließen",
       "sellLocations": "Verkaufsorte",
       "sellLocationsHint": "Nach höchstem Kaufpreis sortiert (beste Verkaufsoptionen). Preise pro SCU.",
-      "loadingPrices": "Preise werden geladen...",
+      "loadingPrices": "Preise werden geladen…",
       "noSellLocations": "Keine Verkaufsorte für diese Ware gefunden.",
       "best": "Beste",
       "total": "Gesamt",
@@ -720,8 +720,7 @@
       "selectedCount": "{n, plural, one {# ausgewählt} other {# ausgewählt}}",
       "clearSelection": "Auswahl löschen",
       "buildRoute": "Route erstellen ({n})",
-      "selectAllSellable": "Alle auswählen",
-      "loadingPrices": "Preise werden geladen…"
+      "selectAllSellable": "Alle auswählen"
     },
     "routePreview": {
       "title": "Verkaufsroute",
@@ -1312,5 +1311,12 @@
     "tierVeryRare": "Sehr selten",
     "source": "Community-Daten — gstool.org (v{version})",
     "fallbackWarn": "⚠ Tabellen in Prod noch leer. Migrationen 049/050 in Supabase ausführen."
+  },
+  "PerformanceToggle": {
+    "labelFull": "Voll",
+    "labelLight": "Licht",
+    "titleFull": "Leistungsmodus: Voll (Animationen und 3D aktiviert). Klicken für Licht-Modus.",
+    "titleLight": "Leistungsmodus: Licht (optimiert für bescheidene Hardware). Klicken für Voll-Modus.",
+    "aria": "Licht-Modus umschalten"
   }
 }

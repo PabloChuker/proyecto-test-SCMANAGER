@@ -9,6 +9,7 @@ import { NAV_SECTIONS } from "./navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import NotificationBell from "@/components/notifications/NotificationBell";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
+import PerformanceToggle from "@/components/shared/PerformanceToggle";
 
 interface HeaderProps {
   subtitle?: string;
@@ -162,6 +163,7 @@ export default function Header({ subtitle }: HeaderProps) {
 
         {/* ── Right: Auth ── */}
         <div className="flex items-center gap-2 justify-end">
+          <PerformanceToggle />
           <LanguageSwitcher />
           {loading ? (
             <div className="w-6 h-6 rounded-full bg-zinc-800 animate-pulse" />
