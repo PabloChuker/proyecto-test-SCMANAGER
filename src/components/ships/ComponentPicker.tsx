@@ -99,6 +99,12 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [contextMenu, setContextMenu] = useState<ComponentContextMenuTarget | null>(null);
   const [subFilter, setSubFilter] = useState<SubFilter>("all");
+  // Auto-filtrar por la marca del default item del slot.
+  // Ej: Avenger Titan slot S4 Gimbal trae default VariPuck → arrancamos
+  // mostrando solo VariPuck mounts para que el usuario no tenga que bucear
+  // entre 50 opciones genericas. El usuario puede desactivarlo con el chip.
+  const defaultBrand = hardpoint.defaultItem?.manufacturer ?? null;
+  const [brandFilter, setBrandFilter] = useState<string | null>(defaultBrand);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const catColor = CAT_COLORS[hardpoint.resolvedCategory] || "#71717a";
@@ -188,11 +194,17 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
   // type="TURRET", separado de type="WEAPON" (armas de weapon_guns). Asi
   // que el filtro es una simple comparacion por type — sin regex, sin falsos
   // positivos con armas cuyo class_name incluye "_Turret_".
+  //
+  // Fase J.1: ademas del filtro por tipo, si el slot tiene un defaultItem
+  // con marca (ej VariPuck) auto-filtramos por esa marca. El usuario puede
+  // desactivarlo con el chip "Only [Brand]" debajo del buscador.
   const filtered = useMemo(() => {
-    if (!isTurretSlot || subFilter === "all") return sorted;
-    if (subFilter === "gimbals") return sorted.filter(i => i.type === "TURRET");
-    return sorted.filter(i => i.type === "WEAPON");
-  }, [sorted, subFilter, isTurretSlot]);
+    let out = sorted;
+    if (isTurretSlot && subFilter === "gimbals") out = out.filter(i => i.type === "TURRET");
+    else if (isTurretSlot && subFilter === "weapons") out = out.filter(i => i.type === "WEAPON");
+    if (brandFilter) out = out.filter(i => i.manufacturer === brandFilter);
+    return out;
+  }, [sorted, subFilter, isTurretSlot, brandFilter]);
 
   const handleItemSelect = useCallback((item: CatalogItem) => {
     const stats = getItemStats(item);
@@ -222,18 +234,44 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
             <input ref={inputRef} type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or manufacturer..." className="flex-1 px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-cyan-500/30 transition-colors" />
             <button onClick={onClear} className="text-[10px] text-zinc-600 hover:text-red-400 transition-colors tracking-wide uppercase px-2 py-2 border border-zinc-800/40 rounded-sm hover:border-red-400/30">Clear slot</button>
           </div>
-          <div className="flex items-center justify-between mt-1">
+          <div className="flex items-center justify-between mt-1 gap-2 flex-wrap">
             <span className="text-[10px] text-zinc-700 font-mono">{filtered.length} compatible</span>
-            {isTurretSlot && (
-              <div className="flex gap-0.5 bg-zinc-800/60 rounded p-0.5">
-                {(["all", "weapons", "gimbals"] as SubFilter[]).map(f => (
-                  <button key={f} onClick={() => setSubFilter(f)}
-                    className={`px-2 py-0.5 text-[8px] font-mono rounded transition-colors uppercase ${subFilter === f ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>
-                    {f}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+              {/* Brand chip — active when auto-filtered to a specific manufacturer.
+                  Clickear: desactiva y muestra todos los brands. Clickear de
+                  nuevo (si hay default): re-activa al brand del default. */}
+              {brandFilter && (
+                <button
+                  onClick={() => setBrandFilter(null)}
+                  title="Click para ver todas las marcas"
+                  className="flex items-center gap-1 px-2 py-0.5 text-[9px] font-mono rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 transition-colors"
+                >
+                  <span className="opacity-60">ONLY</span>
+                  <span className="tracking-wide">{brandFilter}</span>
+                  <svg className="w-2.5 h-2.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              )}
+              {!brandFilter && defaultBrand && (
+                <button
+                  onClick={() => setBrandFilter(defaultBrand)}
+                  title={`Filtrar solo ${defaultBrand} (marca del default de esta nave)`}
+                  className="flex items-center gap-1 px-2 py-0.5 text-[9px] font-mono rounded bg-zinc-800/60 border border-zinc-700/50 text-zinc-400 hover:text-amber-300 hover:border-amber-500/30 transition-colors"
+                >
+                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                  <span>Only {defaultBrand}</span>
+                </button>
+              )}
+              {isTurretSlot && (
+                <div className="flex gap-0.5 bg-zinc-800/60 rounded p-0.5">
+                  {(["all", "weapons", "gimbals"] as SubFilter[]).map(f => (
+                    <button key={f} onClick={() => setSubFilter(f)}
+                      className={`px-2 py-0.5 text-[8px] font-mono rounded transition-colors uppercase ${subFilter === f ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>
+                      {f}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 

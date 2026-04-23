@@ -176,15 +176,18 @@ async function queryCatalog(params: CatalogParams) {
       const params: any[] = [];
       let idx = 1;
 
+      // Columnas de la tabla base se refieren con alias "t." para evitar
+      // ambiguedad cuando agregamos LEFT JOIN manufacturers (que tiene
+      // columnas name, id que colisionan con las de t).
       // Size filter (only if the table has a size column)
       if (def.sizeCol) {
         if (maxSize < 99) {
-          conds.push(`${def.sizeCol} <= $${idx}`);
+          conds.push(`t.${def.sizeCol} <= $${idx}`);
           params.push(maxSize);
           idx++;
         }
         if (minSize > 0) {
-          conds.push(`${def.sizeCol} >= $${idx}`);
+          conds.push(`t.${def.sizeCol} >= $${idx}`);
           params.push(minSize);
           idx++;
         }
@@ -193,17 +196,32 @@ async function queryCatalog(params: CatalogParams) {
       // Text search (sanitized)
       if (search) {
         const sanitized = sanitizeString(search, 100);
-        conds.push(`(${def.nameCol} ILIKE $${idx} OR ${def.classCol} ILIKE $${idx})`);
+        conds.push(`(t.${def.nameCol} ILIKE $${idx} OR t.${def.classCol} ILIKE $${idx})`);
         params.push(`%${sanitized}%`);
         idx++;
       }
 
       const where = conds.length > 0 ? "WHERE " + conds.join(" AND ") : "";
-      const orderCol = def.sizeCol ? `${def.sizeCol} DESC NULLS LAST, ` : "";
+      const orderCol = def.sizeCol ? `t.${def.sizeCol} DESC NULLS LAST, ` : "";
+
+      // LEFT JOIN manufacturers solo si la tabla tiene columna de fabricante.
+      // Asi devolvemos `manufacturer_name` legible (ej "Aegis Dynamics",
+      // "Klaus & Werner") en lugar del UUID crudo que confunde al usuario.
+      const joinClause = def.mfrCol
+        ? `LEFT JOIN manufacturers m ON m.id = t.${def.mfrCol}`
+        : "";
+      const manufacturerSelect = def.mfrCol
+        ? ", m.name AS manufacturer_name"
+        : "";
 
       // Single query: data + total count via window function (no separate COUNT round-trip)
       const rows: any[] = await sql.unsafe(
-        `SELECT *, COUNT(*) OVER()::int AS _total_count FROM ${def.table} ${where} ORDER BY ${orderCol}${def.nameCol} ASC LIMIT $${idx}`,
+        `SELECT t.*${manufacturerSelect}, COUNT(*) OVER()::int AS _total_count
+         FROM ${def.table} t
+         ${joinClause}
+         ${where}
+         ORDER BY ${orderCol}t.${def.nameCol} ASC
+         LIMIT $${idx}`,
         [...params, limit],
       );
 
@@ -310,7 +328,10 @@ function mapRow(row: any, def: TableDef): any {
     type,
     size: numOrNull(row[def.sizeCol || "size"]),
     grade: def.gradeCol ? gradeToLetter(row[def.gradeCol]) : null,
-    manufacturer: def.mfrCol ? (row[def.mfrCol] ?? null) : null,
+    // manufacturer viene del JOIN con manufacturers: nombre legible
+    // (ej "Aegis Dynamics") en lugar del UUID crudo. Fallback al UUID si
+    // por alguna razon el JOIN no resolvio (defensive).
+    manufacturer: def.mfrCol ? (row.manufacturer_name ?? row[def.mfrCol] ?? null) : null,
     // Per-type stat objects (ComponentPicker reads these)
     weaponStats: type === "WEAPON" ? stats : null,
     shieldStats: type === "SHIELD" ? stats : null,
