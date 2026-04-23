@@ -25,6 +25,7 @@ export interface Profile {
   is_online: boolean;
   user_number: number | null;
   country: string | null;
+  notifications_enabled: boolean | null;
 }
 
 interface AuthState {
