@@ -84,10 +84,26 @@ interface CatalogItem {
 
 interface ComponentPickerProps {
   hardpoint: ResolvedHardpoint;
+  /**
+   * className del rack/mount padre cuando el slot abierto es un hijo
+   * (ej. misil dentro de un MISSILE_RACK). El picker lo usa para filtrar:
+   * si el padre es un bomb rack (BMBRCK_…) solo ofrece bombas; si es un
+   * missile rack tradicional solo ofrece misiles. null para slots padre.
+   */
+  parentClassName?: string | null;
   currentItemId: string | null;
   onSelect: (item: EquippedItem) => void;
   onClear: () => void;
   onClose: () => void;
+}
+
+/** ¿Este className corresponde a un rack de bombas? (vs rack de misiles) */
+function isBombRackClass(className: string | null | undefined): boolean {
+  if (!className) return false;
+  // Convención de scunpacked: bomb racks arrancan con BMBRCK_ o son casos
+  // especiales como MRCK_S03_TEMP_BOMB (misma tabla missile_launchers pero
+  // type=BombLauncher en la data fuente).
+  return /^BMBRCK_/i.test(className) || /TEMP_BOMB$/i.test(className);
 }
 
 type SortKey = "name" | "size" | "grade" | "stat" | "price" | "manufacturer";
@@ -95,7 +111,7 @@ type SortDir = "asc" | "desc";
 
 type SubFilter = "all" | "weapons" | "gimbals";
 
-export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, onClose }: ComponentPickerProps) {
+export function ComponentPicker({ hardpoint, parentClassName, currentItemId, onSelect, onClear, onClose }: ComponentPickerProps) {
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -157,7 +173,15 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const apiTypes = CAT_TO_API_TYPE[hardpoint.resolvedCategory] || "OTHER";
+        let apiTypes = CAT_TO_API_TYPE[hardpoint.resolvedCategory] || "OTHER";
+        // Refinamiento por rack padre: si el slot hijo MISSILE está dentro
+        // de un bomb rack (CST-313 Castillo, Starlifter, Spirit, Retaliator
+        // bomb config) ofrecemos solo bombas. Si está dentro de un missile
+        // rack tradicional, solo misiles. Sin padre (ej. slot nuevo) dejamos
+        // el default 'MISSILE,BOMB' que trae ambos mezclados.
+        if (hardpoint.resolvedCategory === "MISSILE" && parentClassName) {
+          apiTypes = isBombRackClass(parentClassName) ? "BOMB" : "MISSILE";
+        }
         const body: Record<string, any> = { types: apiTypes, limit: 80, include: "stats,shops" };
         // Only filter by size if maxSize > 0
         if (hardpoint.maxSize > 0) body.maxSize = hardpoint.maxSize;
@@ -171,7 +195,7 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
       } catch (err) { if (err instanceof DOMException && err.name === "AbortError") return; } finally { setLoading(false); }
     }, 200);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [search, hardpoint.resolvedCategory, hardpoint.maxSize, hardpoint.minSize]);
+  }, [search, hardpoint.resolvedCategory, hardpoint.maxSize, hardpoint.minSize, parentClassName]);
 
   const getItemStats = useCallback((item: CatalogItem): Record<string, any> | null => {
     return item.weaponStats || item.shieldStats || item.powerStats || item.coolingStats || item.quantumStats || item.miningStats || item.missileStats || item.turretStats || item.missileRackStats || item.bombStats || item.thrusterStats || null;

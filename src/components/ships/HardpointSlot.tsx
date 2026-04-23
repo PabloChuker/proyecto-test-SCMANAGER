@@ -23,7 +23,9 @@ interface HardpointSlotProps {
   childSlots?: ResolvedChild[];
   isComponentOn?: (name: string) => boolean;
   toggleComponent?: (name: string) => void;
-  onClickChild?: (child: ResolvedChild) => void;
+  // onClickChild recibe child + parentItem para que el picker pueda inferir
+  // qué tipo de ordenanza acepta (ej: bomb rack CST-313 → solo bombas).
+  onClickChild?: (child: ResolvedChild, parentItem: EquippedItem | null) => void;
   getEffectiveItem?: (id: string) => EquippedItem | null;
   // Weapon ammo props (energy capacitor system)
   weaponAllocatedPips?: number;
@@ -127,7 +129,7 @@ export const HardpointSlot = memo(function HardpointSlot({ hp, item, isOverridde
         const chIsWeapon = (ch.category || "WEAPON") === "WEAPON";
         const chAmmo = chIsWeapon && effectiveItem && chOn ? getAmmoInfo(effectiveItem.componentStats, weaponAllocatedPips ?? 0, weaponMaxPips ?? 0) : null;
         return (
-          <Row key={ch.id} catColor={chColor} size={chSize} item={effectiveItem} stat={chStat} isOn={chOn} isOverridden={chOverridden} onClick={() => onClickChild?.(ch)} onTogglePower={() => toggleComponent?.(ch.hardpointName)} hasChildren={false} depth={1} ammo={chAmmo} />
+          <Row key={ch.id} catColor={chColor} size={chSize} item={effectiveItem} stat={chStat} isOn={chOn} isOverridden={chOverridden} onClick={() => onClickChild?.(ch, item)} onTogglePower={() => toggleComponent?.(ch.hardpointName)} hasChildren={false} depth={1} ammo={chAmmo} />
         );
       })}
     </>
