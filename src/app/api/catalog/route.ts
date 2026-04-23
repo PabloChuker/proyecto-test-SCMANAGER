@@ -511,14 +511,22 @@ function buildStats(row: any, type: string): Record<string, any> | null {
       s.missilePorts = ports.length || 0;
       s.hp = numOrNull(row.durability_health);
       s.mass = numOrNull(row.mass);
-      // Tamanio maximo de misil que el rack acepta (max MaxSize de ports).
+      // Rango de tamanio de misil aceptado: min y max de los ports.
+      // Ej: MSD-322 = 2 ports S2 → min=2, max=2. MSD-441 = 4 ports S1
+      // → min=1, max=1. Usamos tanto MaxSize como MinSize del port para
+      // cubrir ambos extremos.
       if (ports.length > 0) {
-        const sizes = ports
+        const maxSizes = ports
           .map((p: any) => numOrNull(p?.MaxSize ?? p?.Size))
           .filter((n: number | null): n is number => n !== null);
-        s.maxMissileSize = sizes.length > 0 ? Math.max(...sizes) : null;
+        const minSizes = ports
+          .map((p: any) => numOrNull(p?.MinSize ?? p?.Size))
+          .filter((n: number | null): n is number => n !== null);
+        s.maxMissileSize = maxSizes.length > 0 ? Math.max(...maxSizes) : null;
+        s.minMissileSize = minSizes.length > 0 ? Math.min(...minSizes) : null;
       } else {
         s.maxMissileSize = null;
+        s.minMissileSize = null;
       }
       break;
     }

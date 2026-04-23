@@ -85,12 +85,16 @@ interface CatalogItem {
 interface ComponentPickerProps {
   hardpoint: ResolvedHardpoint;
   /**
-   * className del rack/mount padre cuando el slot abierto es un hijo
+   * Item equipado en el rack/mount padre cuando el slot abierto es un hijo
    * (ej. misil dentro de un MISSILE_RACK). El picker lo usa para filtrar:
-   * si el padre es un bomb rack (BMBRCK_…) solo ofrece bombas; si es un
-   * missile rack tradicional solo ofrece misiles. null para slots padre.
+   * - className: detectar bomb rack → solo bombas
+   * - componentStats.{min,max}MissileSize: heredar el size de los ports del
+   *   rack equipado. Ej: MSD-322 = 2 ports S2 → picker pide misiles S2-S2,
+   *   no S1-S3. Evita que se pueda equipar el misil equivocado cuando
+   *   cambiaste el rack (el ship loadout trae el size del rack original,
+   *   que puede no coincidir con el rack nuevo).
    */
-  parentClassName?: string | null;
+  parentItem?: EquippedItem | null;
   currentItemId: string | null;
   onSelect: (item: EquippedItem) => void;
   onClear: () => void;
@@ -111,7 +115,13 @@ type SortDir = "asc" | "desc";
 
 type SubFilter = "all" | "weapons" | "gimbals";
 
-export function ComponentPicker({ hardpoint, parentClassName, currentItemId, onSelect, onClear, onClose }: ComponentPickerProps) {
+export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect, onClear, onClose }: ComponentPickerProps) {
+  // Sizes y className derivados del rack padre equipado. Si parentItem ausente,
+  // usamos los sizes del hardpoint mismo (que viene del ship loadout original,
+  // puede estar desfasado del rack actual — de ahí el fix).
+  const parentClassName = parentItem?.className ?? null;
+  const parentMaxMissileSize = Number(parentItem?.componentStats?.maxMissileSize ?? 0) || null;
+  const parentMinMissileSize = Number(parentItem?.componentStats?.minMissileSize ?? 0) || null;
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -185,9 +195,19 @@ export function ComponentPicker({ hardpoint, parentClassName, currentItemId, onS
           apiTypes = isBombRackClass(parentClassName) ? "BOMB" : "MISSILE";
         }
         const body: Record<string, any> = { types: apiTypes, limit: 80, include: "stats,shops" };
-        // Only filter by size if maxSize > 0
-        if (hardpoint.maxSize > 0) body.maxSize = hardpoint.maxSize;
-        if (hardpoint.minSize > 0) body.minSize = hardpoint.minSize;
+        // Size del filtro:
+        //   - Default: minSize/maxSize del hardpoint (vienen del ship loadout).
+        //   - Override: si hay parentItem con maxMissileSize/minMissileSize
+        //     (viene del rack equipado), los usamos. Esto cubre el caso de
+        //     cambiar de rack — el ship loadout original puede traer el size
+        //     del rack viejo, pero lo importante es el rack actual.
+        //   - Ej: MSD-322 = 2 ports S2 → min=max=2. Solo misiles S2.
+        //     MSD-441 = 4 ports S1 → min=max=1. Solo misiles S1.
+        //     MSD-414 = 1 port S4 → min=max=4. Solo misiles S4.
+        const effMaxSize = parentMaxMissileSize ?? hardpoint.maxSize;
+        const effMinSize = parentMinMissileSize ?? hardpoint.minSize;
+        if (effMaxSize > 0) body.maxSize = effMaxSize;
+        if (effMinSize > 0) body.minSize = effMinSize;
         if (search.trim()) body.search = search.trim();
         const res = await fetch("/api/catalog", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal });
         if (!res.ok) throw new Error("HTTP " + res.status);
@@ -197,7 +217,7 @@ export function ComponentPicker({ hardpoint, parentClassName, currentItemId, onS
       } catch (err) { if (err instanceof DOMException && err.name === "AbortError") return; } finally { setLoading(false); }
     }, 200);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [search, hardpoint.resolvedCategory, hardpoint.maxSize, hardpoint.minSize, parentClassName]);
+  }, [search, hardpoint.resolvedCategory, hardpoint.maxSize, hardpoint.minSize, parentClassName, parentMaxMissileSize, parentMinMissileSize]);
 
   const getItemStats = useCallback((item: CatalogItem): Record<string, any> | null => {
     return item.weaponStats || item.shieldStats || item.powerStats || item.coolingStats || item.quantumStats || item.miningStats || item.missileStats || item.turretStats || item.missileRackStats || item.bombStats || item.thrusterStats || null;

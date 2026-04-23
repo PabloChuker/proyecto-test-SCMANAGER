@@ -545,23 +545,25 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 
   const [pickerHp, setPickerHp] = useState<ResolvedHardpoint | null>(null);
   // Cuando el picker abre para un slot hijo (ej. misil/bomba dentro de un
-  // rack), guardamos el className del rack padre para que el picker pueda
-  // decidir si ofrece misiles o bombas. Ej: CST-313 "Castillo" (BMBRCK_S03_…)
-  // solo acepta bombas. null cuando no hay contexto de padre.
-  const [pickerParentClass, setPickerParentClass] = useState<string | null>(null);
+  // rack), guardamos el item padre completo. El picker lo usa para:
+  // - className → decidir bomb vs missile rack
+  // - componentStats.{min,max}MissileSize → heredar el size de los ports
+  //   del rack equipado (no el ship loadout desfasado)
+  // null cuando no hay contexto de padre (slot independiente).
+  const [pickerParentItem, setPickerParentItem] = useState<EquippedItem | null>(null);
   // Algunos ships (Sabre Firebird, Perseus, Polaris, F8, etc.) tienen racks
   // de misiles integrados al fuselaje que NO son intercambiables — solo se
   // pueden cambiar los misiles que van adentro. La data los marca con
   // `isFixed=true` en el hardpoint MISSILE_RACK. Interceptamos el click para
   // no abrir el picker del padre; los slots hijos (MISSILE) siguen clickables
   // porque pasan por otro handler (onClickChild).
-  // handleClickHp abre el picker. Recibe un segundo param opcional `parentClass`
-  // que viene de los slots hijos (ej. misil dentro de CST-313): ese className
-  // permite que el picker sepa qué tipo de ordenanza aceptar. Null para slots
-  // padres (limpia cualquier filtro de apertura previa).
-  const handleClickHp = useCallback((hp: ResolvedHardpoint, parentClass: string | null = null) => {
+  // handleClickHp abre el picker. Recibe un segundo param opcional `parent`
+  // (EquippedItem completo) que viene de los slots hijos (ej. misil dentro
+  // de CST-313): el picker usa parent.className + parent.componentStats para
+  // decidir qué tipo y qué size de ordenanza aceptar. Null para slots padres.
+  const handleClickHp = useCallback((hp: ResolvedHardpoint, parent: EquippedItem | null = null) => {
     if (hp.resolvedCategory === "MISSILE_RACK" && hp.isFixed) return;
-    setPickerParentClass(parentClass);
+    setPickerParentItem(parent);
     setPickerHp(hp);
   }, []);
   // Share
@@ -854,7 +856,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
         />
       </div>
 
-      {pickerHp && <ComponentPicker hardpoint={pickerHp} parentClassName={pickerParentClass} currentItemId={getEffectiveItem(pickerHp.id)?.id ?? null} onSelect={handleSelect} onClear={handleClear} onClose={() => setPickerHp(null)} />}
+      {pickerHp && <ComponentPicker hardpoint={pickerHp} parentItem={pickerParentItem} currentItemId={getEffectiveItem(pickerHp.id)?.id ?? null} onSelect={handleSelect} onClear={handleClear} onClose={() => setPickerHp(null)} />}
 
       {/* ── Save Loadout Modal ── */}
       {saveModal && (
@@ -949,7 +951,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 // Sub-components
 // =============================================================================
 
-function HpGroup({ hps, onClickHp, weaponAllocatedPips, weaponMaxPips }: { hps: ResolvedHardpoint[]; onClickHp: (hp: ResolvedHardpoint, parentClass?: string | null) => void; weaponAllocatedPips?: number; weaponMaxPips?: number }) {
+function HpGroup({ hps, onClickHp, weaponAllocatedPips, weaponMaxPips }: { hps: ResolvedHardpoint[]; onClickHp: (hp: ResolvedHardpoint, parentItem?: EquippedItem | null) => void; weaponAllocatedPips?: number; weaponMaxPips?: number }) {
   if (hps.length === 0) return null;
   const { getEffectiveItem, overrides, isComponentOn, toggleComponent } = useLoadoutStore(
     useShallow(s => ({
@@ -974,7 +976,7 @@ function HpGroup({ hps, onClickHp, weaponAllocatedPips, weaponMaxPips }: { hps: 
       defaultItem: child.equippedItem,
       children: [],
     };
-    onClickHp(synthetic, parentItem?.className ?? null);
+    onClickHp(synthetic, parentItem);
   }, [onClickHp]);
   // Para brazos MINING: generar module slots dinámicos según el `moduleSlots`
   // del laser equipado. Ej: Helix I=2, Arbor MH1=1, Klein-S1=0, Impact II=3.
