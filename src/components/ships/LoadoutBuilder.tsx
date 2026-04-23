@@ -978,30 +978,80 @@ function HpGroup({ hps, onClickHp, weaponAllocatedPips, weaponMaxPips }: { hps: 
     };
     onClickHp(synthetic, parentItem);
   }, [onClickHp]);
-  // Para brazos MINING: generar module slots dinámicos según el `moduleSlots`
-  // del laser equipado. Ej: Helix I=2, Arbor MH1=1, Klein-S1=0, Impact II=3.
-  // Los IDs de los slots son estables (parentId:module:i), así cambiar de laser
-  // preserva los módulos en los slots que siguen existiendo.
+  // Resuelve los slots hijos de un hardpoint padre según el ITEM EQUIPADO,
+  // no según la data del ship loadout original. Esto es clave para dos casos:
+  //
+  //   a) MINING: los brazos mineros aceptan N módulos según el `moduleSlots`
+  //      del láser equipado (Helix I=2, Arbor MH1=1, Klein-S1=0, Impact II=3).
+  //
+  //   b) MISSILE_RACK: los racks tienen N ports de tamaño fijo según el
+  //      nombre. Ej:
+  //        MSD-313 = rack S3, 1 misil S3  → 1 slot
+  //        MSD-322 = rack S3, 2 misiles S2 → 2 slots
+  //        MSD-441 = rack S4, 4 misiles S1 → 4 slots
+  //        MSD-414 = rack S4, 1 misil S4  → 1 slot
+  //        MSD-423 = rack S4, 2 misiles S3 → 2 slots
+  //      Si cambiás el rack (ej. 322 → 441), el N y el tamaño de cada slot
+  //      se actualizan automáticamente. `missilePorts` + `maxMissileSize` del
+  //      componentStats del rack equipado dan la info (ya calculados en
+  //      /api/catalog buildStats MISSILE_RACK).
+  //
+  // IDs estables (parentId:missile:i) → preserva el ítem equipado cuando el
+  // nuevo rack tiene el mismo nº de slots. Si baja el count, los overrides
+  // sobrantes quedan huérfanos en el store (no molestan, no se renderizan).
   const resolveChildSlots = useCallback(
     (hp: ResolvedHardpoint): ResolvedChild[] => {
-      if (hp.resolvedCategory !== "MINING") return hp.children;
-      const laser = getEffectiveItem(hp.id);
-      const n = Number(laser?.componentStats?.moduleSlots ?? 0);
-      if (!n || n <= 0) return [];
-      const slots: ResolvedChild[] = [];
-      for (let i = 1; i <= n; i++) {
-        const childId = `${hp.id}:module:${i}`;
-        slots.push({
-          id: childId,
-          hardpointName: `${hp.hardpointName}_module_${i}`,
-          category: "MINING_MODULE",
-          minSize: 0,
-          maxSize: 0,
-          isFixed: false,
-          equippedItem: null,
-        });
+      if (hp.resolvedCategory === "MINING") {
+        const laser = getEffectiveItem(hp.id);
+        const n = Number(laser?.componentStats?.moduleSlots ?? 0);
+        if (!n || n <= 0) return [];
+        const slots: ResolvedChild[] = [];
+        for (let i = 1; i <= n; i++) {
+          slots.push({
+            id: `${hp.id}:module:${i}`,
+            hardpointName: `${hp.hardpointName}_module_${i}`,
+            category: "MINING_MODULE",
+            minSize: 0,
+            maxSize: 0,
+            isFixed: false,
+            equippedItem: null,
+          });
+        }
+        return slots;
       }
-      return slots;
+      if (hp.resolvedCategory === "MISSILE_RACK") {
+        const rack = getEffectiveItem(hp.id);
+        // Sin rack equipado → caemos al loadout original (no romper UI).
+        if (!rack) return hp.children;
+        const n = Number(rack.componentStats?.missilePorts ?? 0);
+        if (!n || n <= 0) return hp.children;
+        // Asumimos ports homogéneos (todos el mismo size) — es la norma en
+        // SC. Si algún día aparece un rack heterogéneo, exponer el array
+        // de sizes en lugar de max.
+        const portSize = Number(
+          rack.componentStats?.maxMissileSize
+            ?? rack.componentStats?.minMissileSize
+            ?? hp.maxSize
+            ?? 0
+        );
+        const slots: ResolvedChild[] = [];
+        for (let i = 1; i <= n; i++) {
+          slots.push({
+            id: `${hp.id}:missile:${i}`,
+            hardpointName: `${hp.hardpointName}_missile_${i}`,
+            category: "MISSILE",
+            minSize: portSize,
+            maxSize: portSize,
+            isFixed: false,
+            // Heredar el default del ship loadout solo si el nº de slots
+            // coincide (mismo rack equipado = preservar orden). Si cambió,
+            // slots arrancan vacíos.
+            equippedItem: hp.children.length === n ? hp.children[i - 1]?.equippedItem ?? null : null,
+          });
+        }
+        return slots;
+      }
+      return hp.children;
     },
     [getEffectiveItem],
   );
