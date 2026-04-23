@@ -52,7 +52,13 @@ function isIndustrialArm(item: EquippedItem | null): boolean {
  *    Ej Panther: requestedAmmoLoad=18187, cost=48.5, maxAmmoLoad=75.
  *    Sin cap: 18187/48.5 = 375 (incorrecto). Con cap: min(18187, 3637.5)/48.5 = 75 (match game).
  *  Ballistic weapons: fixed ammoCapacity (no pip dependency).
- *  When allocPips is 0 but maxPips > 0, defaults to full power (all pips). */
+ *
+ *  Pipes a 0 en weapons → munición sostenible = 0 (game-accurate: sin power
+ *  el capacitor no se recarga, así que después del primer burst el arma se
+ *  agota). El store garantiza que `allocPips` siempre viene inicializado
+ *  (auto-alloc corre al montar), así que NO hace falta el fallback "asumir
+ *  full power" — ese fallback era el que hacía que al vaciar los pips la
+ *  UI siguiera mostrando munición completa. */
 function getAmmoInfo(
   cs: Record<string, any> | undefined,
   allocPips: number,
@@ -64,9 +70,8 @@ function getAmmoInfo(
   const reqAmmo = cs.requestedAmmoLoad;
   const costPerBullet = cs.regenCostPerBullet;
   if (reqAmmo > 0 && costPerBullet > 0 && maxPips > 0) {
-    // If no pips allocated yet (auto-alloc pending), assume full power
-    const effectivePips = allocPips > 0 ? allocPips : maxPips;
-    const pipRatio = effectivePips / maxPips;
+    // pipRatio = allocación real del store / máximo. 0 pips → 0 ratio → 0 rounds.
+    const pipRatio = Math.max(0, Math.min(1, allocPips / maxPips));
     // Cap requested pool at game-accurate maxAmmoLoad (if present).
     // maxAmmoLoad está en "rounds" → convertir a "energy units" multiplicando por costPerBullet.
     const maxAmmoLoad = cs.maxAmmoLoad;
