@@ -174,12 +174,14 @@ export function ComponentPicker({ hardpoint, parentClassName, currentItemId, onS
       setLoading(true);
       try {
         let apiTypes = CAT_TO_API_TYPE[hardpoint.resolvedCategory] || "OTHER";
-        // Refinamiento por rack padre: si el slot hijo MISSILE está dentro
-        // de un bomb rack (CST-313 Castillo, Starlifter, Spirit, Retaliator
-        // bomb config) ofrecemos solo bombas. Si está dentro de un missile
-        // rack tradicional, solo misiles. Sin padre (ej. slot nuevo) dejamos
-        // el default 'MISSILE,BOMB' que trae ambos mezclados.
-        if (hardpoint.resolvedCategory === "MISSILE" && parentClassName) {
+        // Cuando hay parentClassName, estamos abriendo un slot hijo (misil/
+        // bomba dentro de un rack). Independiente del category del child
+        // (algunos ships resuelven el child como "MISSILE_RACK" por cómo se
+        // construyen los ports, otros como "MISSILE"), la regla es SIEMPRE:
+        // - Bomb rack padre → pedir solo BOMB
+        // - Missile rack padre → pedir solo MISSILE
+        // Nunca pedir racks cuando estamos dentro de un rack.
+        if (parentClassName) {
           apiTypes = isBombRackClass(parentClassName) ? "BOMB" : "MISSILE";
         }
         const body: Record<string, any> = { types: apiTypes, limit: 80, include: "stats,shops" };
