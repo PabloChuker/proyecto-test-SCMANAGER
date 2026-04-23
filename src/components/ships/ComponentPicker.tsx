@@ -20,8 +20,10 @@ const pnLookup = powerNetworkLookup as Record<string, any>;
 const CAT_TO_API_TYPE: Record<string, string> = {
   WEAPON: "WEAPON", TURRET: "WEAPON,TURRET",
   // Slot padre MISSILE_RACK → racks/lanzadores (tabla missile_launchers).
-  // Slot hijo MISSILE → misiles individuales (tabla missiles).
-  MISSILE_RACK: "MISSILE_RACK", MISSILE: "MISSILE",
+  // Slot hijo MISSILE → misiles (tabla missiles) + bombas (tabla bombs, mig 053).
+  // Los racks de bombers (Retaliator, Eclipse, Firebird) aceptan ambos segun
+  // el size, asi que el picker muestra los dos mezclados por size.
+  MISSILE_RACK: "MISSILE_RACK", MISSILE: "MISSILE,BOMB",
   SHIELD: "SHIELD", POWER_PLANT: "POWER_PLANT", COOLER: "COOLER",
   QUANTUM_DRIVE: "QUANTUM_DRIVE", MINING: "MINING_LASER", UTILITY: "TRACTOR_BEAM,EMP,QED",
 };
@@ -76,7 +78,7 @@ interface CatalogItem {
   grade: string | null; manufacturer: string | null;
   weaponStats?: any; shieldStats?: any; powerStats?: any; coolingStats?: any;
   quantumStats?: any; miningStats?: any; missileStats?: any;
-  turretStats?: any; missileRackStats?: any; thrusterStats?: any;
+  turretStats?: any; missileRackStats?: any; bombStats?: any; thrusterStats?: any;
   shopInventory?: Array<{ priceBuy: number | null; priceSell: number | null; shop: { name: string; location: { name: string; parentName: string | null } } }>;
 }
 
@@ -172,7 +174,7 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
   }, [search, hardpoint.resolvedCategory, hardpoint.maxSize, hardpoint.minSize]);
 
   const getItemStats = useCallback((item: CatalogItem): Record<string, any> | null => {
-    return item.weaponStats || item.shieldStats || item.powerStats || item.coolingStats || item.quantumStats || item.miningStats || item.missileStats || item.turretStats || item.missileRackStats || item.thrusterStats || null;
+    return item.weaponStats || item.shieldStats || item.powerStats || item.coolingStats || item.quantumStats || item.miningStats || item.missileStats || item.turretStats || item.missileRackStats || item.bombStats || item.thrusterStats || null;
   }, []);
 
   const getBestPrice = useCallback((item: CatalogItem): number | null => {

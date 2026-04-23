@@ -64,6 +64,17 @@ const TYPE_TABLE: Record<string, TableDef> = {
     idCol: "uuid", nameCol: "name", classCol: "name",
     sizeCol: "size", gradeCol: null, mfrCol: null,
   },
+  // BOMB (migracion 053 / import-bombs.mjs) — bombas de gravity-drop como
+  // el Colossus S10, Stormburst S5, Thunderball S3. Viven en su propia tabla
+  // porque no tienen tracking y sus stats son ExplosionRadius / ArmTime.
+  // Se piden EN CONJUNTO con MISSILE cuando el slot es un child de MISSILE_RACK:
+  // asi los racks de bombers (Retaliator, Eclipse, Firebird) muestran bombas
+  // como opcion alongside misiles del mismo size.
+  BOMB: {
+    table: "bombs", type: "BOMB",
+    idCol: "id", nameCol: "name", classCol: "class_name",
+    sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
+  },
   // MISSILE_RACK apunta a tabla `missile_launchers` (migracion 018) — son los
   // racks/lanzadores que contienen los misiles adentro. Cuando el usuario
   // abre un slot MISSILE_RACK (no fijo) quiere cambiar el rack, no los
@@ -351,6 +362,7 @@ function mapRow(row: any, def: TableDef): any {
     missileStats: type === "MISSILE" ? stats : null,
     turretStats: type === "TURRET" ? stats : null,
     missileRackStats: type === "MISSILE_RACK" ? stats : null,
+    bombStats: type === "BOMB" ? stats : null,
     thrusterStats: null,
     shopInventory: [],
   };
@@ -466,6 +478,26 @@ function buildStats(row: any, type: string): Record<string, any> | null {
       s.alphaDamage = numOrNull(row.damage_total);
       s.trackingSignal = row.tracking_signal_type ?? null;
       s.speed = numOrNull(row.linear_speed);
+      break;
+    }
+
+    case "BOMB": {
+      // bombs columns (migracion 053). Usamos los mismos alias que MISSILE
+      // (damage, alphaDamage) para que el picker pueda mostrar bombas y
+      // misiles mezclados en el mismo slot de rack sin logica extra.
+      s.damage = numOrNull(row.damage_total);
+      s.alphaDamage = numOrNull(row.damage_total);
+      s.damagePhysical = numOrNull(row.damage_physical);
+      s.damageEnergy = numOrNull(row.damage_energy);
+      s.damageDistortion = numOrNull(row.damage_distortion);
+      s.damageThermal = numOrNull(row.damage_thermal);
+      s.explosionRadius = numOrNull(row.explosion_radius_max);
+      s.armTime = numOrNull(row.arm_time);
+      s.isCluster = !!row.is_cluster;
+      // subType: "Utility" hoy (podria ser "Cluster" en el futuro).
+      s.subType = row.sub_type ?? null;
+      // Las bombas NO tienen tracking, lo dejamos explicito null.
+      s.trackingSignal = null;
       break;
     }
 
