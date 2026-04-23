@@ -210,18 +210,25 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
   //
   // Fase J: el endpoint /api/catalog ahora consulta la tabla `turrets` real
   // (gimbal mounts con sub_type GunTurret/MannedTurret/etc) y devuelve
-  // type="TURRET", separado de type="WEAPON" (armas de weapon_guns). Asi
-  // que el filtro es una simple comparacion por type — sin regex, sin falsos
-  // positivos con armas cuyo class_name incluye "_Turret_".
+  // type="TURRET", separado de type="WEAPON" (armas de weapon_guns).
   //
-  // Fase J.1: ademas del filtro por tipo, si el slot tiene un defaultItem
-  // con marca (ej VariPuck) auto-filtramos por esa marca. El usuario puede
-  // desactivarlo con el chip "Only [Brand]" debajo del buscador.
+  // Comportamiento esperado para slot TURRET con default VariPuck:
+  //   - ALL: todas las armas S4 (cualquier marca) + SOLO mounts VariPuck
+  //   - WEAPONS: todas las armas S4 (cualquier marca)
+  //   - GIMBALS: solo mounts VariPuck
+  //
+  // El brandFilter SOLO se aplica a items tipo TURRET (mounts), no a
+  // armas — porque las naves estan "bianeadas" a ciertos mounts (Avenger
+  // trae VariPuck de fabrica), pero las armas que van dentro son libres.
   const filtered = useMemo(() => {
     let out = sorted;
     if (isTurretSlot && subFilter === "gimbals") out = out.filter(i => i.type === "TURRET");
     else if (isTurretSlot && subFilter === "weapons") out = out.filter(i => i.type === "WEAPON");
-    if (brandFilter) out = out.filter(i => i.manufacturer === brandFilter);
+    if (brandFilter) {
+      // Nota: `i.type !== "TURRET"` deja pasar armas sin importar su marca;
+      // solo los mounts (type=TURRET) se filtran por brand del default.
+      out = out.filter(i => i.type !== "TURRET" || i.manufacturer === brandFilter);
+    }
     return out;
   }, [sorted, subFilter, isTurretSlot, brandFilter]);
 
