@@ -64,6 +64,15 @@ const TYPE_TABLE: Record<string, TableDef> = {
     idCol: "uuid", nameCol: "name", classCol: "name",
     sizeCol: "size", gradeCol: null, mfrCol: null,
   },
+  // MISSILE_RACK apunta a tabla `missile_launchers` (migracion 018) — son los
+  // racks/lanzadores que contienen los misiles adentro. Cuando el usuario
+  // abre un slot MISSILE_RACK (no fijo) quiere cambiar el rack, no los
+  // misiles de adentro. Los slots hijos siguen siendo type=MISSILE.
+  MISSILE_RACK: {
+    table: "missile_launchers", type: "MISSILE_RACK",
+    idCol: "id", nameCol: "name", classCol: "class_name",
+    sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
+  },
   SHIELD: {
     table: "shields", type: "SHIELD",
     idCol: "id", nameCol: "name", classCol: "class_name",
@@ -341,6 +350,7 @@ function mapRow(row: any, def: TableDef): any {
     miningStats: type === "MINING_LASER" ? stats : null,
     missileStats: type === "MISSILE" ? stats : null,
     turretStats: type === "TURRET" ? stats : null,
+    missileRackStats: type === "MISSILE_RACK" ? stats : null,
     thrusterStats: null,
     shopInventory: [],
   };
@@ -456,6 +466,28 @@ function buildStats(row: any, type: string): Record<string, any> | null {
       s.alphaDamage = numOrNull(row.damage_total);
       s.trackingSignal = row.tracking_signal_type ?? null;
       s.speed = numOrNull(row.linear_speed);
+      break;
+    }
+
+    case "MISSILE_RACK": {
+      // missile_launchers columns — son lanzadores/racks que contienen
+      // misiles. missiles_label es el formato "4xS3" (4 misiles size 3),
+      // super util como stat rapido del rack.
+      const ports = Array.isArray(row.ports) ? row.ports : [];
+      s.missileCount = numOrNull(row.missile_count);
+      s.missilesLabel = row.missiles_label ?? null;
+      s.missilePorts = ports.length || 0;
+      s.hp = numOrNull(row.durability_health);
+      s.mass = numOrNull(row.mass);
+      // Tamanio maximo de misil que el rack acepta (max MaxSize de ports).
+      if (ports.length > 0) {
+        const sizes = ports
+          .map((p: any) => numOrNull(p?.MaxSize ?? p?.Size))
+          .filter((n: number | null): n is number => n !== null);
+        s.maxMissileSize = sizes.length > 0 ? Math.max(...sizes) : null;
+      } else {
+        s.maxMissileSize = null;
+      }
       break;
     }
 

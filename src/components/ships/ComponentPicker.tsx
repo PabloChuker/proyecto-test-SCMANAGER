@@ -18,7 +18,10 @@ import {
 const pnLookup = powerNetworkLookup as Record<string, any>;
 
 const CAT_TO_API_TYPE: Record<string, string> = {
-  WEAPON: "WEAPON", TURRET: "WEAPON,TURRET", MISSILE_RACK: "MISSILE", MISSILE: "MISSILE",
+  WEAPON: "WEAPON", TURRET: "WEAPON,TURRET",
+  // Slot padre MISSILE_RACK → racks/lanzadores (tabla missile_launchers).
+  // Slot hijo MISSILE → misiles individuales (tabla missiles).
+  MISSILE_RACK: "MISSILE_RACK", MISSILE: "MISSILE",
   SHIELD: "SHIELD", POWER_PLANT: "POWER_PLANT", COOLER: "COOLER",
   QUANTUM_DRIVE: "QUANTUM_DRIVE", MINING: "MINING_LASER", UTILITY: "TRACTOR_BEAM,EMP,QED",
 };
@@ -73,7 +76,7 @@ interface CatalogItem {
   grade: string | null; manufacturer: string | null;
   weaponStats?: any; shieldStats?: any; powerStats?: any; coolingStats?: any;
   quantumStats?: any; miningStats?: any; missileStats?: any;
-  turretStats?: any; thrusterStats?: any;
+  turretStats?: any; missileRackStats?: any; thrusterStats?: any;
   shopInventory?: Array<{ priceBuy: number | null; priceSell: number | null; shop: { name: string; location: { name: string; parentName: string | null } } }>;
 }
 
@@ -169,7 +172,7 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
   }, [search, hardpoint.resolvedCategory, hardpoint.maxSize, hardpoint.minSize]);
 
   const getItemStats = useCallback((item: CatalogItem): Record<string, any> | null => {
-    return item.weaponStats || item.shieldStats || item.powerStats || item.coolingStats || item.quantumStats || item.miningStats || item.missileStats || item.turretStats || item.thrusterStats || null;
+    return item.weaponStats || item.shieldStats || item.powerStats || item.coolingStats || item.quantumStats || item.miningStats || item.missileStats || item.turretStats || item.missileRackStats || item.thrusterStats || null;
   }, []);
 
   const getBestPrice = useCallback((item: CatalogItem): number | null => {
@@ -344,7 +347,17 @@ function ColHead({ label, k, cur, dir, toggle, cls }: { label: string; k: SortKe
 }
 
 function getStatColumnLabel(cat: string): string {
-  switch (cat) { case "WEAPON": case "TURRET": return "DPS"; case "SHIELD": return "HP"; case "POWER_PLANT": return "Output"; case "COOLER": return "Rate"; case "QUANTUM_DRIVE": return "Spool"; case "MISSILE_RACK": return "DMG"; default: return "Pwr"; }
+  switch (cat) {
+    case "WEAPON": case "TURRET": return "DPS";
+    case "SHIELD": return "HP";
+    case "POWER_PLANT": return "Output";
+    case "COOLER": return "Rate";
+    case "QUANTUM_DRIVE": return "Spool";
+    // MISSILE_RACK slot: ahora muestra racks (tabla missile_launchers) con
+    // label de capacidad tipo "4xS3". El slot hijo MISSILE sigue siendo DMG.
+    case "MISSILE_RACK": return "CAP";
+    default: return "Pwr";
+  }
 }
 
 function getSortStatVal(stats: Record<string, any> | null, cat: string): number {
@@ -359,7 +372,11 @@ function getSortStatVal(stats: Record<string, any> | null, cat: string): number 
     case "POWER_PLANT": return stats.powerOutput ?? 0;
     case "COOLER": return stats.coolingRate ?? 0;
     case "QUANTUM_DRIVE": return stats.spoolUpTime ?? stats.quantumSpoolUp ?? 999;
-    case "MISSILE_RACK": return stats.damage ?? stats.alphaDamage ?? 0;
+    case "MISSILE_RACK":
+      // Racks (type=MISSILE_RACK) ordenan por cantidad de puertos de misil
+      // (mas puertos = mas capacidad). Si stats es de un misil suelto
+      // (type=MISSILE) caemos a damage como antes.
+      return stats.missilePorts ?? stats.damage ?? stats.alphaDamage ?? 0;
     default: return stats.powerDraw ?? 0;
   }
 }

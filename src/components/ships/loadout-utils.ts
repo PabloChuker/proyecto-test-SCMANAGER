@@ -72,6 +72,13 @@ export function getKeyStat(category: string, stats: Record<string, any> | null |
       return null;
     }
     case "MISSILE_RACK": {
+      // Racks (type=MISSILE_RACK desde tabla missile_launchers, Fase K):
+      // mostrar el label de capacidad "4xS3" / "2xS4" que viene en missiles_label.
+      const label = stats.missilesLabel;
+      if (typeof label === "string" && label.length > 0) {
+        return { v: label, l: "CAP" };
+      }
+      // Fallback: si es un misil individual (type=MISSILE) mostrar damage.
       const dmg = tryNum(stats, "alphaDamage", "damage");
       return dmg !== null ? { v: fmtStat(dmg), l: "DMG" } : null;
     }
