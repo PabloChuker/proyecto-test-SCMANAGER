@@ -258,8 +258,20 @@ export function ComponentPicker({ hardpoint, parentClassName, currentItemId, onS
       // solo los mounts (type=TURRET) se filtran por brand del default.
       out = out.filter(i => i.type !== "TURRET" || i.manufacturer === brandFilter);
     }
+    // Guard defensivo: un slot hijo (parentClassName presente) NUNCA acepta
+    // otro rack o gimbal-mount como equipado — solo ordenanza/armas. Previene
+    // el caso "Castillo dentro de Castillo" aunque la query del API se
+    // desvíe por algún motivo (ej. category del child que resuelva mal).
+    if (parentClassName) {
+      out = out.filter(i => i.type !== "MISSILE_RACK" && i.type !== "TURRET");
+    }
+    // Además, si el padre es un bomb rack explícitamente, sacamos misiles
+    // del listado (defensa si la query trajera ambos por cualquier razón).
+    if (isBombRackClass(parentClassName)) {
+      out = out.filter(i => i.type === "BOMB");
+    }
     return out;
-  }, [sorted, subFilter, isTurretSlot, brandFilter]);
+  }, [sorted, subFilter, isTurretSlot, brandFilter, parentClassName]);
 
   const handleItemSelect = useCallback((item: CatalogItem) => {
     const stats = getItemStats(item);
