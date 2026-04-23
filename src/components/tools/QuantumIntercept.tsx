@@ -1052,7 +1052,7 @@ export default function QuantumIntercept() {
           )}
 
           <p className="text-[10px] text-zinc-600 leading-relaxed">
-            Datos: snareplan.dolus.eu 4.7LIVE. Física: Erec @Erec (Alpha 3.12).
+            SC LABS · 4.7 LIVE
           </p>
         </div>
       </div>
