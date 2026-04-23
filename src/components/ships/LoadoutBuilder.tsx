@@ -1021,19 +1021,40 @@ function HpGroup({ hps, onClickHp, weaponAllocatedPips, weaponMaxPips }: { hps: 
       }
       if (hp.resolvedCategory === "MISSILE_RACK") {
         const rack = getEffectiveItem(hp.id);
-        // Sin rack equipado → caemos al loadout original (no romper UI).
         if (!rack) return hp.children;
-        const n = Number(rack.componentStats?.missilePorts ?? 0);
-        if (!n || n <= 0) return hp.children;
-        // Asumimos ports homogéneos (todos el mismo size) — es la norma en
-        // SC. Si algún día aparece un rack heterogéneo, exponer el array
-        // de sizes en lugar de max.
-        const portSize = Number(
+
+        // Count y port size del rack: prioridad al componentStats calculado
+        // (lo que vino del /api/catalog), fallback a parsear el name del
+        // rack con la convención del juego. MSD-XYZ / CST-XYZ / similar:
+        //   X = tamaño del anclaje (rack size)
+        //   Y = cantidad de misiles/bombas (# slots)
+        //   Z = tamaño de cada misil/bomba
+        // Ej: MSD-322 = S3, 2 misiles S2. CST-313 = S3, 1 bomba S3.
+        // El default del ship loadout (endpoint ships/[id]) no enriquece
+        // componentStats, así que el name-parsing es clave para que las
+        // naves multi-rack arranquen bien sin que el user re-elija cada rack.
+        let n = Number(rack.componentStats?.missilePorts ?? 0);
+        let portSize = Number(
           rack.componentStats?.maxMissileSize
             ?? rack.componentStats?.minMissileSize
-            ?? hp.maxSize
             ?? 0
         );
+
+        if (!n || !portSize) {
+          const nameForParse = rack.localizedName || rack.name || "";
+          // Match "MSD-322", "CST-313", etc. Captura los 3 dígitos.
+          const match = nameForParse.match(/-(\d)(\d)(\d)(?:\b|[^0-9])/);
+          if (match) {
+            if (!n) n = Number(match[2]);
+            if (!portSize) portSize = Number(match[3]);
+          }
+        }
+
+        // Fallbacks finales: si ni componentStats ni name-parse resolvieron,
+        // caer al ship loadout original (no romper la UI).
+        if (!n || n <= 0) return hp.children;
+        if (!portSize) portSize = hp.maxSize || 1;
+
         const slots: ResolvedChild[] = [];
         for (let i = 1; i <= n; i++) {
           slots.push({
