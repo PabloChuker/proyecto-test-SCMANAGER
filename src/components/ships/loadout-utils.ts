@@ -59,10 +59,16 @@ export function getKeyStat(category: string, stats: Record<string, any> | null |
   switch (category) {
     case "WEAPON":
     case "TURRET": {
+      // Armas (type=WEAPON en la API): DPS / Alpha.
       const dps = tryNum(stats, "dps");
       if (dps !== null) return { v: dps.toFixed(1), l: "DPS" };
       const alpha = tryNum(stats, "alphaDamage", "damage");
       if (alpha !== null) return { v: fmtStat(alpha), l: "Alpha" };
+      // Gimbal mounts (type=TURRET desde tabla `turrets`, Fase J): mostrar
+      // cantidad de puertos de arma que soporta. Es la metrica mas util para
+      // decidir entre variantes (ej. gimbal 1-port vs twin-port).
+      const ports = tryNum(stats, "weaponPorts");
+      if (ports !== null && ports > 0) return { v: String(ports), l: "PORTS" };
       return null;
     }
     case "MISSILE_RACK": {

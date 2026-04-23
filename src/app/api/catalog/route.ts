@@ -49,8 +49,13 @@ const TYPE_TABLE: Record<string, TableDef> = {
     idCol: "id", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
   },
+  // TURRET apunta a la tabla `turrets` real (migracion 029) — son los gimbal
+  // mounts / turret mounts que equipan armas adentro (con sub_type GunTurret,
+  // MannedTurret, BallTurret, PDCTurret, MissileTurret, etc). Armas directas
+  // se piden con type=WEAPON. El picker para un slot TURRET pide ambos types
+  // y el cliente filtra por item.type para separar weapons vs gimbals.
   TURRET: {
-    table: "weapon_guns", type: "WEAPON",
+    table: "turrets", type: "TURRET",
     idCol: "id", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
   },
@@ -314,6 +319,7 @@ function mapRow(row: any, def: TableDef): any {
     quantumStats: type === "QUANTUM_DRIVE" ? stats : null,
     miningStats: type === "MINING_LASER" ? stats : null,
     missileStats: type === "MISSILE" ? stats : null,
+    turretStats: type === "TURRET" ? stats : null,
     thrusterStats: null,
     shopInventory: [],
   };
@@ -429,6 +435,30 @@ function buildStats(row: any, type: string): Record<string, any> | null {
       s.alphaDamage = numOrNull(row.damage_total);
       s.trackingSignal = row.tracking_signal_type ?? null;
       s.speed = numOrNull(row.linear_speed);
+      break;
+    }
+
+    case "TURRET": {
+      // turrets columns — son gimbal mounts / turret mounts (no confundir con
+      // armas turret-mounted, esas viven en weapon_guns con type=WEAPON).
+      // sub_type: GunTurret, MannedTurret, BallTurret, PDCTurret, TopTurret,
+      //   MissileTurret, Utility, NoseMounted, CanardTurret, BottomTurret.
+      // ports: jsonb array con los slots de arma que tiene dentro.
+      const ports = Array.isArray(row.ports) ? row.ports : [];
+      s.subType = row.sub_type ?? null;
+      s.hp = numOrNull(row.durability_health);
+      s.mass = numOrNull(row.mass);
+      // Numero de armas que puede montar adentro (N slots en el array ports).
+      s.weaponPorts = ports.length || 0;
+      // Tamanio maximo de arma soportada (max MaxSize de los ports).
+      if (ports.length > 0) {
+        const sizes = ports
+          .map((p: any) => numOrNull(p?.MaxSize ?? p?.Size))
+          .filter((n: number | null): n is number => n !== null);
+        s.maxWeaponSize = sizes.length > 0 ? Math.max(...sizes) : null;
+      } else {
+        s.maxWeaponSize = null;
+      }
       break;
     }
 

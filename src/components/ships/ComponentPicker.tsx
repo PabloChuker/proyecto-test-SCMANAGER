@@ -72,7 +72,8 @@ interface CatalogItem {
   className: string | null; type: string; size: number | null;
   grade: string | null; manufacturer: string | null;
   weaponStats?: any; shieldStats?: any; powerStats?: any; coolingStats?: any;
-  quantumStats?: any; miningStats?: any; missileStats?: any; thrusterStats?: any;
+  quantumStats?: any; miningStats?: any; missileStats?: any;
+  turretStats?: any; thrusterStats?: any;
   shopInventory?: Array<{ priceBuy: number | null; priceSell: number | null; shop: { name: string; location: { name: string; parentName: string | null } } }>;
 }
 
@@ -143,7 +144,7 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
   }, [search, hardpoint.resolvedCategory, hardpoint.maxSize, hardpoint.minSize]);
 
   const getItemStats = useCallback((item: CatalogItem): Record<string, any> | null => {
-    return item.weaponStats || item.shieldStats || item.powerStats || item.coolingStats || item.quantumStats || item.miningStats || item.missileStats || item.thrusterStats || null;
+    return item.weaponStats || item.shieldStats || item.powerStats || item.coolingStats || item.quantumStats || item.miningStats || item.missileStats || item.turretStats || item.thrusterStats || null;
   }, []);
 
   const getBestPrice = useCallback((item: CatalogItem): number | null => {
@@ -182,26 +183,15 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
 
   // Filter for turret slots: separate weapons from gimbal mounts.
   //
-  // Historia: el regex original incluia "turret" y se aplicaba tambien a
-  // reference/className. Muchas armas remote-turret tienen `_Turret_` en
-  // su class_name (ej AEGS_Redeemer_SCItem_Remote_Turret_Front) asi que
-  // se colaban como "gimbal" en el filtro. Fix: solo inspeccionamos el
-  // nombre visible del item (los gimbal mounts reales siempre dicen
-  // "Gimbal" o "VariPuck" en su name, mientras que las armas no lo hacen
-  // nunca en el name — solo en el class_name tecnico).
-  //
-  // TODO arquitectonico: el API /api/catalog mapea TURRET -> tabla
-  // weapon_guns (linea 52 de catalog/route.ts) asi que NUNCA recibimos
-  // gimbal mounts reales de la tabla `turrets` (migracion 029) que tiene
-  // sub_type GunTurret/MannedTurret/etc. Para tener los gimbals reales hay
-  // que agregar query a esa tabla en el endpoint. Ver task pendiente.
+  // Fase J: el endpoint /api/catalog ahora consulta la tabla `turrets` real
+  // (gimbal mounts con sub_type GunTurret/MannedTurret/etc) y devuelve
+  // type="TURRET", separado de type="WEAPON" (armas de weapon_guns). Asi
+  // que el filtro es una simple comparacion por type — sin regex, sin falsos
+  // positivos con armas cuyo class_name incluye "_Turret_".
   const filtered = useMemo(() => {
     if (!isTurretSlot || subFilter === "all") return sorted;
-    const gimbalRe = /\b(gimbal|varipuck)\b/i;
-    const isGimbal = (it: CatalogItem) =>
-      gimbalRe.test(it.name || "") || gimbalRe.test(it.localizedName || "");
-    if (subFilter === "gimbals") return sorted.filter(isGimbal);
-    return sorted.filter(i => !isGimbal(i));
+    if (subFilter === "gimbals") return sorted.filter(i => i.type === "TURRET");
+    return sorted.filter(i => i.type === "WEAPON");
   }, [sorted, subFilter, isTurretSlot]);
 
   const handleItemSelect = useCallback((item: CatalogItem) => {
@@ -321,7 +311,19 @@ function getStatColumnLabel(cat: string): string {
 
 function getSortStatVal(stats: Record<string, any> | null, cat: string): number {
   if (!stats) return 0;
-  switch (cat) { case "WEAPON": case "TURRET": return stats.dps ?? 0; case "SHIELD": return stats.maxHp ?? stats.shieldHp ?? 0; case "POWER_PLANT": return stats.powerOutput ?? 0; case "COOLER": return stats.coolingRate ?? 0; case "QUANTUM_DRIVE": return stats.spoolUpTime ?? stats.quantumSpoolUp ?? 999; case "MISSILE_RACK": return stats.damage ?? stats.alphaDamage ?? 0; default: return stats.powerDraw ?? 0; }
+  switch (cat) {
+    case "WEAPON": case "TURRET":
+      // Armas (type=WEAPON) ordenan por DPS. Gimbal mounts (type=TURRET) no
+      // tienen DPS — ordenamos por cantidad de puertos de arma (mas puertos
+      // = mount mas "grande"/capable). Si no hay nada, 0 queda al final.
+      return stats.dps ?? stats.weaponPorts ?? 0;
+    case "SHIELD": return stats.maxHp ?? stats.shieldHp ?? 0;
+    case "POWER_PLANT": return stats.powerOutput ?? 0;
+    case "COOLER": return stats.coolingRate ?? 0;
+    case "QUANTUM_DRIVE": return stats.spoolUpTime ?? stats.quantumSpoolUp ?? 999;
+    case "MISSILE_RACK": return stats.damage ?? stats.alphaDamage ?? 0;
+    default: return stats.powerDraw ?? 0;
+  }
 }
 
 function gradeClass(g: string | number): string {
