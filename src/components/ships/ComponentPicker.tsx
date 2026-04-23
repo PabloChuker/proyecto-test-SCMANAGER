@@ -99,16 +99,25 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [contextMenu, setContextMenu] = useState<ComponentContextMenuTarget | null>(null);
   const [subFilter, setSubFilter] = useState<SubFilter>("all");
-  // Auto-filtrar por la marca del default item del slot.
-  // Ej: Avenger Titan slot S4 Gimbal trae default VariPuck → arrancamos
-  // mostrando solo VariPuck mounts para que el usuario no tenga que bucear
-  // entre 50 opciones genericas. El usuario puede desactivarlo con el chip.
-  const defaultBrand = hardpoint.defaultItem?.manufacturer ?? null;
-  const [brandFilter, setBrandFilter] = useState<string | null>(defaultBrand);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const catColor = CAT_COLORS[hardpoint.resolvedCategory] || "#71717a";
   const isTurretSlot = hardpoint.resolvedCategory === "TURRET";
+
+  // Auto-filtro de marca solo tiene sentido en slots TURRET (gimbal mounts).
+  // Las naves estan bianeadas a ciertos mounts (ej Avenger trae VariPuck), pero
+  // las armas que van ADENTRO del mount son libres — ahi el usuario quiere ver
+  // todas las opciones, no solo la marca del default.
+  //
+  // Guard: si el brand viene como UUID (data legacy del endpoint ships/[id]
+  // que no joinea manufacturers), ignoramos para no filtrar con un string que
+  // no matchea con los names legibles que el catalog si devuelve.
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const rawBrand = hardpoint.defaultItem?.manufacturer ?? null;
+  const canAutoFilter =
+    isTurretSlot && rawBrand !== null && !UUID_RE.test(rawBrand);
+  const defaultBrand = canAutoFilter ? rawBrand : null;
+  const [brandFilter, setBrandFilter] = useState<string | null>(defaultBrand);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
   useEffect(() => { const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, [onClose]);
