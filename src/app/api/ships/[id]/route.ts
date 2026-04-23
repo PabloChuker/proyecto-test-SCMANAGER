@@ -139,6 +139,11 @@ function hpCategory(hpType: string, hpName: string): string {
   if (n.includes("shield")) return "SHIELD";
   if (n.includes("power_plant")) return "POWER_PLANT";
   if (n.includes("cooler")) return "COOLER";
+  // Quantum Fuel Tank (hardpoint_quantum_fuel_tank) matcheaba "quantum" y
+  // aparecía en el widget QT DRIVES. Los fuel tanks van en OTHER — el widget
+  // QT DRIVES solo muestra quantum drives reales (spool time, jump speed).
+  if (n.includes("fuel_tank") || n.includes("quantum_fuel")) return "OTHER";
+  if (n.includes("fuel_intake")) return "OTHER";
   if (n.includes("quantum")) return "QUANTUM_DRIVE";
   if (n.includes("radar")) return "RADAR";
   if (n.includes("countermeasure")) return "COUNTERMEASURE";
