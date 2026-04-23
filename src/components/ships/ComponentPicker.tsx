@@ -104,20 +104,30 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
   const catColor = CAT_COLORS[hardpoint.resolvedCategory] || "#71717a";
   const isTurretSlot = hardpoint.resolvedCategory === "TURRET";
 
-  // Auto-filtro de marca solo tiene sentido en slots TURRET (gimbal mounts).
-  // Las naves estan bianeadas a ciertos mounts (ej Avenger trae VariPuck), pero
-  // las armas que van ADENTRO del mount son libres — ahi el usuario quiere ver
-  // todas las opciones, no solo la marca del default.
+  // Auto-filtro de marca para slots TURRET — silencioso, sin UI.
   //
-  // Guard: si el brand viene como UUID (data legacy del endpoint ships/[id]
-  // que no joinea manufacturers), ignoramos para no filtrar con un string que
-  // no matchea con los names legibles que el catalog si devuelve.
+  // Regla: si el slot es TURRET (gimbal mount) y la nave trae un default con
+  // marca legible (ej Avenger Titan → VariPuck/Flashfire Systems), el picker
+  // muestra solo esa marca de mount. No hay chip ni toggle — Pablo decidio
+  // que ensuciar la UI con un filtro que el usuario rara vez necesita
+  // cambiar era peor que no mostrar todas las marcas.
+  //
+  // Guards:
+  //   1. Solo TURRET: slots WEAPON (armas dentro del gimbal) y otros NO
+  //      filtran por marca, porque el usuario quiere explorar todas las armas
+  //      compatibles con el tamanio, no solo las de la marca del default.
+  //   2. Anti-UUID: si el brand del default viene como UUID (data legacy
+  //      del endpoint ships/[id] que aun no joinea manufacturers), no
+  //      filtramos — sino nadie matchearia y la lista saldria vacia.
+  //
+  // Fallback sano: si la nave no tiene default valido, muestra todos los
+  // gimbals del tamanio correcto (mejor que mostrar nada).
   const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const rawBrand = hardpoint.defaultItem?.manufacturer ?? null;
-  const canAutoFilter =
-    isTurretSlot && rawBrand !== null && !UUID_RE.test(rawBrand);
-  const defaultBrand = canAutoFilter ? rawBrand : null;
-  const [brandFilter, setBrandFilter] = useState<string | null>(defaultBrand);
+  const brandFilter =
+    isTurretSlot && rawBrand !== null && !UUID_RE.test(rawBrand)
+      ? rawBrand
+      : null;
 
   useEffect(() => { inputRef.current?.focus(); }, []);
   useEffect(() => { const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, [onClose]);
@@ -243,44 +253,18 @@ export function ComponentPicker({ hardpoint, currentItemId, onSelect, onClear, o
             <input ref={inputRef} type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or manufacturer..." className="flex-1 px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-cyan-500/30 transition-colors" />
             <button onClick={onClear} className="text-[10px] text-zinc-600 hover:text-red-400 transition-colors tracking-wide uppercase px-2 py-2 border border-zinc-800/40 rounded-sm hover:border-red-400/30">Clear slot</button>
           </div>
-          <div className="flex items-center justify-between mt-1 gap-2 flex-wrap">
+          <div className="flex items-center justify-between mt-1">
             <span className="text-[10px] text-zinc-700 font-mono">{filtered.length} compatible</span>
-            <div className="flex items-center gap-2">
-              {/* Brand chip — active when auto-filtered to a specific manufacturer.
-                  Clickear: desactiva y muestra todos los brands. Clickear de
-                  nuevo (si hay default): re-activa al brand del default. */}
-              {brandFilter && (
-                <button
-                  onClick={() => setBrandFilter(null)}
-                  title="Click para ver todas las marcas"
-                  className="flex items-center gap-1 px-2 py-0.5 text-[9px] font-mono rounded bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 transition-colors"
-                >
-                  <span className="opacity-60">ONLY</span>
-                  <span className="tracking-wide">{brandFilter}</span>
-                  <svg className="w-2.5 h-2.5 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              )}
-              {!brandFilter && defaultBrand && (
-                <button
-                  onClick={() => setBrandFilter(defaultBrand)}
-                  title={`Filtrar solo ${defaultBrand} (marca del default de esta nave)`}
-                  className="flex items-center gap-1 px-2 py-0.5 text-[9px] font-mono rounded bg-zinc-800/60 border border-zinc-700/50 text-zinc-400 hover:text-amber-300 hover:border-amber-500/30 transition-colors"
-                >
-                  <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
-                  <span>Only {defaultBrand}</span>
-                </button>
-              )}
-              {isTurretSlot && (
-                <div className="flex gap-0.5 bg-zinc-800/60 rounded p-0.5">
-                  {(["all", "weapons", "gimbals"] as SubFilter[]).map(f => (
-                    <button key={f} onClick={() => setSubFilter(f)}
-                      className={`px-2 py-0.5 text-[8px] font-mono rounded transition-colors uppercase ${subFilter === f ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>
-                      {f}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            {isTurretSlot && (
+              <div className="flex gap-0.5 bg-zinc-800/60 rounded p-0.5">
+                {(["all", "weapons", "gimbals"] as SubFilter[]).map(f => (
+                  <button key={f} onClick={() => setSubFilter(f)}
+                    className={`px-2 py-0.5 text-[8px] font-mono rounded transition-colors uppercase ${subFilter === f ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>
+                    {f}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
