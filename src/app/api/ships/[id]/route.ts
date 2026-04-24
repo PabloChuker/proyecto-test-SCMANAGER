@@ -775,6 +775,7 @@ function buildSyntheticIndustrialHardpoints(
   shipReference: string,
   existing: any[],
   miningLaserStats: Map<string, any> = new Map(),
+  salvageStats: Map<string, any> = new Map(),
 ): any[] {
   const out: any[] = [];
   for (const { match, arms } of INDUSTRIAL_INJECTIONS) {
@@ -785,14 +786,21 @@ function buildSyntheticIndustrialHardpoints(
       if (alreadyHas) continue;
       const idBase = `synthetic:${shipReference}:${arm.hardpointName}`;
       const isFixed = arm.fixed ?? false;
-      // Para MINING: buscar stats del laser default en mining_lasers para que
-      // componentStats.moduleSlots esté disponible desde el primer render.
-      // Sin esto, el laser default muestra 0 slots hasta que el user elije
-      // explícitamente un laser del picker.
-      const defaultStats =
-        arm.category === "MINING"
-          ? miningLaserStats.get(arm.equippedClass) ?? null
-          : null;
+      // Para MINING: buscar stats del laser default en weapon_mining para que
+      // componentStats.moduleSlots esté disponible desde el primer render
+      // (sin esto el laser muestra 0 slots hasta que el user elige uno).
+      //
+      // Para SALVAGE: buscar stats del head default en weapon_salvage. Desde
+      // la migración 056 los items de salvage viven en tabla y exponemos el
+      // raw_data del stdItem como componentStats para que el LoadoutBuilder
+      // los renderice como cualquier otro item. Fallback a null si la tabla
+      // aún no se pobló o si el className no matchea (nave no industrial).
+      let defaultStats: any = null;
+      if (arm.category === "MINING") {
+        defaultStats = miningLaserStats.get(arm.equippedClass) ?? null;
+      } else if (arm.category === "SALVAGE") {
+        defaultStats = salvageStats.get(arm.equippedClass) ?? null;
+      }
       const equippedItem = {
         id: `${idBase}:item`,
         reference: arm.equippedClass,
@@ -810,6 +818,13 @@ function buildSyntheticIndustrialHardpoints(
       // módulos del JSON mining-modules). El picker respeta cada caso.
       const childWeapons =
         arm.children?.map((ch, ci) => {
+          // Si es SALVAGE con default, intentamos traer los stats reales
+          // del modifier (tractor/scraper) desde weapon_salvage para que
+          // el LoadoutBuilder muestre speed/radius/efficiency de entrada.
+          const childStats =
+            ch.defaultItem && ch.category === "SALVAGE"
+              ? salvageStats.get(ch.defaultItem.className) ?? null
+              : null;
           const childEquipped = ch.defaultItem
             ? {
                 id: `${idBase}:child:${ci}:item`,
@@ -821,7 +836,7 @@ function buildSyntheticIndustrialHardpoints(
                 size: ch.size,
                 grade: null,
                 manufacturer: null,
-                componentStats: null,
+                componentStats: childStats,
               }
             : null;
           return {
@@ -1096,6 +1111,7 @@ export async function GET(
     const needsIndustrial = /^(ARGO_MOLE|ARGO_MOTH|MISC_Prospector|DRAK_Golem|DRAK_Vulture|MISC_Fortune|RSI_Salvation)/i
       .test(String(ship.reference ?? ""));
     let miningLaserStats = new Map<string, any>();
+    let salvageStats = new Map<string, any>();
     if (needsIndustrial) {
       // Migrado a weapon_mining (Fase L.1 — migración 054). Esta tabla tiene
       // el class_name canonical del juego, así que ya no necesitamos mapear
@@ -1125,11 +1141,41 @@ export async function GET(
           moduleSlots: l.module_slots,
         });
       }
+
+      // Fase M (migración 056): componentes de salvage ahora viven en
+      // weapon_salvage. Hidratamos stats por class_name para poblar los
+      // componentStats del head sintético y de cada modifier (tractor/scraper)
+      // en los brazos de Vulture / Fortune / Salvation.
+      const salvageRows: any[] = await sql.unsafe(
+        `SELECT class_name, name, sub_type, modifier_kind, size, grade,
+                salvage_speed_multiplier, radius_multiplier, extraction_efficiency,
+                mass, width, height, length, scu
+           FROM weapon_salvage`,
+      ).catch((e: unknown) => { console.warn("[ships/[id]] weapon_salvage fetch failed:", e); return []; });
+      for (const s of salvageRows) {
+        salvageStats.set(String(s.class_name), {
+          subType: s.sub_type,
+          modifierKind: s.modifier_kind,
+          size: s.size,
+          grade: s.grade,
+          salvageSpeedMultiplier: s.salvage_speed_multiplier,
+          radiusMultiplier: s.radius_multiplier,
+          extractionEfficiency: s.extraction_efficiency,
+          mass: s.mass,
+          dimensions: {
+            width: s.width,
+            height: s.height,
+            length: s.length,
+            scu: s.scu,
+          },
+        });
+      }
     }
     const syntheticIndustrial = buildSyntheticIndustrialHardpoints(
       String(ship.reference ?? ""),
       flatHardpointsFromDb as any[],
       miningLaserStats,
+      salvageStats,
     );
     const flatHardpoints = [...flatHardpointsFromDb, ...syntheticIndustrial];
 
