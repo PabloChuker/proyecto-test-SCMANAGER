@@ -171,7 +171,10 @@ const NYX_POIS: POI[] = [
   // Planets
   { id: "nyx1", name: "Nyx I",   type: "planet", group: "nyx1", x:   6_495_194, y:  -3_749_995, color: "#6b7a8d" },
   { id: "nyx2", name: "Nyx II",  type: "planet", group: "nyx2", x:  -3_591_211, y:   9_866_771, color: "#5a6e7f" },
-  { id: "nyx3", name: "Nyx III", type: "planet", group: "nyx3", x: -29_109_694, y: -24_425_931, color: "#4a5e6f" },
+  { id: "nyx3", name: "Nyx III (Delamar)", type: "planet", group: "nyx3", x: -29_109_694, y: -24_425_931, color: "#4a5e6f" },
+
+  // Delamar (Nyx III) — Levsky
+  { id: "levsky", name: "Levsky", type: "station", group: "nyx3", x: -29_109_694, y: -24_425_931 },
 
   // QV Breaker Stations (~48 Mkm ring, 20 stations at 18° intervals)
   { id: "brk_204", name: "QV Breaker BRK-204", type: "station", group: "breakers", x:  47_999_735, y:           0 },
@@ -321,6 +324,118 @@ const PLANET_RADIUS: Record<string, number> = {
   pyro1: 5, pyro2: 5, pyro3: 6, pyro4: 5, pyro5: 7, pyro6: 6,
   nyx1: 5, nyx2: 5, nyx3: 5,
 };
+
+// ─── SearchSelect ─────────────────────────────────────────────────────────────
+
+interface SearchSelectProps {
+  value: string;
+  onChange: (id: string) => void;
+  options: POI[];
+  groupLabels: Record<string, string>;
+  disabledId: string;
+  placeholder: string;
+}
+
+function poiPrefix(type: POI["type"]) {
+  if (type === "jumppoint") return "◇ ";
+  if (type === "station")   return "  ";
+  if (type === "moon")      return " ";
+  return "";
+}
+
+function SearchSelect({ value, onChange, options, groupLabels, disabledId, placeholder }: SearchSelectProps) {
+  const [query, setQuery]   = useState("");
+  const [open,  setOpen]    = useState(false);
+  const containerRef        = useRef<HTMLDivElement>(null);
+  const inputRef            = useRef<HTMLInputElement>(null);
+
+  const selected = options.find((p) => p.id === value);
+
+  const filtered = options.filter(
+    (p) => p.id !== disabledId && p.name.toLowerCase().includes(query.toLowerCase())
+  );
+  const groupKeys = [...new Set(filtered.map((p) => p.group))];
+  const byGroup   = (gk: string) => filtered.filter((p) => p.group === gk);
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
+
+  const handleSelect = (id: string) => {
+    onChange(id);
+    setOpen(false);
+    setQuery("");
+  };
+
+  return (
+    <div ref={containerRef} className="relative">
+      <div
+        onClick={() => setOpen(true)}
+        className="w-full bg-zinc-900 border border-zinc-700 rounded px-2 py-1.5 flex items-center gap-1 cursor-pointer focus-within:border-cyan-600 transition-colors"
+      >
+        {open ? (
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Escape") { setOpen(false); setQuery(""); } }}
+            placeholder="Buscar..."
+            className="flex-1 bg-transparent outline-none text-sm text-zinc-100 placeholder-zinc-500"
+          />
+        ) : (
+          <span className={`flex-1 text-sm truncate ${selected ? "text-zinc-100" : "text-zinc-500"}`}>
+            {selected ? `${poiPrefix(selected.type)}${selected.name}` : placeholder}
+          </span>
+        )}
+        {value && !open && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onChange(""); }}
+            className="text-zinc-500 hover:text-zinc-300 text-xs ml-1"
+          >✕</button>
+        )}
+        {!open && <span className="text-zinc-600 text-xs ml-1">▾</span>}
+      </div>
+
+      {open && (
+        <div className="absolute z-50 w-full mt-1 bg-zinc-900 border border-zinc-700 rounded shadow-xl max-h-60 overflow-y-auto">
+          {groupKeys.length === 0 ? (
+            <div className="px-3 py-2 text-zinc-500 text-xs">Sin resultados</div>
+          ) : (
+            groupKeys.map((gk) => (
+              <div key={gk}>
+                <div className="px-3 py-1 text-xs text-zinc-500 uppercase tracking-wider bg-zinc-950/80 sticky top-0">
+                  {groupLabels[gk] ?? gk}
+                </div>
+                {byGroup(gk).map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => handleSelect(p.id)}
+                    className={`w-full text-left px-3 py-1.5 text-sm transition-colors hover:bg-zinc-800 ${
+                      p.id === value ? "text-cyan-300 bg-zinc-800/50" : "text-zinc-200"
+                    }`}
+                  >
+                    {poiPrefix(p.type)}{p.name}
+                  </button>
+                ))}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -797,22 +912,14 @@ export default function QuantumIntercept() {
             <div className="flex flex-col gap-2">
               <div>
                 <span className="text-xs text-zinc-500 uppercase tracking-wider mb-1 block">Origen</span>
-                <select
+                <SearchSelect
                   value={originId}
-                  onChange={(e) => setOriginId(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 text-sm rounded px-2 py-1.5 focus:outline-none focus:border-cyan-600"
-                >
-                  <option value="">— Selecciona origen —</option>
-                  {groupKeys.map((gk) => (
-                    <optgroup key={gk} label={groupLabels[gk] ?? gk}>
-                      {byGroup(gk).map((p) => (
-                        <option key={p.id} value={p.id} disabled={p.id === destId}>
-                          {p.type === "moon" ? "  " : p.type === "station" ? "    " : p.type === "jumppoint" ? "◇ " : ""}{p.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+                  onChange={setOriginId}
+                  options={SELECTABLE}
+                  groupLabels={groupLabels}
+                  disabledId={destId}
+                  placeholder="— Selecciona origen —"
+                />
               </div>
 
               <div className="flex items-center gap-2 px-1">
@@ -823,22 +930,14 @@ export default function QuantumIntercept() {
 
               <div>
                 <span className="text-xs text-zinc-500 uppercase tracking-wider mb-1 block">Destino</span>
-                <select
+                <SearchSelect
                   value={destId}
-                  onChange={(e) => setDestId(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 text-zinc-100 text-sm rounded px-2 py-1.5 focus:outline-none focus:border-cyan-600"
-                >
-                  <option value="">— Selecciona destino —</option>
-                  {groupKeys.map((gk) => (
-                    <optgroup key={gk} label={groupLabels[gk] ?? gk}>
-                      {byGroup(gk).map((p) => (
-                        <option key={p.id} value={p.id} disabled={p.id === originId}>
-                          {p.type === "moon" ? "  " : p.type === "station" ? "    " : p.type === "jumppoint" ? "◇ " : ""}{p.name}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+                  onChange={setDestId}
+                  options={SELECTABLE}
+                  groupLabels={groupLabels}
+                  disabledId={originId}
+                  placeholder="— Selecciona destino —"
+                />
               </div>
             </div>
           </section>
