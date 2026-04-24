@@ -104,6 +104,11 @@ const CAT_TO_POWER: Record<string, PowerCategory> = {
   SHIELD: "shields", COOLER: "coolers", QUANTUM_DRIVE: "quantum",
   MINING: "weapons", SALVAGE: "weapons", UTILITY: "weapons", RADAR: "radar",
   LIFE_SUPPORT: "lifesupport",
+  // QIG comparte bucket de power con el QT drive — ambos consumen del mismo
+  // subsistema "quantum" del juego y en la práctica el jugador no puede usar
+  // QT jump y QIG al mismo tiempo. Mantis/Cutlass Blue/Guardian QI suman sus
+  // 3 MW del interdictor al mismo bucket que el QT drive.
+  QIG: "quantum",
 };
 
 /** Per-instance power allocation info for the power grid UI */
@@ -166,26 +171,36 @@ const TYPE_TO_CAT: Record<string, string> = {
   TRACTOR_BEAM: "UTILITY", EMP: "UTILITY",
   RADAR: "RADAR", COUNTERMEASURE: "COUNTERMEASURE",
   LIFE_SUPPORT: "LIFE_SUPPORT", LifeSupportGenerator: "LIFE_SUPPORT",
+  // Fase N (2026-04-24): interdictores cuánticos. El API los emite con
+  // type="QIG" y category="QIG"; acá aseguramos que mapeen a "QIG" y no caigan
+  // al patrón genérico /quantum/ que los tragaría como QUANTUM_DRIVE.
+  QIG: "QIG", QuantumInterdictionGenerator: "QIG",
 };
 const NAME_PATTERNS: [RegExp, string][] = [
   [/turret/i, "TURRET"], [/weapon|gun|cannon|gatling|repeater|scattergun|gimbal/i, "WEAPON"],
   [/missile|rocket|msd-/i, "MISSILE_RACK"], [/shield/i, "SHIELD"],
   [/power_plant|powerplant|power plant/i, "POWER_PLANT"], [/cool/i, "COOLER"],
+  // QIG DEBE ir antes de /quantum/ — el hardpoint name
+  // "hardpoint_quantum_interdiction_generator" contiene la palabra "quantum"
+  // pero no es un QT drive. Idem QED/QDMP (los del Reynie/Burke/Captor).
+  [/interdict|\bqed\b|\bqdmp\b|\bqig\b/i, "QIG"],
   [/quantum|qdrive/i, "QUANTUM_DRIVE"],
   [/salvage|scraper|reclaim/i, "SALVAGE"],
   [/tractor.?beam|cargo.?beam/i, "UTILITY"],
   [/mining/i, "MINING"],
   [/radar|scanner/i, "RADAR"], [/life.?support/i, "LIFE_SUPPORT"],
 ];
-const USEFUL = new Set(["WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "SALVAGE", "UTILITY", "RADAR", "COUNTERMEASURE", "LIFE_SUPPORT"]);
+const USEFUL = new Set(["WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "SALVAGE", "UTILITY", "RADAR", "COUNTERMEASURE", "LIFE_SUPPORT", "QIG"]);
 
 // Patrones industriales que DEBEN ganarle a una categoría genérica "WEAPON"
 // devuelta por la API. Ej: Mole/Prospector/Golem traen los brazos mineros con
 // hpType "Weapon" → sin este chequeo quedan como WEAPON y nunca entran al
-// widget MINING. Idem Reclaimer/Fortune/Salvation con SALVAGE.
+// widget MINING. Idem Reclaimer/Fortune/Salvation con SALVAGE. Y QIG para
+// que el nombre "quantum_interdiction" no caiga al bucket QUANTUM_DRIVE.
 const INDUSTRIAL_OVERRIDE: [RegExp, string][] = [
   [/salvage|scraper|reclaim/i, "SALVAGE"],
   [/mining/i, "MINING"],
+  [/interdict|\bqed\b|\bqdmp\b|\bqig\b/i, "QIG"],
 ];
 
 function inferCategory(category: string, item: EquippedItem | null, hpName: string): string {
@@ -239,7 +254,7 @@ function parseEquipped(eq: any): EquippedItem | null {
 // =============================================================================
 
 const WEAPON_CATS = new Set(["WEAPON", "TURRET", "MISSILE_RACK"]);
-const SYSTEM_CATS = new Set(["SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "SALVAGE", "UTILITY", "LIFE_SUPPORT"]);
+const SYSTEM_CATS = new Set(["SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "SALVAGE", "UTILITY", "LIFE_SUPPORT", "QIG"]);
 
 function emptyCat(): CategoryPowerInfo { return { minDraw: 0, allocated: 0, componentCount: 0, activeCount: 0 }; }
 
