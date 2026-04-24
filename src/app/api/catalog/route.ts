@@ -104,12 +104,20 @@ const TYPE_TABLE: Record<string, TableDef> = {
     idCol: "uuid", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
   },
-  // Mining lasers: misma fuente que /api/mining/lasers (MiningLoadoutCalculator).
-  // mining_lasers no tiene class_name → usamos name como fallback para classCol.
+  // Mining lasers: migrado a tabla `weapon_mining` (migración 054). Es el
+  // superset con modelo de power completo. La tabla antigua `mining_lasers`
+  // queda como legacy hasta que se confirme todo funciona en prod.
+  //
+  // IMPORTANTE: weapon_mining tiene variantes por ship (Template, Test,
+  // Test_Active, MPUV_Arm, etc). El filtrado de esas variantes se hace en
+  // mapRow/buildStats vía un WHERE implícito o DISTINCT ON (name). Los
+  // endpoints con resultados listables (catalog picker, mining/lasers)
+  // deduplican por name. Los ship loadouts vienen con className exacto
+  // asi que SI buscan por class_name matchean la variante correcta.
   MINING_LASER: {
-    table: "mining_lasers", type: "MINING_LASER",
-    idCol: "id", nameCol: "name", classCol: "name",
-    sizeCol: "size", gradeCol: null, mfrCol: "manufacturer",
+    table: "weapon_mining", type: "MINING_LASER",
+    idCol: "id", nameCol: "name", classCol: "class_name",
+    sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
   },
 };
 
@@ -556,17 +564,30 @@ function buildStats(row: any, type: string): Record<string, any> | null {
     }
 
     case "MINING_LASER": {
-      // mining_lasers columns (mismo schema que usa MiningLoadoutCalculator).
-      s.miningPower = numOrNull(row.mining_power);
+      // weapon_mining columns (migrado desde mining_lasers en Fase L.1).
+      // Nombres que cambian respecto al legacy mining_lasers:
+      //   mining_power → mining_laser_power
+      //   max_range    → maximum_range
+      // Las otras columnas (resistance, instability, throttle_*, heat_output,
+      // shatter_damage, module_slots) fueron agregadas a weapon_mining por la
+      // migración 054 y pobladas desde mining_lasers matcheando por name.
+      s.miningPower = numOrNull(row.mining_laser_power);
       s.resistance = numOrNull(row.resistance);
       s.instability = numOrNull(row.instability);
       s.optimalRange = numOrNull(row.optimal_range);
-      s.maxRange = numOrNull(row.max_range);
+      s.maxRange = numOrNull(row.maximum_range);
       s.throttleRate = numOrNull(row.throttle_rate);
       s.throttleMin = numOrNull(row.throttle_min);
       s.heatOutput = numOrNull(row.heat_output);
       s.shatterDamage = numOrNull(row.shatter_damage);
       s.moduleSlots = numOrNull(row.module_slots);
+      // Extra de weapon_mining (no estaba en mining_lasers) — permite que el
+      // power grid del LoadoutBuilder use el modelo real del mining laser.
+      s.powerDraw = numOrNull(row.power_consumption_max) ?? numOrNull(row.power_consumption_min);
+      s.powerDrawMin = numOrNull(row.power_consumption_min);
+      s.powerDrawMax = numOrNull(row.power_consumption_max);
+      s.emSignature = numOrNull(row.em_max);
+      s.irSignature = numOrNull(row.ir_max);
       break;
     }
   }

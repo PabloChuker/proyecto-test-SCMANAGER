@@ -29,7 +29,7 @@ const TABLE_TO_ITEM_TYPE: Record<string, string> = {
   power_plants: "POWER_PLANT",
   coolers: "COOLER",
   quantum_drives: "QUANTUM_DRIVE",
-  mining_lasers: "MINING",
+  weapon_mining: "MINING",
   turrets: "TURRET",
   quantum_interdiction_generators: "QED",
 };
@@ -54,7 +54,7 @@ const CATEGORIES: CategoryDef[] = [
   { key: "coolers", table: "coolers", label: "Coolers", shortLabel: "Coolers", icon: "/icons/coolers.png" },
   { key: "quantum_drives", table: "quantum_drives", label: "Quantum Drives", shortLabel: "QD", icon: "/icons/Quantum_drives.png" },
   { key: "qed", table: "quantum_interdiction_generators", label: "QED Generators", shortLabel: "QED", icon: "/icons/interdict_pulse.png" },
-  { key: "mining", table: "mining_lasers", label: "Mining Lasers", shortLabel: "Mining", icon: "/icons/mining_lasers.png" },
+  { key: "mining", table: "weapon_mining", label: "Mining Lasers", shortLabel: "Mining", icon: "/icons/mining_lasers.png" },
   { key: "turrets", table: "turrets", label: "Turrets", shortLabel: "Turrets", icon: "/icons/weapons.png" },
 ];
 

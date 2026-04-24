@@ -1097,30 +1097,27 @@ export async function GET(
       .test(String(ship.reference ?? ""));
     let miningLaserStats = new Map<string, any>();
     if (needsIndustrial) {
+      // Migrado a weapon_mining (Fase L.1 — migración 054). Esta tabla tiene
+      // el class_name canonical del juego, así que ya no necesitamos mapear
+      // manualmente arbor-mh1 → Mining_Laser_MPUV_Arm — usamos class_name
+      // directo y matcheamos contra el hardpoint del ship.
       const lasers: any[] = await sql.unsafe(
-        `SELECT id, name, size, mining_power, resistance, instability,
-                optimal_range, max_range, throttle_rate, throttle_min,
+        `SELECT id, name, class_name, size,
+                mining_laser_power, resistance, instability,
+                optimal_range, maximum_range, throttle_rate, throttle_min,
                 heat_output, shatter_damage, module_slots
-           FROM mining_lasers`,
-      ).catch((e: unknown) => { console.warn("[ships/[id]] mining_lasers fetch failed:", e); return []; });
+           FROM weapon_mining`,
+      ).catch((e: unknown) => { console.warn("[ships/[id]] weapon_mining fetch failed:", e); return []; });
       for (const l of lasers) {
-        // Mapeo id → className basado en el MiningLoadoutCalculator:
-        //   arbor-mh1 → Mining_Laser_MPUV_Arm
-        //   arbor-mh2 → Mining_Laser_MPUV_Arm_S2
-        //   pitman    → Mining_Laser_DRAK_Golem_S1
-        // Para otros se usa el id directo (el picker los resuelve igualmente).
-        const idToClass: Record<string, string> = {
-          "arbor-mh1": "Mining_Laser_MPUV_Arm",
-          "arbor-mh2": "Mining_Laser_MPUV_Arm_S2",
-          "pitman":    "Mining_Laser_DRAK_Golem_S1",
-        };
-        const className = idToClass[l.id] ?? l.id;
-        miningLaserStats.set(className, {
-          miningPower: l.mining_power,
+        // class_name directo como key (ej. Mining_Laser_MPUV_Arm, Mining_Laser_DRAK_Golem_S1).
+        // Varias filas pueden tener el mismo name (ej. Arbor MH1 aparece en 4
+        // class_names distintos), cada una se inserta por su class_name único.
+        miningLaserStats.set(String(l.class_name), {
+          miningPower: l.mining_laser_power,
           resistance: l.resistance,
           instability: l.instability,
           optimalRange: l.optimal_range,
-          maxRange: l.max_range,
+          maxRange: l.maximum_range,
           throttleRate: l.throttle_rate,
           throttleMin: l.throttle_min,
           heatOutput: l.heat_output,

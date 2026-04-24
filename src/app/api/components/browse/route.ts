@@ -39,7 +39,7 @@ const ALLOWED_TABLES: Record<string, { label: string; defaultSort: string }> = {
   power_plants:        { label: "Power Plants",      defaultSort: "name" },
   coolers:             { label: "Coolers",           defaultSort: "name" },
   quantum_drives:      { label: "Quantum Drives",    defaultSort: "name" },
-  mining_lasers:       { label: "Mining Lasers",     defaultSort: "name" },
+  weapon_mining:       { label: "Mining Lasers",     defaultSort: "name" },
   turrets:             { label: "Turrets",           defaultSort: "name" },
   quantum_interdiction_generators: { label: "QED", defaultSort: "name" },
 };
@@ -142,7 +142,7 @@ const TABLE_COLUMNS: Record<string, ColumnDef[]> = {
     { key: "spool_up_time", label: "Spool Time", type: "number" },
     { key: "cooldown_time", label: "Cooldown", type: "number" },
   ],
-  mining_lasers: [
+  weapon_mining: [
     { key: "name", label: "Name", type: "text", width: 2 },
     { key: "class_name", label: "Class", type: "text", width: 2 },
     { key: "size", label: "Size", type: "number" },
