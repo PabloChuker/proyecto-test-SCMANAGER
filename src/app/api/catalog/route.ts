@@ -41,6 +41,13 @@ interface TableDef {
   sizeCol: string | null; // size column (null if not present)
   gradeCol: string | null;
   mfrCol: string | null;  // manufacturer column
+  /**
+   * WHERE estático opcional que se AND-ea al final. Sirve para múltiples
+   * types que comparten tabla pero filtran por sub_type (ej SALVAGE_HEAD vs
+   * SALVAGE_MODIFIER sobre weapon_salvage). Ya viene pre-sanitizado porque
+   * es literal en código (no viene del user).
+   */
+  extraWhere?: string;
 }
 
 const TYPE_TABLE: Record<string, TableDef> = {
@@ -119,6 +126,27 @@ const TYPE_TABLE: Record<string, TableDef> = {
     idCol: "id", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
   },
+  // Salvage (Fase M — migración 056): la tabla weapon_salvage alberga tanto
+  // cabezas de salvage (Baler, Salvation, y los tractor beams que CIG tipifica
+  // como SalvageHead) como los modifiers Tractor/Scraper que van dentro de
+  // esos heads. El ComponentPicker pide SALVAGE_HEAD para el slot padre y
+  // SALVAGE_MODIFIER para el slot hijo — ambos resuelven a la misma tabla
+  // con extraWhere por sub_type.
+  //
+  // Se filtran templates/placeholders en extraWhere para que el picker no
+  // muestre "<= PLACEHOLDER =>" ni variantes Template.
+  SALVAGE_HEAD: {
+    table: "weapon_salvage", type: "SALVAGE_HEAD",
+    idCol: "id", nameCol: "name", classCol: "class_name",
+    sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
+    extraWhere: "t.sub_type = 'Head' AND t.class_name NOT ILIKE '%_Template%' AND (t.name IS NULL OR t.name NOT ILIKE '%PLACEHOLDER%')",
+  },
+  SALVAGE_MODIFIER: {
+    table: "weapon_salvage", type: "SALVAGE_MODIFIER",
+    idCol: "id", nameCol: "name", classCol: "class_name",
+    sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
+    extraWhere: "t.sub_type = 'Modifier' AND t.class_name NOT ILIKE '%_Template%' AND (t.name IS NULL OR t.name NOT ILIKE '%PLACEHOLDER%')",
+  },
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -180,13 +208,16 @@ async function queryCatalog(params: CatalogParams) {
     return { data: [], meta: { total: 0, limit } };
   }
 
-  // Deduplicate tables (WEAPON and TURRET both map to weapon_guns)
+  // Deduplicate by (table + extraWhere) porque varios types pueden compartir
+  // tabla con filtros distintos (SALVAGE_HEAD vs SALVAGE_MODIFIER sobre
+  // weapon_salvage, WEAPON vs TURRET sobre weapon_guns/turrets). Usar solo
+  // la tabla como clave colapsaría los dos a un solo query.
   const tablesToQuery = new Map<string, TableDef>();
   for (const t of validTypes) {
     const def = TYPE_TABLE[t];
-    if (def && !tablesToQuery.has(def.table)) {
-      tablesToQuery.set(def.table, def);
-    }
+    if (!def) continue;
+    const key = def.table + "::" + (def.extraWhere ?? "");
+    if (!tablesToQuery.has(key)) tablesToQuery.set(key, def);
   }
 
   if (tablesToQuery.size === 0) {
@@ -227,6 +258,12 @@ async function queryCatalog(params: CatalogParams) {
         conds.push(`(t.${def.nameCol} ILIKE $${idx} OR t.${def.classCol} ILIKE $${idx})`);
         params.push(`%${sanitized}%`);
         idx++;
+      }
+
+      // Static extraWhere (sub_type / template filter, etc). Literal en código,
+      // no viene del user — no se paramatriza.
+      if (def.extraWhere) {
+        conds.push(`(${def.extraWhere})`);
       }
 
       const where = conds.length > 0 ? "WHERE " + conds.join(" AND ") : "";
@@ -371,6 +408,7 @@ function mapRow(row: any, def: TableDef): any {
     turretStats: type === "TURRET" ? stats : null,
     missileRackStats: type === "MISSILE_RACK" ? stats : null,
     bombStats: type === "BOMB" ? stats : null,
+    salvageStats: type === "SALVAGE_HEAD" || type === "SALVAGE_MODIFIER" ? stats : null,
     thrusterStats: null,
     shopInventory: [],
   };
@@ -588,6 +626,22 @@ function buildStats(row: any, type: string): Record<string, any> | null {
       s.powerDrawMax = numOrNull(row.power_consumption_max);
       s.emSignature = numOrNull(row.em_max);
       s.irSignature = numOrNull(row.ir_max);
+      break;
+    }
+
+    case "SALVAGE_HEAD":
+    case "SALVAGE_MODIFIER": {
+      // weapon_salvage columns (migración 056). Sub_type distingue Head vs
+      // Modifier; modifier_kind distingue Tractor vs Scraper dentro de los
+      // modifiers. Los heads no tienen stats (wraparound del juego; son
+      // puro "contenedor" de los modifiers en el brazo). Los modifiers
+      // llevan speed/radius/efficiency multipliers.
+      s.subType = row.sub_type ?? null;
+      s.modifierKind = row.modifier_kind ?? null;
+      s.salvageSpeedMultiplier = numOrNull(row.salvage_speed_multiplier);
+      s.radiusMultiplier = numOrNull(row.radius_multiplier);
+      s.extractionEfficiency = numOrNull(row.extraction_efficiency);
+      s.mass = numOrNull(row.mass);
       break;
     }
   }

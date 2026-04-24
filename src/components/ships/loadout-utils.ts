@@ -104,6 +104,15 @@ export function getKeyStat(category: string, stats: Record<string, any> | null |
       const range = tryNum(stats, "optimalRange");
       return range !== null ? { v: fmtStat(range) + "m", l: "OPT" } : null;
     }
+    case "SALVAGE": {
+      // Modifiers de salvage: speed multiplier como métrica principal
+      // (más rápido = mejor). Si es un head no hay stat y devolvemos null.
+      const spd = tryNum(stats, "salvageSpeedMultiplier");
+      if (spd !== null) return { v: spd.toFixed(2) + "×", l: "SPD" };
+      const rad = tryNum(stats, "radiusMultiplier");
+      if (rad !== null) return { v: rad.toFixed(2) + "×", l: "RAD" };
+      return null;
+    }
     case "MINING_MODULE": {
       // Los módulos suelen traer laserPower (%) como efecto principal; si no,
       // showeamos lo que haya.

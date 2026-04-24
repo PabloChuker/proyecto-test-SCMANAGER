@@ -26,6 +26,11 @@ const CAT_TO_API_TYPE: Record<string, string> = {
   MISSILE_RACK: "MISSILE_RACK", MISSILE: "MISSILE,BOMB",
   SHIELD: "SHIELD", POWER_PLANT: "POWER_PLANT", COOLER: "COOLER",
   QUANTUM_DRIVE: "QUANTUM_DRIVE", MINING: "MINING_LASER", UTILITY: "TRACTOR_BEAM,EMP,QED",
+  // SALVAGE: default para slot sin parent es pedir heads (slot del brazo de
+  // Vulture/Fortune/Salvation/Reclaimer). Si hay parentClassName y ese parent
+  // es un salvage head (detectado abajo con isSalvageHeadClass), el picker
+  // flipea a SALVAGE_MODIFIER. Ver bloque de parentClassName más abajo.
+  SALVAGE: "SALVAGE_HEAD",
 };
 
 // Mining modules no viven en la BD: vienen del JSON curado en
@@ -70,6 +75,7 @@ const CAT_TO_ITEM_TYPE: Record<string, string> = {
   QUANTUM_DRIVE: "QUANTUM_DRIVE",
   MINING: "MINING",
   UTILITY: "UTILITY",
+  SALVAGE: "SALVAGE",
 };
 
 interface CatalogItem {
@@ -78,7 +84,8 @@ interface CatalogItem {
   grade: string | null; manufacturer: string | null;
   weaponStats?: any; shieldStats?: any; powerStats?: any; coolingStats?: any;
   quantumStats?: any; miningStats?: any; missileStats?: any;
-  turretStats?: any; missileRackStats?: any; bombStats?: any; thrusterStats?: any;
+  turretStats?: any; missileRackStats?: any; bombStats?: any;
+  salvageStats?: any; thrusterStats?: any;
   shopInventory?: Array<{ priceBuy: number | null; priceSell: number | null; shop: { name: string; location: { name: string; parentName: string | null } } }>;
 }
 
@@ -108,6 +115,22 @@ function isBombRackClass(className: string | null | undefined): boolean {
   // especiales como MRCK_S03_TEMP_BOMB (misma tabla missile_launchers pero
   // type=BombLauncher en la data fuente).
   return /^BMBRCK_/i.test(className) || /TEMP_BOMB$/i.test(className);
+}
+
+/** ¿Este className corresponde a un salvage head? (vs missile/bomb rack) */
+function isSalvageHeadClass(className: string | null | undefined): boolean {
+  if (!className) return false;
+  // Convención de scunpacked weapon_salvage sub_type='Head':
+  //   Salvage_Head_standard  → Baler
+  //   Salvage_Head_Salvation → Salvation
+  //   WEP_TractorBeam_S3_*, GRIN_TractorBeam_S3, WEP_TowingBeam_S3_template
+  //     → tractor beams que el juego tipifica como SalvageHead (por eso viven
+  //     en la misma tabla).
+  return (
+    /^Salvage_Head_/i.test(className) ||
+    /_TractorBeam_/i.test(className) ||
+    /_TowingBeam_/i.test(className)
+  );
 }
 
 type SortKey = "name" | "size" | "grade" | "stat" | "price" | "manufacturer";
@@ -184,15 +207,18 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
       setLoading(true);
       try {
         let apiTypes = CAT_TO_API_TYPE[hardpoint.resolvedCategory] || "OTHER";
-        // Cuando hay parentClassName, estamos abriendo un slot hijo (misil/
-        // bomba dentro de un rack). Independiente del category del child
-        // (algunos ships resuelven el child como "MISSILE_RACK" por cómo se
-        // construyen los ports, otros como "MISSILE"), la regla es SIEMPRE:
-        // - Bomb rack padre → pedir solo BOMB
-        // - Missile rack padre → pedir solo MISSILE
-        // Nunca pedir racks cuando estamos dentro de un rack.
+        // Cuando hay parentClassName, estamos abriendo un slot hijo de algún
+        // brazo/rack. La categoría del child puede haberse resuelto distinto
+        // en la API (MISSILE_RACK, MISSILE o SALVAGE según nave), así que la
+        // decisión la tomamos mirando el className del padre:
+        //   - Salvage head padre → SALVAGE_MODIFIER (Tractor/Scraper)
+        //   - Bomb rack padre    → BOMB
+        //   - Missile rack padre → MISSILE
+        // Nunca pedir racks/heads cuando estamos dentro de uno.
         if (parentClassName) {
-          apiTypes = isBombRackClass(parentClassName) ? "BOMB" : "MISSILE";
+          if (isSalvageHeadClass(parentClassName)) apiTypes = "SALVAGE_MODIFIER";
+          else if (isBombRackClass(parentClassName)) apiTypes = "BOMB";
+          else apiTypes = "MISSILE";
         }
         const body: Record<string, any> = { types: apiTypes, limit: 80, include: "stats,shops" };
         // Size del filtro:
@@ -220,7 +246,7 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
   }, [search, hardpoint.resolvedCategory, hardpoint.maxSize, hardpoint.minSize, parentClassName, parentMaxMissileSize, parentMinMissileSize]);
 
   const getItemStats = useCallback((item: CatalogItem): Record<string, any> | null => {
-    return item.weaponStats || item.shieldStats || item.powerStats || item.coolingStats || item.quantumStats || item.miningStats || item.missileStats || item.turretStats || item.missileRackStats || item.bombStats || item.thrusterStats || null;
+    return item.weaponStats || item.shieldStats || item.powerStats || item.coolingStats || item.quantumStats || item.miningStats || item.missileStats || item.turretStats || item.missileRackStats || item.bombStats || item.salvageStats || item.thrusterStats || null;
   }, []);
 
   const getBestPrice = useCallback((item: CatalogItem): number | null => {
@@ -281,16 +307,25 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
       out = out.filter(i => i.type !== "TURRET" || i.manufacturer === brandFilter);
     }
     // Guard defensivo: un slot hijo (parentClassName presente) NUNCA acepta
-    // otro rack o gimbal-mount como equipado — solo ordenanza/armas. Previene
-    // el caso "Castillo dentro de Castillo" aunque la query del API se
-    // desvíe por algún motivo (ej. category del child que resuelva mal).
+    // otro rack/gimbal/head como equipado — solo ordenanza/armas/modifiers.
+    // Previene el caso "Castillo dentro de Castillo" (misiles) o "Head dentro
+    // de Head" (salvage) aunque la query del API se desvíe por algún motivo.
     if (parentClassName) {
-      out = out.filter(i => i.type !== "MISSILE_RACK" && i.type !== "TURRET");
+      out = out.filter(
+        (i) =>
+          i.type !== "MISSILE_RACK" &&
+          i.type !== "TURRET" &&
+          i.type !== "SALVAGE_HEAD",
+      );
     }
     // Además, si el padre es un bomb rack explícitamente, sacamos misiles
     // del listado (defensa si la query trajera ambos por cualquier razón).
     if (isBombRackClass(parentClassName)) {
-      out = out.filter(i => i.type === "BOMB");
+      out = out.filter((i) => i.type === "BOMB");
+    }
+    // Si el padre es un salvage head, solo modifiers.
+    if (isSalvageHeadClass(parentClassName)) {
+      out = out.filter((i) => i.type === "SALVAGE_MODIFIER");
     }
     return out;
   }, [sorted, subFilter, isTurretSlot, brandFilter, parentClassName]);
@@ -416,6 +451,9 @@ function getStatColumnLabel(cat: string): string {
     // MISSILE_RACK slot: ahora muestra racks (tabla missile_launchers) con
     // label de capacidad tipo "4xS3". El slot hijo MISSILE sigue siendo DMG.
     case "MISSILE_RACK": return "CAP";
+    // SALVAGE: las heads no tienen stat propia (el stat column queda "-");
+    // los modifiers muestran Speed multiplier como métrica principal.
+    case "SALVAGE": return "Spd";
     default: return "Pwr";
   }
 }
@@ -437,6 +475,10 @@ function getSortStatVal(stats: Record<string, any> | null, cat: string): number 
       // (mas puertos = mas capacidad). Si stats es de un misil suelto
       // (type=MISSILE) caemos a damage como antes.
       return stats.missilePorts ?? stats.damage ?? stats.alphaDamage ?? 0;
+    case "SALVAGE":
+      // Modifiers: orden por speed multiplier (más rápido primero). Heads
+      // no tienen speed — quedan al final con 0.
+      return stats.salvageSpeedMultiplier ?? 0;
     default: return stats.powerDraw ?? 0;
   }
 }
