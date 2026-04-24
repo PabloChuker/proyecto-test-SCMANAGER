@@ -173,8 +173,8 @@ const NYX_POIS: POI[] = [
   { id: "nyx2", name: "Nyx II",  type: "planet", group: "nyx2", x:  -3_591_211, y:   9_866_771, color: "#5a6e7f" },
   { id: "nyx3", name: "Nyx III (Delamar)", type: "planet", group: "nyx3", x: -29_109_694, y: -24_425_931, color: "#4a5e6f" },
 
-  // Delamar (Nyx III) — Levsky
-  { id: "levsky", name: "Levsky", type: "station", group: "nyx3", x: -29_109_694, y: -24_425_931 },
+  // Delamar (Nyx III) — Levsky (offset visual ~1.5Mkm para separarlo del planeta en el mapa)
+  { id: "levsky", name: "Levsky", type: "station", group: "nyx3", x: -27_609_694, y: -24_425_931 },
 
   // QV Breaker Stations (~48 Mkm ring, 20 stations at 18° intervals)
   { id: "brk_204", name: "QV Breaker BRK-204", type: "station", group: "breakers", x:  47_999_735, y:           0 },
