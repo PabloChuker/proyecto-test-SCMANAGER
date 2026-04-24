@@ -96,19 +96,20 @@ export interface ShipResistances {
 export type FlightMode = "SCM" | "NAV";
 
 /** Power categories for UI grouping */
-export type PowerCategory = "weapons" | "thrusters" | "shields" | "quantum" | "radar" | "coolers" | "lifesupport";
-export const POWER_CATEGORIES: PowerCategory[] = ["weapons", "thrusters", "shields", "quantum", "radar", "coolers", "lifesupport"];
+export type PowerCategory = "weapons" | "thrusters" | "shields" | "quantum" | "radar" | "coolers" | "lifesupport" | "qig";
+export const POWER_CATEGORIES: PowerCategory[] = ["weapons", "thrusters", "shields", "quantum", "radar", "coolers", "lifesupport", "qig"];
 
 const CAT_TO_POWER: Record<string, PowerCategory> = {
   WEAPON: "weapons", TURRET: "weapons", MISSILE_RACK: "weapons",
   SHIELD: "shields", COOLER: "coolers", QUANTUM_DRIVE: "quantum",
   MINING: "weapons", SALVAGE: "weapons", UTILITY: "weapons", RADAR: "radar",
   LIFE_SUPPORT: "lifesupport",
-  // QIG comparte bucket de power con el QT drive — ambos consumen del mismo
-  // subsistema "quantum" del juego y en la práctica el jugador no puede usar
-  // QT jump y QIG al mismo tiempo. Mantis/Cutlass Blue/Guardian QI suman sus
-  // 3 MW del interdictor al mismo bucket que el QT drive.
-  QIG: "quantum",
+  // Fase N.4 (2026-04-24): QIG tiene SU PROPIO bucket de power. Antes lo
+  // colapsé con "quantum" pensando que compartían subsistema, pero el power
+  // grid del LoadoutBuilder renderiza UNA columna por bucket y los QIGs
+  // aparecían como "un segundo QT drive" con el mismo ícono. Separándolos
+  // queda claro que Burke/Captor/Reynie son interdictores, no motores de salto.
+  QIG: "qig",
 };
 
 /** Per-instance power allocation info for the power grid UI */
@@ -953,7 +954,7 @@ function computeStats(
 // Store
 // =============================================================================
 
-const ZERO_ALLOC: Record<PowerCategory, number> = { weapons: 0, thrusters: 0, shields: 0, quantum: 0, radar: 0, coolers: 0, lifesupport: 0 };
+const ZERO_ALLOC: Record<PowerCategory, number> = { weapons: 0, thrusters: 0, shields: 0, quantum: 0, radar: 0, coolers: 0, lifesupport: 0, qig: 0 };
 const EMPTY_NET: PowerNetworkState = { totalOutput: 0, totalAllocated: 0, totalMinDraw: 0, totalActualDraw: 0, consumptionPercent: 0, freePoints: 0, isOverloaded: false, categories: (() => { const c = {} as any; for (const k of POWER_CATEGORIES) c[k] = emptyCat(); return c; })(), activeCategories: [], instances: [] };
 const EMPTY_STATS: ComputedStats = { totalDps: 0, burstDps: 0, sustainedDps: 0, totalAlpha: 0, weaponAlpha: 0, missileAlpha: 0, shieldHp: 0, shieldRegen: 0, powerOutput: 0, powerDraw: 0, powerBalance: 0, coolingRate: 0, thermalOutput: 0, thermalBalance: 0, emSignature: 0, irSignature: 0, effectiveSpeed: null, effectiveSpeedLabel: "SCM", powerNetwork: EMPTY_NET, weaponMaxPips: 0, summary: { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0, activeComponents: 0, totalComponents: 0 } };
 

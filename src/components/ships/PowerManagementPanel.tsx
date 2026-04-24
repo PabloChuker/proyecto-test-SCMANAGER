@@ -27,7 +27,7 @@ const ROWS = 8;
 
 // Category display ordering (weapons first, then systems in Erkul order)
 const CATEGORY_ORDER: PowerCategory[] = [
-  "weapons", "thrusters", "quantum", "radar", "shields", "coolers", "lifesupport",
+  "weapons", "thrusters", "quantum", "qig", "radar", "shields", "coolers", "lifesupport",
 ];
 
 // Whether category uses orange or green
@@ -48,6 +48,9 @@ const CAT_ICON_MAP: Record<PowerCategory, string> = {
   thrusters: "/icons/Ships.png",
   shields: "/icons/shilds.png",
   quantum: "/icons/Quantum_drives.png",
+  // QIG: ícono dedicado interdict.png para que no se confunda con el QT drive
+  // (Quantum_drives.png). La barra debe leerse "interdictor" a primera vista.
+  qig: "/icons/interdict.png",
   radar: "/icons/interdict_pulse.png",
   coolers: "/icons/coolers.png",
   lifesupport: "/icons/shilds.png",

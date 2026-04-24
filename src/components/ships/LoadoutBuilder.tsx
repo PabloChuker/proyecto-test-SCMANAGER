@@ -77,7 +77,7 @@ const CAT_CONFIG: Record<string, { label: string; icon: string; accent: string }
   RADAR: { label: "RADAR", icon: "/icons/DPS_calculator.png", accent: "#22c55e" },
   MINING: { label: "MINING", icon: "/icons/mining_lasers.png", accent: "#f472b6" },
   UTILITY: { label: "UTILITY", icon: "/icons/tractor_beam.png", accent: "#94a3b8" },
-  QIG: { label: "QUANTUM INTERDICTION", icon: "/icons/Quantum_drives.png", accent: "#7c3aed" },
+  QIG: { label: "QUANTUM INTERDICTION", icon: "/icons/interdict.png", accent: "#7c3aed" },
 };
 
 // ── Widget System (free absolute positioning) ──────────────────────────────
