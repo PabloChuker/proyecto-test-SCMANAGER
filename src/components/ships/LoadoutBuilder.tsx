@@ -77,6 +77,7 @@ const CAT_CONFIG: Record<string, { label: string; icon: string; accent: string }
   RADAR: { label: "RADAR", icon: "/icons/DPS_calculator.png", accent: "#22c55e" },
   MINING: { label: "MINING", icon: "/icons/mining_lasers.png", accent: "#f472b6" },
   UTILITY: { label: "UTILITY", icon: "/icons/tractor_beam.png", accent: "#94a3b8" },
+  QIG: { label: "QUANTUM INTERDICTION", icon: "/icons/Quantum_drives.png", accent: "#7c3aed" },
 };
 
 // ── Widget System (free absolute positioning) ──────────────────────────────
@@ -86,7 +87,7 @@ type WidgetId =
   | "weapons" | "missiles"
   | "shields" | "powerplants" | "coolers"
   | "quantum" | "radar" | "utility"
-  | "mining" | "salvage"
+  | "mining" | "salvage" | "qig"
   | "power-grid"
   | "ship-selector" | "ship-card" | "loadout-detail"
   | "flight-dynamics" | "flight-dynamics-3d";
@@ -97,11 +98,17 @@ type WidgetId =
 // se amplían los regex acá.
 const MINING_SHIP_RX  = /mole|moth|prospector|golem/i;
 const SALVAGE_SHIP_RX = /reclaimer|fortune|salvation|vulture/i;
+// Fase N (2026-04-24): naves con QIG/QED/QDMP fijo — Mantis (Reynie), Cutlass
+// Blue (Burke), Guardian QI (Captor). Mostramos el widget "qig" sólo en ellas.
+const QIG_SHIP_RX = /mantis|cutlass[_\s-]*blue|guardian[_\s-]*qi/i;
 function isMiningShip(name: string | null | undefined): boolean {
   return !!name && MINING_SHIP_RX.test(name);
 }
 function isSalvageShip(name: string | null | undefined): boolean {
   return !!name && SALVAGE_SHIP_RX.test(name);
+}
+function isQigShip(name: string | null | undefined): boolean {
+  return !!name && QIG_SHIP_RX.test(name);
 }
 
 // ─── Geometric grid: UNIT-based positioning (v7) ────────────────────────────
@@ -141,7 +148,7 @@ const WIDGET_WIDTH: Record<WidgetId, CardWidth> = {
   weapons: 1, missiles: 1,
   shields: 1, powerplants: 1, coolers: 1,
   quantum: 1, radar: 1, utility: 1,
-  mining: 1, salvage: 1,
+  mining: 1, salvage: 1, qig: 1,
   "power-grid": 1,
   "ship-selector": 2,           // search → 2-col
   "ship-card": 2,               // ship card → 2-col
@@ -155,6 +162,7 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   shields: "SHIELDS", powerplants: "POWER PLANTS", coolers: "COOLERS",
   quantum: "QT DRIVES", radar: "RADAR", utility: "UTILITY",
   mining: "MINING LASERS", salvage: "SALVAGE & TRACTOR",
+  qig: "QUANTUM INTERDICTION",
   "power-grid": "POWER GRID",
   "ship-selector": "SEARCH", "ship-card": "SHIP CARD", "loadout-detail": "LOADOUT DETAIL",
   "flight-dynamics": "FLIGHT DYNAMICS",
@@ -165,7 +173,7 @@ const ALL_WIDGET_IDS: WidgetId[] = [
   "weapons", "missiles",
   "shields", "powerplants", "coolers",
   "quantum", "radar", "utility",
-  "mining", "salvage",
+  "mining", "salvage", "qig",
   "power-grid",
   "ship-selector", "ship-card", "loadout-detail",
   "flight-dynamics", "flight-dynamics-3d",
@@ -223,7 +231,7 @@ function getWidgetBlocks(
     weapons: number; missiles: number;
     shields: number; powerplants: number; coolers: number;
     quantum: number; radar: number; utility: number;
-    mining: number; salvage: number;
+    mining: number; salvage: number; qig: number;
   },
 ): number {
   // Grupo HP: 1 bloque base (header compacto) + 1 bloque por slot.
@@ -241,6 +249,7 @@ function getWidgetBlocks(
     case "utility":            return hpBlocks(counts.utility);
     case "mining":             return hpBlocks(counts.mining);
     case "salvage":            return hpBlocks(counts.salvage);
+    case "qig":                return hpBlocks(counts.qig);
     case "power-grid":         return 4;
     case "ship-selector":      return 2;
     case "ship-card":          return 3;
@@ -268,7 +277,7 @@ const COLUMN_PLAN_1COL: WidgetId[][] = [
   // la primera fila; las siguientes tarjetas (weapons, mining, salvage, missiles)
   // caen abajo en col 0 (w=1). mining/salvage reemplazan visualmente a weapons
   // cuando la nave es industrial.
-  ["ship-card", "weapons", "mining", "salvage", "missiles"],
+  ["ship-card", "weapons", "mining", "salvage", "qig", "missiles"],
   // Col 1 — DEFENSE + POWER + NAV/SENSORS
   ["shields", "powerplants", "coolers", "quantum", "radar"],
   // Col 2 — ANALYTICS: power grid + combat summary + utility hardpoints
@@ -493,6 +502,14 @@ function renderWidget(
       const hps = useful.filter((hp: any) => hp.resolvedCategory === "SALVAGE");
       return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: "/icons/tractor_beam.png", badge: hps.length }) : null;
     }
+    case "qig": {
+      // Fase N: solo naves con QIG fijo — Mantis (Reynie QED, corta saltos),
+      // Cutlass Blue (Burke QD) y Guardian QI (Captor QD). Los dos QDMP solo
+      // jammean spooling (interdict ~1m). El slot es fixed=true, así que el
+      // picker queda bloqueado.
+      const hps = useful.filter((hp: any) => hp.resolvedCategory === "QIG");
+      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: CAT_CONFIG.QIG.icon, badge: hps.length }) : null;
+    }
     case "power-grid":
       return W(<PowerManagementPanel stats={stats} flightMode={flightMode} onModeChange={setFlightMode} />);
     case "ship-selector":
@@ -622,10 +639,12 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const utilityCount = useful.filter((hp) => hp.resolvedCategory === "UTILITY").length;
   const miningCount  = useful.filter((hp) => hp.resolvedCategory === "MINING").length;
   const salvageCount = useful.filter((hp) => hp.resolvedCategory === "SALVAGE").length;
+  const qigCount     = useful.filter((hp) => hp.resolvedCategory === "QIG").length;
 
   // Detección de rol industrial (gate para mostrar los widgets mining/salvage).
   const miningShip  = isMiningShip(shipInfo?.name);
   const salvageShip = isSalvageShip(shipInfo?.name);
+  const qigShip     = isQigShip(shipInfo?.name);
 
   const visibleIds = useMemo<Set<WidgetId>>(() => {
     const s = new Set<WidgetId>();
@@ -638,13 +657,14 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
       if (id === "quantum"      && quantumCount === 0) continue;
       if (id === "radar"        && radarCount === 0) continue;
       if (id === "utility"      && utilityCount === 0) continue;
-      // Mining/Salvage: solo en naves industriales Y solo si hay hardpoints.
+      // Mining/Salvage/QIG: solo en naves del rol Y solo si hay hardpoints.
       if (id === "mining"       && (!miningShip  || miningCount === 0)) continue;
       if (id === "salvage"      && (!salvageShip || salvageCount === 0)) continue;
+      if (id === "qig"          && (!qigShip     || qigCount === 0)) continue;
       s.add(id);
     }
     return s;
-  }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount, miningCount, salvageCount, miningShip, salvageShip]);
+  }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount, miningCount, salvageCount, qigCount, miningShip, salvageShip, qigShip]);
 
   // ─── Bloques verticales por widget (altura fija, deriva de UNIT) ─────────
   const widgetBlocks = useMemo<Record<WidgetId, number>>(() => {
@@ -659,13 +679,14 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
       utility: utilityCount,
       mining: miningCount,
       salvage: salvageCount,
+      qig: qigCount,
     };
     const out = {} as Record<WidgetId, number>;
     for (const id of ALL_WIDGET_IDS) {
       out[id] = getWidgetBlocks(id, counts);
     }
     return out;
-  }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount, miningCount, salvageCount]);
+  }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount, miningCount, salvageCount, qigCount]);
 
   // ─── Layout v12 — useDpsGridLayout + DpsGridCanvas ──────────────────────
   const gridLayout = useDpsGridLayout({

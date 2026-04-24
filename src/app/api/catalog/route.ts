@@ -147,6 +147,17 @@ const TYPE_TABLE: Record<string, TableDef> = {
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
     extraWhere: "t.sub_type = 'Modifier' AND t.class_name NOT ILIKE '%_Template%' AND (t.name IS NULL OR t.name NOT ILIKE '%PLACEHOLDER%')",
   },
+  // QIG / QED / QDMP — Fase N (migración 057). Los 3 tipos viven en la
+  // misma tabla (quantum_interdiction_generators). El picker pide QIG
+  // cuando el slot es editable; para slots fixed (Mantis/Cutlass Blue/
+  // Guardian QI) ni siquiera se abre. extraWhere excluye templates /
+  // placeholders ("<= PLACEHOLDER =>", QED_Template, QIG_Prototype).
+  QIG: {
+    table: "quantum_interdiction_generators", type: "QIG",
+    idCol: "uuid", nameCol: "name", classCol: "class_name",
+    sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
+    extraWhere: "t.class_name NOT ILIKE '%_Template%' AND t.class_name NOT ILIKE '%_Prototype%' AND (t.name IS NULL OR t.name NOT ILIKE '%PLACEHOLDER%')",
+  },
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -409,6 +420,7 @@ function mapRow(row: any, def: TableDef): any {
     missileRackStats: type === "MISSILE_RACK" ? stats : null,
     bombStats: type === "BOMB" ? stats : null,
     salvageStats: type === "SALVAGE_HEAD" || type === "SALVAGE_MODIFIER" ? stats : null,
+    qigStats: type === "QIG" ? stats : null,
     thrusterStats: null,
     shopInventory: [],
   };
@@ -642,6 +654,33 @@ function buildStats(row: any, type: string): Record<string, any> | null {
       s.radiusMultiplier = numOrNull(row.radius_multiplier);
       s.extractionEfficiency = numOrNull(row.extraction_efficiency);
       s.mass = numOrNull(row.mass);
+      break;
+    }
+
+    case "QIG": {
+      // quantum_interdiction_generators columns (migración 049 base +
+      // extensión 057 con power/emisiones). Los 3 dígitos claves para el
+      // picker son:
+      //   - jammingRange: si impide spooling (los 3 QIGs tienen > 0)
+      //   - interdictionRange: si corta saltos (sólo Reynie tiene > 0)
+      //   - powerDraw: MW continuo en modo Online
+      s.jammingRange = numOrNull(row.jamming_range);
+      s.interdictionRange = numOrNull(row.interdiction_range);
+      s.pulseChargeTime = numOrNull(row.pulse_charge_time);
+      s.pulseDischargeTime = numOrNull(row.pulse_discharge_time);
+      s.pulseCooldownTime = numOrNull(row.pulse_cooldown_time);
+      s.pulseRadius = numOrNull(row.pulse_radius);
+      s.powerDraw = numOrNull(row.power_consumption_max);
+      s.powerDrawMin = numOrNull(row.power_consumption_min);
+      s.powerDrawMax = numOrNull(row.power_consumption_max);
+      s.emSignature = numOrNull(row.em_max);
+      s.emMin = numOrNull(row.em_min);
+      s.emDecay = numOrNull(row.em_decay);
+      s.irSignature = numOrNull(row.ir_max);
+      s.jammerMaxPowerDraw = numOrNull(row.jammer_max_power_draw);
+      s.basePowerDrawFraction = numOrNull(row.base_power_draw_fraction);
+      s.pulsePowerFraction = numOrNull(row.pulse_power_fraction);
+      s.jammerPowerFraction = numOrNull(row.jammer_power_fraction);
       break;
     }
   }

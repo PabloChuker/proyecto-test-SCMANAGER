@@ -114,6 +114,10 @@ const HP_TYPE_TO_CATEGORY: Record<string, string> = {
   TractorBeam: "UTILITY",
   Cargo: "UTILITY",
   EMP: "UTILITY",
+  // Fase N: QIG / QED / QDMP. El hpType de scunpacked es
+  // "QuantumInterdictionGenerator"; mapeamos a QIG para que el widget
+  // dedicado del LoadoutBuilder lo muestre.
+  QuantumInterdictionGenerator: "QIG",
 };
 
 function hpCategory(hpType: string, hpName: string): string {
@@ -127,6 +131,8 @@ function hpCategory(hpType: string, hpName: string): string {
   if (n.includes("salvage") || n.includes("scraper")) return "SALVAGE";
   if (n.includes("mining")) return "MINING";
   if (n.includes("tractor") || n.includes("cargo_beam")) return "UTILITY";
+  // QIG names como `hardpoint_quantum_interdiction_*` o `hardpoint_qed_*`.
+  if (n.includes("interdict") || n.includes("qed") || n.includes("qig") || n.includes("qdmp")) return "QIG";
 
   if (HP_TYPE_TO_CATEGORY[hpType]) return HP_TYPE_TO_CATEGORY[hpType];
   // Try base type (e.g. "LifeSupportGenerator.UNDEFINED" → "LifeSupportGenerator")
@@ -610,14 +616,15 @@ interface IndustrialChildDef {
 }
 
 interface IndustrialArmDef {
-  category: "MINING" | "SALVAGE";
+  category: "MINING" | "SALVAGE" | "QIG";
   hardpointName: string;   // nombre único por brazo
   size: number;
-  /** Override del minSize (default = 0 para MINING, = size para SALVAGE). */
+  /** Override del minSize (default = 0 para MINING, = size para SALVAGE/QIG). */
   minSize?: number;
-  /** true → arm fijo (ej. Golem con Pitman soldado). Bloquea el picker. */
+  /** true → arm fijo (ej. Golem con Pitman soldado, o cualquier QIG). Bloquea el picker. */
   fixed?: boolean;
-  /** Para mining: className que resuelve contra mining_lasers. Para salvage: placeholder del head. */
+  /** Para mining: className que resuelve contra weapon_mining. Para salvage: placeholder del head.
+   *  Para QIG: className del QIG que resuelve contra quantum_interdiction_generators. */
   equippedClass: string;
   equippedName: string;
   /** Sub-items embebidos (module slots para mining, tractor+scraper para salvage). */
@@ -763,6 +770,56 @@ const INDUSTRIAL_INJECTIONS: Array<{ match: RegExp; arms: IndustrialArmDef[] }> 
       ],
     })),
   },
+
+  // ── QIG / QED / QDMP ────────────────────────────────────────────────────
+  // Fase N (2026-04-24): las naves con interdictor cuántico lo traen como
+  // geometría fija del casco — scunpacked NO las expone como hardpoint
+  // editable, igual que salvage arms. Inyectamos el QIG sintético para que
+  // aparezca en el widget del LoadoutBuilder con power/emisiones reales.
+  //
+  // Mapeos confirmados contra scunpacked ships.json + quantum_interdiction_generators:
+  //   RSI_Mantis        → QED_WETK_S03_Reynie (Reynie QED — EM 17000,
+  //                        interdict 20km, CORTA saltos + jammea spool)
+  //   DRAK_Cutlass_Blue → QDMP_WETK_S01_Burke (Burke QD — sólo jammea
+  //                        spooling, interdict ~1m)
+  //   MRAI_Guardian_QI  → QDMP_RSI_S03_Captor (Captor QD — sólo jammea
+  //                        spooling, interdict ~1m)
+  //
+  // Todos marcados fixed=true: el jugador no puede cambiar el QIG (es parte
+  // de la nave). El picker queda bloqueado igual que en el Golem (Pitman fijo).
+  {
+    match: /^RSI_Mantis\b/i,
+    arms: [{
+      category: "QIG",
+      hardpointName: "hardpoint_quantum_interdiction_generator",
+      size: 3,
+      fixed: true,
+      equippedClass: "QED_WETK_S03_Reynie",
+      equippedName: "Reynie QED",
+    }],
+  },
+  {
+    match: /^DRAK_Cutlass_Blue/i,
+    arms: [{
+      category: "QIG",
+      hardpointName: "hardpoint_quantum_interdiction_generator",
+      size: 1,
+      fixed: true,
+      equippedClass: "QDMP_WETK_S01_Burke",
+      equippedName: "Burke QD",
+    }],
+  },
+  {
+    match: /^MRAI_Guardian_QI/i,
+    arms: [{
+      category: "QIG",
+      hardpointName: "hardpoint_quantum_interdiction_generator",
+      size: 3,
+      fixed: true,
+      equippedClass: "QDMP_RSI_S03_Captor",
+      equippedName: "Captor QD",
+    }],
+  },
 ];
 
 /**
@@ -776,6 +833,7 @@ function buildSyntheticIndustrialHardpoints(
   existing: any[],
   miningLaserStats: Map<string, any> = new Map(),
   salvageStats: Map<string, any> = new Map(),
+  qigStats: Map<string, any> = new Map(),
 ): any[] {
   const out: any[] = [];
   for (const { match, arms } of INDUSTRIAL_INJECTIONS) {
@@ -800,6 +858,8 @@ function buildSyntheticIndustrialHardpoints(
         defaultStats = miningLaserStats.get(arm.equippedClass) ?? null;
       } else if (arm.category === "SALVAGE") {
         defaultStats = salvageStats.get(arm.equippedClass) ?? null;
+      } else if (arm.category === "QIG") {
+        defaultStats = qigStats.get(arm.equippedClass) ?? null;
       }
       const equippedItem = {
         id: `${idBase}:item`,
@@ -1020,7 +1080,7 @@ export async function GET(
         const USEFUL = new Set([
           "WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT",
           "COOLER", "QUANTUM_DRIVE", "RADAR", "COUNTERMEASURE", "LIFE_SUPPORT",
-          "MINING", "SALVAGE", "UTILITY",
+          "MINING", "SALVAGE", "UTILITY", "QIG",
         ]);
         if (!USEFUL.has(category)) return null;
 
@@ -1108,10 +1168,11 @@ export async function GET(
     // Pre-fetch mining_lasers una vez para poblar componentStats del laser
     // default (crítico: moduleSlots se usa para renderizar los slots de módulos
     // en el LoadoutBuilder). Solo hace la query si la nave es industrial.
-    const needsIndustrial = /^(ARGO_MOLE|ARGO_MOTH|MISC_Prospector|DRAK_Golem|DRAK_Vulture|MISC_Fortune|RSI_Salvation)/i
+    const needsIndustrial = /^(ARGO_MOLE|ARGO_MOTH|MISC_Prospector|DRAK_Golem|DRAK_Vulture|MISC_Fortune|RSI_Salvation|RSI_Mantis\b|DRAK_Cutlass_Blue|MRAI_Guardian_QI)/i
       .test(String(ship.reference ?? ""));
     let miningLaserStats = new Map<string, any>();
     let salvageStats = new Map<string, any>();
+    let qigStats = new Map<string, any>();
     if (needsIndustrial) {
       // Migrado a weapon_mining (Fase L.1 — migración 054). Esta tabla tiene
       // el class_name canonical del juego, así que ya no necesitamos mapear
@@ -1170,12 +1231,52 @@ export async function GET(
           },
         });
       }
+
+      // Fase N (migración 057): QIG / QED / QDMP ahora tienen power +
+      // emisiones. Hidratamos stats por class_name para los 3 brazos
+      // sintéticos que inyectamos en Mantis / Cutlass Blue / Guardian QI.
+      // El power grid del LoadoutBuilder y el signature panel leen de acá.
+      const qigRows: any[] = await sql.unsafe(
+        `SELECT class_name, name, size, grade,
+                jamming_range, interdiction_range,
+                pulse_charge_time, pulse_discharge_time, pulse_cooldown_time, pulse_radius,
+                power_consumption_min, power_consumption_max,
+                em_max, em_min, em_decay, ir_max,
+                jammer_max_power_draw,
+                base_power_draw_fraction, pulse_power_fraction, jammer_power_fraction
+           FROM quantum_interdiction_generators`,
+      ).catch((e: unknown) => { console.warn("[ships/[id]] quantum_interdiction_generators fetch failed:", e); return []; });
+      for (const q of qigRows) {
+        qigStats.set(String(q.class_name), {
+          size: q.size,
+          grade: q.grade,
+          jammingRange: q.jamming_range,
+          interdictionRange: q.interdiction_range,
+          pulseChargeTime: q.pulse_charge_time,
+          pulseDischargeTime: q.pulse_discharge_time,
+          pulseCooldownTime: q.pulse_cooldown_time,
+          pulseRadius: q.pulse_radius,
+          // Convención del LoadoutBuilder: powerDraw es el consumption_max.
+          powerDraw: q.power_consumption_max,
+          powerDrawMin: q.power_consumption_min,
+          powerDrawMax: q.power_consumption_max,
+          emSignature: q.em_max,
+          emMin: q.em_min,
+          emDecay: q.em_decay,
+          irSignature: q.ir_max,
+          jammerMaxPowerDraw: q.jammer_max_power_draw,
+          basePowerDrawFraction: q.base_power_draw_fraction,
+          pulsePowerFraction: q.pulse_power_fraction,
+          jammerPowerFraction: q.jammer_power_fraction,
+        });
+      }
     }
     const syntheticIndustrial = buildSyntheticIndustrialHardpoints(
       String(ship.reference ?? ""),
       flatHardpointsFromDb as any[],
       miningLaserStats,
       salvageStats,
+      qigStats,
     );
     const flatHardpoints = [...flatHardpointsFromDb, ...syntheticIndustrial];
 

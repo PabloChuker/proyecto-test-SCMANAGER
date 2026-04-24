@@ -8,6 +8,9 @@ export const CAT_COLORS: Record<string, string> = {
   SHIELD: "#3b82f6", POWER_PLANT: "#22c55e", COOLER: "#06b6d4",
   QUANTUM_DRIVE: "#a855f7", MINING: "#f472b6", MINING_MODULE: "#ec4899",
   SALVAGE: "#14b8a6", UTILITY: "#94a3b8",
+  // QIG: violeta profundo para diferenciarlo del QUANTUM_DRIVE lila y seguir
+  // manteniendo la categoría "quantum" visualmente agrupada.
+  QIG: "#7c3aed",
   OTHER: "#71717a",
 };
 
@@ -111,6 +114,16 @@ export function getKeyStat(category: string, stats: Record<string, any> | null |
       if (spd !== null) return { v: spd.toFixed(2) + "×", l: "SPD" };
       const rad = tryNum(stats, "radiusMultiplier");
       if (rad !== null) return { v: rad.toFixed(2) + "×", l: "RAD" };
+      return null;
+    }
+    case "QIG": {
+      // Prioridad: interdiction_range si corta saltos (Reynie = 20km; los
+      // QDMP-only tienen interdiction ~1m y muestran jamming_range). Formato
+      // "20.0k" / "4.5k" con unidad "m" abreviada por fmtStat.
+      const inter = tryNum(stats, "interdictionRange");
+      if (inter !== null && inter > 10) return { v: fmtStat(inter) + "m", l: "CUT" };
+      const jam = tryNum(stats, "jammingRange");
+      if (jam !== null) return { v: fmtStat(jam) + "m", l: "JAM" };
       return null;
     }
     case "MINING_MODULE": {

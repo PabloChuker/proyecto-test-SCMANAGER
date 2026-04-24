@@ -31,6 +31,10 @@ const CAT_TO_API_TYPE: Record<string, string> = {
   // es un salvage head (detectado abajo con isSalvageHeadClass), el picker
   // flipea a SALVAGE_MODIFIER. Ver bloque de parentClassName más abajo.
   SALVAGE: "SALVAGE_HEAD",
+  // QIG — slot de interdictor cuántico. En Mantis/Cutlass Blue/Guardian QI
+  // el slot viene fixed=true (no se abre el picker), pero si en el futuro
+  // otras naves lo traen editable, el mapping ya está.
+  QIG: "QIG",
 };
 
 // Mining modules no viven en la BD: vienen del JSON curado en
@@ -76,6 +80,7 @@ const CAT_TO_ITEM_TYPE: Record<string, string> = {
   MINING: "MINING",
   UTILITY: "UTILITY",
   SALVAGE: "SALVAGE",
+  QIG: "QIG",
 };
 
 interface CatalogItem {
@@ -85,7 +90,7 @@ interface CatalogItem {
   weaponStats?: any; shieldStats?: any; powerStats?: any; coolingStats?: any;
   quantumStats?: any; miningStats?: any; missileStats?: any;
   turretStats?: any; missileRackStats?: any; bombStats?: any;
-  salvageStats?: any; thrusterStats?: any;
+  salvageStats?: any; qigStats?: any; thrusterStats?: any;
   shopInventory?: Array<{ priceBuy: number | null; priceSell: number | null; shop: { name: string; location: { name: string; parentName: string | null } } }>;
 }
 
@@ -246,7 +251,7 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
   }, [search, hardpoint.resolvedCategory, hardpoint.maxSize, hardpoint.minSize, parentClassName, parentMaxMissileSize, parentMinMissileSize]);
 
   const getItemStats = useCallback((item: CatalogItem): Record<string, any> | null => {
-    return item.weaponStats || item.shieldStats || item.powerStats || item.coolingStats || item.quantumStats || item.miningStats || item.missileStats || item.turretStats || item.missileRackStats || item.bombStats || item.salvageStats || item.thrusterStats || null;
+    return item.weaponStats || item.shieldStats || item.powerStats || item.coolingStats || item.quantumStats || item.miningStats || item.missileStats || item.turretStats || item.missileRackStats || item.bombStats || item.salvageStats || item.qigStats || item.thrusterStats || null;
   }, []);
 
   const getBestPrice = useCallback((item: CatalogItem): number | null => {
@@ -454,6 +459,9 @@ function getStatColumnLabel(cat: string): string {
     // SALVAGE: las heads no tienen stat propia (el stat column queda "-");
     // los modifiers muestran Speed multiplier como métrica principal.
     case "SALVAGE": return "Spd";
+    // QIG: métrica principal es el alcance de jamming (los 3 QIGs siempre
+    // tienen jamming_range; sólo el Reynie corta saltos con interdict_range).
+    case "QIG": return "Jam";
     default: return "Pwr";
   }
 }
@@ -479,6 +487,9 @@ function getSortStatVal(stats: Record<string, any> | null, cat: string): number 
       // Modifiers: orden por speed multiplier (más rápido primero). Heads
       // no tienen speed — quedan al final con 0.
       return stats.salvageSpeedMultiplier ?? 0;
+    case "QIG":
+      // Orden por jamming range descendente (más alcance primero).
+      return stats.jammingRange ?? 0;
     default: return stats.powerDraw ?? 0;
   }
 }
