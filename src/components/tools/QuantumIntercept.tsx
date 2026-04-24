@@ -319,10 +319,10 @@ const GROUP_LABELS: Record<string, Record<string, string>> = {
 };
 
 const PLANET_RADIUS: Record<string, number> = {
-  stantonstar: 14, pyrostar: 14, nyxstar: 12,
-  stanton1: 7, stanton2: 9, stanton3: 6, stanton4: 6,
-  pyro1: 5, pyro2: 5, pyro3: 6, pyro4: 5, pyro5: 7, pyro6: 6,
-  nyx1: 5, nyx2: 5, nyx3: 5,
+  stantonstar: 18, pyrostar: 18, nyxstar: 16,
+  stanton1: 9, stanton2: 12, stanton3: 8, stanton4: 8,
+  pyro1: 7, pyro2: 7, pyro3: 8, pyro4: 7, pyro5: 9, pyro6: 8,
+  nyx1: 7, nyx2: 7, nyx3: 7,
 };
 
 // ─── SearchSelect ─────────────────────────────────────────────────────────────
@@ -621,13 +621,13 @@ export default function QuantumIntercept() {
       ctx.lineWidth   = 2;
       ctx.stroke();
       ctx.restore();
-      ctx.font      = "bold 11px monospace";
+      ctx.font      = "bold 13px monospace";
       ctx.fillStyle = "#fbbf24";
       ctx.textAlign = "left";
-      ctx.fillText("INTERCEPT", ix + r + 4, iy - 4);
-      ctx.font      = "10px monospace";
+      ctx.fillText("INTERCEPT", ix + r + 5, iy - 4);
+      ctx.font      = "12px monospace";
       ctx.fillStyle = "rgba(251,191,36,0.7)";
-      ctx.fillText(`${interceptPct}%`, ix + r + 4, iy + 8);
+      ctx.fillText(`${interceptPct}%`, ix + r + 5, iy + 10);
     }
 
     // Positioning guide: line from nearest marker to intercept
@@ -658,7 +658,7 @@ export default function QuantumIntercept() {
 
       const mx2 = (nx + ix2) / 2;
       const my2 = (ny + iy2) / 2;
-      ctx.font      = "9px monospace";
+      ctx.font      = "11px monospace";
       ctx.fillStyle = "#4ade80";
       ctx.textAlign = "center";
       ctx.fillText(fmtDist(nearestToIntercept.dist), mx2, my2 - 5);
@@ -680,19 +680,19 @@ export default function QuantumIntercept() {
         ctx.shadowColor = starColor;
         ctx.shadowBlur  = 30;
         ctx.beginPath();
-        ctx.arc(sx, sy, 14, 0, Math.PI * 2);
+        ctx.arc(sx, sy, 17, 0, Math.PI * 2);
         ctx.fillStyle = grad;
         ctx.fill();
         ctx.restore();
-        ctx.font      = "11px monospace";
+        ctx.font      = "13px monospace";
         ctx.fillStyle = `${starColor}99`;
         ctx.textAlign = "center";
-        ctx.fillText(poi.name, sx, sy + 24);
+        ctx.fillText(poi.name, sx, sy + 28);
         return;
       }
 
       if (poi.type === "jumppoint") {
-        const h = 6 + (isHovered || isSelected ? 2 : 0);
+        const h = 8 + (isHovered || isSelected ? 2 : 0);
         ctx.save();
         if (isSelected) { ctx.shadowColor = "#a78bfa"; ctx.shadowBlur = 14; }
         else if (isHovered) { ctx.shadowColor = "#c4b5fd"; ctx.shadowBlur = 8; }
@@ -709,7 +709,7 @@ export default function QuantumIntercept() {
         ctx.stroke();
         ctx.restore();
         if (isHovered || isSelected) {
-          ctx.font      = "10px monospace";
+          ctx.font      = "12px monospace";
           ctx.fillStyle = isSelected ? "#c4b5fd" : "#a1a1aa";
           ctx.textAlign = "left";
           ctx.fillText(poi.name, sx + h + 5, sy + 4);
@@ -718,14 +718,14 @@ export default function QuantumIntercept() {
       }
 
       if (poi.type === "station") {
-        const h = 3 + (isHovered || isSelected ? 2 : 0);
+        const h = 4 + (isHovered || isSelected ? 2 : 0);
         ctx.save();
         if (isSelected) { ctx.shadowColor = "#22d3ee"; ctx.shadowBlur = 8; }
         ctx.fillStyle = isSelected ? "#22d3ee" : isHovered ? "#d4d4d8" : "#52525b";
         ctx.fillRect(sx - h, sy - h, h * 2, h * 2);
         ctx.restore();
         if (isHovered || isSelected) {
-          ctx.font      = "10px monospace";
+          ctx.font      = "12px monospace";
           ctx.fillStyle = isSelected ? "#22d3ee" : "#a1a1aa";
           ctx.textAlign = "left";
           ctx.fillText(poi.name, sx + h + 4, sy + 4);
@@ -734,7 +734,7 @@ export default function QuantumIntercept() {
       }
 
       if (poi.type === "moon") {
-        const r = 3 + (isHovered || isSelected ? 1.5 : 0);
+        const r = 4 + (isHovered || isSelected ? 1.5 : 0);
         ctx.save();
         if (isSelected) { ctx.shadowColor = "#22d3ee"; ctx.shadowBlur = 8; }
         ctx.beginPath();
@@ -743,7 +743,7 @@ export default function QuantumIntercept() {
         ctx.fill();
         ctx.restore();
         if (isHovered || isSelected) {
-          ctx.font      = "10px monospace";
+          ctx.font      = "12px monospace";
           ctx.fillStyle = isSelected ? "#22d3ee" : "#a1a1aa";
           ctx.textAlign = "left";
           ctx.fillText(poi.name, sx + 6, sy + 4);
@@ -767,10 +767,10 @@ export default function QuantumIntercept() {
         ctx.stroke();
       }
       ctx.restore();
-      ctx.font      = "bold 11px monospace";
+      ctx.font      = "bold 13px monospace";
       ctx.fillStyle = isSelected ? "#22d3ee" : (poi.color ?? "#a1a1aa");
       ctx.textAlign = "center";
-      ctx.fillText(poi.name, sx, sy + rr + 13);
+      ctx.fillText(poi.name, sx, sy + rr + 15);
     });
   }, [system, POIS, origin, dest, interceptPct, interceptPos, nearestToIntercept, hoveredPoi, originId, destId, zoom, pan, showComlinks]);
 
@@ -1182,34 +1182,34 @@ export default function QuantumIntercept() {
         <div className="absolute bottom-3 right-3 flex gap-1.5">
           <button
             onClick={resetView}
-            className="bg-zinc-900/80 border border-zinc-700 text-zinc-400 hover:text-zinc-200 text-xs px-2 py-1 rounded"
+            className="bg-zinc-900/80 border border-zinc-700 text-zinc-400 hover:text-zinc-200 text-sm px-3 py-1.5 rounded"
           >
             Reset view
           </button>
         </div>
 
-        <div className="absolute bottom-3 left-3 flex items-center gap-3 text-xs text-zinc-500">
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-3 rounded-full bg-[#c2783a] inline-block" /> Planeta
+        <div className="absolute bottom-3 left-3 flex items-center gap-3 text-sm text-zinc-400">
+          <span className="flex items-center gap-1.5">
+            <span className="w-3.5 h-3.5 rounded-full bg-[#c2783a] inline-block" /> Planeta
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-zinc-500 inline-block" /> Luna
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-zinc-500 inline-block" /> Luna
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 bg-zinc-600 inline-block" /> Estación
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 bg-zinc-600 inline-block" /> Estación
           </span>
-          <span className="flex items-center gap-1 text-violet-400">
-            <span className="inline-block" style={{ fontSize: 10 }}>◇</span> Jump Point
+          <span className="flex items-center gap-1.5 text-violet-400">
+            <span className="inline-block" style={{ fontSize: 13 }}>◇</span> Jump Point
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-px bg-cyan-500 inline-block" /> Ruta QT
+          <span className="flex items-center gap-1.5">
+            <span className="w-4 h-px bg-cyan-500 inline-block" /> Ruta QT
           </span>
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-amber-400 inline-block" /> Intercept
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" /> Intercept
           </span>
         </div>
 
-        <div className="absolute top-3 right-3 text-xs text-zinc-600">
+        <div className="absolute top-3 right-3 text-sm text-zinc-500">
           Scroll para zoom · Drag para mover
         </div>
       </div>
