@@ -72,9 +72,13 @@ export default function FriendsPage() {
       return;
     }
 
+    // SECURITY: usar la view profiles_public (mig 063) que expone SOLO
+    // columnas seguras (id, username, display_name, avatar_url, is_online,
+    // user_number, country, org_id). Nunca discord_id / discord_username /
+    // last_seen / first_name / last_name / age.
     const { data: profiles } = await supabase
-      .from("profiles")
-      .select("*")
+      .from("profiles_public")
+      .select("id, username, display_name, avatar_url, is_online")
       .in("id", allIds);
 
     const profileMap = new Map<string, Profile>();
@@ -145,10 +149,13 @@ export default function FriendsPage() {
   const searchUsers = useCallback(async () => {
     if (!searchQuery.trim() || !user) return;
     setSearching(true);
+    // SECURITY: profiles_public view + whitelist explícita. Ya no buscamos
+    // por discord_username porque exponer Discord IDs/handles a otros usuarios
+    // sería una fuga de PII (ver fix de seguridad 2026-04-25).
     const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .or(`username.ilike.%${searchQuery}%,display_name.ilike.%${searchQuery}%,discord_username.ilike.%${searchQuery}%`)
+      .from("profiles_public")
+      .select("id, username, display_name, avatar_url, is_online")
+      .or(`username.ilike.%${searchQuery}%,display_name.ilike.%${searchQuery}%`)
       .neq("id", user.id)
       .limit(20);
     setSearchResults((data ?? []) as Profile[]);
@@ -339,6 +346,8 @@ export default function FriendsPage() {
                             : "Solicitud enviada"}
                         </div>
                       </div>
+                      {/* SECURITY 2026-04-25: removido `discord_username` —
+                          no exponer handles de Discord de otros users. */}
                       {f.direction === "received" && (
                         <button
                           onClick={() => acceptRequest(f.friendship.id)}
@@ -409,7 +418,7 @@ export default function FriendsPage() {
                           {p.display_name ?? p.username}
                         </div>
                         <div className="text-xs text-zinc-500">
-                          {p.discord_username ?? ""}
+                          {p.username ? `@${p.username}` : ""}
                         </div>
                       </div>
                       {alreadyFriend ? (
@@ -475,7 +484,7 @@ function FriendCard({
           {friend.profile.display_name ?? friend.profile.username}
         </div>
         <div className="text-xs text-zinc-500">
-          {friend.profile.discord_username ?? ""}
+          {friend.profile.username ? `@${friend.profile.username}` : ""}
         </div>
       </div>
       <button

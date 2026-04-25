@@ -447,9 +447,10 @@ export default function ActivityManager() {
 
       if (members && members.length > 0) {
         const userIds = members.map((m) => m.user_id);
+        // SECURITY: profiles_public + whitelist (mig 063).
         const { data: profiles } = await supabase
-          .from("profiles")
-          .select("*")
+          .from("profiles_public")
+          .select("id, username, display_name, avatar_url, is_online")
           .in("id", userIds);
 
         setPartyMembers((profiles ?? []) as Profile[]);

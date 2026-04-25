@@ -6,7 +6,7 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   X, Lock, ChevronDown, Shield,
-  Settings, CreditCard, Heart, Bell, Eye, Check, Link2,
+  Settings, CreditCard, Heart, Bell, Eye, Check, Link2, Share2,
 } from "lucide-react";
 import Header from "@/app/assets/header/Header";
 import { SIDEBAR_ITEMS } from "@/app/assets/header/navigation";
@@ -16,7 +16,7 @@ import { PageVideoBackground } from "@/components/shared/PageVideoBackground";
 import { useTranslations } from "next-intl";
 
 // ── Types ──────────────────────────────────────────────────────────────────
-type SectionId = "config" | "subs" | "org";
+type SectionId = "config" | "referral" | "subs" | "org";
 
 // ── Panel: Configuración ───────────────────────────────────────────────────
 
@@ -180,6 +180,175 @@ function SubsPanel({ onClose }: { onClose: () => void }) {
           <div className="text-base font-bold text-zinc-400 mb-1">{t("comingSoon")}</div>
           <p className="text-xs text-zinc-600 leading-relaxed">{t("comingSoonDesc")}</p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Panel: Referral code ───────────────────────────────────────────────────
+//
+// Permite al usuario cargar SU código de Star Citizen Referral Program. El
+// código entra al pool del rotador del header con weight=1 (baja exposición
+// vs los devs que tienen weight=6). Validación STAR-XXXX-XXXX en el cliente
+// + servidor.
+function ReferralPanel({ onClose }: { onClose: () => void }) {
+  const [code, setCode] = useState("");
+  const [savedCode, setSavedCode] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+
+  // Load current code on mount
+  useEffect(() => {
+    fetch("/api/referral/me", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.code) {
+          setSavedCode(d.code);
+          setCode(d.code);
+        }
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const isValidFormat = /^STAR-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(code.toUpperCase().trim());
+
+  const handleSave = async () => {
+    setError(null);
+    setSuccess(false);
+    if (!isValidFormat) {
+      setError("Formato esperado: STAR-XXXX-XXXX");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/referral/me", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: code.toUpperCase().trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data?.error ?? "Error al guardar");
+      } else {
+        setSavedCode(data.code);
+        setSuccess(true);
+        setTimeout(() => setSuccess(false), 3000);
+      }
+    } catch (e: any) {
+      setError(e?.message ?? "Error de red");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    setError(null);
+    setSaving(true);
+    try {
+      const res = await fetch("/api/referral/me", { method: "DELETE" });
+      if (res.ok) {
+        setSavedCode(null);
+        setCode("");
+      } else {
+        const d = await res.json().catch(() => ({}));
+        setError(d?.error ?? "No se pudo quitar");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="bg-zinc-900/50 backdrop-blur-sm px-6 py-5 border-b border-zinc-800/30 flex items-center justify-between flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <Share2 size={16} className="text-amber-400" />
+          <span className="font-mono text-xs tracking-[0.15em] uppercase text-zinc-300">Referral Code</span>
+        </div>
+        <button onClick={onClose} className="w-8 h-8 rounded border border-zinc-700/50 flex items-center justify-center text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition-all"><X size={13} /></button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        <div>
+          <p className="text-xs text-zinc-400 leading-relaxed">
+            Cargá tu código de referidos del programa oficial de RSI. Cuando un visitante de SC Labs
+            entre a registrarse en el juego, tu código puede aparecer en el rotador del header y
+            sumarte recruits.
+          </p>
+          <p className="text-[11px] text-zinc-500 mt-2 leading-relaxed">
+            Formato: <span className="font-mono text-amber-300">STAR-XXXX-XXXX</span>. Lo encontrás en
+            tu cuenta RSI → Settings → Referral.
+          </p>
+        </div>
+
+        {loading ? (
+          <div className="text-center text-xs text-zinc-500 py-6">Loading…</div>
+        ) : (
+          <>
+            <div>
+              <label className="text-[10px] font-mono tracking-[0.12em] uppercase text-zinc-500 block mb-1.5">
+                Tu código
+              </label>
+              <input
+                type="text"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                placeholder="STAR-XXXX-XXXX"
+                maxLength={14}
+                className="w-full px-3 py-2.5 bg-zinc-900/60 border border-zinc-800/60 rounded-sm text-zinc-100 text-sm font-mono tracking-wider placeholder-zinc-700 focus:outline-none focus:border-amber-500/50 transition-colors"
+              />
+              {!loading && code && !isValidFormat && (
+                <p className="text-[11px] text-rose-400/80 mt-1.5">Formato inválido. Debe ser STAR-XXXX-XXXX.</p>
+              )}
+              {savedCode && (
+                <p className="text-[11px] text-emerald-400/80 mt-1.5">
+                  Código activo en el rotador del header ✓
+                </p>
+              )}
+            </div>
+
+            {error && (
+              <div className="px-3 py-2 rounded-sm border border-rose-500/40 bg-rose-500/10 text-[11px] text-rose-300">
+                {error}
+              </div>
+            )}
+            {success && (
+              <div className="px-3 py-2 rounded-sm border border-emerald-500/40 bg-emerald-500/10 text-[11px] text-emerald-300">
+                Código guardado correctamente.
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleSave}
+                disabled={saving || !isValidFormat || code.toUpperCase().trim() === savedCode}
+                className="flex-1 px-4 py-2 bg-amber-500/20 border border-amber-500/40 rounded-sm text-amber-300 text-sm font-medium hover:bg-amber-500/30 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {saving ? "Saving…" : savedCode && code.toUpperCase().trim() === savedCode ? "Guardado" : "Guardar"}
+              </button>
+              {savedCode && (
+                <button
+                  onClick={handleRemove}
+                  disabled={saving}
+                  className="px-4 py-2 border border-zinc-700 rounded-sm text-zinc-400 text-sm hover:border-rose-500/40 hover:text-rose-300 transition-all disabled:opacity-40"
+                >
+                  Quitar
+                </button>
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-zinc-800/40">
+              <p className="text-[10px] text-zinc-600 leading-relaxed">
+                Tu código aparece de forma aleatoria en el rotador del header con un peso bajo
+                (1× vs 6× de los códigos de los devs de SC Labs). A medida que crezca el pool
+                de códigos, los pesos se irán balanceando.
+              </p>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -612,6 +781,14 @@ export default function ProfilePage() {
                           soon: false,
                         },
                         {
+                          id: "referral" as SectionId,
+                          icon: <Share2 size={17} />,
+                          iconCls: "bg-amber-500/15 text-amber-400",
+                          label: "Referral Code",
+                          desc: "Cargá tu STAR-XXXX-XXXX para sumar recruits",
+                          soon: false,
+                        },
+                        {
                           id: "subs" as SectionId,
                           icon: <Lock size={17} />,
                           iconCls: "bg-zinc-800/50 text-zinc-600",
@@ -677,7 +854,7 @@ export default function ProfilePage() {
               display:    "flex",
               alignItems: "stretch",
             }}>
-              {(["config", "subs", "org"] as SectionId[]).map(id => (
+              {(["config", "referral", "subs", "org"] as SectionId[]).map(id => (
                 <div key={id} style={{
                   ...panelStyle(activeSection === id),
                   borderRadius:   "0 16px 16px 0",
@@ -689,9 +866,10 @@ export default function ProfilePage() {
                   flexDirection:  "column",
                 }}>
                   <div className="h-[3px] bg-gradient-to-r from-lime-600 to-amber-600 flex-shrink-0" />
-                  {activeSection === "config" && id === "config" && <ConfigPanel onClose={() => setActiveSection(null)} />}
-                  {activeSection === "subs"   && id === "subs"   && <SubsPanel onClose={() => setActiveSection(null)} />}
-                  {activeSection === "org"    && id === "org"    && <OrgInfoPanel orgName={orgName} onClose={() => setActiveSection(null)} />}
+                  {activeSection === "config"   && id === "config"   && <ConfigPanel onClose={() => setActiveSection(null)} />}
+                  {activeSection === "referral" && id === "referral" && <ReferralPanel onClose={() => setActiveSection(null)} />}
+                  {activeSection === "subs"     && id === "subs"     && <SubsPanel onClose={() => setActiveSection(null)} />}
+                  {activeSection === "org"      && id === "org"      && <OrgInfoPanel orgName={orgName} onClose={() => setActiveSection(null)} />}
                 </div>
               ))}
             </div>

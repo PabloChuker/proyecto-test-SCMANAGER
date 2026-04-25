@@ -78,9 +78,11 @@ export default function PartyPage() {
       f.requester_id === user.id ? f.addressee_id : f.requester_id
     );
 
+    // SECURITY: profiles_public + whitelist (mig 063 — no exponer
+    // discord_id, discord_username, last_seen, first_name, last_name, age).
     const { data: profiles } = await supabase
-      .from("profiles")
-      .select("*")
+      .from("profiles_public")
+      .select("id, username, display_name, avatar_url, is_online")
       .in("id", friendIds)
       .eq("is_online", true);
 
@@ -134,9 +136,10 @@ export default function PartyPage() {
 
       if (members && members.length > 0) {
         const userIds = members.map((m) => m.user_id);
+        // SECURITY: profiles_public + whitelist (mig 063).
         const { data: profiles } = await supabase
-          .from("profiles")
-          .select("*")
+          .from("profiles_public")
+          .select("id, username, display_name, avatar_url, is_online")
           .in("id", userIds);
 
         const profileMap = new Map<string, Profile>();

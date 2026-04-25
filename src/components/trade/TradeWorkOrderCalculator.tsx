@@ -705,8 +705,10 @@ export default function TradeWorkOrderCalculator() {
       }
 
       const ids = members.map((m) => m.user_id);
+      // SECURITY: profiles_public (mig 063) — la base table profiles tiene
+      // RLS owner-only, queries de OTROS users van contra la view.
       const { data: profiles, error: pErr } = await supabase
-        .from("profiles")
+        .from("profiles_public")
         .select("id, display_name, username, avatar_url")
         .in("id", ids);
       if (pErr) throw pErr;
