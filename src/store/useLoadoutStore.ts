@@ -354,42 +354,17 @@ function computeStats(
     if (dps === 0 && alpha > 0 && fireRate > 0) dps = alpha * (fireRate / 60);
     totalDps += dps;
     totalAlpha += alpha;
-    if (dps <= 0 || fireRate <= 0) return;
-    const rps = fireRate / 60;
-    // Heat duty-cycle (sustained-DPS heat-limited): armas balísticas tipo Mantis GT-220.
-    // Modelo Erkul-match: el cooling *no* actúa durante el fuego — el arma acumula
-    // heatPerShot × rps y overheatea cuando llega a overheatTemperature; después
-    // espera overheatFixTime y reinicia. coolingPerSecond no entra en la fórmula
-    // porque el juego aplica cooling solo entre disparos (muy marginal) o durante
-    // el fix state, lo cual ya está representado por overheatFixTime.
-    const heatPerShot = pickNum(s, "heatPerShot");
-    const overheatTemp = pickNum(s, "overheatTemperature");
-    const overheatFixTime = pickNum(s, "overheatFixTime");
-    let heatDuty = 1;
-    if (heatPerShot > 0 && overheatTemp > 0 && overheatFixTime > 0) {
-      const heatPerSec = heatPerShot * rps;
-      if (heatPerSec > 0) {
-        const tToOverheat = overheatTemp / heatPerSec;
-        heatDuty = tToOverheat / (tToOverheat + overheatFixTime);
-      }
-    }
-    // Capacitor duty-cycle (energy weapons tipo Panther/Omnisky): modelo "reserve magazine".
-    // Erkul-match: maxRegenPerSec es la tasa de refill del reserve, NO energy/s del capacitor.
-    // fire_time = maxAmmoLoad / rps         (tiempo en agotar el reserve completo)
-    // reload_time = maxAmmoLoad / maxRegenPerSec   (tiempo en rellenar el reserve)
-    // Ej Panther: 75/12.5 = 6s fire, 75/15 = 5s reload, duty = 6/11 = 0.545,
-    //   sustained = 545.6 × 0.545 = 297 dps (≈ Erkul 291). ✅
-    // Ballistic weapons no tienen maxAmmoLoad/maxRegenPerSec → se skipea; heat handle el throttle.
-    const reserveRounds = pickNum(s, "maxAmmoLoad");
-    const regenPerSec = pickNum(s, "maxRegenPerSec");
-    let capDuty = 1;
-    if (reserveRounds > 0 && regenPerSec > 0) {
-      const fireTime = reserveRounds / rps;
-      const reloadTime = reserveRounds / regenPerSec;
-      capDuty = fireTime / (fireTime + reloadTime);
-    }
-    const duty = Math.max(0, Math.min(1, Math.min(heatDuty, capDuty)));
-    totalSustainedDps += dps * duty;
+    // Pablo (2026-04-25): Sustained DPS = sumatoria pura del DPS de cada
+    // arma. NO aplicar duty cycle (heat / capacitor) — eso confundía al
+    // usuario porque el panel mostraba un número menor a la suma simple
+    // de los DPS individuales que ven en cada slot. El gate binario por
+    // energía de armas (todo/nada) se aplica más abajo en el bucket.
+    // Si en el futuro queremos exponer el "DPS real con throttle por
+    // overheat/capacitor", lo agregamos como métrica separada (ej.
+    // realisticDps) — el modelo de duty cycle quedó comentado por las
+    // fórmulas que lo calculaban (heat: tToOverheat / (t + fixTime);
+    // capacitor: fireTime / (fireTime + reloadTime)).
+    totalSustainedDps += dps;
   };
 
   const accumBase = (s: ComponentStatsData | null | undefined) => {
@@ -736,15 +711,16 @@ function computeStats(
       isOn: weaponActiveCount > 0,
     });
 
-    // Fase Q.3 (2026-04-25): si el usuario quita toda la energía del bucket
-    // weapons (allocatedPips === 0 explícito), o no hay armas activas, el
-    // DPS debe colapsar a 0. Erkul-style: la asignación de pips actúa como
-    // gate multiplicativo sobre el DPS / alpha damage. Escalar lineal por el
-    // ratio mantiene la curva intuitiva entre 0 y máximo.
-    const weaponsEffectivePips = Math.min(weaponAllocPips, combinedPips);
-    const weaponPowerRatio = combinedPips > 0 && weaponActiveCount > 0
-      ? weaponsEffectivePips / combinedPips
-      : 0;
+    // Pablo (2026-04-25): GATE BINARIO. El DPS reportado debe ser:
+    //   - Suma cruda de las armas si hay energía Y al menos un weapon ON
+    //   - 0 si pips=0 explícito o todas las armas off
+    // Antes escalaba lineal por el ratio de pips (0.5 pips → DPS al 50%),
+    // pero el feedback de Pablo es que la métrica que importa es "tengo
+    // armas operativas o no", no "qué porcentaje de energía les puse". Si
+    // mañana queremos volver al modelo lineal Erkul-style se restaura
+    // multiplicando por (effectivePips / combinedPips) en vez de 0/1.
+    const weaponSystemActive = weaponActiveCount > 0 && weaponAllocPips > 0;
+    const weaponPowerRatio = weaponSystemActive ? 1 : 0;
     totalDps          *= weaponPowerRatio;
     totalSustainedDps *= weaponPowerRatio;
     totalAlpha        *= weaponPowerRatio;
