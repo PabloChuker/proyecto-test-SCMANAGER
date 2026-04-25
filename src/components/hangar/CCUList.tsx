@@ -221,14 +221,19 @@ export function CCUList({ ccus }: CCUListProps) {
 
   return (
     <div className="overflow-hidden rounded-sm border border-zinc-800/60 bg-zinc-900/40">
+      {/* Layout estilo planilla (Pablo, 2026-04-25):
+          $From | Desde | Hacia | $To | Exchange (lo pagado) | Ahorro | Type | Location | Notes | Actions
+          El "Jump" implícito es la resta visual de las dos columnas $. */}
       <div className="hidden md:flex items-center gap-3 px-3 py-2 border-b border-zinc-800/60 bg-zinc-900/60 text-[9px] tracking-[0.15em] uppercase text-zinc-500 font-mono">
-        <div className="flex-1">From ($MSRP) → To ($MSRP)</div>
-        <div className="w-20 text-right" title="Real jump value: MSRP destination − MSRP origin">Jump</div>
-        <div className="w-20 text-right" title="What you actually paid for this CCU">Paid</div>
-        <div className="w-24 text-right" title="Discount you got: Jump − Paid. Green = saved money, red = paid more than the bare delta.">Saved</div>
-        <div className="w-16 text-center">Type</div>
+        <div className="w-16 text-right" title="MSRP de la nave origen">$</div>
+        <div className="flex-1 min-w-0">Desde</div>
+        <div className="flex-1 min-w-0">Hacia</div>
+        <div className="w-16 text-right" title="MSRP de la nave destino">$</div>
+        <div className="w-20 text-right" title="Lo que pagaste por este CCU">Exchange</div>
+        <div className="w-24 text-right" title="Ahorro: ($destino − $origen) − exchange. Verde = ahorraste; rojo = pagaste de más.">Ahorro</div>
+        <div className="w-14 text-center">Type</div>
         <div className="w-24 text-center">Location</div>
-        <div className="flex-1 max-w-[200px]">Notes</div>
+        <div className="flex-1 max-w-[180px]">Notes</div>
         <div className="w-24 text-right">Actions</div>
       </div>
       <div className="divide-y divide-zinc-800/40">
@@ -272,32 +277,28 @@ function CCURow({ ccu, msrpIndex }: { ccu: HangarCCU; msrpIndex: MsrpIndex }) {
 
   return (
     <div className="group flex items-center gap-3 px-3 py-2 hover:bg-zinc-800/30 transition-colors text-[12px]">
-      {/* From ($X) → To ($Y) */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 truncate">
-          <span className="text-zinc-300">{ccu.fromShip}</span>
-          <span className="text-[10px] font-mono text-zinc-500 tabular-nums">
-            ({fmtUSD(fromMsrp)})
-          </span>
-          <span className="text-zinc-600">→</span>
-          <span className="text-cyan-300">{ccu.toShip}</span>
-          <span className="text-[10px] font-mono text-cyan-500/70 tabular-nums">
-            ({fmtUSD(toMsrp)})
-          </span>
-        </div>
+      {/* $From — precio de la nave origen */}
+      <div className="w-16 text-right hidden md:block font-mono tabular-nums text-zinc-400">
+        {fmtUSD(fromMsrp)}
       </div>
 
-      {/* Jump value (puro) */}
-      <div className="w-20 text-right hidden md:block font-mono tabular-nums text-zinc-300">
-        {jumpValue !== null ? fmtUSD(jumpValue) : "—"}
+      {/* Desde — nombre nave origen */}
+      <div className="flex-1 min-w-0 truncate text-zinc-300">{ccu.fromShip}</div>
+
+      {/* Hacia — nombre nave destino */}
+      <div className="flex-1 min-w-0 truncate text-cyan-300">{ccu.toShip}</div>
+
+      {/* $To — precio de la nave destino */}
+      <div className="w-16 text-right hidden md:block font-mono tabular-nums text-cyan-300/80">
+        {fmtUSD(toMsrp)}
       </div>
 
-      {/* Paid */}
+      {/* Exchange — lo que el usuario pagó */}
       <div className="w-20 text-right hidden md:block font-mono tabular-nums text-amber-300/80">
         ${ccu.pricePaid.toLocaleString()}
       </div>
 
-      {/* Saved (= jump − paid) */}
+      {/* Ahorro (= $To − $From − Exchange) */}
       <div className={`w-24 text-right hidden md:block font-mono tabular-nums ${savedColor}`}>
         {saved !== null ? (
           <>
@@ -315,7 +316,7 @@ function CCURow({ ccu, msrpIndex }: { ccu: HangarCCU; msrpIndex: MsrpIndex }) {
       </div>
 
       {/* Type */}
-      <div className="w-16 text-center hidden md:block">
+      <div className="w-14 text-center hidden md:block">
         {ccu.isWarbond ? (
           <span className="text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded-[2px] border bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
             WB
@@ -333,7 +334,7 @@ function CCURow({ ccu, msrpIndex }: { ccu: HangarCCU; msrpIndex: MsrpIndex }) {
       </div>
 
       {/* Notes */}
-      <div className="flex-1 max-w-[200px] hidden md:block text-[10px] text-zinc-500 truncate">
+      <div className="flex-1 max-w-[180px] hidden md:block text-[10px] text-zinc-500 truncate">
         {ccu.notes || "—"}
       </div>
 
