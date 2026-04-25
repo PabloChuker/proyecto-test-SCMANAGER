@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import NotificationBell from "@/components/notifications/NotificationBell";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
 import PerformanceToggle from "@/components/shared/PerformanceToggle";
+import ReferralRotator from "@/components/shared/ReferralRotator";
 
 interface HeaderProps {
   subtitle?: string;
@@ -161,8 +162,12 @@ export default function Header({ subtitle }: HeaderProps) {
           })}
         </nav>
 
-        {/* ── Right: Auth ── */}
+        {/* ── Right: Referral rotator + Performance + Lang + Auth ──
+            Fase S (2026-04-25): ReferralRotator queda al inicio de la zona
+            derecha — visualmente entre el último menú central (TOOLS) y el
+            toggle FULL/LITE. Se oculta solo en mobile (<md). */}
         <div className="flex items-center gap-2 justify-end">
+          <ReferralRotator />
           <PerformanceToggle />
           <LanguageSwitcher />
           {loading ? (
