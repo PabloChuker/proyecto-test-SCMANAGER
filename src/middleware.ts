@@ -39,7 +39,7 @@ setInterval(() => {
 // ─── Middleware ──────────────────────────────────────────────────────────────
 
 // ─── MANTENIMIENTO — quitar estas líneas para reactivar la web ───────────────
-const MAINTENANCE_MODE = true;
+const MAINTENANCE_MODE = false;
 
 export async function middleware(request: NextRequest) {
   if (MAINTENANCE_MODE) {
