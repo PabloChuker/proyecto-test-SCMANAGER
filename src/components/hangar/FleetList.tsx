@@ -13,6 +13,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useHangarStore, type HangarShip, type ItemCategory } from "@/store/useHangarStore";
 import { EditShipModal } from "./EditShipModal";
+import { CouponSafeName } from "./CouponSafeName";
 import {
   INSURANCE_COLORS,
   INSURANCE_LABELS,
@@ -110,10 +111,16 @@ function FleetRow({ ship }: { ship: HangarShip }) {
         )}
       </div>
 
-      {/* Name + meta */}
+      {/* Name + meta — el nombre del pledge puede contener un código de
+          cupón (Imperator/BIS/Referral); CouponSafeName lo redacta por
+          default para no exponerlo en streams. */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-zinc-200 truncate font-medium">{displayName}</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <CouponSafeName
+            name={displayName}
+            className="text-zinc-200 truncate font-medium"
+            compact
+          />
           {ship.isLoaner && (
             <span className="text-[8px] px-1 py-0 border border-amber-500/30 text-amber-300 rounded-[2px] uppercase tracking-wider">Loaner</span>
           )}
@@ -128,7 +135,11 @@ function FleetRow({ ship }: { ship: HangarShip }) {
           )}
         </div>
         {ship.pledgeName && ship.pledgeName !== displayName && (
-          <div className="text-[10px] text-zinc-500 truncate mt-0.5">{ship.pledgeName}</div>
+          <CouponSafeName
+            name={ship.pledgeName}
+            className="text-[10px] text-zinc-500 truncate mt-0.5 block"
+            compact
+          />
         )}
       </div>
 

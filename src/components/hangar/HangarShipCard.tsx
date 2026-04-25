@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useHangarStore, type HangarShip, type ItemCategory } from "@/store/useHangarStore";
 import { EditShipModal } from "./EditShipModal";
+import { CouponSafeName } from "./CouponSafeName";
 
 const INSURANCE_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   LTI: { bg: "bg-emerald-500/20", text: "text-emerald-400", border: "border-emerald-500/30" },
@@ -402,11 +403,14 @@ export function HangarShipCard({ ship }: { ship: HangarShip }) {
             )}
           </div>
 
-          {/* Name overlaid at bottom of image */}
+          {/* Name overlaid at bottom of image — códigos de cupón redactados
+              por default vía CouponSafeName (Fase T.2). */}
           <div className="absolute bottom-2 left-3 right-3 z-10">
-            <p className="text-[13px] font-semibold text-white drop-shadow-lg truncate">
-              {displayName}
-            </p>
+            <CouponSafeName
+              name={displayName}
+              className="text-[13px] font-semibold text-white drop-shadow-lg truncate block"
+              compact
+            />
           </div>
         </div>
 
@@ -415,9 +419,13 @@ export function HangarShipCard({ ship }: { ship: HangarShip }) {
           {/* Top line accent */}
           <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-zinc-700/50 to-transparent group-hover:via-cyan-500/60 transition-all duration-500" />
 
-          {/* Pledge name (if different from display name) */}
+          {/* Pledge name (if different from display name) — también redactado */}
           {ship.pledgeName !== displayName && (
-            <p className="text-[10px] text-zinc-500 truncate">{ship.pledgeName}</p>
+            <CouponSafeName
+              name={ship.pledgeName}
+              className="text-[10px] text-zinc-500 truncate block"
+              compact
+            />
           )}
 
           {/* Price */}
