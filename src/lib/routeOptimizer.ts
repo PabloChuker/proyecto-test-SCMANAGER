@@ -75,6 +75,8 @@ const CITY_MAP: { re: RegExp; body: string }[] = [
   { re: /new\s*babbage|port\s*tressler|shubin\s*sm|rayari\s*deltana|aberdeen|calliope|clio|euterpe|microtech/i, body: "microTech" },
   // Pyro
   { re: /ruin\s*station|checkmate|bloom|terminus|stanton\s*gateway|pyro\s*gateway|pyro/i, body: "Pyro System" },
+  // Nyx (sistema sin ley con Levski / Delamar y las People's Service Stations).
+  { re: /levski|delamar|pss\s*(alpha|delta|lambda|theta)|keeger|glaciem|breaker\s*station|nyx/i, body: "Nyx System" },
 ];
 
 export function inferBody(station: string | null, system: string | null): string {

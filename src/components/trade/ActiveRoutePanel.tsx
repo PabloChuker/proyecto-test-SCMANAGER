@@ -1333,10 +1333,15 @@ function StationTypeBadge({ type }: { type: StationType }) {
 function SystemBadge({ system }: { system: string | null }) {
   if (!system) return null;
   const lower = system.toLowerCase();
-  const isPyro = lower.includes("pyro");
-  const cls = isPyro
-    ? "bg-red-500/15 border-red-500/40 text-red-300"
-    : "bg-emerald-500/15 border-emerald-500/40 text-emerald-300";
+  // Color por sistema: Stanton=verde (default), Pyro=rojo (alta amenaza),
+  // Nyx=violeta (sistema sin ley conocido por las refinerías de Levski).
+  // Cualquier sistema futuro caerá al verde como fallback hasta agregarlo.
+  let cls = "bg-emerald-500/15 border-emerald-500/40 text-emerald-300";
+  if (lower.includes("pyro")) {
+    cls = "bg-red-500/15 border-red-500/40 text-red-300";
+  } else if (lower.includes("nyx")) {
+    cls = "bg-violet-500/15 border-violet-500/40 text-violet-300";
+  }
   return (
     <span
       className={`px-1.5 py-0.5 rounded text-[9px] font-mono uppercase tracking-wider border ${cls}`}

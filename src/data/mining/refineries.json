@@ -553,5 +553,43 @@
       "SAVR": 5,
       "STIL": 0
     }
+  },
+  {
+    "id": "LEVSKI",
+    "name": "Levski",
+    "system": "Nyx",
+    "region": "Delamar",
+    "_note": "Bonuses confirmados desde UEX (uexcorp.space/mining/refineries). Ores no expuestos por UEX (JACL/SALDN/DIAM/RICC/OURA/ASLA/STIL/SILI/TIN/ICE) quedan en 0 — ajustar cuando CIG publique tabla oficial o salga otro snapshot.",
+    "bonuses": {
+      "QUAN": 8,
+      "GOLD": 8,
+      "BEXA": 8,
+      "TARA": 1,
+      "LARA": 4,
+      "BERL": 8,
+      "AGRI": 8,
+      "HEPH": 8,
+      "TUNG": 8,
+      "TITA": 8,
+      "SILI": 0,
+      "IRON": 7,
+      "QUAR": 8,
+      "COPP": 8,
+      "ALUM": 8,
+      "TIN": 0,
+      "CORU": 5,
+      "DIAM": 0,
+      "TORI": 8,
+      "ICE": 0,
+      "ASLA": 0,
+      "BORS": 8,
+      "JACL": 0,
+      "LIND": 5,
+      "OURA": 0,
+      "RICC": 0,
+      "SALDN": 0,
+      "SAVR": 9,
+      "STIL": 0
+    }
   }
 ]
