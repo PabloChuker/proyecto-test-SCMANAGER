@@ -68,6 +68,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "Tools",
     items: [
       { label: "Fleet Canvas",      href: "/fleet-canvas" },
+      { label: "FPS Weapons Data",  href: "/tools/fps-weapons" },
       { label: "Pyro Timers",       href: "/timers" },
       { label: "Quantum Intercept", href: "/quantum-intercept" },
       { label: "Streamers",         href: "/streamers" },
