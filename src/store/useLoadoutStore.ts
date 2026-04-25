@@ -701,7 +701,6 @@ function computeStats(
 
   // ── Push single combined weapons column ──
   if (weaponCount > 0) {
-    const weaponAllocPips = instancePower[WEAPON_POWER_ID] ?? 0;
     // Best pip source priority: usedGroupedScm > sum of individual pips > pools > ceil(pMax)
     const ugScmWpn = usedGroupedScm?.WeaponGun ?? 0;
     const wpnPoolPips = pools?.WeaponGun ?? 0;
@@ -711,6 +710,12 @@ function computeStats(
       wpnPoolPips,
       Math.max(1, Math.ceil(weaponPowerMax)),
     ));
+    // Fase Q.3 + bugfix: distinguir "user nunca tocó pips" (default = full
+    // alloc, DPS al 100%) de "user puso 0 explícitamente" (colapsa DPS a 0).
+    // Antes asumíamos 0 si era undefined, lo que rompía el DPS por default
+    // hasta que el usuario movía el slider — ahora full alloc es el default.
+    const weaponAllocRaw = instancePower[WEAPON_POWER_ID];
+    const weaponAllocPips = weaponAllocRaw !== undefined ? weaponAllocRaw : combinedPips;
     // Override the per-weapon allocated counts with the single combined allocation
     cats.weapons.allocated = weaponAllocPips;
     instances.push({
@@ -732,9 +737,9 @@ function computeStats(
     });
 
     // Fase Q.3 (2026-04-25): si el usuario quita toda la energía del bucket
-    // weapons (allocatedPips === 0), o no hay armas activas, el DPS debe
-    // colapsar a 0. Erkul-style: la asignación de pips actúa como gate
-    // multiplicativo sobre el DPS / alpha damage. Escalar lineal por el
+    // weapons (allocatedPips === 0 explícito), o no hay armas activas, el
+    // DPS debe colapsar a 0. Erkul-style: la asignación de pips actúa como
+    // gate multiplicativo sobre el DPS / alpha damage. Escalar lineal por el
     // ratio mantiene la curva intuitiva entre 0 y máximo.
     const weaponsEffectivePips = Math.min(weaponAllocPips, combinedPips);
     const weaponPowerRatio = combinedPips > 0 && weaponActiveCount > 0
