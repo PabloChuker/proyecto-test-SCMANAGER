@@ -4,15 +4,18 @@ import { useEffect, useRef, useState } from "react";
 import { useHangarStore, type InsuranceType, type ItemCategory, type CCUChain, type WishlistPriority, type HangarShip } from "@/store/useHangarStore";
 import { getLoanersFor } from "@/lib/loaners";
 import { FleetGrid } from "./FleetGrid";
+import { FleetList } from "./FleetList";
 import { ImportModal } from "./ImportModal";
 import { AddShipModal } from "./AddShipModal";
 import { CCUGrid } from "./CCUGrid";
+import { CCUList } from "./CCUList";
 import { AddCCUModal } from "./AddCCUModal";
 import { ChainList } from "./ChainList";
 import { ChainBuilder } from "./ChainBuilder";
 import { CCUChainCalculator } from "./CCUChainCalculator";
 import { QuickAddShip } from "./QuickAddShip";
 import { WishlistGrid } from "./WishlistGrid";
+import { WishlistList } from "./WishlistList";
 
 type TabType = "My Fleet" | "Buyback" | "Wishlist" | "CCU Chains";
 
@@ -55,6 +58,16 @@ export function HangarDashboard() {
   const [filterInsurance, setFilterInsurance] = useState<InsuranceType | "all">("all");
   const [filterCategory, setFilterCategory] = useState<ItemCategory | "all" | "ccu" | "fleet">("all");
   const [sortBy, setSortBy] = useState<"name" | "price" | "date">("name");
+  // Fase T: Cards/List toggle persistido en localStorage. Aplica a Fleet,
+  // Buyback y Wishlist (CCU Chains queda con su propia UI).
+  const [viewMode, setViewMode] = useState<"cards" | "list">("cards");
+  useEffect(() => {
+    const saved = typeof window !== "undefined" ? localStorage.getItem("sc-labs-hangar-view") : null;
+    if (saved === "cards" || saved === "list") setViewMode(saved);
+  }, []);
+  useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("sc-labs-hangar-view", viewMode);
+  }, [viewMode]);
 
   const ships = useHangarStore((state) => state.ships);
   const ccus = useHangarStore((state) => state.ccus);
@@ -387,16 +400,21 @@ export function HangarDashboard() {
                   <option value="price">Sort: Price</option>
                   <option value="date">Sort: Date</option>
                 </select>
+                <ViewModeToggle viewMode={viewMode} setViewMode={setViewMode} />
                 <button onClick={() => setShowAddShipModal(true)} className="px-4 py-2 bg-amber-500/20 border border-amber-500/50 rounded-sm text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-all duration-300">Add Ship</button>
                 {(filterCategory === "all" || filterCategory === "ccu") && (
                   <button onClick={() => setShowAddCCUModal(true)} className="px-4 py-2 bg-cyan-500/20 border border-cyan-500/50 rounded-sm text-cyan-400 text-sm font-medium hover:bg-cyan-500/30 transition-all duration-300">Add CCU</button>
                 )}
               </div>
 
-              {/* Items grid */}
-              {filteredShips.length > 0 && <FleetGrid ships={filteredShips} />}
+              {/* Items grid o list según viewMode */}
+              {filteredShips.length > 0 && (
+                viewMode === "list"
+                  ? <FleetList ships={filteredShips} />
+                  : <FleetGrid ships={filteredShips} />
+              )}
 
-              {/* CCUs grid (inline within the same tab) */}
+              {/* CCUs (inline within the same tab) */}
               {filteredCCUs.length > 0 && (
                 <div className="space-y-3">
                   {filteredShips.length > 0 && filterCategory === "all" && (
@@ -404,7 +422,9 @@ export function HangarDashboard() {
                       CCU / Upgrades ({filteredCCUs.length})
                     </h3>
                   )}
-                  <CCUGrid ccus={filteredCCUs} />
+                  {viewMode === "list"
+                    ? <CCUList ccus={filteredCCUs} />
+                    : <CCUGrid ccus={filteredCCUs} />}
                 </div>
               )}
 
@@ -472,7 +492,7 @@ export function HangarDashboard() {
                 })}
               </div>
 
-              {/* Search */}
+              {/* Search + view mode toggle */}
               <div className="flex flex-col sm:flex-row gap-3">
                 <input
                   type="text"
@@ -481,12 +501,15 @@ export function HangarDashboard() {
                   onChange={(e) => setWishlistSearch(e.target.value)}
                   className="flex-1 px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-fuchsia-500/50 transition-all duration-300"
                 />
+                <ViewModeToggle viewMode={viewMode} setViewMode={setViewMode} />
               </div>
             </>
           )}
 
-          {/* Grid */}
-          <WishlistGrid items={filteredWishlist} />
+          {/* Wishlist render: cards o list según viewMode */}
+          {viewMode === "list"
+            ? <WishlistList items={filteredWishlist} />
+            : <WishlistGrid items={filteredWishlist} />}
 
           {wishlist.length > 0 && filteredWishlist.length === 0 && (
             <div className="text-center py-12">
@@ -555,6 +578,64 @@ function EmptyState({ title, description, onImport }: { title: string; descripti
       <p className="text-lg text-zinc-400 font-medium mb-2">{title}</p>
       <p className="text-sm text-zinc-500 mb-6 max-w-md mx-auto">{description}</p>
       <button onClick={onImport} className="px-6 py-2.5 bg-amber-500/20 border border-amber-500/50 rounded-sm text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-all duration-300">Import Hangar</button>
+    </div>
+  );
+}
+
+// ─── Cards / List view toggle ────────────────────────────────────────────────
+//
+// Fase T (2026-04-25): toggle compartido entre Fleet, Buyback y Wishlist. El
+// estado vive en HangarDashboard y se persiste en localStorage para que el
+// usuario tenga consistencia entre tabs y entre sesiones.
+function ViewModeToggle({
+  viewMode,
+  setViewMode,
+}: {
+  viewMode: "cards" | "list";
+  setViewMode: (m: "cards" | "list") => void;
+}) {
+  return (
+    <div className="inline-flex rounded-sm border border-zinc-800/50 bg-zinc-900/60 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setViewMode("cards")}
+        title="Card view"
+        aria-pressed={viewMode === "cards"}
+        className={`px-2.5 py-2 text-xs flex items-center gap-1.5 transition-colors ${
+          viewMode === "cards"
+            ? "bg-amber-500/20 text-amber-400"
+            : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
+        }`}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="7" height="7" rx="1" />
+          <rect x="14" y="3" width="7" height="7" rx="1" />
+          <rect x="3" y="14" width="7" height="7" rx="1" />
+          <rect x="14" y="14" width="7" height="7" rx="1" />
+        </svg>
+        <span className="hidden sm:inline">Cards</span>
+      </button>
+      <button
+        type="button"
+        onClick={() => setViewMode("list")}
+        title="List view"
+        aria-pressed={viewMode === "list"}
+        className={`px-2.5 py-2 text-xs flex items-center gap-1.5 transition-colors border-l border-zinc-800/50 ${
+          viewMode === "list"
+            ? "bg-amber-500/20 text-amber-400"
+            : "text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50"
+        }`}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6" />
+          <line x1="8" y1="12" x2="21" y2="12" />
+          <line x1="8" y1="18" x2="21" y2="18" />
+          <line x1="3" y1="6" x2="3.01" y2="6" />
+          <line x1="3" y1="12" x2="3.01" y2="12" />
+          <line x1="3" y1="18" x2="3.01" y2="18" />
+        </svg>
+        <span className="hidden sm:inline">List</span>
+      </button>
     </div>
   );
 }
