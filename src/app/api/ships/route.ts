@@ -179,7 +179,8 @@ async function handleShipsQuery(params: ShipsQueryParams) {
       `${dedupCTE}
        SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer, s.role, s.size,
               s.crew, s.mass_total_kg AS mass, s.cargo_capacity, s.game_version,
-              sp.msrp_usd, sp.warbond_usd, sp.acquisition_method,
+              s.flight_status,
+              sp.msrp_usd, sp.warbond_usd, sp.acquisition_method, sp.is_limited,
               fs.scm_speed, fs.max_speed as afterburner_speed,
               s.length_m AS length_m,
               s.width_m  AS width_m,
@@ -229,6 +230,11 @@ async function handleShipsQuery(params: ShipsQueryParams) {
       gameVersion: s.game_version,
       inGameOnly, // flag for UI if it wants to show a "In-Game Only" badge
       acquisitionMethod, // 'STORE' | 'REFERRAL' | 'IN_GAME' | …
+      // Fase R.2 (2026-04-25): exponer estado productivo (concept / in_development /
+      // flight_ready) y flag de tirada limitada para que ShipCard muestre el
+      // badge correspondiente.
+      flightStatus: (s.flight_status ?? "flight_ready") as string,
+      isLimited: !!s.is_limited,
       msrpUsd: hideUsd ? null : (s.msrp_usd != null ? Number(s.msrp_usd) : null),
       warbondUsd: hideUsd ? null : (s.warbond_usd != null ? Number(s.warbond_usd) : null),
       ship: {

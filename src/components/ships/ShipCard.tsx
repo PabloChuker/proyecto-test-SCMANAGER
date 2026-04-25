@@ -24,6 +24,15 @@ interface ShipCardData {
    * 'IN_GAME'  → equivalente a inGameOnly=true.
    */
   acquisitionMethod?: "STORE" | "REFERRAL" | "IN_GAME" | "SUBSCRIBER" | "EXCLUSIVE" | string;
+  /**
+   * Fase R.2 (2026-04-25): production status del ship matrix de RSI.
+   * 'concept'        → la nave todavía no está en juego, solo se vende como concept.
+   * 'in_development' → nave anunciada y en desarrollo activo.
+   * 'flight_ready'   → ya jugable (default).
+   */
+  flightStatus?: "concept" | "in_development" | "flight_ready" | string;
+  /** Tirada limitada (concept limited / event-only) — combina con flightStatus="concept" para mostrar "CONCEPT LIMITED". */
+  isLimited?: boolean;
   ship: {
     maxCrew: number | null;
     cargo: number | null;
@@ -222,6 +231,22 @@ export function ShipCard({
           <span className={"absolute top-2 right-2.5 text-sm opacity-50 group-hover:opacity-90 transition-opacity duration-300 " + roleColor}>
             {roleIndicator.icon}
           </span>
+          {/* Production-status badge (esquina inferior izquierda).
+              Fase R.2: para naves concept mostramos badge "CONCEPT" o
+              "CONCEPT LIMITED" en vez del precio. Tienen prioridad sobre
+              cualquier otro badge porque la nave NO se puede usar todavía.
+              In-development queda como badge naranja también. */}
+          {(ship.flightStatus === "concept" || ship.flightStatus === "in_development") && (
+            <div className="absolute bottom-2 left-2.5 z-10">
+              <span className="text-[9px] font-mono font-medium text-orange-300/90 bg-zinc-950/80 backdrop-blur-sm px-1.5 py-0.5 rounded-sm border border-orange-500/40 tracking-[0.15em] uppercase">
+                {ship.flightStatus === "in_development"
+                  ? "In Development"
+                  : ship.isLimited
+                    ? "Concept Limited"
+                    : "Concept"}
+              </span>
+            </div>
+          )}
           {/* Price badge — orden de prioridad:
               1. REFERRAL PROGRAM (más restrictivo, no se compra en tienda)
               2. IN-GAME ONLY     (se gana en juego)
