@@ -77,6 +77,14 @@ interface ShipsQueryParams {
   limit: number;
   sortBy: string;
   sortOrder: "ASC" | "DESC";
+  /**
+   * Fase R.3 (2026-04-25): cuando es true, excluye naves cuyo `flight_status`
+   * es 'concept' o 'in_development' (las que no se pueden cargar en el
+   * LoadoutBuilder porque no tienen hardpoints reales en la BD). Usado por
+   * el ShipSelector del Loadout Manager para evitar errores de carga.
+   * Default false → la página /ships y los demás endpoints siguen viéndolas.
+   */
+  flightReadyOnly: boolean;
 }
 
 /**
@@ -135,6 +143,12 @@ async function handleShipsQuery(params: ShipsQueryParams) {
       conditions.push(`s.class_name = $${paramIdx}`);
       queryParams.push(params.reference);
       paramIdx++;
+    }
+
+    if (params.flightReadyOnly) {
+      // Solo flight_ready (o NULL por compatibilidad con filas antiguas que
+      // no tenían el campo poblado). Excluye 'concept' e 'in_development'.
+      conditions.push(`(s.flight_status IS NULL OR s.flight_status = 'flight_ready')`);
     }
 
     const whereClause = "WHERE " + conditions.join(" AND ");
@@ -285,6 +299,7 @@ export async function GET(request: NextRequest) {
       limit:        parseInt(searchParams.get("limit") || "24", 10),
       sortBy:       searchParams.get("sortBy")  || "name",
       sortOrder:    (searchParams.get("sortOrder") === "desc" ? "DESC" : "ASC") as "ASC" | "DESC",
+      flightReadyOnly: searchParams.get("flightReadyOnly") === "1" || searchParams.get("flightReadyOnly") === "true",
     };
 
     const result = await handleShipsQuery(params);
@@ -324,6 +339,7 @@ export async function POST(request: NextRequest) {
       limit:        body.limit || 24,
       sortBy:       body.sortBy    || "name",
       sortOrder:    (body.sortOrder === "DESC" ? "DESC" : "ASC") as "ASC" | "DESC",
+      flightReadyOnly: !!body.flightReadyOnly,
     };
 
     const result = await handleShipsQuery(params);

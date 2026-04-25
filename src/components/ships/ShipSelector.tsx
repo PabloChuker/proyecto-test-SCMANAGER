@@ -54,7 +54,14 @@ export function ShipSelector() {
 
   const fetchShips = useCallback((params: { search?: string; manufacturer?: string } = {}) => {
     setLoading(true);
-    const qs = new URLSearchParams({ limit: "100", sortBy: "name" });
+    // Fase R.3 (2026-04-25): el LoadoutBuilder usa este selector y NO debe
+    // listar naves en concepto / in_development — esas no tienen hardpoints
+    // reales en BD y revientan al cargar. Forzamos flightReadyOnly=1 acá.
+    const qs = new URLSearchParams({
+      limit: "100",
+      sortBy: "name",
+      flightReadyOnly: "1",
+    });
     if (params.search) qs.set("search", params.search);
     if (params.manufacturer) qs.set("manufacturer", params.manufacturer);
 
