@@ -447,9 +447,9 @@ export default function ActivityManager() {
 
       if (members && members.length > 0) {
         const userIds = members.map((m) => m.user_id);
-        // SECURITY: profiles_public + whitelist (mig 063).
+        // SECURITY: whitelist explícita — sin PII.
         const { data: profiles } = await supabase
-          .from("profiles_public")
+          .from("profiles")
           .select("id, username, display_name, avatar_url, is_online")
           .in("id", userIds);
 

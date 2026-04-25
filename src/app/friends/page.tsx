@@ -72,12 +72,13 @@ export default function FriendsPage() {
       return;
     }
 
-    // SECURITY: usar la view profiles_public (mig 063) que expone SOLO
-    // columnas seguras (id, username, display_name, avatar_url, is_online,
-    // user_number, country, org_id). Nunca discord_id / discord_username /
-    // last_seen / first_name / last_name / age.
+    // SECURITY: whitelist EXPLÍCITA de columnas safe — nunca discord_id,
+    // discord_username, last_seen, first_name, last_name, age, country.
+    // (La view profiles_public + RLS owner-only de la mig 063 se va a
+    //  activar cuando esa migración corra en Supabase. Mientras tanto, la
+    //  protección está en este whitelist.)
     const { data: profiles } = await supabase
-      .from("profiles_public")
+      .from("profiles")
       .select("id, username, display_name, avatar_url, is_online")
       .in("id", allIds);
 
@@ -149,13 +150,14 @@ export default function FriendsPage() {
   const searchUsers = useCallback(async () => {
     if (!searchQuery.trim() || !user) return;
     setSearching(true);
-    // SECURITY: profiles_public view + whitelist explícita. Ya no buscamos
-    // por discord_username porque exponer Discord IDs/handles a otros usuarios
-    // sería una fuga de PII (ver fix de seguridad 2026-04-25).
+    // SECURITY: whitelist explícita — la búsqueda PUEDE filtrar por
+    // discord_username (porque postgres lo evalúa server-side) pero NO lo
+    // devolvemos en el SELECT. Así seguimos pudiendo encontrar gente por su
+    // handle de Discord pero no exponemos el handle de OTROS users en la UI.
     const { data } = await supabase
-      .from("profiles_public")
+      .from("profiles")
       .select("id, username, display_name, avatar_url, is_online")
-      .or(`username.ilike.%${searchQuery}%,display_name.ilike.%${searchQuery}%`)
+      .or(`username.ilike.%${searchQuery}%,display_name.ilike.%${searchQuery}%,discord_username.ilike.%${searchQuery}%`)
       .neq("id", user.id)
       .limit(20);
     setSearchResults((data ?? []) as Profile[]);
@@ -346,8 +348,6 @@ export default function FriendsPage() {
                             : "Solicitud enviada"}
                         </div>
                       </div>
-                      {/* SECURITY 2026-04-25: removido `discord_username` —
-                          no exponer handles de Discord de otros users. */}
                       {f.direction === "received" && (
                         <button
                           onClick={() => acceptRequest(f.friendship.id)}

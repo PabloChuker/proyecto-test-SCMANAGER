@@ -62,10 +62,10 @@ export async function POST(request: NextRequest) {
 
       if (partyMembers && partyMembers.length > 0) {
         // Fetch profiles for all party member user_ids
-        // SECURITY: profiles_public (mig 063) — la base table es owner-only.
+        // SECURITY: whitelist explícita — sin PII.
         const userIds = partyMembers.map((pm: any) => pm.user_id);
         const { data: profiles } = await supabase
-          .from("profiles_public")
+          .from("profiles")
           .select("id, display_name, avatar_url")
           .in("id", userIds);
 

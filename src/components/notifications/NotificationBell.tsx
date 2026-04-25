@@ -73,10 +73,9 @@ export default function NotificationBell() {
     const profileMap = new Map<string, { display_name: string | null; username: string | null; avatar_url: string | null }>();
 
     if (fromIds.length > 0) {
-      // SECURITY: profiles_public (mig 063) — la base table profiles ahora
-      // tiene RLS owner-only, sólo la view expone columnas seguras de OTROS.
+      // SECURITY: whitelist explícita — sin PII.
       const { data: profiles } = await supabase
-        .from("profiles_public")
+        .from("profiles")
         .select("id, display_name, username, avatar_url")
         .in("id", fromIds);
       (profiles ?? []).forEach((p) => profileMap.set(p.id, p));

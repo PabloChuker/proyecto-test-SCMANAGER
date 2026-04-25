@@ -80,9 +80,9 @@ export default function OrgPage() {
 
     if (memberData && memberData.length > 0) {
       const userIds = memberData.map((m) => m.user_id);
-      // SECURITY: profiles_public + whitelist (mig 063).
+      // SECURITY: whitelist explícita — sin PII.
       const { data: profiles } = await supabase
-        .from("profiles_public")
+        .from("profiles")
         .select("id, username, display_name, avatar_url, is_online, country, org_id")
         .in("id", userIds);
 
@@ -184,9 +184,9 @@ export default function OrgPage() {
 
   const searchFriendsToInvite = useCallback(async () => {
     if (!inviteSearch.trim() || !user) return;
-    // SECURITY: profiles_public + whitelist (mig 063).
+    // SECURITY: whitelist explícita — sin PII.
     const { data } = await supabase
-      .from("profiles_public")
+      .from("profiles")
       .select("id, username, display_name, avatar_url, is_online")
       .or(`username.ilike.%${inviteSearch}%,display_name.ilike.%${inviteSearch}%`)
       .neq("id", user.id)
