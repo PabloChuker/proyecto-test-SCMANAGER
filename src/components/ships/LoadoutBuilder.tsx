@@ -699,8 +699,44 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const { user } = useAuth();
   const supabaseClient = createClient();
 
-  const handleSelect = useCallback((item: EquippedItem) => { if (!pickerHp) return; equipItem(pickerHp.id, item); setPickerHp(null); }, [pickerHp, equipItem]);
-  const handleClear = useCallback(() => { if (!pickerHp) return; clearSlot(pickerHp.id); setPickerHp(null); }, [pickerHp, clearSlot]);
+  // Fase O.2: en el juego de Star Citizen un missile/bomb rack solo acepta
+  // UN tipo de ordenanza — todos los slots del rack llevan el mismo misil
+  // o la misma bomba. El picker abre por slot individual, pero al confirmar
+  // replicamos la selección a todos los slots hermanos del mismo rack para
+  // reflejar la restricción real. Idem el "Clear slot": vacía todo el rack.
+  //
+  // Identificación: los slots child sintéticos llevan id con patrón
+  // `${rackHpId}:missile:${i}` (ver resolveChildSlots). El picker recibe
+  // pickerParentItem = rack equipado con componentStats.missilePorts.
+  const handleSelect = useCallback((item: EquippedItem) => {
+    if (!pickerHp) return;
+    const idMatch = pickerHp.id.match(/^(.+):missile:(\d+)$/);
+    const portCount = Number(pickerParentItem?.componentStats?.missilePorts ?? 0);
+    if (idMatch && portCount > 1) {
+      const rackHpId = idMatch[1];
+      for (let i = 1; i <= portCount; i++) {
+        equipItem(`${rackHpId}:missile:${i}`, item);
+      }
+    } else {
+      equipItem(pickerHp.id, item);
+    }
+    setPickerHp(null);
+  }, [pickerHp, pickerParentItem, equipItem]);
+
+  const handleClear = useCallback(() => {
+    if (!pickerHp) return;
+    const idMatch = pickerHp.id.match(/^(.+):missile:(\d+)$/);
+    const portCount = Number(pickerParentItem?.componentStats?.missilePorts ?? 0);
+    if (idMatch && portCount > 1) {
+      const rackHpId = idMatch[1];
+      for (let i = 1; i <= portCount; i++) {
+        clearSlot(`${rackHpId}:missile:${i}`);
+      }
+    } else {
+      clearSlot(pickerHp.id);
+    }
+    setPickerHp(null);
+  }, [pickerHp, pickerParentItem, clearSlot]);
 
   // ── SHARE: build URL with ship reference + current build code ──────────────
   const handleShare = useCallback(() => {
@@ -974,9 +1010,10 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 
 function HpGroup({ hps, onClickHp, weaponAllocatedPips, weaponMaxPips }: { hps: ResolvedHardpoint[]; onClickHp: (hp: ResolvedHardpoint, parentItem?: EquippedItem | null) => void; weaponAllocatedPips?: number; weaponMaxPips?: number }) {
   if (hps.length === 0) return null;
-  const { getEffectiveItem, overrides, isComponentOn, toggleComponent } = useLoadoutStore(
+  const { getEffectiveItem, hasOverride, overrides, isComponentOn, toggleComponent } = useLoadoutStore(
     useShallow(s => ({
       getEffectiveItem: s.getEffectiveItem,
+      hasOverride: s.hasOverride,
       overrides: s.overrides,
       isComponentOn: s.isComponentOn,
       toggleComponent: s.toggleComponent,
@@ -1101,7 +1138,7 @@ function HpGroup({ hps, onClickHp, weaponAllocatedPips, weaponMaxPips }: { hps: 
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60">
       {hps.map(hp => (
-        <HardpointSlot key={hp.id} hp={hp} item={getEffectiveItem(hp.id)} isOverridden={overrides.has(hp.id)} isOn={isComponentOn(hp.hardpointName)} onClick={() => onClickHp(hp)} onTogglePower={() => toggleComponent(hp.hardpointName)} childSlots={resolveChildSlots(hp)} isComponentOn={isComponentOn} toggleComponent={toggleComponent} onClickChild={handleClickChild} getEffectiveItem={getEffectiveItem} weaponAllocatedPips={weaponAllocatedPips} weaponMaxPips={weaponMaxPips} />
+        <HardpointSlot key={hp.id} hp={hp} item={getEffectiveItem(hp.id)} isOverridden={overrides.has(hp.id)} isOn={isComponentOn(hp.hardpointName)} onClick={() => onClickHp(hp)} onTogglePower={() => toggleComponent(hp.hardpointName)} childSlots={resolveChildSlots(hp)} isComponentOn={isComponentOn} toggleComponent={toggleComponent} onClickChild={handleClickChild} getEffectiveItem={getEffectiveItem} hasOverride={hasOverride} weaponAllocatedPips={weaponAllocatedPips} weaponMaxPips={weaponMaxPips} />
       ))}
     </div>
   );

@@ -27,6 +27,14 @@ interface HardpointSlotProps {
   // qué tipo de ordenanza acepta (ej: bomb rack CST-313 → solo bombas).
   onClickChild?: (child: ResolvedChild, parentItem: EquippedItem | null) => void;
   getEffectiveItem?: (id: string) => EquippedItem | null;
+  /**
+   * Distingue "el usuario hizo override (incluso clearSlot)" de "no hay info
+   * en el store". Necesario para slots child sintéticos (ej. missile rack
+   * children) donde el id no aparece en hardpoints[].children del store y
+   * getEffectiveItem retorna null por default — sin esto los misiles
+   * default del rack se renderizaban vacíos.
+   */
+  hasOverride?: (id: string) => boolean;
   // Weapon ammo props (energy capacitor system)
   weaponAllocatedPips?: number;
   weaponMaxPips?: number;
@@ -100,7 +108,7 @@ function fmtAmmo(n: number): string {
   return String(n);
 }
 
-export const HardpointSlot = memo(function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onTogglePower, childSlots, isComponentOn, toggleComponent, onClickChild, getEffectiveItem, weaponAllocatedPips, weaponMaxPips }: HardpointSlotProps) {
+export const HardpointSlot = memo(function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onTogglePower, childSlots, isComponentOn, toggleComponent, onClickChild, getEffectiveItem, hasOverride, weaponAllocatedPips, weaponMaxPips }: HardpointSlotProps) {
   const catColor = CAT_COLORS[hp.resolvedCategory] || "#52525b";
   const stat = item && isOn ? getKeyStat(hp.resolvedCategory, item.componentStats) : null;
   const displaySize = hp.maxSize > 0 ? hp.maxSize : (item?.size ?? 0);
@@ -120,7 +128,15 @@ export const HardpointSlot = memo(function HardpointSlot({ hp, item, isOverridde
       {hasChildren && isOn && childSlots!.map(ch => {
         const chOn = isComponentOn ? isComponentOn(ch.hardpointName) : true;
         const chColor = CAT_COLORS[ch.category] || catColor;
-        const effectiveItem = getEffectiveItem ? getEffectiveItem(ch.id) : ch.equippedItem;
+        // Si el store tiene un override registrado para este child id (puede
+        // ser null cuando el user vacía explícitamente), respetarlo. Sino,
+        // caer al default del API (ch.equippedItem) — necesario para misiles
+        // default de un rack porque sus IDs sintéticos no viven en
+        // hardpoints[].children y getEffectiveItem retorna null.
+        const childOverridden = hasOverride ? hasOverride(ch.id) : false;
+        const effectiveItem = childOverridden && getEffectiveItem
+          ? getEffectiveItem(ch.id)
+          : ch.equippedItem;
         const chStat = effectiveItem && chOn ? getKeyStat(ch.category || "WEAPON", effectiveItem.componentStats) : null;
         const chSize = ch.maxSize > 0 ? ch.maxSize : (effectiveItem?.size ?? 0);
         const chOverridden = effectiveItem && ch.equippedItem

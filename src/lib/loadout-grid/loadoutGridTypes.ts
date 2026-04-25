@@ -13,7 +13,7 @@ export type WidgetId =
   | "weapons" | "missiles"
   | "shields" | "powerplants" | "coolers"
   | "quantum" | "radar" | "utility"
-  | "mining" | "salvage"
+  | "mining" | "salvage" | "qig"
   | "power-grid"
   | "ship-selector" | "ship-card" | "loadout-detail"
   | "flight-dynamics" | "flight-dynamics-3d";

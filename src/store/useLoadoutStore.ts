@@ -1035,6 +1035,15 @@ interface LoadoutState {
 
   getStats: () => ComputedStats;
   getEffectiveItem: (hpId: string) => EquippedItem | null;
+  /**
+   * True si hay un override registrado para este hpId — incluye overrides
+   * con valor null (clearSlot). Útil para distinguir "el usuario vacía
+   * explícitamente" de "no hay info en el store" cuando el slot es
+   * sintético (ej. children dinámicos de missile racks). Sin esto el
+   * default del API se pisaba con null y los misiles se renderizaban
+   * vacíos por defecto.
+   */
+  hasOverride: (hpId: string) => boolean;
   isComponentOn: (hpName: string) => boolean;
   hasChanges: () => boolean;
   getWeaponHardpoints: () => ResolvedHardpoint[];
@@ -1071,6 +1080,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
     return result;
   },
   getEffectiveItem: (hpId) => { const { hardpoints, overrides } = get(); if (overrides.has(hpId)) return overrides.get(hpId) ?? null; const top = hardpoints.find(h => h.id === hpId); if (top) return top.defaultItem ?? null; for (const h of hardpoints) { const ch = h.children.find(c => c.id === hpId); if (ch) return ch.equippedItem ?? null; } return null; },
+  hasOverride: (hpId) => get().overrides.has(hpId),
   isComponentOn: (hpName) => get().componentStates[hpName] !== false,
   hasChanges: () => get().overrides.size > 0,
   getWeaponHardpoints: () => get().hardpoints.filter(hp => WEAPON_CATS.has(hp.resolvedCategory)),

@@ -354,6 +354,103 @@ function buildQuantumItem(row: any): any {
   };
 }
 
+// Build a MissileLauncher (rack) item — Fase O.1.
+//
+// Sin esta hidratación, los racks que vienen como default del ship loadout
+// (ej. MRCK_S03_BEHR_Dual_S02 en el Mantis) llegaban al cliente vía
+// buildGenericItem sin componentStats, lo que dejaba `missilePorts` y
+// `maxMissileSize` en null. El LoadoutBuilder entonces no podía resolver
+// los slots child del rack, los misiles se renderizaban como "— empty —"
+// aunque el loadout_json del hardpoint sí los tuviera.
+//
+// Replicamos la lógica de buildStats MISSILE_RACK del catalog: parseamos
+// el array `ports` para extraer max/min size y missilesLabel.
+function buildMissileLauncherItem(row: any): any {
+  const ports = Array.isArray(row.ports) ? row.ports : [];
+  const maxSizes = ports
+    .map((p: any) => numOrNull(p?.MaxSize ?? p?.Size))
+    .filter((n: number | null): n is number => n !== null);
+  const minSizes = ports
+    .map((p: any) => numOrNull(p?.MinSize ?? p?.Size))
+    .filter((n: number | null): n is number => n !== null);
+  const maxMissileSize = maxSizes.length > 0 ? Math.max(...maxSizes) : null;
+  const minMissileSize = minSizes.length > 0 ? Math.min(...minSizes) : null;
+  return {
+    id: row.id || row.class_name,
+    reference: row.class_name || "",
+    name: row.name || row.item_name || "",
+    localizedName: null,
+    className: row.class_name,
+    type: "MISSILE_RACK",
+    size: numOrNull(row.size),
+    grade: gradeToLetter(row.grade),
+    manufacturer: row.manufacturer_id ?? null,
+    componentStats: {
+      missilePorts: numOrNull(row.missile_count) ?? ports.length,
+      missilesLabel: row.missiles_label ?? null,
+      maxMissileSize,
+      minMissileSize,
+      health: numOrNull(row.durability_health),
+      mass: numOrNull(row.mass),
+    },
+    powerNetwork: getPowerNetworkInfo(row.class_name),
+  };
+}
+
+// Build a Missile (individual ordnance) item — Fase O.1.
+function buildMissileItem(row: any): any {
+  return {
+    id: row.uuid || row.name,
+    reference: row.name || "",
+    name: row.name || "",
+    localizedName: null,
+    className: row.name,
+    type: "MISSILE",
+    size: numOrNull(row.size),
+    grade: gradeToLetter(row.grade),
+    manufacturer: row.manufacturer_id ?? null,
+    componentStats: {
+      damage: numOrNull(row.damage_total),
+      alphaDamage: numOrNull(row.damage_total),
+      trackingType: row.tracking_signal_type ?? null,
+      lockRangeMin: numOrNull(row.lock_range_min),
+      lockRangeMax: numOrNull(row.lock_range_max),
+      lockTime: numOrNull(row.lock_time),
+      linearSpeed: numOrNull(row.linear_speed),
+      isCluster: row.is_cluster ?? false,
+    },
+    powerNetwork: null,
+  };
+}
+
+// Build a Bomb item — Fase O.1.
+function buildBombItem(row: any): any {
+  return {
+    id: row.id || row.class_name,
+    reference: row.class_name || "",
+    name: row.name || "",
+    localizedName: null,
+    className: row.class_name,
+    type: "BOMB",
+    size: numOrNull(row.size),
+    grade: gradeToLetter(row.grade),
+    manufacturer: row.manufacturer_id ?? null,
+    componentStats: {
+      damage: numOrNull(row.damage_total),
+      alphaDamage: numOrNull(row.damage_total),
+      damagePhysical: numOrNull(row.damage_physical),
+      damageEnergy: numOrNull(row.damage_energy),
+      damageDistortion: numOrNull(row.damage_distortion),
+      damageThermal: numOrNull(row.damage_thermal),
+      explosionRadiusMin: numOrNull(row.explosion_radius_min),
+      explosionRadiusMax: numOrNull(row.explosion_radius_max),
+      armTime: numOrNull(row.arm_time),
+      isCluster: row.is_cluster ?? false,
+    },
+    powerNetwork: null,
+  };
+}
+
 // Build a generic item from ship_hardpoints data (no component table match)
 function buildGenericItem(hp: any): any {
   if (!hp.default_item_name || hp.default_item_name === "") return null;
@@ -558,32 +655,58 @@ function buildChildren(
       };
     }
 
-    // Missile
+    // Missile (individual ordnance dentro de un rack). Antes el type quedaba
+    // mal seteado a "MISSILE_RACK", lo que rompía el filtrado del picker y
+    // del store. Lo corregimos a "MISSILE" — el rack en sí es el padre, el
+    // misil de adentro es un MISSILE puro. Si tenemos hit en missileMap
+    // (nombre), hidratamos con stats reales (damage_total, lock ranges, etc).
     if (!equippedItem && entry.Type?.includes("Missile")) {
-      equippedItem = {
-        id: entry.UUID || `child-${idx}`,
-        reference: className,
-        name: entry.Name || className,
-        localizedName: null,
-        className,
-        type: "MISSILE_RACK",
-        size: entry.Size ?? null,
-        grade: gradeToLetter(entry.Grade),
-        manufacturer: null,
-        componentStats: entry.DamageTotal
-          ? { alphaDamage: Number(entry.DamageTotal), damage: Number(entry.DamageTotal) }
-          : null,
-      };
+      const mrow = missileMap.get(entry.Name) ?? missileMap.get(className);
+      if (mrow) {
+        equippedItem = buildMissileItem(mrow);
+        // Pisar el className por el del entry (pueden diferir de versión
+        // entre missiles.name y entry.ClassName por compatibilidad histórica).
+        equippedItem.className = className || equippedItem.className;
+        equippedItem.reference = className || equippedItem.reference;
+      } else {
+        equippedItem = {
+          id: entry.UUID || `child-${idx}`,
+          reference: className,
+          name: entry.Name || className,
+          localizedName: null,
+          className,
+          type: "MISSILE",
+          size: numOrNull(entry.Size ?? entry.MaxSize),
+          grade: gradeToLetter(entry.Grade),
+          manufacturer: null,
+          componentStats: entry.DamageTotal
+            ? { alphaDamage: Number(entry.DamageTotal), damage: Number(entry.DamageTotal) }
+            : null,
+        };
+      }
     }
 
     if (!equippedItem) continue;
 
+    // category del child: MISSILE → ports de un rack (slots de ordnance).
+    // Antes mapeaba a "MISSILE_RACK" lo cual era incorrecto: el slot child
+    // contiene un misil individual, no otro rack. WEAPON queda como fallback
+    // para gimbals/turrets nested.
+    let childCategory: string;
+    if (equippedItem.type === "MISSILE" || equippedItem.type === "BOMB") {
+      childCategory = "MISSILE";
+    } else if (equippedItem.type === "MISSILE_RACK") {
+      childCategory = "MISSILE_RACK";
+    } else {
+      childCategory = "WEAPON";
+    }
+
     results.push({
       id: entry.UUID || `child-${idx}`,
       hardpointName: entry.HardpointName || `sub_${idx}`,
-      category: equippedItem.type === "MISSILE_RACK" ? "MISSILE_RACK" : "WEAPON",
-      minSize: 0,
-      maxSize: entry.MaxSize ?? equippedItem.size ?? 0,
+      category: childCategory,
+      minSize: numOrNull(entry.MinSize) ?? 0,
+      maxSize: numOrNull(entry.MaxSize ?? equippedItem.size) ?? 0,
       isFixed: false,
       equippedItem,
     });
@@ -1059,6 +1182,12 @@ export async function GET(
       batchFetch("power_plants", "class_name", uniqueClasses),
       batchFetch("coolers", "class_name", uniqueClasses),
       batchFetch("quantum_drives", "class_name", uniqueClasses),
+      // Fase O.1: agregar missile_launchers + bombs al batchFetch para que los
+      // racks default del ship loadout traigan ports/missilesLabel/missilePorts
+      // hidratados. Sin esto, MRCK_S03_BEHR_Dual_S02 (Mantis) y similares caen
+      // a buildGenericItem y los slots child se renderizan vacíos.
+      batchFetch("missile_launchers", "class_name", uniqueClasses),
+      batchFetch("bombs", "class_name", uniqueClasses),
     ]);
 
     // Build weapon map for child resolution
@@ -1066,8 +1195,39 @@ export async function GET(
     for (const [cls, { table, row }] of componentMap) {
       if (table === "weapon_guns") weaponMap.set(cls, row);
     }
-    // Missile map (missiles use 'name' not 'class_name', so we skip batch for now)
+    // Missile map: la tabla `missiles` indexa por `name` no por class_name.
+    // Hacemos un fetch dedicado por className/name de los misiles que aparecen
+    // en los loadout_json para hidratar los children con stats reales.
     const missileMap = new Map<string, any>();
+    try {
+      // Extraer todos los className de entries Missile.Missile dentro de los
+      // loadout_json de los hardpoints. Estas son las tablas indexadas por name.
+      const missileNames = new Set<string>();
+      for (const hp of hardpointRows) {
+        const lj = hp.loadout_json;
+        if (!Array.isArray(lj)) continue;
+        for (const e of lj) {
+          const t = String(e?.Type ?? "");
+          const it = String(e?.ItemTypes ?? "");
+          if (t.includes("Missile") || it.includes("Missile")) {
+            const cn = e.ClassName ?? e.className;
+            if (cn) missileNames.add(cn);
+          }
+        }
+      }
+      if (missileNames.size > 0) {
+        const arr = [...missileNames];
+        const placeholders = arr.map((_, i) => `$${i + 1}`).join(",");
+        const rows: any[] = await sql.unsafe(
+          `SELECT * FROM missiles WHERE name IN (${placeholders})`,
+          arr,
+        );
+        for (const r of rows) missileMap.set(String(r.name), r);
+      }
+    } catch {
+      // Si la tabla no existe o falla, dejamos missileMap vacío y los misiles
+      // caen al stub genérico (sin stats); no rompemos el flow.
+    }
 
     // ── 6. Build flatHardpoints ──
     const flatHardpointsFromDb = hardpointRows
@@ -1113,6 +1273,12 @@ export async function GET(
               break;
             case "quantum_drives":
               equippedItem = buildQuantumItem(row);
+              break;
+            case "missile_launchers":
+              equippedItem = buildMissileLauncherItem(row);
+              break;
+            case "bombs":
+              equippedItem = buildBombItem(row);
               break;
           }
         }
