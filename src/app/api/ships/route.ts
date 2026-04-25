@@ -179,7 +179,7 @@ async function handleShipsQuery(params: ShipsQueryParams) {
       `${dedupCTE}
        SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer, s.role, s.size,
               s.crew, s.mass_total_kg AS mass, s.cargo_capacity, s.game_version,
-              sp.msrp_usd, sp.warbond_usd,
+              sp.msrp_usd, sp.warbond_usd, sp.acquisition_method,
               fs.scm_speed, fs.max_speed as afterburner_speed,
               s.length_m AS length_m,
               s.width_m  AS width_m,
@@ -211,6 +211,13 @@ async function handleShipsQuery(params: ShipsQueryParams) {
     // Map to expected format
     const data = ships.map((s) => {
       const inGameOnly = isInGameOnly(s);
+      // Fase R (2026-04-25): naves del Referral Program no se compran en
+      // tienda ni en juego — viene marcado en ship_price.acquisition_method.
+      // Si es REFERRAL, ocultamos los precios USD para que la UI muestre el
+      // badge "REFERRAL PROGRAM" en su lugar.
+      const acquisitionMethod = (s.acquisition_method ?? "STORE") as string;
+      const isReferralOnly = acquisitionMethod === "REFERRAL";
+      const hideUsd = inGameOnly || isReferralOnly;
       return {
       id: s.id,
       reference: s.reference,
@@ -221,8 +228,9 @@ async function handleShipsQuery(params: ShipsQueryParams) {
       manufacturer: s.manufacturer,
       gameVersion: s.game_version,
       inGameOnly, // flag for UI if it wants to show a "In-Game Only" badge
-      msrpUsd: inGameOnly ? null : (s.msrp_usd != null ? Number(s.msrp_usd) : null),
-      warbondUsd: inGameOnly ? null : (s.warbond_usd != null ? Number(s.warbond_usd) : null),
+      acquisitionMethod, // 'STORE' | 'REFERRAL' | 'IN_GAME' | …
+      msrpUsd: hideUsd ? null : (s.msrp_usd != null ? Number(s.msrp_usd) : null),
+      warbondUsd: hideUsd ? null : (s.warbond_usd != null ? Number(s.warbond_usd) : null),
       ship: {
         maxCrew: s.crew,
         mass: s.mass != null ? Number(s.mass) : null,

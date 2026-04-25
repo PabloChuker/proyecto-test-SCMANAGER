@@ -1070,7 +1070,7 @@ export async function GET(
 
     // ── 1. Find the ship (exact matches prioritized over partial) ──
     const shipRows: any[] = await sql.unsafe(
-      `SELECT s.*, s.class_name AS reference, sp.msrp_usd, sp.warbond_usd, m.name AS manufacturer,
+      `SELECT s.*, s.class_name AS reference, sp.msrp_usd, sp.warbond_usd, sp.acquisition_method, m.name AS manufacturer,
          CASE
            WHEN s.class_name = $1 THEN 0
            WHEN s.class_name ILIKE $1 THEN 1
@@ -1564,8 +1564,11 @@ export async function GET(
       manufacturer: ship.manufacturer,
       gameVersion: col(ship, "game_version", "gameVersion") ?? "",
       type: "SHIP",
-      msrpUsd: numOrNull(ship.msrp_usd),
-      warbondUsd: numOrNull(ship.warbond_usd),
+      // Fase R: respeto del acquisition_method para no mostrar precios USD
+      // de naves que no se compran en tienda (referral program).
+      acquisitionMethod: (ship.acquisition_method ?? "STORE") as string,
+      msrpUsd: ship.acquisition_method === "REFERRAL" ? null : numOrNull(ship.msrp_usd),
+      warbondUsd: ship.acquisition_method === "REFERRAL" ? null : numOrNull(ship.warbond_usd),
       ship: {
         scmSpeed,
         afterburnerSpeed,

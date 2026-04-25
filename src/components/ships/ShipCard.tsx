@@ -17,6 +17,13 @@ interface ShipCardData {
   msrpUsd?: number | null;
   warbondUsd?: number | null;
   inGameOnly?: boolean;
+  /**
+   * Fase R (2026-04-25): cómo se obtiene la nave.
+   * 'REFERRAL' → solo via Referral Program de RSI; el badge sustituye al precio.
+   * 'STORE'    → default; muestra precio USD.
+   * 'IN_GAME'  → equivalente a inGameOnly=true.
+   */
+  acquisitionMethod?: "STORE" | "REFERRAL" | "IN_GAME" | "SUBSCRIBER" | "EXCLUSIVE" | string;
   ship: {
     maxCrew: number | null;
     cargo: number | null;
@@ -215,8 +222,17 @@ export function ShipCard({
           <span className={"absolute top-2 right-2.5 text-sm opacity-50 group-hover:opacity-90 transition-opacity duration-300 " + roleColor}>
             {roleIndicator.icon}
           </span>
-          {/* Price badge */}
-          {ship.inGameOnly ? (
+          {/* Price badge — orden de prioridad:
+              1. REFERRAL PROGRAM (más restrictivo, no se compra en tienda)
+              2. IN-GAME ONLY     (se gana en juego)
+              3. Precio USD       (default) */}
+          {ship.acquisitionMethod === "REFERRAL" ? (
+            <div className="absolute top-2 left-2.5">
+              <span className="text-[10px] font-mono font-medium text-fuchsia-300/90 bg-zinc-950/70 backdrop-blur-sm px-1.5 py-0.5 rounded-sm border border-fuchsia-500/40 tracking-wider uppercase">
+                Referral Program
+              </span>
+            </div>
+          ) : ship.inGameOnly ? (
             <div className="absolute top-2 left-2.5">
               <span className="text-[10px] font-mono font-medium text-cyan-300/90 bg-zinc-950/70 backdrop-blur-sm px-1.5 py-0.5 rounded-sm border border-cyan-500/30">
                 IN-GAME ONLY
