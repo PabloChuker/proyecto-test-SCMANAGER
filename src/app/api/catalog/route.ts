@@ -111,6 +111,16 @@ const TYPE_TABLE: Record<string, TableDef> = {
     idCol: "uuid", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
   },
+  // Jump Drive (Fase P.1, migración 058) — módulo independiente del QT drive,
+  // habilita saltos inter-sistema. Mayoritariamente equipado en capital ships
+  // (890J / Bengal / Idris / Javelin / Polaris). Excluimos templates/placeholders
+  // del catálogo público para que el picker no muestre <= PLACEHOLDER =>.
+  JUMP_DRIVE: {
+    table: "jump_drives", type: "JUMP_DRIVE",
+    idCol: "uuid", nameCol: "name", classCol: "class_name",
+    sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
+    extraWhere: "t.class_name NOT ILIKE '%_Template%' AND (t.name IS NULL OR t.name NOT ILIKE '%PLACEHOLDER%')",
+  },
   // Mining lasers: migrado a tabla `weapon_mining` (migración 054). Es el
   // superset con modelo de power completo. La tabla antigua `mining_lasers`
   // queda como legacy hasta que se confirme todo funciona en prod.
@@ -413,7 +423,7 @@ function mapRow(row: any, def: TableDef): any {
     shieldStats: type === "SHIELD" ? stats : null,
     powerStats: type === "POWER_PLANT" ? stats : null,
     coolingStats: type === "COOLER" ? stats : null,
-    quantumStats: type === "QUANTUM_DRIVE" ? stats : null,
+    quantumStats: type === "QUANTUM_DRIVE" || type === "JUMP_DRIVE" ? stats : null,
     miningStats: type === "MINING_LASER" ? stats : null,
     missileStats: type === "MISSILE" ? stats : null,
     turretStats: type === "TURRET" ? stats : null,
@@ -653,6 +663,22 @@ function buildStats(row: any, type: string): Record<string, any> | null {
       s.salvageSpeedMultiplier = numOrNull(row.salvage_speed_multiplier);
       s.radiusMultiplier = numOrNull(row.radius_multiplier);
       s.extractionEfficiency = numOrNull(row.extraction_efficiency);
+      s.mass = numOrNull(row.mass);
+      break;
+    }
+
+    case "JUMP_DRIVE": {
+      // jump_drives columns (migración 058). El JD no consume power continuo
+      // (solo QuantumFuel durante el salto) — la métrica clave es el alignment
+      // rate y el fuel efficiency. Distortion + health van como referencia.
+      s.alignmentRate = numOrNull(row.alignment_rate);
+      s.alignmentDecayRate = numOrNull(row.alignment_decay_rate);
+      s.tuningRate = numOrNull(row.tuning_rate);
+      s.tuningDecayRate = numOrNull(row.tuning_decay_rate);
+      s.fuelEfficiencyMultiplier = numOrNull(row.fuel_usage_efficiency_multiplier);
+      s.distortionMax = numOrNull(row.distortion_max);
+      s.distortionShutdownTime = numOrNull(row.distortion_shutdown_time);
+      s.health = numOrNull(row.health);
       s.mass = numOrNull(row.mass);
       break;
     }

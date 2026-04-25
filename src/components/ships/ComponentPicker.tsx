@@ -25,7 +25,11 @@ const CAT_TO_API_TYPE: Record<string, string> = {
   // el size, asi que el picker muestra los dos mezclados por size.
   MISSILE_RACK: "MISSILE_RACK", MISSILE: "MISSILE,BOMB",
   SHIELD: "SHIELD", POWER_PLANT: "POWER_PLANT", COOLER: "COOLER",
-  QUANTUM_DRIVE: "QUANTUM_DRIVE", MINING: "MINING_LASER", UTILITY: "TRACTOR_BEAM,EMP,QED",
+  // QT drive y Jump Drive son slots separados pero conviven en el mismo
+  // widget visual (QT DRIVES). El picker abre el catálogo correcto según
+  // qué slot estés mirando.
+  QUANTUM_DRIVE: "QUANTUM_DRIVE", JUMP_DRIVE: "JUMP_DRIVE",
+  MINING: "MINING_LASER", UTILITY: "TRACTOR_BEAM,EMP,QED",
   // SALVAGE: default para slot sin parent es pedir heads (slot del brazo de
   // Vulture/Fortune/Salvation/Reclaimer). Si hay parentClassName y ese parent
   // es un salvage head (detectado abajo con isSalvageHeadClass), el picker
@@ -77,6 +81,7 @@ const CAT_TO_ITEM_TYPE: Record<string, string> = {
   POWER_PLANT: "POWER_PLANT",
   COOLER: "COOLER",
   QUANTUM_DRIVE: "QUANTUM_DRIVE",
+  JUMP_DRIVE: "QUANTUM_DRIVE",
   MINING: "MINING",
   UTILITY: "UTILITY",
   SALVAGE: "SALVAGE",

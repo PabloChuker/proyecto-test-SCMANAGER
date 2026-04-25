@@ -167,6 +167,9 @@ export interface ComputedStats {
 const TYPE_TO_CAT: Record<string, string> = {
   WEAPON: "WEAPON", TURRET: "TURRET", MISSILE: "MISSILE_RACK", MISSILE_RACK: "MISSILE_RACK",
   SHIELD: "SHIELD", POWER_PLANT: "POWER_PLANT", COOLER: "COOLER", QUANTUM_DRIVE: "QUANTUM_DRIVE",
+  // Jump Drive (Fase P.1) — categoría propia para que el LoadoutBuilder pueda
+  // renderizarlo como slot separado del QT drive en el widget QUANTUM.
+  JUMP_DRIVE: "JUMP_DRIVE",
   MINING_LASER: "MINING", MINING: "MINING", MINING_MODIFIER: "MINING",
   SALVAGE: "SALVAGE", SALVAGE_MODIFIER: "SALVAGE", SALVAGE_HEAD: "SALVAGE", SALVAGE_LASER: "SALVAGE",
   TRACTOR_BEAM: "UTILITY", EMP: "UTILITY",
@@ -185,13 +188,16 @@ const NAME_PATTERNS: [RegExp, string][] = [
   // "hardpoint_quantum_interdiction_generator" contiene la palabra "quantum"
   // pero no es un QT drive. Idem QED/QDMP (los del Reynie/Burke/Captor).
   [/interdict|\bqed\b|\bqdmp\b|\bqig\b/i, "QIG"],
+  // JD-specific name patterns ANTES del genérico /quantum/ para no caer al
+  // bucket QT drive. Convención scunpacked: className arranca con JDRV_.
+  [/\bjump.?drive\b|\bjdrv\b/i, "JUMP_DRIVE"],
   [/quantum|qdrive/i, "QUANTUM_DRIVE"],
   [/salvage|scraper|reclaim/i, "SALVAGE"],
   [/tractor.?beam|cargo.?beam/i, "UTILITY"],
   [/mining/i, "MINING"],
   [/radar|scanner/i, "RADAR"], [/life.?support/i, "LIFE_SUPPORT"],
 ];
-const USEFUL = new Set(["WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "SALVAGE", "UTILITY", "RADAR", "COUNTERMEASURE", "LIFE_SUPPORT", "QIG"]);
+const USEFUL = new Set(["WEAPON", "TURRET", "MISSILE_RACK", "SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "JUMP_DRIVE", "MINING", "SALVAGE", "UTILITY", "RADAR", "COUNTERMEASURE", "LIFE_SUPPORT", "QIG"]);
 
 // Patrones industriales que DEBEN ganarle a una categoría genérica "WEAPON"
 // devuelta por la API. Ej: Mole/Prospector/Golem traen los brazos mineros con
@@ -255,7 +261,7 @@ function parseEquipped(eq: any): EquippedItem | null {
 // =============================================================================
 
 const WEAPON_CATS = new Set(["WEAPON", "TURRET", "MISSILE_RACK"]);
-const SYSTEM_CATS = new Set(["SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "MINING", "SALVAGE", "UTILITY", "LIFE_SUPPORT", "QIG"]);
+const SYSTEM_CATS = new Set(["SHIELD", "POWER_PLANT", "COOLER", "QUANTUM_DRIVE", "JUMP_DRIVE", "MINING", "SALVAGE", "UTILITY", "LIFE_SUPPORT", "QIG"]);
 
 function emptyCat(): CategoryPowerInfo { return { minDraw: 0, allocated: 0, componentCount: 0, activeCount: 0 }; }
 
@@ -870,8 +876,15 @@ function computeStats(
   const baseIr = _res?.baseIrSignature ?? 0;
   const emMult = _res?.sigMultElectromagnetic ?? 1;
   const irMult = _res?.sigMultInfrared ?? 1;
-  // Use scaled component sum; fall back to baseEm/baseIr only for bare hulls.
-  emSig = (emSigScaled > 0 ? emSigScaled : baseEm) * emMult;
+  // Fase P.4 (2026-04-25): si la nave tiene hardpoints pero el usuario apagó
+  // todo, emisiones = 0. El fallback a baseEm/baseIr SOLO aplica para naves
+  // sin hardpoints en absoluto (edge case de bare hull / loading). Antes
+  // mostraba el baseline aunque todo estuviera off, lo cual no se condice
+  // con un casco realmente apagado.
+  const hasAnyHp = hardpoints.length > 0;
+  emSig = hasAnyHp
+    ? emSigScaled * emMult
+    : baseEm * emMult;
 
   // F2.6 (2026-04-17): IR signature via ratio against CIG's ship-level
   // aggregate. Per-component irMax values (e.g. Bracer cooler = 7260)
@@ -890,8 +903,12 @@ function computeStats(
   if (irShieldsRef && irShieldsRef > 0 && emShieldsRef && emShieldsRef > 0 && emSigScaled > 0) {
     const activityRatio = Math.min(1, emSigScaled / emShieldsRef);
     irSig = irShieldsRef * activityRatio * irMult;
+  } else if (hasAnyHp) {
+    // Fase P.4: misma regla que EM — si la nave tiene hardpoints pero todo
+    // está off, IR = 0. baseIr solo cuando no hay hardpoints (bare hull).
+    irSig = irSigScaled * irMult;
   } else {
-    irSig = (irSigScaled > 0 ? irSigScaled : baseIr) * irMult;
+    irSig = baseIr * irMult;
   }
 
   // ── Shield regen + cooling scaling with pip allocation (F2.4) ─────────────

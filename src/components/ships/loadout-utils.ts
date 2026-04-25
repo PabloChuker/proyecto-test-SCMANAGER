@@ -6,8 +6,12 @@
 export const CAT_COLORS: Record<string, string> = {
   WEAPON: "#ef4444", TURRET: "#f59e0b", MISSILE_RACK: "#f97316",
   SHIELD: "#3b82f6", POWER_PLANT: "#22c55e", COOLER: "#06b6d4",
-  QUANTUM_DRIVE: "#a855f7", MINING: "#f472b6", MINING_MODULE: "#ec4899",
+  QUANTUM_DRIVE: "#a855f7", JUMP_DRIVE: "#c084fc", MINING: "#f472b6", MINING_MODULE: "#ec4899",
   SALVAGE: "#14b8a6", UTILITY: "#94a3b8",
+  // RADAR: sin color asignado caía a OTHER (gris) y al combinarse con
+  // opacity-30 cuando se apagaba la nave quedaba casi invisible. Verde
+  // turquesa coherente con el accent que ya usaba el widget.
+  RADAR: "#10b981",
   // QIG: violeta profundo para diferenciarlo del QUANTUM_DRIVE lila y seguir
   // manteniendo la categoría "quantum" visualmente agrupada.
   QIG: "#7c3aed",
@@ -100,6 +104,15 @@ export function getKeyStat(category: string, stats: Record<string, any> | null |
     case "QUANTUM_DRIVE": {
       const spool = tryNum(stats, "quantumSpoolUp", "spoolUpTime");
       return spool !== null ? { v: spool.toFixed(1) + "s", l: "SPOOL" } : null;
+    }
+    case "JUMP_DRIVE": {
+      // El JD no tiene spool — la métrica clave es el alignment rate (qué tan
+      // rápido se sintoniza al jump point). Mostramos eso como porcentaje/s.
+      const align = tryNum(stats, "alignmentRate");
+      if (align !== null) return { v: align.toFixed(2) + "/s", l: "ALIGN" };
+      const tune = tryNum(stats, "tuningRate");
+      if (tune !== null) return { v: tune.toFixed(2) + "/s", l: "TUNE" };
+      return null;
     }
     case "MINING": {
       const power = tryNum(stats, "miningPower");

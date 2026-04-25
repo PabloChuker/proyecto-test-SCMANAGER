@@ -477,7 +477,13 @@ function renderWidget(
     case "flight-dynamics-3d":
       return W(<FlightDynamics3dContent />);
     case "quantum": {
-      const hps = useful.filter((hp: any) => hp.resolvedCategory === "QUANTUM_DRIVE");
+      // Fase P.1 (2026-04-25): el widget QT DRIVES ahora muestra TANTO
+      // QUANTUM_DRIVE (motor de salto local) COMO JUMP_DRIVE (módulo
+      // inter-sistema). El JD viene como slot sintético inyectado en
+      // ships/[id] cuando la nave tiene QT drive.
+      const hps = useful.filter((hp: any) =>
+        hp.resolvedCategory === "QUANTUM_DRIVE" || hp.resolvedCategory === "JUMP_DRIVE"
+      );
       return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: CAT_CONFIG.QUANTUM_DRIVE.icon, badge: hps.length }) : null;
     }
     case "radar": {
@@ -633,7 +639,12 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const shieldCount = useful.filter((hp) => hp.resolvedCategory === "SHIELD").length;
   const powerPlantCount = useful.filter((hp) => hp.resolvedCategory === "POWER_PLANT").length;
   const coolerCount = useful.filter((hp) => hp.resolvedCategory === "COOLER").length;
-  const quantumCount = useful.filter((hp) => hp.resolvedCategory === "QUANTUM_DRIVE").length;
+  // QT DRIVES widget agrupa QUANTUM_DRIVE (motor local) + JUMP_DRIVE (módulo
+  // inter-sistema, mig 058). Ambos se contabilizan en el mismo bucket para
+  // que el alto del widget escale con el total de slots.
+  const quantumCount = useful.filter((hp) =>
+    hp.resolvedCategory === "QUANTUM_DRIVE" || hp.resolvedCategory === "JUMP_DRIVE"
+  ).length;
   const radarCount = useful.filter((hp) => hp.resolvedCategory === "RADAR").length;
   // UTILITY puro (tractor beam, EMP, etc) — MINING y SALVAGE tienen widgets propios.
   const utilityCount = useful.filter((hp) => hp.resolvedCategory === "UTILITY").length;
@@ -714,14 +725,22 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     const portCount = Number(pickerParentItem?.componentStats?.missilePorts ?? 0);
     if (idMatch && portCount > 1) {
       const rackHpId = idMatch[1];
+      // 1) Slots sintéticos (lo que el LoadoutBuilder renderiza visualmente)
       for (let i = 1; i <= portCount; i++) {
         equipItem(`${rackHpId}:missile:${i}`, item);
+      }
+      // 2) Children del API del rack (lo que computeStats agrega para
+      //    sumar damage de misiles al panel LOADOUT DETAIL). Sin esto, el
+      //    daño de misiles quedaba en 0 después de cambiar de misil.
+      const rack = hardpoints.find((h) => h.id === rackHpId);
+      if (rack) {
+        for (const ch of rack.children) equipItem(ch.id, item);
       }
     } else {
       equipItem(pickerHp.id, item);
     }
     setPickerHp(null);
-  }, [pickerHp, pickerParentItem, equipItem]);
+  }, [pickerHp, pickerParentItem, equipItem, hardpoints]);
 
   const handleClear = useCallback(() => {
     if (!pickerHp) return;
@@ -732,11 +751,15 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
       for (let i = 1; i <= portCount; i++) {
         clearSlot(`${rackHpId}:missile:${i}`);
       }
+      const rack = hardpoints.find((h) => h.id === rackHpId);
+      if (rack) {
+        for (const ch of rack.children) clearSlot(ch.id);
+      }
     } else {
       clearSlot(pickerHp.id);
     }
     setPickerHp(null);
-  }, [pickerHp, pickerParentItem, clearSlot]);
+  }, [pickerHp, pickerParentItem, clearSlot, hardpoints]);
 
   // ── SHARE: build URL with ship reference + current build code ──────────────
   const handleShare = useCallback(() => {

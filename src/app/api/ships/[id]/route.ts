@@ -1200,9 +1200,12 @@ export async function GET(
     // en los loadout_json para hidratar los children con stats reales.
     const missileMap = new Map<string, any>();
     try {
-      // Extraer todos los className de entries Missile.Missile dentro de los
-      // loadout_json de los hardpoints. Estas son las tablas indexadas por name.
-      const missileNames = new Set<string>();
+      // Extraer Name + ClassName de entries Missile.Missile dentro de los
+      // loadout_json. La tabla `missiles` indexa por `name` (ej. "Ignite II
+      // Missile") pero los entries traen tanto `Name` como `ClassName`
+      // (ej. "MISL_S02_IR_FSKI_Ignite"). Recolectamos ambos para que el
+      // lookup en buildChildren matchee sin importar cuál esté disponible.
+      const missileKeys = new Set<string>();
       for (const hp of hardpointRows) {
         const lj = hp.loadout_json;
         if (!Array.isArray(lj)) continue;
@@ -1210,19 +1213,30 @@ export async function GET(
           const t = String(e?.Type ?? "");
           const it = String(e?.ItemTypes ?? "");
           if (t.includes("Missile") || it.includes("Missile")) {
+            if (e.Name) missileKeys.add(String(e.Name));
             const cn = e.ClassName ?? e.className;
-            if (cn) missileNames.add(cn);
+            if (cn) missileKeys.add(String(cn));
           }
         }
       }
-      if (missileNames.size > 0) {
-        const arr = [...missileNames];
+      if (missileKeys.size > 0) {
+        const arr = [...missileKeys];
         const placeholders = arr.map((_, i) => `$${i + 1}`).join(",");
+        // Match por name (forma canónica). Si la BD agrega class_name en el
+        // futuro se puede hacer OR aquí.
         const rows: any[] = await sql.unsafe(
           `SELECT * FROM missiles WHERE name IN (${placeholders})`,
           arr,
         );
-        for (const r of rows) missileMap.set(String(r.name), r);
+        for (const r of rows) {
+          // Indexamos doblemente: por name y por raw_data.ClassName si existe.
+          // Así buildChildren puede matchear con cualquiera de los dos campos
+          // del entry del loadout_json.
+          missileMap.set(String(r.name), r);
+          const rawCls =
+            r.raw_data?.ClassName ?? r.raw_data?.stdItem?.ClassName ?? null;
+          if (rawCls) missileMap.set(String(rawCls), r);
+        }
       }
     } catch {
       // Si la tabla no existe o falla, dejamos missileMap vacío y los misiles
@@ -1444,7 +1458,40 @@ export async function GET(
       salvageStats,
       qigStats,
     );
-    const flatHardpoints = [...flatHardpointsFromDb, ...syntheticIndustrial];
+
+    // ── 6c. Inyectar slot Jump Drive sintético ──────────────────────────────
+    //
+    // Fase P.1 (2026-04-25): el Jump Drive es un módulo independiente del QT
+    // drive (mig 058). En SC casi ninguna nave por debajo de capital trae un
+    // JumpDrive equipado por default — pero conceptualmente es un slot
+    // distinto del QT drive y Pablo quiere que se vea siempre como tal en el
+    // widget QT DRIVES, vacío hasta que el usuario equipe uno.
+    //
+    // Regla: si la nave tiene al menos un hardpoint QUANTUM_DRIVE Y NO trae
+    // ya un Jump Drive en sus hardpoints (por si en el futuro CIG los expone),
+    // inyectamos UN slot sintético JUMP_DRIVE al lado. Tamaño se hereda del
+    // QT drive (los JD son típicamente del mismo size que el QT en SC).
+    const allHpsSoFar = [...flatHardpointsFromDb, ...syntheticIndustrial];
+    const hasQuantum = allHpsSoFar.some((hp: any) => hp.category === "QUANTUM_DRIVE");
+    const hasJump = allHpsSoFar.some((hp: any) => hp.category === "JUMP_DRIVE");
+    const syntheticJump: any[] = [];
+    if (hasQuantum && !hasJump) {
+      const qt = allHpsSoFar.find((hp: any) => hp.category === "QUANTUM_DRIVE");
+      const sz = Number(qt?.maxSize ?? 0) || 1;
+      syntheticJump.push({
+        id: `synthetic:${ship.reference}:jump_drive`,
+        hardpointName: "hardpoint_jump_drive",
+        category: "JUMP_DRIVE",
+        minSize: 0,
+        maxSize: sz,
+        isFixed: false,
+        isManned: false,
+        isInternal: true,
+        equippedItem: null,
+        childWeapons: [],
+      });
+    }
+    const flatHardpoints = [...allHpsSoFar, ...syntheticJump];
 
     // ── 7. Build response ──
     const scmSpeed =
