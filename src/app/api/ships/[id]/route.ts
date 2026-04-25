@@ -1459,35 +1459,90 @@ export async function GET(
       qigStats,
     );
 
-    // ── 6c. Inyectar slot Jump Drive sintético ──────────────────────────────
+    // ── 6c. Inyectar slot Jump Drive sintético con default ──────────────────
     //
-    // Fase P.1 (2026-04-25): el Jump Drive es un módulo independiente del QT
-    // drive (mig 058). En SC casi ninguna nave por debajo de capital trae un
-    // JumpDrive equipado por default — pero conceptualmente es un slot
-    // distinto del QT drive y Pablo quiere que se vea siempre como tal en el
-    // widget QT DRIVES, vacío hasta que el usuario equipe uno.
+    // Fase P.1 / Q.1 (2026-04-25): el Jump Drive es un módulo independiente
+    // del QT drive (mig 058). En SC casi ninguna nave por debajo de capital
+    // trae un JumpDrive equipado por default en scunpacked — pero CIG asume
+    // que toda nave navegable tiene uno. Inyectamos un JD por size matching
+    // (Explorer S1 / Excelsior S2 / Exodus S3 / Exfiltrate S4 — los reales
+    // de TARS/WETK con nombre legible) para que la nave salga "completa".
     //
     // Regla: si la nave tiene al menos un hardpoint QUANTUM_DRIVE Y NO trae
-    // ya un Jump Drive en sus hardpoints (por si en el futuro CIG los expone),
-    // inyectamos UN slot sintético JUMP_DRIVE al lado. Tamaño se hereda del
-    // QT drive (los JD son típicamente del mismo size que el QT en SC).
+    // ya un Jump Drive, inyectamos un slot synthetic JUMP_DRIVE con un JD
+    // default equipado de tamaño matching el QT drive.
     const allHpsSoFar = [...flatHardpointsFromDb, ...syntheticIndustrial];
     const hasQuantum = allHpsSoFar.some((hp: any) => hp.category === "QUANTUM_DRIVE");
     const hasJump = allHpsSoFar.some((hp: any) => hp.category === "JUMP_DRIVE");
     const syntheticJump: any[] = [];
     if (hasQuantum && !hasJump) {
+      // Pre-fetch JDs reales (sin templates / placeholders) indexados por size.
+      // Si una nave tiene QT drive S2, le ponemos el JD S2 (Excelsior). Si no
+      // hay match exacto, fallback al más cercano por debajo o templates S4
+      // para naves grandes que no tienen "real" JD pero conceptualmente lo
+      // necesitan.
+      const jdRows: any[] = await sql.unsafe(
+        `SELECT class_name, uuid, name, size, grade,
+                alignment_rate, alignment_decay_rate, tuning_rate, tuning_decay_rate,
+                fuel_usage_efficiency_multiplier, distortion_max, distortion_shutdown_time,
+                health, mass
+           FROM jump_drives
+          WHERE class_name NOT ILIKE '%_Template%'
+            AND (name IS NULL OR name NOT ILIKE '%PLACEHOLDER%')
+          ORDER BY size ASC, grade ASC`,
+      ).catch(() => []);
+      const jdBySize = new Map<number, any>();
+      for (const j of jdRows) {
+        const s = Number(j.size);
+        if (!jdBySize.has(s)) jdBySize.set(s, j);
+      }
+      // Determinar size del JD a equipar a partir del QT drive de la nave.
       const qt = allHpsSoFar.find((hp: any) => hp.category === "QUANTUM_DRIVE");
-      const sz = Number(qt?.maxSize ?? 0) || 1;
+      const qtItemSize = Number(qt?.equippedItem?.size ?? 0);
+      const qtMaxSize = Number(qt?.maxSize ?? 0);
+      const targetSize = qtItemSize || qtMaxSize || 1;
+      // Match exacto → más chico → fallback a Explorer S1.
+      const pickJd =
+        jdBySize.get(targetSize) ??
+        jdBySize.get(targetSize - 1) ??
+        jdBySize.get(1) ??
+        null;
+      let defaultJdItem: any = null;
+      if (pickJd) {
+        defaultJdItem = {
+          id: pickJd.uuid,
+          reference: pickJd.class_name,
+          name: pickJd.name,
+          localizedName: null,
+          className: pickJd.class_name,
+          type: "JUMP_DRIVE",
+          size: numOrNull(pickJd.size),
+          grade: gradeToLetter(pickJd.grade),
+          manufacturer: null,
+          componentStats: {
+            alignmentRate: numOrNull(pickJd.alignment_rate),
+            alignmentDecayRate: numOrNull(pickJd.alignment_decay_rate),
+            tuningRate: numOrNull(pickJd.tuning_rate),
+            tuningDecayRate: numOrNull(pickJd.tuning_decay_rate),
+            fuelEfficiencyMultiplier: numOrNull(pickJd.fuel_usage_efficiency_multiplier),
+            distortionMax: numOrNull(pickJd.distortion_max),
+            distortionShutdownTime: numOrNull(pickJd.distortion_shutdown_time),
+            health: numOrNull(pickJd.health),
+            mass: numOrNull(pickJd.mass),
+          },
+          powerNetwork: null,
+        };
+      }
       syntheticJump.push({
         id: `synthetic:${ship.reference}:jump_drive`,
         hardpointName: "hardpoint_jump_drive",
         category: "JUMP_DRIVE",
         minSize: 0,
-        maxSize: sz,
+        maxSize: targetSize,
         isFixed: false,
         isManned: false,
         isInternal: true,
-        equippedItem: null,
+        equippedItem: defaultJdItem,
         childWeapons: [],
       });
     }

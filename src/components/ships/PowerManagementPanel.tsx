@@ -56,15 +56,25 @@ const CAT_ICON_MAP: Record<PowerCategory, string> = {
   lifesupport: "/icons/shilds.png",
 };
 
-function ComponentIcon({ cat, color }: { cat: PowerCategory; color: string }) {
+function ComponentIcon({ cat, isOn }: { cat: PowerCategory; isOn: boolean }) {
   const src = CAT_ICON_MAP[cat] || "/icons/weapons.png";
+  // Fase Q.2: blanco si ON, gris si OFF — efecto visual claro y consistente
+  // sin importar la categoría (antes cada cat tenía un color distinto que
+  // distraía). brightness invierte el png oscuro a blanco; saturate(0)
+  // deja gris cuando está apagado.
   return (
     <img
       src={src}
       alt={cat}
       width={24}
       height={24}
-      style={{ display: "block", opacity: color === "#3f3f46" ? 0.35 : 1 }}
+      style={{
+        display: "block",
+        filter: isOn
+          ? "brightness(0) invert(1)"
+          : "brightness(0) invert(1) opacity(0.35)",
+        transition: "filter 0.15s ease",
+      }}
     />
   );
 }
@@ -291,23 +301,26 @@ export function PowerManagementPanel({
               })}
             </div>
 
-            {/* Icons row: one icon per column, aligned — no percentages */}
+            {/* Icons row: cada icono es un toggle ON/OFF del componente.
+                Fase Q.2: click apaga/enciende. Blanco=ON, gris=OFF.
+                Apagar acá NO oscurece la tarjeta del HardpointSlot
+                (ese efecto se removió en HardpointSlot). */}
             <div className="flex" style={{ gap: "2px", justifyContent: "center" }}>
               {columns.map((inst, colIdx) => {
                 const prevCat = colIdx > 0 ? columns[colIdx - 1].category : null;
                 const showSep = prevCat !== null && prevCat !== inst.category;
-                const color = catColor(inst.category);
-
                 return (
                   <React.Fragment key={inst.hardpointName + "-icon"}>
                     {showSep && <div style={{ width: "4px" }} />}
-                    <div
-                      className="flex items-center justify-center"
-                      style={{ width: 24 }}
-                      title={`${inst.componentName} — ${inst.allocatedPips}/${inst.totalPips} pips\nDraw: ${(inst.powerMin + (inst.powerMax - inst.powerMin) * (inst.totalPips > 0 ? inst.allocatedPips / inst.totalPips : 0)).toFixed(1)} / ${inst.powerMax} pwr`}
+                    <button
+                      type="button"
+                      onClick={() => toggleComponent(inst.hardpointName)}
+                      className="flex items-center justify-center cursor-pointer hover:bg-zinc-800/40 rounded-sm transition-colors"
+                      style={{ width: 24, height: 24, border: 0, padding: 0, background: "transparent" }}
+                      title={`${inst.componentName} — ${inst.isOn ? "ON" : "OFF"} · click para alternar\n${inst.allocatedPips}/${inst.totalPips} pips · Draw: ${(inst.powerMin + (inst.powerMax - inst.powerMin) * (inst.totalPips > 0 ? inst.allocatedPips / inst.totalPips : 0)).toFixed(1)} / ${inst.powerMax} pwr`}
                     >
-                      <ComponentIcon cat={inst.category} color={inst.isOn ? color : "#3f3f46"} />
-                    </div>
+                      <ComponentIcon cat={inst.category} isOn={inst.isOn} />
+                    </button>
                   </React.Fragment>
                 );
               })}
@@ -323,12 +336,12 @@ export function PowerManagementPanel({
         </div>
       </div>
 
-      {/* ── Signatures & Power/Thermal ── */}
-      <div className="border-t border-zinc-800/50 px-3 py-2 grid grid-cols-2 gap-y-1 gap-x-4">
-        <MiniStat icon="⚡" label="EM" value={stats.emSignature} color="#a855f7" />
-        <MiniStat icon="🔥" label="IR" value={stats.irSignature} color="#f97316" />
-        <MiniStat icon="⚡" label="PWR" value={stats.powerBalance} color={stats.powerBalance >= 0 ? "#22c55e" : "#ef4444"} signed />
-        <MiniStat icon="❄" label="THM" value={stats.thermalBalance} color={stats.thermalBalance >= 0 ? "#06b6d4" : "#ef4444"} signed />
+      {/* ── Signatures (EM / IR) — Fase Q.4: PWR y THM removidos.
+          EM e IR son los relevantes en este panel; el balance de power
+          ya se ve en la barra superior y el thermal en los bars. */}
+      <div className="border-t border-zinc-800/50 px-3 py-3 grid grid-cols-2 gap-x-6">
+        <BigStat icon="⚡" label="EM" value={stats.emSignature} color="#a855f7" />
+        <BigStat icon="🔥" label="IR" value={stats.irSignature} color="#f97316" />
       </div>
     </div>
   );
@@ -365,6 +378,24 @@ function MiniStat({ icon, label, value, color, signed }: {
       <span className="text-[9px]" style={{ opacity: 0.5 }}>{icon}</span>
       <span className="text-[8px] font-mono text-zinc-500 tracking-wider uppercase">{label}</span>
       <span className="text-[11px] font-mono font-bold tabular-nums" style={{ color }}>{display}</span>
+    </div>
+  );
+}
+
+// Fase Q.4: stat grande para EM/IR. Usa la misma forma de fmt que MiniStat
+// (1.2K / 17K) pero con tipografía mucho más prominente y label arriba.
+function BigStat({ icon, label, value, color }: {
+  icon: string; label: string; value: number; color: string;
+}) {
+  const abs = Math.abs(value);
+  const str = abs >= 1000 ? (abs / 1000).toFixed(1) + "K" : Math.round(abs).toString();
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-2xl" style={{ opacity: 0.7 }}>{icon}</span>
+      <div className="flex flex-col">
+        <span className="text-[10px] font-mono text-zinc-500 tracking-[0.15em] uppercase">{label}</span>
+        <span className="text-2xl font-mono font-bold tabular-nums leading-none" style={{ color }}>{str}</span>
+      </div>
     </div>
   );
 }

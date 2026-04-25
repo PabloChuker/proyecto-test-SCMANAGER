@@ -730,6 +730,26 @@ function computeStats(
       irMax: weaponIrMax,
       isOn: weaponActiveCount > 0,
     });
+
+    // Fase Q.3 (2026-04-25): si el usuario quita toda la energía del bucket
+    // weapons (allocatedPips === 0), o no hay armas activas, el DPS debe
+    // colapsar a 0. Erkul-style: la asignación de pips actúa como gate
+    // multiplicativo sobre el DPS / alpha damage. Escalar lineal por el
+    // ratio mantiene la curva intuitiva entre 0 y máximo.
+    const weaponsEffectivePips = Math.min(weaponAllocPips, combinedPips);
+    const weaponPowerRatio = combinedPips > 0 && weaponActiveCount > 0
+      ? weaponsEffectivePips / combinedPips
+      : 0;
+    totalDps          *= weaponPowerRatio;
+    totalSustainedDps *= weaponPowerRatio;
+    totalAlpha        *= weaponPowerRatio;
+    weaponAlpha       *= weaponPowerRatio;
+  } else {
+    // No hay armas: DPS y alpha en 0 por definición.
+    totalDps = 0;
+    totalSustainedDps = 0;
+    totalAlpha = 0;
+    weaponAlpha = 0;
   }
 
   // ── Push single combined shields column ──

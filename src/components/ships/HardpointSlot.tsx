@@ -159,23 +159,27 @@ const Row = memo(function Row({ catColor, size, item, stat, isOn, isOverridden, 
   ammo?: { rounds: number; label: string } | null;
 }) {
   const indent = depth > 0;
+  // Fase Q.2 (2026-04-25): la fila YA no se oscurece con opacity-30 cuando
+  // isOn=false. El estado off se comunica con el badge "OFF" en amber y
+  // el dot LED del lado izquierdo. Eso mantiene la tarjeta legible
+  // mientras el usuario juega con el power grid.
   return (
-    <div className={"flex items-center h-8 border-b border-zinc-800/50 last:border-b-0 transition-opacity duration-150 " + (isOn ? "" : "opacity-30") + (indent ? " ml-5 border-l-2 border-l-zinc-700/40" : "")}>
+    <div className={"flex items-center h-8 border-b border-zinc-800/50 last:border-b-0 " + (indent ? " ml-5 border-l-2 border-l-zinc-700/40" : "")}>
       <button onClick={(e) => { e.stopPropagation(); onTogglePower(); }} className={"w-6 h-full flex items-center justify-center flex-shrink-0 transition-colors " + (isOn ? "text-yellow-500/70 hover:text-yellow-400" : "text-zinc-700 hover:text-yellow-600")}>
         <div className={"w-1.5 h-1.5 rounded-full " + (isOn ? "bg-yellow-500/80" : "bg-zinc-700")} />
       </button>
       <div className="w-7 flex-shrink-0 text-center">
         <span className="text-[10px] font-mono font-bold" style={{ color: catColor }}>{size > 0 ? "S" + size : "--"}</span>
       </div>
-      <div className="w-px h-4 flex-shrink-0 mr-1.5" style={{ backgroundColor: catColor, opacity: isOn ? 0.5 : 0.15 }} />
+      <div className="w-px h-4 flex-shrink-0 mr-1.5" style={{ backgroundColor: catColor, opacity: 0.5 }} />
       <button onClick={onClick} className="flex-1 flex items-center gap-1.5 h-full min-w-0 text-left hover:bg-yellow-500/5 transition-colors px-1">
         {item ? (
           <>
-            <span className={"text-[11px] truncate flex-1 min-w-0 " + (isOn ? (isOverridden ? "text-yellow-200/90" : "text-zinc-300") : "text-zinc-600")}>{item.localizedName || item.name}</span>
-            {item.grade && isOn && <span className="text-[8px] font-mono text-zinc-500 px-0.5 border border-zinc-800/60 rounded-[2px] flex-shrink-0">{item.grade}</span>}
+            <span className={"text-[11px] truncate flex-1 min-w-0 " + (isOverridden ? "text-yellow-200/90" : "text-zinc-300")}>{item.localizedName || item.name}</span>
+            {item.grade && <span className="text-[8px] font-mono text-zinc-500 px-0.5 border border-zinc-800/60 rounded-[2px] flex-shrink-0">{item.grade}</span>}
             {!isOn && <span className="text-[7px] text-amber-600/80 tracking-widest uppercase flex-shrink-0">OFF</span>}
-            {isOverridden && isOn && <span className="text-[7px] text-yellow-500/70 tracking-wider flex-shrink-0">MOD</span>}
-            {hasChildren && isOn && <span className="text-[7px] text-cyan-500/60 tracking-wider flex-shrink-0">+{(item as any)?.children?.length ?? ""}SUB</span>}
+            {isOverridden && <span className="text-[7px] text-yellow-500/70 tracking-wider flex-shrink-0">MOD</span>}
+            {hasChildren && <span className="text-[7px] text-cyan-500/60 tracking-wider flex-shrink-0">+{(item as any)?.children?.length ?? ""}SUB</span>}
           </>
         ) : (
           <span className="text-[10px] text-zinc-700 italic flex-1">— empty —</span>
