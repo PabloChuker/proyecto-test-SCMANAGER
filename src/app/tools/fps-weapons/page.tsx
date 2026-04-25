@@ -46,8 +46,15 @@ type SortKey =
   | "maxFirerate" | "maxDps" | "singleDps" | "burstDps" | "rapidDps" | "volumeMicroScu";
 type SortDir = "asc" | "desc";
 
-function fmtNum(n: number | null, digits = 0): string {
-  if (n === null || n === undefined || !Number.isFinite(n)) return "—";
+function fmtNum(raw: number | string | null | undefined, digits = 0): string {
+  if (raw === null || raw === undefined || raw === "") return "—";
+  // Postgres `numeric` puede llegar como string desde la API si no lo coerciona;
+  // forzamos a Number acá también como cinturón + tirantes.
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) return "—";
+  // 0 = "modo no disponible para esta arma" (single/burst/rapid puede ser 0
+  // si el arma no tiene ese modo de fuego). Mostrar — para que se distinga
+  // de un valor real bajo.
   if (n === 0) return "—";
   return digits > 0 ? n.toFixed(digits) : Math.round(n).toLocaleString();
 }

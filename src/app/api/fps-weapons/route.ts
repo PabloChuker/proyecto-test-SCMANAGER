@@ -33,10 +33,27 @@ export async function GET() {
       ORDER BY name ASC
     `);
 
+    // Postgres `numeric` se serializa como STRING por defecto en el driver
+    // postgres.js — el front necesita Number para hacer comparaciones y sort.
+    // Convertimos explícitamente cualquier valor numérico de string a Number;
+    // dejamos null/undefined intactos. `name` y `type` son text → siguen
+    // siendo string.
+    const TEXT_FIELDS = new Set(["name", "type"]);
     const data = rows.map((r) => {
       const obj: any = {};
       for (const [k, v] of Object.entries(r)) {
-        obj[k] = typeof v === "bigint" ? Number(v) : v;
+        if (v === null || v === undefined) {
+          obj[k] = null;
+        } else if (TEXT_FIELDS.has(k)) {
+          obj[k] = String(v);
+        } else if (typeof v === "bigint") {
+          obj[k] = Number(v);
+        } else if (typeof v === "string") {
+          const n = Number(v);
+          obj[k] = Number.isFinite(n) ? n : null;
+        } else {
+          obj[k] = v;
+        }
       }
       return obj;
     });
