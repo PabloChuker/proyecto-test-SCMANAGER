@@ -205,8 +205,68 @@ function fmtSigned(n: number): string {
   return "$0";
 }
 
+// ── Sort: por header click ──────────────────────────────────────────────────
+// Pablo (2026-04-25): el dashboard ya tiene un sort global (name/price/date)
+// que se aplica antes de pasar el array a CCUList. Acá agregamos un sort
+// LOCAL por columna que tiene precedencia cuando está activo. Click en una
+// header alterna asc/desc. Click en otra header reinicia a desc para columnas
+// numéricas (suele preferirse "mayor primero") y asc para texto.
+type SortKey =
+  | "fromMsrp" | "fromShip" | "toShip" | "toMsrp"
+  | "paid" | "saved" | "type" | "location" | null;
+type SortDir = "asc" | "desc";
+
 export function CCUList({ ccus }: CCUListProps) {
   const msrpIndex = useShipMsrpMap();
+  const [sortKey, setSortKey] = useState<SortKey>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const toggleSort = (key: NonNullable<SortKey>) => {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      // numéricas arrancan desc (mayor primero), texto arranca asc.
+      const numericKeys: NonNullable<SortKey>[] = ["fromMsrp", "toMsrp", "paid", "saved"];
+      setSortDir(numericKeys.includes(key) ? "desc" : "asc");
+    }
+  };
+
+  const sortedCcus = useMemo(() => {
+    if (!sortKey) return ccus;
+    const arr = [...ccus];
+    const dir = sortDir === "asc" ? 1 : -1;
+    arr.sort((a, b) => {
+      const aFromMsrp = lookupMsrp(a.fromShipReference, a.fromShip, msrpIndex);
+      const aToMsrp = lookupMsrp(a.toShipReference, a.toShip, msrpIndex);
+      const bFromMsrp = lookupMsrp(b.fromShipReference, b.fromShip, msrpIndex);
+      const bToMsrp = lookupMsrp(b.toShipReference, b.toShip, msrpIndex);
+      const aJump = aFromMsrp !== null && aToMsrp !== null ? aToMsrp - aFromMsrp : null;
+      const bJump = bFromMsrp !== null && bToMsrp !== null ? bToMsrp - bFromMsrp : null;
+      const aSaved = aJump !== null ? aJump - a.pricePaid : null;
+      const bSaved = bJump !== null ? bJump - b.pricePaid : null;
+      // Helper para que null siempre quede al final, sin importar la dirección.
+      const cmpNum = (av: number | null, bv: number | null) => {
+        if (av === null && bv === null) return 0;
+        if (av === null) return 1;
+        if (bv === null) return -1;
+        return (av - bv) * dir;
+      };
+      const cmpStr = (av: string, bv: string) => av.localeCompare(bv) * dir;
+      switch (sortKey) {
+        case "fromMsrp":  return cmpNum(aFromMsrp, bFromMsrp);
+        case "toMsrp":    return cmpNum(aToMsrp, bToMsrp);
+        case "fromShip":  return cmpStr(a.fromShip, b.fromShip);
+        case "toShip":    return cmpStr(a.toShip, b.toShip);
+        case "paid":      return cmpNum(a.pricePaid, b.pricePaid);
+        case "saved":     return cmpNum(aSaved, bSaved);
+        case "type":      return cmpNum(a.isWarbond ? 1 : 0, b.isWarbond ? 1 : 0);
+        case "location":  return cmpStr(a.location, b.location);
+        default:          return 0;
+      }
+    });
+    return arr;
+  }, [ccus, msrpIndex, sortKey, sortDir]);
 
   if (ccus.length === 0) {
     return (
@@ -221,27 +281,103 @@ export function CCUList({ ccus }: CCUListProps) {
 
   return (
     <div className="overflow-hidden rounded-sm border border-zinc-800/60 bg-zinc-900/40">
-      {/* Layout estilo planilla (Pablo, 2026-04-25):
+      {/* Layout estilo planilla:
           $From | Desde | Hacia | $To | Exchange (lo pagado) | Ahorro | Type | Location | Notes | Actions
-          El "Jump" implícito es la resta visual de las dos columnas $. */}
+          Headers clickables ordenan asc/desc; chevron indica dirección. */}
       <div className="hidden md:flex items-center gap-3 px-3 py-2 border-b border-zinc-800/60 bg-zinc-900/60 text-[9px] tracking-[0.15em] uppercase text-zinc-500 font-mono">
-        <div className="w-16 text-right" title="MSRP de la nave origen">$</div>
-        <div className="flex-1 min-w-0">Desde</div>
-        <div className="flex-1 min-w-0">Hacia</div>
-        <div className="w-16 text-right" title="MSRP de la nave destino">$</div>
-        <div className="w-20 text-right" title="Lo que pagaste por este CCU">Exchange</div>
-        <div className="w-24 text-right" title="Ahorro: ($destino − $origen) − exchange. Verde = ahorraste; rojo = pagaste de más.">Ahorro</div>
-        <div className="w-14 text-center">Type</div>
-        <div className="w-24 text-center">Location</div>
+        <SortHeader sortKey="fromMsrp" curKey={sortKey} curDir={sortDir} onClick={toggleSort} className="w-16 text-right" align="right" title="MSRP de la nave origen">
+          $
+        </SortHeader>
+        <SortHeader sortKey="fromShip" curKey={sortKey} curDir={sortDir} onClick={toggleSort} className="flex-1 min-w-0">
+          Desde
+        </SortHeader>
+        <SortHeader sortKey="toShip" curKey={sortKey} curDir={sortDir} onClick={toggleSort} className="flex-1 min-w-0">
+          Hacia
+        </SortHeader>
+        <SortHeader sortKey="toMsrp" curKey={sortKey} curDir={sortDir} onClick={toggleSort} className="w-16 text-right" align="right" title="MSRP de la nave destino">
+          $
+        </SortHeader>
+        <SortHeader sortKey="paid" curKey={sortKey} curDir={sortDir} onClick={toggleSort} className="w-20 text-right" align="right" title="Lo que pagaste por este CCU">
+          Exchange
+        </SortHeader>
+        <SortHeader sortKey="saved" curKey={sortKey} curDir={sortDir} onClick={toggleSort} className="w-24 text-right" align="right" title="Ahorro: ($destino − $origen) − exchange.">
+          Ahorro
+        </SortHeader>
+        <SortHeader sortKey="type" curKey={sortKey} curDir={sortDir} onClick={toggleSort} className="w-14 text-center" align="center">
+          Type
+        </SortHeader>
+        <SortHeader sortKey="location" curKey={sortKey} curDir={sortDir} onClick={toggleSort} className="w-24 text-center" align="center">
+          Location
+        </SortHeader>
         <div className="flex-1 max-w-[180px]">Notes</div>
         <div className="w-24 text-right">Actions</div>
       </div>
       <div className="divide-y divide-zinc-800/40">
-        {ccus.map((ccu) => (
+        {sortedCcus.map((ccu) => (
           <CCURow key={ccu.id} ccu={ccu} msrpIndex={msrpIndex} />
         ))}
       </div>
     </div>
+  );
+}
+
+// ── SortHeader helper ────────────────────────────────────────────────────────
+function SortHeader({
+  sortKey,
+  curKey,
+  curDir,
+  onClick,
+  className,
+  align,
+  title,
+  children,
+}: {
+  sortKey: NonNullable<SortKey>;
+  curKey: SortKey;
+  curDir: SortDir;
+  onClick: (k: NonNullable<SortKey>) => void;
+  className?: string;
+  align?: "left" | "right" | "center";
+  title?: string;
+  children: React.ReactNode;
+}) {
+  const active = curKey === sortKey;
+  const justify =
+    align === "right" ? "justify-end" : align === "center" ? "justify-center" : "justify-start";
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(sortKey)}
+      title={title}
+      className={
+        (className ?? "") +
+        " inline-flex items-center gap-1 cursor-pointer select-none transition-colors " +
+        justify +
+        (active ? " text-amber-400" : " hover:text-zinc-300")
+      }
+      aria-sort={active ? (curDir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <span>{children}</span>
+      {active ? (
+        curDir === "desc" ? (
+          // chevron down
+          <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 4l4 4 4-4" />
+          </svg>
+        ) : (
+          // chevron up
+          <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M2 8l4-4 4 4" />
+          </svg>
+        )
+      ) : (
+        // double chevron muted (sortable hint)
+        <svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="opacity-40">
+          <path d="M3 5l3-3 3 3" />
+          <path d="M3 7l3 3 3-3" />
+        </svg>
+      )}
+    </button>
   );
 }
 
