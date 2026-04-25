@@ -22,16 +22,77 @@ interface CCUListProps {
 
 interface ShipMsrpRow {
   reference: string;
+  name: string;
+  manufacturer: string | null;
   msrpUsd: number;
+}
+
+interface MsrpIndex {
+  exact: Map<string, number>;
+  // Fuzzy: lista de naves del catálogo con sus tokens (sin manufacturer) y msrp.
+  // Sirve para matchear "C2 Hercules" (CCU) contra "Crusader C2 Hercules
+  // Starlifter" (BD) — el CCU es subset del nombre de BD.
+  fuzzy: Array<{ tokens: Set<string>; msrp: number; name: string }>;
+}
+
+// Marcas de fabricante (códigos + nombres comunes) que se strippean del nombre
+// de una nave para poder matchear "MISC Hercules C2" con "C2 Hercules" del CCU.
+// Si tras el strip no queda ningún token, se respeta el original (caso edge).
+const MFR_TOKENS = new Set([
+  "rsi", "drak", "drake", "misc", "anvl", "anvil", "orig", "origin",
+  "crus", "crusader", "aegs", "aegis", "banu", "vncl", "vanduul",
+  "esperia", "gama", "gatac", "tmbl", "tumbril", "argo", "cnou",
+  "consolidated", "outland", "greycat", "kruger", "musashi", "mirai",
+  "roberts", "space", "industries", "dynamics", "interplanetary",
+  "jumpworks", "aerospace", "manufacture", "intergalactic", "land",
+  "systems", "industrial", "starflight", "concern",
+]);
+
+/**
+ * Normaliza un nombre de nave a una clave estable que matchea sin importar
+ * orden de palabras ni prefijo de manufacturer:
+ *   "MISC Hercules C2" → ["c2","hercules","misc"] → strip manufacturer →
+ *     ["c2","hercules"] → sort → "c2 hercules"
+ *   "C2 Hercules"      → ["c2","hercules"]                    → "c2 hercules" ✓
+ *   "Origin 600i Explorer" → strip "origin" → "600i explorer" → "600i explorer"
+ *   "Anvil Carrack"        → strip "anvil"  → ["carrack"]      → "carrack"
+ */
+function normalizeShipKey(raw: string): string {
+  if (!raw) return "";
+  const tokens = raw
+    .toLowerCase()
+    .replace(/[-_/]/g, " ")
+    .replace(/[^a-z0-9\s]/g, "")
+    .split(/\s+/)
+    .filter(Boolean);
+  // Strip manufacturer tokens, pero si quedan vacíos, respetar el original
+  const stripped = tokens.filter((t) => !MFR_TOKENS.has(t));
+  const final = stripped.length > 0 ? stripped : tokens;
+  return final.slice().sort().join(" ");
+}
+
+function tokenize(raw: string): string[] {
+  return (raw || "")
+    .toLowerCase()
+    .replace(/[-_/]/g, " ")
+    .replace(/[^a-z0-9\s]/g, "")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function stripManufacturer(tokens: string[]): string[] {
+  const stripped = tokens.filter((t) => !MFR_TOKENS.has(t));
+  return stripped.length > 0 ? stripped : tokens;
 }
 
 /**
  * Hook compartido: pre-fetcha el catálogo de naves con MSRP UNA sola vez al
- * montar la lista de CCUs. Devuelve un map `reference (lowercased) → msrp`.
- * Se cachea con SWR-like behavior porque /api/ccu/ships ya tiene Cache-Control
- * `s-maxage=300` en el backend.
+ * montar la lista de CCUs. Devuelve un índice con dos niveles:
+ *   - exact: lookup O(1) por class_name o nombre normalizado canónico
+ *   - fuzzy: lista para matchear CCUs cuyo nombre es SUBCONJUNTO del nombre
+ *     completo de la BD (ej. "C2 Hercules" ⊂ "Crusader C2 Hercules Starlifter")
  */
-function useShipMsrpMap(): Map<string, number> {
+function useShipMsrpMap(): MsrpIndex {
   const [ships, setShips] = useState<ShipMsrpRow[]>([]);
   useEffect(() => {
     let cancelled = false;
@@ -41,22 +102,95 @@ function useShipMsrpMap(): Map<string, number> {
         if (cancelled) return;
         setShips((d.ships ?? []) as ShipMsrpRow[]);
       })
-      .catch(() => {
-        // Falla silenciosa — la UI igual renderiza sin MSRP.
-      });
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, []);
-  return useMemo(() => {
-    const m = new Map<string, number>();
+  return useMemo<MsrpIndex>(() => {
+    const exact = new Map<string, number>();
+    const fuzzy: MsrpIndex["fuzzy"] = [];
     for (const s of ships) {
-      if (s.reference && s.msrpUsd > 0) {
-        m.set(s.reference.toLowerCase(), s.msrpUsd);
+      if (!(s.msrpUsd > 0)) continue;
+      if (s.reference) exact.set(s.reference.toLowerCase(), s.msrpUsd);
+      if (s.name) {
+        exact.set(normalizeShipKey(s.name), s.msrpUsd);
+        exact.set(s.name.toLowerCase(), s.msrpUsd);
+        const tokens = stripManufacturer(tokenize(s.name));
+        if (tokens.length > 0) {
+          fuzzy.push({ tokens: new Set(tokens), msrp: s.msrpUsd, name: s.name });
+        }
       }
     }
-    return m;
+    // Ordenar por cantidad de tokens DESC para que el match más específico gane
+    // primero (ej. "Carrack Expedition" > "Carrack" cuando el CCU dice "Carrack
+    // Expedition"). Para el caso inverso (CCU "Carrack" matchea ambos), el
+    // orden natural en la lista hace que el primero que sea subset gane —
+    // damos prioridad al más simple (menos tokens) para evitar "C2 Hercules"
+    // → "Crusader A2 Hercules Starlifter" por error. Por eso ASC.
+    fuzzy.sort((a, b) => a.tokens.size - b.tokens.size);
+    return { exact, fuzzy };
   }, [ships]);
+}
+
+/** Busca msrp por nombre. Prueba exact match primero (class_name o normalized);
+ *  si no encuentra, hace subset match contra los nombres del catálogo
+ *  (todos los tokens del CCU presentes en algún ship de la BD). */
+function lookupMsrp(
+  reference: string | undefined,
+  shipName: string,
+  index: MsrpIndex,
+): number | null {
+  if (reference) {
+    const v = index.exact.get(reference.toLowerCase());
+    if (v !== undefined) return v;
+  }
+  const norm = normalizeShipKey(shipName);
+  if (norm) {
+    const v = index.exact.get(norm);
+    if (v !== undefined) return v;
+  }
+  const lower = (shipName || "").toLowerCase();
+  if (lower) {
+    const v = index.exact.get(lower);
+    if (v !== undefined) return v;
+  }
+  const queryTokens = stripManufacturer(tokenize(shipName));
+  if (queryTokens.length === 0) return null;
+  const querySet = new Set(queryTokens);
+
+  // Pase 1: query ⊆ candidate. Útil cuando el CCU dice "C2 Hercules" (2 tok)
+  // y la BD tiene "Crusader C2 Hercules Starlifter" (3 tok stripeada). El
+  // fuzzy está ordenado ASC por size, así que el primer match es el más
+  // simple — evita "Carrack" matchee con "Carrack Expedition".
+  for (const candidate of index.fuzzy) {
+    let allPresent = true;
+    for (const t of querySet) {
+      if (!candidate.tokens.has(t)) {
+        allPresent = false;
+        break;
+      }
+    }
+    if (allPresent) return candidate.msrp;
+  }
+
+  // Pase 2: candidate ⊆ query. Caso inverso: CCU dice "600i Explorer" (2 tok)
+  // y la BD solo tiene "Origin 600i" (1 tok stripeado). Recorremos DESC para
+  // que el candidato más específico (más tokens) gane primero — evita que
+  // "Aurora" matchee "Aurora MR" cuando hay un "Aurora MR" en el catálogo.
+  const fuzzyDesc = [...index.fuzzy].sort((a, b) => b.tokens.size - a.tokens.size);
+  for (const candidate of fuzzyDesc) {
+    if (candidate.tokens.size === 0) continue;
+    let allPresent = true;
+    for (const t of candidate.tokens) {
+      if (!querySet.has(t)) {
+        allPresent = false;
+        break;
+      }
+    }
+    if (allPresent) return candidate.msrp;
+  }
+  return null;
 }
 
 function fmtUSD(n: number | null | undefined): string {
@@ -72,7 +206,7 @@ function fmtSigned(n: number): string {
 }
 
 export function CCUList({ ccus }: CCUListProps) {
-  const msrpMap = useShipMsrpMap();
+  const msrpIndex = useShipMsrpMap();
 
   if (ccus.length === 0) {
     return (
@@ -99,22 +233,24 @@ export function CCUList({ ccus }: CCUListProps) {
       </div>
       <div className="divide-y divide-zinc-800/40">
         {ccus.map((ccu) => (
-          <CCURow key={ccu.id} ccu={ccu} msrpMap={msrpMap} />
+          <CCURow key={ccu.id} ccu={ccu} msrpIndex={msrpIndex} />
         ))}
       </div>
     </div>
   );
 }
 
-function CCURow({ ccu, msrpMap }: { ccu: HangarCCU; msrpMap: Map<string, number> }) {
+function CCURow({ ccu, msrpIndex }: { ccu: HangarCCU; msrpIndex: MsrpIndex }) {
   const [showEdit, setShowEdit] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const removeCCU = useHangarStore((s) => s.removeCCU);
   const location = LOCATION_COLORS[ccu.location];
 
-  // MSRPs por reference. Si no encontramos uno, dejamos null y mostramos "—".
-  const fromMsrp = msrpMap.get((ccu.fromShipReference || "").toLowerCase()) ?? null;
-  const toMsrp = msrpMap.get((ccu.toShipReference || "").toLowerCase()) ?? null;
+  // MSRPs vía lookup (reference → exacto → fuzzy subset). Los CCUs importados
+  // desde la extensión guardan `fromShipReference` vacío, así que el lookup
+  // cae al matching por nombre tokenizado contra el catálogo.
+  const fromMsrp = lookupMsrp(ccu.fromShipReference, ccu.fromShip, msrpIndex);
+  const toMsrp = lookupMsrp(ccu.toShipReference, ccu.toShip, msrpIndex);
   // Salto real (puro): destino − origen. Si falta cualquiera, null.
   const jumpValue =
     fromMsrp !== null && toMsrp !== null ? toMsrp - fromMsrp : null;
