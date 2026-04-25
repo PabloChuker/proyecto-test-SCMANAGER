@@ -4,6 +4,8 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getMessages } from "next-intl/server";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ReferralTracker from "@/components/streamers/ReferralTracker";
+import { Analytics } from "@vercel/analytics/react";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 // react-grid-layout base CSS (draggable items, placeholders, etc).
 // En Next.js App Router solo el root layout puede importar CSS global,
 // así que lo hacemos acá en vez de con @import desde globals.css.
@@ -52,6 +54,9 @@ export default async function RootLayout({
             {children}
           </AuthProvider>
         </NextIntlClientProvider>
+        {/* Vercel Analytics + Speed Insights — privacy-friendly, sin cookies. */}
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
