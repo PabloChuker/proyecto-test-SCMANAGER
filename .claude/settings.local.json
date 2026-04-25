@@ -37,7 +37,16 @@
       "Bash(git push *)",
       "WebFetch(domain:hangar.link)",
       "Bash(awk '{print $NF}')",
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "Bash(node -e \"const p = require\\('./node_modules/zustand/package.json'\\); console.log\\('zustand:', p.version\\)\")",
+      "Bash(gh run *)",
+      "Bash(grep -E \"\\\\.\\(sql|ts|tsx\\)$\")",
+      "Bash(npx vercel *)",
+      "WebFetch(domain:www.vercel-status.com)",
+      "Bash(curl -s \"https://api.github.com/repos/PabloChuker/proyecto-test-SCMANAGER/hooks\" -H \"Accept: application/vnd.github+json\")",
+      "Bash(python generate_api_report.py)",
+      "Bash(git commit *)",
+      "Bash(git rm *)"
     ]
   }
 }

@@ -16,13 +16,15 @@ export async function GET() {
 
     const { data, error } = await supabase
       .from("mining_sessions")
-      .select("*")
+      .select("id, name, status, party_id, notes, created_at, updated_at")
+      .eq("owner_id", user.id)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
     return NextResponse.json({ data });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[/api/mining/sessions GET]", e);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -126,7 +128,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: { session, members } }, { status: 201 });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -155,7 +157,7 @@ export async function PATCH(request: NextRequest) {
     if (error) throw error;
     return NextResponse.json({ data });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -196,6 +198,6 @@ export async function DELETE(request: NextRequest) {
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

@@ -19,14 +19,15 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
     const { data, error } = await supabase
       .from("trade_wo_participants")
-      .select("*")
+      .select("id, display_name, avatar_url, role, role_pct, contribution_uec, contribution_note, payout_uec, paid, paid_at, created_at")
       .eq("work_order_id", id)
       .order("created_at", { ascending: true });
 
     if (error) throw error;
     return NextResponse.json({ data });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[/api/trade/work-orders/[id]/participants GET]", e);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -51,13 +52,14 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
         contribution_note: body.contribution_note || null,
         payout_uec: body.payout_uec || 0,
       })
-      .select()
+      .select("id, display_name, avatar_url, role, role_pct, contribution_uec, contribution_note, payout_uec, paid, paid_at, created_at")
       .single();
 
     if (error) throw error;
     return NextResponse.json({ data }, { status: 201 });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[/api/trade/work-orders/[id]/participants POST]", e);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -87,13 +89,14 @@ export async function PATCH(request: NextRequest) {
       .from("trade_wo_participants")
       .update(updates)
       .eq("id", id)
-      .select()
+      .select("id, display_name, avatar_url, role, role_pct, contribution_uec, contribution_note, payout_uec, paid, paid_at")
       .single();
 
     if (error) throw error;
     return NextResponse.json({ data });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[/api/trade/work-orders/[id]/participants PATCH]", e);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -114,6 +117,7 @@ export async function DELETE(request: NextRequest) {
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[/api/trade/work-orders/[id]/participants DELETE]", e);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

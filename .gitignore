@@ -47,6 +47,4 @@ data/scunpacked-data/
 scripts/_*.mjs
 scripts/importers/_*.mjs
 
-# Sandbox-restored backups
-*.fresh
-
+.vercel

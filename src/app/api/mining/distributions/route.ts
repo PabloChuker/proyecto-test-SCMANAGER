@@ -66,8 +66,11 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from("mining_stop_distributions")
       .select(`
-        *,
-        mining_pending_payouts(*),
+        id, route_group_id, stop_index, route_total_stops,
+        mining_session_id, split_mode, status, notes,
+        gross_auec, buy_cost_auec, expenses_auec, net_auec,
+        triggered_at, distributed_at,
+        mining_pending_payouts(id, identity_key, display_name, role, payout_auec, status),
         mining_stop_distribution_wos(work_order_id)
       `)
       .order("triggered_at", { ascending: false });
@@ -81,7 +84,7 @@ export async function GET(request: NextRequest) {
     if (error) throw error;
     return NextResponse.json({ data });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -344,7 +347,7 @@ export async function POST(request: NextRequest) {
       { status: existing?.id ? 200 : 201 },
     );
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -551,7 +554,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ data, ledgerEntries });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -590,6 +593,6 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

@@ -21,14 +21,15 @@ export async function GET(request: NextRequest) {
 
     const { data, error } = await supabase
       .from("mining_members")
-      .select("*")
+      .select("id, session_id, display_name, avatar_url, role, share_pct, is_from_party, joined_at")
       .eq("session_id", sessionId)
       .order("joined_at", { ascending: true });
 
     if (error) throw error;
     return NextResponse.json({ data });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[/api/mining/members GET]", e);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -56,13 +57,14 @@ export async function POST(request: NextRequest) {
         share_pct: share_pct ?? 0,
         is_from_party: false,
       })
-      .select()
+      .select("id, session_id, display_name, avatar_url, role, share_pct, is_from_party, joined_at")
       .single();
 
     if (error) throw error;
     return NextResponse.json({ data }, { status: 201 });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[/api/mining/members POST]", e);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -84,13 +86,14 @@ export async function PATCH(request: NextRequest) {
       .from("mining_members")
       .update(updates)
       .eq("id", id)
-      .select()
+      .select("id, session_id, display_name, avatar_url, role, share_pct, is_from_party, joined_at")
       .single();
 
     if (error) throw error;
     return NextResponse.json({ data });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[/api/mining/members PATCH]", e);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -111,6 +114,7 @@ export async function DELETE(request: NextRequest) {
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[/api/mining/members DELETE]", e);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

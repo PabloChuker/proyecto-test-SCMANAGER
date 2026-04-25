@@ -47,14 +47,15 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
     const { data, error } = await supabase
       .from("trade_wo_expenses")
-      .select("*")
+      .select("id, payer_name, description, amount, expense_type, created_at")
       .eq("work_order_id", id)
       .order("created_at", { ascending: true });
 
     if (error) throw error;
     return NextResponse.json({ data });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[/api/trade/work-orders/[id]/expenses GET]", e);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -76,7 +77,7 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
         amount: body.amount || 0,
         expense_type: body.expense_type || "general",
       })
-      .select()
+      .select("id, payer_name, description, amount, expense_type, created_at")
       .single();
 
     if (error) throw error;
@@ -84,7 +85,8 @@ export async function POST(request: NextRequest, ctx: { params: Promise<{ id: st
     await recomputeWorkOrderTotals(supabase, id);
     return NextResponse.json({ data }, { status: 201 });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[/api/trade/work-orders/[id]/expenses POST]", e);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -108,6 +110,7 @@ export async function DELETE(request: NextRequest, ctx: { params: Promise<{ id: 
     await recomputeWorkOrderTotals(supabase, id);
     return NextResponse.json({ success: true });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[/api/trade/work-orders/[id]/expenses DELETE]", e);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

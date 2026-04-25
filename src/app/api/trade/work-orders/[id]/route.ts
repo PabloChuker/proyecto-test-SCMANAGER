@@ -34,14 +34,25 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
 
     const { data, error } = await supabase
       .from("trade_work_orders")
-      .select(`*, trade_wo_participants(*), trade_wo_expenses(*)`)
+      .select(`
+        id, title, status, party_id,
+        commodity_code, commodity_name,
+        buy_station, buy_system, sell_station, sell_system,
+        scu_bought, scu_sold, scu_lost,
+        buy_price_per_scu, sell_price_per_scu,
+        total_buy, total_sell, total_expenses, net_profit,
+        notes, created_at, updated_at, completed_at,
+        trade_wo_participants(id, display_name, avatar_url, role, role_pct, contribution_uec, contribution_note, payout_uec, paid, paid_at),
+        trade_wo_expenses(id, payer_name, description, amount, expense_type, created_at)
+      `)
       .eq("id", id)
       .single();
 
     if (error) throw error;
     return NextResponse.json({ data });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[/api/trade/work-orders/[id] GET]", e);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -101,13 +112,24 @@ export async function PATCH(request: NextRequest, ctx: { params: Promise<{ id: s
       .from("trade_work_orders")
       .update(updates)
       .eq("id", id)
-      .select(`*, trade_wo_participants(*), trade_wo_expenses(*)`)
+      .select(`
+        id, title, status, party_id,
+        commodity_code, commodity_name,
+        buy_station, buy_system, sell_station, sell_system,
+        scu_bought, scu_sold, scu_lost,
+        buy_price_per_scu, sell_price_per_scu,
+        total_buy, total_sell, total_expenses, net_profit,
+        notes, created_at, updated_at, completed_at,
+        trade_wo_participants(id, display_name, avatar_url, role, role_pct, contribution_uec, contribution_note, payout_uec, paid, paid_at),
+        trade_wo_expenses(id, payer_name, description, amount, expense_type, created_at)
+      `)
       .single();
 
     if (error) throw error;
     return NextResponse.json({ data });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[/api/trade/work-orders/[id] PATCH]", e);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -121,10 +143,12 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: str
     const { error } = await supabase
       .from("trade_work_orders")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("owner_id", user.id);
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[/api/trade/work-orders/[id] DELETE]", e);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

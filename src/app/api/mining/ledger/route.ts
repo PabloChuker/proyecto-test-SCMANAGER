@@ -1,7 +1,7 @@
 // =============================================================================
 // SC LABS — /api/mining/ledger
 //
-// GET   — Get cross-session accumulated ledger for current user or all members
+// GET   — Get cross-session accumulated ledger for current user
 // PATCH — Record a payment (marks balance as paid)
 // =============================================================================
 
@@ -14,24 +14,17 @@ export async function GET(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // If ?all=true, return all ledger entries visible to this user
-    // Otherwise return just the current user's ledger
-    const all = request.nextUrl.searchParams.get("all") === "true";
-
-    let query = supabase
+    const { data, error } = await supabase
       .from("mining_member_ledger")
-      .select("*")
+      .select("id, session_id, display_name, balance, total_earned, total_paid, updated_at")
+      .eq("user_id", user.id)
       .order("balance", { ascending: false });
 
-    if (!all) {
-      query = query.eq("user_id", user.id);
-    }
-
-    const { data, error } = await query;
     if (error) throw error;
     return NextResponse.json({ data });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[/api/mining/ledger GET]", e);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
 
@@ -42,7 +35,7 @@ export async function PATCH(request: NextRequest) {
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const body = await request.json();
-    const { payout_id, amount } = body;
+    const { payout_id } = body;
 
     if (!payout_id) {
       return NextResponse.json({ error: "payout_id required" }, { status: 400 });
@@ -53,12 +46,13 @@ export async function PATCH(request: NextRequest) {
       .from("mining_crew_payouts")
       .update({ paid: true, paid_at: new Date().toISOString() })
       .eq("id", payout_id)
-      .select()
+      .select("id, paid, paid_at")
       .single();
 
     if (error) throw error;
     return NextResponse.json({ data });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    console.error("[/api/mining/ledger PATCH]", e);
+    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
