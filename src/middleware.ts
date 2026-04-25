@@ -38,7 +38,24 @@ setInterval(() => {
 
 // ─── Middleware ──────────────────────────────────────────────────────────────
 
+// ─── MANTENIMIENTO — quitar estas líneas para reactivar la web ───────────────
+const MAINTENANCE_MODE = true;
+
 export async function middleware(request: NextRequest) {
+  if (MAINTENANCE_MODE) {
+    const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>En mantenimiento</title>
+<style>body{margin:0;background:#0F172A;color:#F1F5F9;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center}
+h1{font-size:2rem;color:#3B82F6}p{color:#94A3B8}</style></head>
+<body><div><h1>SC Manager</h1><p>Estamos realizando tareas de mantenimiento.<br>Volvemos pronto.</p></div></body></html>`;
+    return new NextResponse(html, {
+      status: 503,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Retry-After": "3600",
+      },
+    });
+  }
+
   const { pathname } = request.nextUrl;
   const isApi = pathname.startsWith("/api/");
 
