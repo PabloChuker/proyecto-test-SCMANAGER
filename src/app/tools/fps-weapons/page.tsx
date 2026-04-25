@@ -10,6 +10,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Header from "@/app/assets/header/Header";
+import { PageVideoBackground } from "@/components/shared/PageVideoBackground";
 
 interface Weapon {
   name: string;
@@ -128,9 +129,11 @@ export default function FpsWeaponsPage() {
   };
 
   return (
-    <>
-      <Header subtitle="FPS WEAPONS" />
-      <main className="min-h-screen px-4 sm:px-6 py-6 max-w-[1700px] mx-auto">
+    <main className="relative min-h-screen text-zinc-100">
+      <PageVideoBackground />
+      <div className="relative z-10 flex flex-col min-h-screen">
+        <Header subtitle="FPS WEAPONS" />
+        <div className="flex-1 max-w-[1700px] mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full">
         <div className="mb-5">
           <h1 className="text-xl tracking-[0.18em] uppercase text-amber-400 font-medium">FPS Weapons Data</h1>
           <p className="text-xs text-zinc-500 mt-1">
@@ -169,16 +172,16 @@ export default function FpsWeaponsPage() {
             placeholder="Search by name or type…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm placeholder-zinc-600 focus:outline-none focus:border-amber-500/50 transition-colors"
+            className="w-full px-3 py-2 bg-zinc-900/70 backdrop-blur-sm border border-zinc-800/60 rounded-sm text-zinc-100 text-sm placeholder-zinc-600 focus:outline-none focus:border-amber-500/50 transition-colors"
           />
           <p className="text-[10px] font-mono text-zinc-600 mt-1.5">{filtered.length} matching</p>
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto rounded-sm border border-zinc-800/60 bg-zinc-900/40">
+        <div className="overflow-x-auto rounded-sm border border-zinc-800/60 bg-zinc-900/70 backdrop-blur-sm">
           <table className="w-full text-[11px] tabular-nums">
             <thead>
-              <tr className="border-b border-zinc-800/60 bg-zinc-900/60 text-[9px] tracking-[0.15em] uppercase text-zinc-500 font-mono">
+              <tr className="border-b border-zinc-800/60 bg-zinc-900/80 text-[9px] tracking-[0.15em] uppercase text-zinc-500 font-mono">
                 <ThSort label="Name" k="name" cur={sortKey} dir={sortDir} onClick={toggleSort} align="left" className="px-3 py-2 min-w-[220px]" />
                 <ThSort label="Type" k="type" cur={sortKey} dir={sortDir} onClick={toggleSort} align="center" className="px-2 py-2 w-40" />
                 <ThSort label="Mag" k="magazine" cur={sortKey} dir={sortDir} onClick={toggleSort} align="right" className="px-2 py-2 w-14" title="Magazine capacity" />
@@ -229,8 +232,9 @@ export default function FpsWeaponsPage() {
         <p className="text-[10px] text-zinc-600 mt-3 italic">
           Source: in-game testing data. Last updated: 2026-04-25. Some weapons have only one fire mode active — empty cells (—) mean that mode is not available for that weapon.
         </p>
-      </main>
-    </>
+        </div>
+      </div>
+    </main>
   );
 }
 
@@ -266,7 +270,7 @@ function FilterChip({
     <button
       type="button"
       onClick={onClick}
-      className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-[2px] border bg-zinc-900/50 text-zinc-500 border-zinc-800/60 hover:text-zinc-300 hover:border-zinc-600 transition-colors"
+      className="px-2.5 py-1 text-[10px] font-mono tracking-wider uppercase rounded-[2px] border bg-zinc-900/70 backdrop-blur-sm text-zinc-500 border-zinc-800/60 hover:text-zinc-300 hover:border-zinc-600 transition-colors"
     >
       {label} <span className="opacity-50 ml-1">{count}</span>
     </button>
