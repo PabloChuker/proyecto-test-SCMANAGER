@@ -479,47 +479,58 @@ export default function BlueprintWorkbench() {
     return mod.atMinQuality + t * (mod.atMaxQuality - mod.atMinQuality);
   }, []);
 
+  // Properties whose displayed sign should be inverted: the DB stores them as
+  // "amount of recoil/disturbance" (lower=better), but the user-facing label
+  // means "ability/quality" (higher=better). SCCrafter applies the same inversion.
+  // Add more keys here as we discover them.
+  const INVERTED_PROPS = useMemo(() => new Set([
+    "weapon_recoil_handling",
+    "weapon_recoil_smoothness",
+  ]), []);
+
   // Convert a raw SC modifier value to a percentage effect.
-  // The DB stores modifier values as decimal percentages (e.g. 0.15 = +15%, -0.08 = -8%).
-  // Formula is simply value × 100. The old (value−neutral)/neutral approach gave wrong
-  // results for asymmetric ranges (e.g. temperature: atMin=0.017, atMax=0.20 → gave
-  // +84.62% instead of +20%). The (value−1.0)×100 approach failed for non-multiplier
-  // storage formats. Direct ×100 is correct universally for this DB.
-  // atMin/atMax params kept for API compatibility.
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // The DB stores modifier values in TWO different formats depending on the blueprint:
+  //   - Multiplier-around-baseline format: atMin/atMax around a non-zero midpoint
+  //     (e.g. P8-SC SMG: 925/1075 around 1000 → ±7.5%; A03 Sniper: 9/11 or 12/8
+  //     around 10 → ±10% damage / ±20% recoil). Formula: (value − mid) / mid × 100
+  //   - Delta-around-zero format: atMin/atMax around 0 (e.g. Novikov: −0.10/−0.01).
+  //     Formula: value × 100
+  // We auto-detect the format by checking if |midpoint| is large enough to be a
+  // meaningful baseline (>0.5) vs near-zero (delta format). Then for properties in
+  // INVERTED_PROPS we flip the sign so the display semantically reads "improvement".
   const modToPercent = useCallback(
-    (value: number, _atMin: number, _atMax: number): number => {
-      return value * 100;
-    }, []
+    (value: number, atMin: number, atMax: number, propertyKey?: string): number => {
+      const midpoint = (atMin + atMax) / 2;
+      const pct = Math.abs(midpoint) > 0.5
+        ? ((value - midpoint) / midpoint) * 100
+        : value * 100;
+      return propertyKey && INVERTED_PROPS.has(propertyKey) ? -pct : pct;
+    }, [INVERTED_PROPS]
   );
 
-  // Per-stat modifier map: for each property key, keep the contribution from the
-  // part that has the LARGEST effect range. This avoids double-counting when the
-  // same modifier key is stored on multiple parts in the DB (a common data
-  // artefact in SC blueprints where modifiers are defined at the blueprint level
-  // and duplicated across groups). Parts that genuinely add different stats still
-  // accumulate separately.
+  // Per-stat modifier map: SUM contributions from all parts that have the same
+  // property key. This matches SCCrafter behavior — e.g. P8-SC SMG has Recoil
+  // Smoothness on both Frame and Stock at -20% each → combined = -40%. When only
+  // one part has a property, the combined value equals that single contribution.
   const combinedModifiers = useMemo(() => {
     if (!selectedBlueprint) return {} as Record<string, { currentPct: number; atMinPct: number; atMaxPct: number }>;
 
-    // bestRange[key] tracks the absolute effect range of the winning entry so far
-    const bestRange: Record<string, number> = {};
     const result: Record<string, { currentPct: number; atMinPct: number; atMaxPct: number }> = {};
 
     selectedBlueprint.parts.forEach((part) => {
       const quality = partQualities[part.groupKey] ?? 0;
       part.modifiers.forEach((mod) => {
-        const current   = getModValueAtQuality(mod, quality);
-        const currentPct = modToPercent(current, mod.atMinQuality, mod.atMaxQuality);
-        const atMinPct  = modToPercent(mod.atMinQuality, mod.atMinQuality, mod.atMaxQuality);
-        const atMaxPct  = modToPercent(mod.atMaxQuality, mod.atMinQuality, mod.atMaxQuality);
-        const range     = Math.abs(atMaxPct - atMinPct);
+        const current    = getModValueAtQuality(mod, quality);
+        const currentPct = modToPercent(current, mod.atMinQuality, mod.atMaxQuality, mod.propertyKey);
+        const atMinPct   = modToPercent(mod.atMinQuality, mod.atMinQuality, mod.atMaxQuality, mod.propertyKey);
+        const atMaxPct   = modToPercent(mod.atMaxQuality, mod.atMinQuality, mod.atMaxQuality, mod.propertyKey);
 
-        const prev = bestRange[mod.propertyKey] ?? -1;
-        if (range > prev) {
-          bestRange[mod.propertyKey] = range;
-          result[mod.propertyKey] = { currentPct, atMinPct, atMaxPct };
+        if (!result[mod.propertyKey]) {
+          result[mod.propertyKey] = { currentPct: 0, atMinPct: 0, atMaxPct: 0 };
         }
+        result[mod.propertyKey].currentPct += currentPct;
+        result[mod.propertyKey].atMinPct  += atMinPct;
+        result[mod.propertyKey].atMaxPct  += atMaxPct;
       });
     });
 
@@ -828,7 +839,7 @@ export default function BlueprintWorkbench() {
                         <div className="flex flex-wrap gap-x-3 gap-y-1 mt-0.5">
                           {part.modifiers.map((mod) => {
                             const val = getModValueAtQuality(mod, q);
-                            const pct = modToPercent(val, mod.atMinQuality, mod.atMaxQuality);
+                            const pct = modToPercent(val, mod.atMinQuality, mod.atMaxQuality, mod.propertyKey);
                             const isPos = pct >= 0;
                             return (
                               <div key={mod.propertyKey} className="text-[9px] flex items-center gap-1">
