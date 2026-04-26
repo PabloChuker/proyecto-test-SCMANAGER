@@ -17,7 +17,8 @@ import type { CargoGridData } from "./CargoPage";
 
 const SCU        = 1.25;
 const CELL_SCALE = 0.84;
-const GRID_GAP   = SCU * 2; // separación entre módulos
+const SLOT_GAP   = SCU * 0.5;  // gap entre grids dentro de una bahía (eje X)
+const BAY_GAP    = SCU * 1.5;  // gap entre bahías (eje Z = profundidad del barco)
 
 // ─── Tipos de cargo ───────────────────────────────────────────────────────────
 
@@ -91,7 +92,8 @@ interface CellInfo { gi: number; x: number; y: number; z: number; type: CargoTyp
 
 interface GridMeta {
   gx: number; gy: number; gz: number;
-  offsetX: number; // desplazamiento X Three.js para este módulo
+  offsetX: number; // desplazamiento X Three.js (dentro de la bahía)
+  offsetZ: number; // desplazamiento Z Three.js (= DB.y = profundidad de la nave)
 }
 
 export function CargoGrid3D({ grids }: { grids: CargoGridData[] }) {
@@ -216,41 +218,70 @@ export function CargoGrid3D({ grids }: { grids: CargoGridData[] }) {
     }));
     dimsRef.current = dims;
 
-    // Calcular offsets X para disponer grids en fila
+    // ── Detección de bahías ─────────────────────────────────────────────────────
+    // Una "bahía" es un ciclo completo de tipos de grid en el array interleaved.
+    // Cuando un className aparece por segunda vez en la secuencia → nueva bahía.
+    // • Dentro de la bahía : grids en fila a lo largo del eje X (ancho)
+    // • Entre bahías       : offset a lo largo del eje Z Three.js (= DB.y = profundidad nave)
+    const bayAssignments: number[] = [];
+    {
+      const seenInBay = new Set<string>();
+      let bay = 0;
+      for (const g of grids) {
+        if (seenInBay.has(g.className)) { bay++; seenInBay.clear(); }
+        seenInBay.add(g.className);
+        bayAssignments.push(bay);
+      }
+    }
+    const numBays = (bayAssignments[bayAssignments.length - 1] ?? 0) + 1;
+
+    // Profundidad máxima (gy) de cada bahía
+    const bayMaxDepth = new Array<number>(numBays).fill(0);
+    for (let gi = 0; gi < grids.length; gi++) {
+      const b = bayAssignments[gi];
+      bayMaxDepth[b] = Math.max(bayMaxDepth[b], dims[gi].gy * SCU);
+    }
+
+    // Offset Z acumulado por bahía
+    const bayZOff = new Array<number>(numBays).fill(0);
+    for (let b = 1; b < numBays; b++) {
+      bayZOff[b] = bayZOff[b - 1] + bayMaxDepth[b - 1] + BAY_GAP;
+    }
+
+    // Cursor X independiente por bahía
+    const bayXCursor = new Array<number>(numBays).fill(0);
+
     const offsets: number[] = [0];
     const meta: GridMeta[]  = [];
-    let cursorX = 0;
 
     for (let gi = 0; gi < grids.length; gi++) {
       const { gx, gy, gz } = dims[gi];
-      meta.push({ gx, gy, gz, offsetX: cursorX });
-      if (gi < grids.length - 1) {
-        offsets.push(offsets[gi] + gx * gy * gz);
-        cursorX += gx * SCU + GRID_GAP;
-      }
+      const b = bayAssignments[gi];
+      meta.push({ gx, gy, gz, offsetX: bayXCursor[b], offsetZ: bayZOff[b] });
+      if (gi < grids.length - 1) offsets.push(offsets[gi] + gx * gy * gz);
+      bayXCursor[b] += gx * SCU + SLOT_GAP;
     }
     offsetsRef.current = offsets;
     gridMetaRef.current = meta;
 
     const totalInstances = dims.reduce((s, d) => s + d.gx * d.gy * d.gz, 0);
 
-    // Bounds de la escena completa
-    const lastGrid   = meta[meta.length - 1];
-    const totalWorldX = lastGrid.offsetX + lastGrid.gx * SCU;
-    const maxWorldZ   = Math.max(...dims.map((d) => d.gz * SCU)); // alto (Z en SC = Y en Three)
-    const maxWorldY   = Math.max(...dims.map((d) => d.gy * SCU)); // fondo (Y en SC = Z en Three)
-    const center      = new THREE.Vector3(totalWorldX / 2, maxWorldZ / 2, maxWorldY / 2);
-    const sceneSpan   = Math.max(totalWorldX, maxWorldZ, maxWorldY);
+    // Bounds de la escena completa (2D footprint)
+    const sceneW   = Math.max(...meta.map((m, gi) => m.offsetX + dims[gi].gx * SCU), SCU);
+    const sceneD   = Math.max(...meta.map((m, gi) => m.offsetZ + dims[gi].gy * SCU), SCU);
+    const sceneH   = Math.max(...dims.map((d) => d.gz * SCU), SCU);
+    const center   = new THREE.Vector3(sceneW / 2, sceneH / 2, sceneD / 2);
+    const sceneSpan = Math.max(sceneW, sceneD, sceneH);
 
     // Escena
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x09090b); // zinc-950
 
-    // Cámara — mirando el plano XY desde arriba y delante
+    // Cámara — posición isométrica para ver el footprint 2D (X=ancho, Z=fondo)
     const W = container.clientWidth || 800;
     const H = container.clientHeight || 600;
     const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 2000);
-    camera.position.set(center.x, center.y + sceneSpan * 1.0, center.z + sceneSpan * 1.5);
+    camera.position.set(center.x, center.y + sceneSpan * 1.1, center.z + sceneSpan * 1.4);
     camera.lookAt(center);
     cameraRef.current = camera;
 
@@ -269,61 +300,40 @@ export function CargoGrid3D({ grids }: { grids: CargoGridData[] }) {
     scene.add(fill);
 
     // Grid helper (suelo en Y=0 Three.js = suelo del cargo hold)
-    const gh = new THREE.GridHelper(
-      Math.max(totalWorldX, maxWorldY) * 2.5,
-      Math.max(20, Math.ceil(Math.max(totalWorldX, maxWorldY) / SCU) * 2),
-      0x3f3f46,
-      0x27272a,
-    );
+    const ghSize = Math.max(sceneW, sceneD) * 2.2;
+    const ghDivs = Math.max(20, Math.ceil(ghSize / SCU));
+    const gh = new THREE.GridHelper(ghSize, ghDivs, 0x3f3f46, 0x27272a);
     gh.position.set(center.x, 0, center.z);
     scene.add(gh);
 
-    // Wireframes de límite por cada módulo — color según tipo de módulo
-    // Detectamos cambio de "bahía": cuando el className cambia de vuelta al primero
-    // marcamos separador de grupo entre bahías.
-    let prevBayStart = 0; // offsetX donde empieza la bahía actual
-    let prevClassName = grids[0]?.className ?? "";
-
+    // ── Wireframes por grid (color por tipo de módulo) ────────────────────────
+    // DB: x=ancho, y=fondo, z=alto → Three: w=gx*SCU, h=gz*SCU (Y), d=gy*SCU (Z)
     for (let gi = 0; gi < grids.length; gi++) {
-      const { gx, gy, gz, offsetX } = meta[gi];
-      const cn    = grids[gi].className;
-      const col   = moduleColorMap[cn] ?? { hex: 0xf59e0b, css: "#f59e0b", label: cn };
+      const { gx, gy, gz, offsetX, offsetZ } = meta[gi];
+      const cn  = grids[gi].className;
+      const col = moduleColorMap[cn] ?? { hex: 0xf59e0b };
 
-      // DB: x=ancho, y=fondo, z=alto → Three: w=gx*SCU, h=gz*SCU, d=gy*SCU
-      const edgeGeo = new THREE.EdgesGeometry(
-        new THREE.BoxGeometry(gx * SCU, gz * SCU, gy * SCU),
-      );
-      const edgeMat = new THREE.LineBasicMaterial({
-        color: col.hex,
-        transparent: true,
-        opacity: 0.35,
-      });
+      const edgeGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(gx * SCU, gz * SCU, gy * SCU));
+      const edgeMat = new THREE.LineBasicMaterial({ color: col.hex, transparent: true, opacity: 0.35 });
       const edge = new THREE.LineSegments(edgeGeo, edgeMat);
-      edge.position.set(
-        offsetX + (gx * SCU) / 2,
-        (gz * SCU) / 2,
-        (gy * SCU) / 2,
-      );
+      edge.position.set(offsetX + (gx * SCU) / 2, (gz * SCU) / 2, offsetZ + (gy * SCU) / 2);
       scene.add(edge);
-
-      // Separador delgado entre módulos adyacentes
-      if (gi > 0) {
-        // Separador de bahía (más brillante) cuando la clase vuelve al primero del ciclo
-        const isBayBoundary = cn === grids[0]?.className && gi > 0;
-        const sepColor = isBayBoundary ? 0x71717a : 0x3f3f46;
-        const sepOpacity = isBayBoundary ? 0.6 : 0.4;
-        const sepGeo = new THREE.BufferGeometry().setFromPoints([
-          new THREE.Vector3(offsetX - GRID_GAP / 2, 0, 0),
-          new THREE.Vector3(offsetX - GRID_GAP / 2, maxWorldZ + SCU, 0),
-        ]);
-        const sepMat = new THREE.LineBasicMaterial({ color: sepColor, transparent: true, opacity: sepOpacity });
-        scene.add(new THREE.Line(sepGeo, sepMat));
-
-        if (isBayBoundary) prevBayStart = offsetX;
-      }
-      prevClassName = cn;
     }
-    void prevBayStart; void prevClassName; // suppress unused warning
+
+    // ── Separadores entre bahías (líneas horizontales en el plano Z) ──────────
+    for (let b = 1; b < numBays; b++) {
+      const sepZ = bayZOff[b] - BAY_GAP / 2;
+      const pts  = [
+        new THREE.Vector3(0,      0,          sepZ),
+        new THREE.Vector3(sceneW, 0,          sepZ),
+        new THREE.Vector3(sceneW, sceneH + SCU, sepZ),
+        new THREE.Vector3(0,      sceneH + SCU, sepZ),
+        new THREE.Vector3(0,      0,          sepZ),
+      ];
+      const sepGeo = new THREE.BufferGeometry().setFromPoints(pts);
+      const sepMat = new THREE.LineBasicMaterial({ color: 0x52525b, transparent: true, opacity: 0.5 });
+      scene.add(new THREE.Line(sepGeo, sepMat));
+    }
 
     // Ejes de referencia
     const mkAxis = (dir2: THREE.Vector3, color: number) =>
@@ -350,14 +360,15 @@ export function CargoGrid3D({ grids }: { grids: CargoGridData[] }) {
     const idToCell = new Map<number, { gi: number; x: number; y: number; z: number }>();
 
     for (let gi = 0; gi < grids.length; gi++) {
-      const { gx, gy, gz, offsetX } = meta[gi];
+      const { gx, gy, gz, offsetX, offsetZ } = meta[gi];
       // Iteramos igual que globalIID: z → y → x
       for (let z = 0; z < gz; z++)
         for (let y = 0; y < gy; y++)
           for (let x = 0; x < gx; x++) {
             const iid = offsets[gi] + z * gx * gy + y * gx + x;
             const pos = toThree(x, y, z);
-            pos.x += offsetX;
+            pos.x += offsetX;   // offset dentro de la bahía (X)
+            pos.z += offsetZ;   // offset de bahía (profundidad nave, Three Z)
             mtx.setPosition(pos);
             instMesh.setMatrixAt(iid, mtx);
             instMesh.setColorAt(iid, emptyCol);
@@ -377,7 +388,7 @@ export function CargoGrid3D({ grids }: { grids: CargoGridData[] }) {
       ctrl.enableDamping = true;
       ctrl.dampingFactor = 0.06;
       ctrl.minDistance   = SCU * 2;
-      ctrl.maxDistance   = sceneSpan * 12;
+      ctrl.maxDistance   = sceneSpan * 15;
       ctrl.mouseButtons  = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
       controlsRef.current = ctrl;
       ctrlReady = true;
