@@ -480,15 +480,16 @@ export default function BlueprintWorkbench() {
   }, []);
 
   // Convert a raw SC modifier value to a percentage effect.
-  // SC stores modifiers as multipliers where 1.0 = no change (neutral baseline).
-  // e.g. atMax=1.20 → +20%, atMax=0.85 → -15%. We do NOT use (atMin+atMax)/2
-  // as the neutral because atMin can differ from (2 - atMax) for properties like
-  // temperature resistance, which would give wrong results.
-  // atMin/atMax params kept for potential future use; only value is needed.
+  // The DB stores modifier values as decimal percentages (e.g. 0.15 = +15%, -0.08 = -8%).
+  // Formula is simply value × 100. The old (value−neutral)/neutral approach gave wrong
+  // results for asymmetric ranges (e.g. temperature: atMin=0.017, atMax=0.20 → gave
+  // +84.62% instead of +20%). The (value−1.0)×100 approach failed for non-multiplier
+  // storage formats. Direct ×100 is correct universally for this DB.
+  // atMin/atMax params kept for API compatibility.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const modToPercent = useCallback(
     (value: number, _atMin: number, _atMax: number): number => {
-      return (value - 1.0) * 100;
+      return value * 100;
     }, []
   );
 
