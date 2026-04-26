@@ -77,11 +77,18 @@ export function CargoPage() {
   const selectedShip = ships.find((s) => s.id === selectedId) ?? null;
 
   // Grids expandidos por instance_count → pasados al 3D
+  // Se intercalan por "bahía": [M1,W1,L1, M2,W2,L2, ...] en vez de [M,M,M,M, W,W,W,W]
+  // Así los componentes de cada módulo físico quedan agrupados en el visor 3D.
   const activeGrids = useMemo<CargoGridData[]>(() => {
     if (!selectedShip) return [];
-    return selectedShip.grids.flatMap((g) =>
-      Array.from({ length: g.instanceCount }, () => g),
-    );
+    const maxInstances = Math.max(...selectedShip.grids.map((g) => g.instanceCount), 1);
+    const result: CargoGridData[] = [];
+    for (let i = 0; i < maxInstances; i++) {
+      for (const g of selectedShip.grids) {
+        if (i < g.instanceCount) result.push(g);
+      }
+    }
+    return result;
   }, [selectedShip]);
 
   return (

@@ -9,7 +9,7 @@
 // Cada celda = 1 SCU = 1.25 × 1.25 × 1.25 m.
 // =============================================================================
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import * as THREE from "three";
 import type { CargoGridData } from "./CargoPage";
 
@@ -35,6 +35,26 @@ const CARGO: Record<CargoType, { label: string; hex: number; css: string }> = {
 };
 
 const FILLED = (Object.keys(CARGO) as CargoType[]).filter((t) => t !== "empty");
+
+// ─── Paleta de colores para tipos de módulo ───────────────────────────────────
+
+const MODULE_PALETTE: { hex: number; css: string }[] = [
+  { hex: 0xf59e0b, css: "#f59e0b" }, // amber   — módulo principal
+  { hex: 0x3b82f6, css: "#3b82f6" }, // blue
+  { hex: 0x22c55e, css: "#22c55e" }, // green
+  { hex: 0xa855f7, css: "#a855f7" }, // purple
+  { hex: 0x06b6d4, css: "#06b6d4" }, // cyan
+  { hex: 0xef4444, css: "#ef4444" }, // red
+  { hex: 0xf97316, css: "#f97316" }, // orange
+  { hex: 0xec4899, css: "#ec4899" }, // pink
+  { hex: 0x84cc16, css: "#84cc16" }, // lime
+  { hex: 0xfbbf24, css: "#fbbf24" }, // yellow
+];
+
+/** Extrae el sufijo legible de un className de CargoGrid */
+function moduleLabel(className: string): string {
+  return className.split("_CargoGrid")[1]?.replace(/_/g, " ").trim() || className;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -107,6 +127,21 @@ export function CargoGrid3D({ grids }: { grids: CargoGridData[] }) {
   // SCU totales y usados
   const totalSCU = grids.reduce((s, g) => s + g.scuCapacity, 0);
   const usedSCU  = Object.values(stats).reduce((a, b) => a + b, 0);
+
+  // Mapa de colores por tipo de módulo (className único → color de paleta)
+  const moduleColorMap = useMemo(() => {
+    const seen: Record<string, number> = {}; // className → palette index
+    let idx = 0;
+    grids.forEach((g) => {
+      if (!(g.className in seen)) seen[g.className] = idx++;
+    });
+    const map: Record<string, { hex: number; css: string; label: string }> = {};
+    for (const [cn, i] of Object.entries(seen)) {
+      const pal = MODULE_PALETTE[i % MODULE_PALETTE.length];
+      map[cn] = { ...pal, label: moduleLabel(cn) };
+    }
+    return map;
+  }, [grids]);
 
   // ── Pintar celda en GPU ───────────────────────────────────────────────────
   const paintCell = useCallback((gi: number, x: number, y: number, z: number, type: CargoType) => {
@@ -243,17 +278,25 @@ export function CargoGrid3D({ grids }: { grids: CargoGridData[] }) {
     gh.position.set(center.x, 0, center.z);
     scene.add(gh);
 
-    // Wireframes de límite por cada módulo
+    // Wireframes de límite por cada módulo — color según tipo de módulo
+    // Detectamos cambio de "bahía": cuando el className cambia de vuelta al primero
+    // marcamos separador de grupo entre bahías.
+    let prevBayStart = 0; // offsetX donde empieza la bahía actual
+    let prevClassName = grids[0]?.className ?? "";
+
     for (let gi = 0; gi < grids.length; gi++) {
       const { gx, gy, gz, offsetX } = meta[gi];
+      const cn    = grids[gi].className;
+      const col   = moduleColorMap[cn] ?? { hex: 0xf59e0b, css: "#f59e0b", label: cn };
+
       // DB: x=ancho, y=fondo, z=alto → Three: w=gx*SCU, h=gz*SCU, d=gy*SCU
       const edgeGeo = new THREE.EdgesGeometry(
         new THREE.BoxGeometry(gx * SCU, gz * SCU, gy * SCU),
       );
       const edgeMat = new THREE.LineBasicMaterial({
-        color: 0xf59e0b, // amber-500
+        color: col.hex,
         transparent: true,
-        opacity: 0.25,
+        opacity: 0.35,
       });
       const edge = new THREE.LineSegments(edgeGeo, edgeMat);
       edge.position.set(
@@ -263,15 +306,24 @@ export function CargoGrid3D({ grids }: { grids: CargoGridData[] }) {
       );
       scene.add(edge);
 
-      // Label del módulo (línea separadora entre módulos)
+      // Separador delgado entre módulos adyacentes
       if (gi > 0) {
+        // Separador de bahía (más brillante) cuando la clase vuelve al primero del ciclo
+        const isBayBoundary = cn === grids[0]?.className && gi > 0;
+        const sepColor = isBayBoundary ? 0x71717a : 0x3f3f46;
+        const sepOpacity = isBayBoundary ? 0.6 : 0.4;
         const sepGeo = new THREE.BufferGeometry().setFromPoints([
           new THREE.Vector3(offsetX - GRID_GAP / 2, 0, 0),
           new THREE.Vector3(offsetX - GRID_GAP / 2, maxWorldZ + SCU, 0),
         ]);
-        scene.add(new THREE.Line(sepGeo, new THREE.LineBasicMaterial({ color: 0x3f3f46 })));
+        const sepMat = new THREE.LineBasicMaterial({ color: sepColor, transparent: true, opacity: sepOpacity });
+        scene.add(new THREE.Line(sepGeo, sepMat));
+
+        if (isBayBoundary) prevBayStart = offsetX;
       }
+      prevClassName = cn;
     }
+    void prevBayStart; void prevClassName; // suppress unused warning
 
     // Ejes de referencia
     const mkAxis = (dir2: THREE.Vector3, color: number) =>
@@ -441,7 +493,7 @@ export function CargoGrid3D({ grids }: { grids: CargoGridData[] }) {
       cellGeo.dispose();
       cellMat.dispose();
     };
-  }, [grids, applyTool]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [grids, applyTool, moduleColorMap]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!grids.length) return null;
 
@@ -505,6 +557,32 @@ export function CargoGrid3D({ grids }: { grids: CargoGridData[] }) {
             );
           })}
         </div>
+
+        {/* Leyenda de tipos de módulo */}
+        {Object.keys(moduleColorMap).length > 0 && (
+          <div className="p-3 border-b border-zinc-800/40">
+            <p className="text-[9px] text-zinc-500 uppercase tracking-widest mb-2">Módulos</p>
+            {Object.entries(moduleColorMap).map(([cn, col]) => {
+              const count = grids.filter((g) => g.className === cn).length;
+              return (
+                <div key={cn} className="flex items-center gap-2 mb-1.5">
+                  <span
+                    className="w-2.5 h-2.5 rounded-sm flex-shrink-0 border"
+                    style={{ backgroundColor: col.css + "33", borderColor: col.css + "99" }}
+                  />
+                  <span className="text-[10px] text-zinc-400 truncate flex-1 leading-tight">
+                    {col.label || cn}
+                  </span>
+                  {count > 1 && (
+                    <span className="text-[9px] font-mono flex-shrink-0" style={{ color: col.css + "aa" }}>
+                      ×{count}
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Fill capa Z por módulo */}
         <div className="p-3 border-b border-zinc-800/40">
@@ -594,8 +672,21 @@ export function CargoGrid3D({ grids }: { grids: CargoGridData[] }) {
         </div>
 
         {/* Módulos activos */}
-        <div className="text-[9px] font-mono text-zinc-600 whitespace-nowrap">
-          {grids.length > 1 ? `${grids.length} módulos` : `${grids[0]?.className?.split("_CargoGrid")[1]?.replace(/_/g, " ").trim() || "Grid"}`}
+        <div className="flex items-center gap-2">
+          {Object.entries(moduleColorMap).map(([cn, col]) => {
+            const count = grids.filter((g) => g.className === cn).length;
+            return (
+              <div key={cn} className="flex items-center gap-1">
+                <span
+                  className="w-2 h-2 rounded-sm inline-block flex-shrink-0"
+                  style={{ backgroundColor: col.css + "55", border: `1px solid ${col.css}88` }}
+                />
+                <span className="text-[9px] font-mono whitespace-nowrap" style={{ color: col.css + "cc" }}>
+                  {col.label}{count > 1 ? ` ×${count}` : ""}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
