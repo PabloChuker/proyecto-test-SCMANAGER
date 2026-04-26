@@ -479,14 +479,16 @@ export default function BlueprintWorkbench() {
     return mod.atMinQuality + t * (mod.atMaxQuality - mod.atMinQuality);
   }, []);
 
-  // Convert a raw absolute stat value to a percentage effect relative to its neutral point.
-  // SC stores modifier values as absolute stat levels (e.g. firerate atMin=88, atMax=112).
-  // The midpoint (atMin+atMax)/2 is the neutral baseline. Effect = (value - neutral) / neutral * 100.
+  // Convert a raw SC modifier value to a percentage effect.
+  // SC stores modifiers as multipliers where 1.0 = no change (neutral baseline).
+  // e.g. atMax=1.20 → +20%, atMax=0.85 → -15%. We do NOT use (atMin+atMax)/2
+  // as the neutral because atMin can differ from (2 - atMax) for properties like
+  // temperature resistance, which would give wrong results.
+  // atMin/atMax params kept for potential future use; only value is needed.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const modToPercent = useCallback(
-    (value: number, atMin: number, atMax: number): number => {
-      const neutral = (atMin + atMax) / 2;
-      if (neutral === 0) return 0;
-      return (value - neutral) / neutral * 100;
+    (value: number, _atMin: number, _atMax: number): number => {
+      return (value - 1.0) * 100;
     }, []
   );
 
