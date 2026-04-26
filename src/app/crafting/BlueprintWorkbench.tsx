@@ -479,22 +479,36 @@ export default function BlueprintWorkbench() {
     return mod.atMinQuality + t * (mod.atMaxQuality - mod.atMinQuality);
   }, []);
 
-  // Aggregate per-stat contributions from ALL parts at their current quality
+  // Convert a raw absolute stat value to a percentage effect relative to its neutral point.
+  // SC stores modifier values as absolute stat levels (e.g. firerate atMin=88, atMax=112).
+  // The midpoint (atMin+atMax)/2 is the neutral baseline. Effect = (value - neutral) / neutral * 100.
+  const modToPercent = useCallback(
+    (value: number, atMin: number, atMax: number): number => {
+      const neutral = (atMin + atMax) / 2;
+      if (neutral === 0) return 0;
+      return (value - neutral) / neutral * 100;
+    }, []
+  );
+
+  // Aggregate per-stat % contributions from ALL parts at their current quality
   const combinedModifiers = useMemo(() => {
-    if (!selectedBlueprint) return {} as Record<string, { current: number; atMin: number; atMax: number }>;
-    const result: Record<string, { current: number; atMin: number; atMax: number }> = {};
+    if (!selectedBlueprint) return {} as Record<string, { currentPct: number; atMinPct: number; atMaxPct: number }>;
+    const result: Record<string, { currentPct: number; atMinPct: number; atMaxPct: number }> = {};
     selectedBlueprint.parts.forEach((part) => {
       const quality = partQualities[part.groupKey] ?? 0;
       part.modifiers.forEach((mod) => {
         const current = getModValueAtQuality(mod, quality);
-        if (!result[mod.propertyKey]) result[mod.propertyKey] = { current: 0, atMin: 0, atMax: 0 };
-        result[mod.propertyKey].current += current;
-        result[mod.propertyKey].atMin += mod.atMinQuality;
-        result[mod.propertyKey].atMax += mod.atMaxQuality;
+        const currentPct = modToPercent(current, mod.atMinQuality, mod.atMaxQuality);
+        const atMinPct  = modToPercent(mod.atMinQuality, mod.atMinQuality, mod.atMaxQuality);
+        const atMaxPct  = modToPercent(mod.atMaxQuality, mod.atMinQuality, mod.atMaxQuality);
+        if (!result[mod.propertyKey]) result[mod.propertyKey] = { currentPct: 0, atMinPct: 0, atMaxPct: 0 };
+        result[mod.propertyKey].currentPct += currentPct;
+        result[mod.propertyKey].atMinPct  += atMinPct;
+        result[mod.propertyKey].atMaxPct  += atMaxPct;
       });
     });
     return result;
-  }, [selectedBlueprint, partQualities, getModValueAtQuality]);
+  }, [selectedBlueprint, partQualities, getModValueAtQuality, modToPercent]);
 
   const getQC = (q: number) => q < 250 ? "text-red-400" : q < 500 ? "text-orange-400" : q < 750 ? "text-yellow-400" : "text-emerald-400";
   const getQL = (q: number) => q < 250 ? tc("poor") : q < 500 ? tc("substandard") : q < 750 ? tc("standard") : q < 900 ? tc("high") : tc("excellent");
@@ -798,13 +812,13 @@ export default function BlueprintWorkbench() {
                         <div className="flex flex-wrap gap-x-3 gap-y-1 mt-0.5">
                           {part.modifiers.map((mod) => {
                             const val = getModValueAtQuality(mod, q);
-                            const pct = (val * 100).toFixed(2);
-                            const isPos = val >= 0;
+                            const pct = modToPercent(val, mod.atMinQuality, mod.atMaxQuality);
+                            const isPos = pct >= 0;
                             return (
                               <div key={mod.propertyKey} className="text-[9px] flex items-center gap-1">
                                 <span className="text-zinc-500">{formatModKey(mod.propertyKey)}</span>
                                 <span className={`font-mono font-bold ${isPos ? "text-emerald-400" : "text-red-400"}`}>
-                                  {isPos ? "+" : ""}{pct}%
+                                  {isPos ? "+" : ""}{pct.toFixed(2)}%
                                 </span>
                               </div>
                             );
@@ -832,24 +846,21 @@ export default function BlueprintWorkbench() {
             }
           >
             <div className="p-4 space-y-2">
-              {Object.entries(combinedModifiers).map(([stat, { current, atMin, atMax }]) => {
-                const isNeg = current < 0;
-                const currentPct = (current * 100).toFixed(2);
-                const minPct = (atMin * 100).toFixed(2);
-                const maxPct = (atMax * 100).toFixed(2);
-                const range = atMax - atMin;
-                const progress = range !== 0 ? Math.max(0, Math.min(100, ((current - atMin) / range) * 100)) : 0;
+              {Object.entries(combinedModifiers).map(([stat, { currentPct, atMinPct, atMaxPct }]) => {
+                const isNeg = currentPct < 0;
+                const range = atMaxPct - atMinPct;
+                const progress = range !== 0 ? Math.max(0, Math.min(100, ((currentPct - atMinPct) / range) * 100)) : 0;
                 return (
                   <div key={stat} className="border border-zinc-800/40 rounded-xl p-3 bg-zinc-950/20">
                     <div className="flex justify-between items-center mb-1.5">
                       <span className="text-xs font-semibold text-zinc-300">{formatModKey(stat)}</span>
                       <span className={`font-mono text-sm font-bold ${isNeg ? "text-red-400" : "text-emerald-400"}`}>
-                        {current >= 0 ? "+" : ""}{currentPct}%
+                        {currentPct >= 0 ? "+" : ""}{currentPct.toFixed(2)}%
                       </span>
                     </div>
                     <div className="flex justify-between text-[9px] text-zinc-600 mb-1.5">
-                      <span>Q0: {Number(minPct) >= 0 ? "+" : ""}{minPct}%</span>
-                      <span>Q1000: {Number(maxPct) >= 0 ? "+" : ""}{maxPct}%</span>
+                      <span>Q0: {atMinPct >= 0 ? "+" : ""}{atMinPct.toFixed(2)}%</span>
+                      <span>Q1000: {atMaxPct >= 0 ? "+" : ""}{atMaxPct.toFixed(2)}%</span>
                     </div>
                     <div className="h-1 bg-zinc-800/60 rounded-full overflow-hidden">
                       <div
