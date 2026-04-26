@@ -38,11 +38,45 @@ setInterval(() => {
 
 // ─── Middleware ──────────────────────────────────────────────────────────────
 
-// ─── MANTENIMIENTO — quitar estas líneas para reactivar la web ───────────────
-const MAINTENANCE_MODE = false;
+// ─── Maintenance mode — leído dinámicamente de Supabase con cache ────────────
+
+const SYS_PATHS = ["/sys", "/api/sys/"];
+
+let maintenanceCache: { value: boolean; ts: number } | null = null;
+const MAINTENANCE_CACHE_TTL = 10_000; // 10 segundos
+
+async function getMaintenanceMode(): Promise<boolean> {
+  const now = Date.now();
+  if (maintenanceCache && now - maintenanceCache.ts < MAINTENANCE_CACHE_TTL) {
+    return maintenanceCache.value;
+  }
+  try {
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/system_settings?key=eq.maintenance_mode&select=value`,
+      {
+        headers: {
+          apikey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+          Authorization: `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!}`,
+        },
+        cache: "no-store",
+      }
+    );
+    const data = await res.json();
+    const value = data[0]?.value === "true";
+    maintenanceCache = { value, ts: now };
+    return value;
+  } catch {
+    return maintenanceCache?.value ?? false;
+  }
+}
 
 export async function middleware(request: NextRequest) {
-  if (MAINTENANCE_MODE) {
+  const { pathname } = request.nextUrl;
+
+  // /sys siempre accesible — salta todo el bloque de mantenimiento
+  const isSysRoute = SYS_PATHS.some((p) => pathname.startsWith(p));
+
+  if (!isSysRoute && (await getMaintenanceMode())) {
     const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>En mantenimiento</title>
 <style>body{margin:0;background:#0F172A;color:#F1F5F9;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center}
 h1{font-size:2rem;color:#3B82F6}p{color:#94A3B8}</style></head>
@@ -56,7 +90,6 @@ h1{font-size:2rem;color:#3B82F6}p{color:#94A3B8}</style></head>
     });
   }
 
-  const { pathname } = request.nextUrl;
   const isApi = pathname.startsWith("/api/");
 
   // Rate limiting for API routes only
