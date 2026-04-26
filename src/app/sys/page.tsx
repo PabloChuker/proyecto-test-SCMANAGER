@@ -1,12 +1,12 @@
 import { notFound, redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { supabaseService } from "@/lib/supabase/service-role";
+import { getServiceClient } from "@/lib/supabase/service-role";
 import SysPanel from "./SysPanel";
 
 export const dynamic = "force-dynamic";
 
 async function isAdmin(userId: string): Promise<boolean> {
-  const { data } = await supabaseService
+  const { data } = await getServiceClient()
     .from("admin_users")
     .select("role")
     .eq("user_id", userId)
@@ -23,7 +23,7 @@ export default async function SysPage() {
   const admin = await isAdmin(user.id);
   if (!admin) notFound();
 
-  const { data: settings } = await supabaseService
+  const { data: settings } = await getServiceClient()
     .from("system_settings")
     .select("key, value");
 
