@@ -34,6 +34,7 @@ export async function GET() {
       JOIN cargo_grids cg ON cg.ship_id = s.id
       LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
       WHERE cg.scu_capacity > 0
+        AND cg.instance_count > 0
         AND cg.dimensions IS NOT NULL
         AND cg.dimensions != '{}'::jsonb
         AND COALESCE((cg.dimensions->>'x')::float, 0) > 0
