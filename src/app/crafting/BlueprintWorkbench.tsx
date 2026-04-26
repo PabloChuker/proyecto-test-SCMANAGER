@@ -490,23 +490,36 @@ export default function BlueprintWorkbench() {
     }, []
   );
 
-  // Aggregate per-stat % contributions from ALL parts at their current quality
+  // Per-stat modifier map: for each property key, keep the contribution from the
+  // part that has the LARGEST effect range. This avoids double-counting when the
+  // same modifier key is stored on multiple parts in the DB (a common data
+  // artefact in SC blueprints where modifiers are defined at the blueprint level
+  // and duplicated across groups). Parts that genuinely add different stats still
+  // accumulate separately.
   const combinedModifiers = useMemo(() => {
     if (!selectedBlueprint) return {} as Record<string, { currentPct: number; atMinPct: number; atMaxPct: number }>;
+
+    // bestRange[key] tracks the absolute effect range of the winning entry so far
+    const bestRange: Record<string, number> = {};
     const result: Record<string, { currentPct: number; atMinPct: number; atMaxPct: number }> = {};
+
     selectedBlueprint.parts.forEach((part) => {
       const quality = partQualities[part.groupKey] ?? 0;
       part.modifiers.forEach((mod) => {
-        const current = getModValueAtQuality(mod, quality);
+        const current   = getModValueAtQuality(mod, quality);
         const currentPct = modToPercent(current, mod.atMinQuality, mod.atMaxQuality);
         const atMinPct  = modToPercent(mod.atMinQuality, mod.atMinQuality, mod.atMaxQuality);
         const atMaxPct  = modToPercent(mod.atMaxQuality, mod.atMinQuality, mod.atMaxQuality);
-        if (!result[mod.propertyKey]) result[mod.propertyKey] = { currentPct: 0, atMinPct: 0, atMaxPct: 0 };
-        result[mod.propertyKey].currentPct += currentPct;
-        result[mod.propertyKey].atMinPct  += atMinPct;
-        result[mod.propertyKey].atMaxPct  += atMaxPct;
+        const range     = Math.abs(atMaxPct - atMinPct);
+
+        const prev = bestRange[mod.propertyKey] ?? -1;
+        if (range > prev) {
+          bestRange[mod.propertyKey] = range;
+          result[mod.propertyKey] = { currentPct, atMinPct, atMaxPct };
+        }
       });
     });
+
     return result;
   }, [selectedBlueprint, partQualities, getModValueAtQuality, modToPercent]);
 
@@ -967,17 +980,16 @@ export default function BlueprintWorkbench() {
             }
           >
             <div className="p-3 space-y-2">
-              {Object.entries(combinedModifiers).map(([stat, { current, atMin, atMax }]) => {
-                const isPos = current >= 0;
-                const currentPct = (current * 100).toFixed(2);
-                const range = atMax - atMin;
-                const progress = range !== 0 ? Math.max(0, Math.min(100, ((current - atMin) / range) * 100)) : 0;
+              {Object.entries(combinedModifiers).map(([stat, { currentPct, atMinPct, atMaxPct }]) => {
+                const isPos = currentPct >= 0;
+                const range = atMaxPct - atMinPct;
+                const progress = range !== 0 ? Math.max(0, Math.min(100, ((currentPct - atMinPct) / range) * 100)) : 0;
                 return (
                   <div key={stat} className="border border-zinc-800/40 rounded-lg p-2.5 space-y-1.5">
                     <div className="flex justify-between items-baseline">
                       <span className="text-[10px] font-semibold text-zinc-300">{formatModKey(stat)}</span>
                       <span className={`text-[9px] font-mono font-bold ${isPos ? "text-emerald-400" : "text-red-400"}`}>
-                        {isPos ? "+" : ""}{currentPct}%
+                        {isPos ? "+" : ""}{currentPct.toFixed(2)}%
                       </span>
                     </div>
                     <div className="h-1 bg-zinc-800/60 rounded-full overflow-hidden">

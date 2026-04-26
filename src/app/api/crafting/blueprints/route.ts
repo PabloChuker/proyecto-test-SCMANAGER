@@ -179,7 +179,7 @@ export async function GET() {
             description: m.resource_description || "",
             refinedName: m.refined_name || null,
             boxSizes,
-            quantityScu: Number(m.quantity_scu) || 0,
+            quantityScu: (Number(m.quantity_scu) || 0) / 100,
             minQuality: Number(m.min_quality) || 0,
           });
         }

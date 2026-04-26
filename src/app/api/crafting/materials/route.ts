@@ -63,7 +63,7 @@ export async function GET() {
       refinedUuid: r.refined_uuid ? String(r.refined_uuid) : null,
       refinedName: r.refined_name || null,
       blueprintCount: Number(r.blueprint_count) || 0,
-      totalScuUsed: Number(r.total_scu_used) || 0,
+      totalScuUsed: (Number(r.total_scu_used) || 0) / 100,
       boxSizes: Array.isArray(r.box_sizes)
         ? r.box_sizes.map((s: any) => Number(s)).filter((n: number) => !Number.isNaN(n))
         : [],
