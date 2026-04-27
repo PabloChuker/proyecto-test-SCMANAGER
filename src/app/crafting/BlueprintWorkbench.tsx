@@ -472,46 +472,50 @@ export default function BlueprintWorkbench() {
   );
   const totalItems = queue.reduce((s, q) => s + q.quantity, 0);
 
-  // ── Per-part quality helpers ───────────────────────────
-  const getModValueAtQuality = useCallback((mod: import("./types").ModifierEntry, quality: number): number => {
-    if (mod.qualityMax === mod.qualityMin) return mod.atMinQuality;
-    const t = Math.max(0, Math.min(1, (quality - mod.qualityMin) / (mod.qualityMax - mod.qualityMin)));
-    return mod.atMinQuality + t * (mod.atMaxQuality - mod.atMinQuality);
-  }, []);
-
   // Properties whose displayed sign should be inverted: the DB stores them as
   // "amount of recoil/disturbance" (lower=better), but the user-facing label
   // means "ability/quality" (higher=better). SCCrafter applies the same inversion.
-  // Add more keys here as we discover them.
   const INVERTED_PROPS = useMemo(() => new Set([
     "weapon_recoil_handling",
     "weapon_recoil_smoothness",
   ]), []);
 
-  // Convert a raw SC modifier value to a percentage effect.
-  // The DB stores modifier values in TWO different formats depending on the blueprint:
-  //   - Multiplier-around-baseline format: atMin/atMax around a non-zero midpoint
-  //     (e.g. P8-SC SMG: 925/1075 around 1000 → ±7.5%; A03 Sniper: 9/11 or 12/8
-  //     around 10 → ±10% damage / ±20% recoil). Formula: (value − mid) / mid × 100
-  //   - Delta-around-zero format: atMin/atMax around 0 (e.g. Novikov: −0.10/−0.01).
-  //     Formula: value × 100
-  // We auto-detect the format by checking if |midpoint| is large enough to be a
-  // meaningful baseline (>0.5) vs near-zero (delta format). Then for properties in
-  // INVERTED_PROPS we flip the sign so the display semantically reads "improvement".
-  const modToPercent = useCallback(
-    (value: number, atMin: number, atMax: number, propertyKey?: string): number => {
-      const midpoint = (atMin + atMax) / 2;
-      const pct = Math.abs(midpoint) > 0.5
-        ? ((value - midpoint) / midpoint) * 100
-        : value * 100;
-      return propertyKey && INVERTED_PROPS.has(propertyKey) ? -pct : pct;
-    }, [INVERTED_PROPS]
-  );
+  // Compute the percentage effect of a single raw modifier value.
+  // SCCrafter convention: the implicit neutral is the NEAREST POWER OF 10 to
+  // each value, computed independently. Examples verified against SCCrafter:
+  //   value=8   → neutral=10   → −20%   (temperature)
+  //   value=12  → neutral=10   → +20%   (temperature)
+  //   value=85  → neutral=100  → −15%   (damage mitigation Q0 of Segment Paneling)
+  //   value=11  → neutral=10   → +10%   (damage mitigation Q1000 of Segment Paneling)
+  //   value=1   → neutral=1    →   0%   (Panel Covering at qMin threshold)
+  //   value=105 → neutral=100  → +5%    (Panel Covering Q1000)
+  //   value=925 → neutral=1000 → −7.5%  (P8-SC SMG damage Q0)
+  // Properties in INVERTED_PROPS get their sign flipped (handling/smoothness).
+  const pctOfValue = useCallback((value: number, propertyKey?: string): number => {
+    if (value === 0) return 0;
+    const sign = Math.sign(value);
+    const abs = Math.abs(value);
+    const neutral = sign * Math.pow(10, Math.round(Math.log10(abs)));
+    let pct = ((value - neutral) / neutral) * 100;
+    if (propertyKey && INVERTED_PROPS.has(propertyKey)) pct = -pct;
+    return pct;
+  }, [INVERTED_PROPS]);
+
+  // Compute the modifier's percentage effect at a given crafting quality.
+  // Lerp in PERCENTAGE space (not value space) between pct(atMin) and pct(atMax),
+  // matching SCCrafter behavior. Below qualityMin the modifier is not yet active.
+  const getModPctAtQuality = useCallback((mod: import("./types").ModifierEntry, quality: number): number => {
+    if (quality < mod.qualityMin) return 0;
+    const pctAtMin = pctOfValue(mod.atMinQuality, mod.propertyKey);
+    const pctAtMax = pctOfValue(mod.atMaxQuality, mod.propertyKey);
+    if (quality >= mod.qualityMax || mod.qualityMax === mod.qualityMin) return pctAtMax;
+    const t = (quality - mod.qualityMin) / (mod.qualityMax - mod.qualityMin);
+    return pctAtMin + t * (pctAtMax - pctAtMin);
+  }, [pctOfValue]);
 
   // Per-stat modifier map: SUM contributions from all parts that have the same
-  // property key. This matches SCCrafter behavior — e.g. P8-SC SMG has Recoil
-  // Smoothness on both Frame and Stock at -20% each → combined = -40%. When only
-  // one part has a property, the combined value equals that single contribution.
+  // property key. Matches SCCrafter behavior — e.g. P8-SC SMG has Recoil
+  // Smoothness on both Frame and Stock at -20% each → combined = -40%.
   const combinedModifiers = useMemo(() => {
     if (!selectedBlueprint) return {} as Record<string, { currentPct: number; atMinPct: number; atMaxPct: number }>;
 
@@ -520,10 +524,9 @@ export default function BlueprintWorkbench() {
     selectedBlueprint.parts.forEach((part) => {
       const quality = partQualities[part.groupKey] ?? 0;
       part.modifiers.forEach((mod) => {
-        const current    = getModValueAtQuality(mod, quality);
-        const currentPct = modToPercent(current, mod.atMinQuality, mod.atMaxQuality, mod.propertyKey);
-        const atMinPct   = modToPercent(mod.atMinQuality, mod.atMinQuality, mod.atMaxQuality, mod.propertyKey);
-        const atMaxPct   = modToPercent(mod.atMaxQuality, mod.atMinQuality, mod.atMaxQuality, mod.propertyKey);
+        const currentPct = getModPctAtQuality(mod, quality);
+        const atMinPct   = pctOfValue(mod.atMinQuality, mod.propertyKey);
+        const atMaxPct   = pctOfValue(mod.atMaxQuality, mod.propertyKey);
 
         if (!result[mod.propertyKey]) {
           result[mod.propertyKey] = { currentPct: 0, atMinPct: 0, atMaxPct: 0 };
@@ -535,7 +538,7 @@ export default function BlueprintWorkbench() {
     });
 
     return result;
-  }, [selectedBlueprint, partQualities, getModValueAtQuality, modToPercent]);
+  }, [selectedBlueprint, partQualities, getModPctAtQuality, pctOfValue]);
 
   const getQC = (q: number) => q < 250 ? "text-red-400" : q < 500 ? "text-orange-400" : q < 750 ? "text-yellow-400" : "text-emerald-400";
   const getQL = (q: number) => q < 250 ? tc("poor") : q < 500 ? tc("substandard") : q < 750 ? tc("standard") : q < 900 ? tc("high") : tc("excellent");
@@ -838,8 +841,7 @@ export default function BlueprintWorkbench() {
                         {/* Live modifier preview per part */}
                         <div className="flex flex-wrap gap-x-3 gap-y-1 mt-0.5">
                           {part.modifiers.map((mod) => {
-                            const val = getModValueAtQuality(mod, q);
-                            const pct = modToPercent(val, mod.atMinQuality, mod.atMaxQuality, mod.propertyKey);
+                            const pct = getModPctAtQuality(mod, q);
                             const isPos = pct >= 0;
                             return (
                               <div key={mod.propertyKey} className="text-[9px] flex items-center gap-1">
