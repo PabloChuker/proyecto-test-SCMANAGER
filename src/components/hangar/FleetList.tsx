@@ -9,7 +9,7 @@
 // ordena el dashboard antes de pasar el array).
 // =============================================================================
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useHangarStore, type HangarShip, type ItemCategory } from "@/store/useHangarStore";
 import { EditShipModal } from "./EditShipModal";
@@ -20,12 +20,46 @@ import {
   CATEGORY_BADGE,
   LOCATION_COLORS,
 } from "./hangar-style";
+import { SortableHeader, nextSortState, compareValues, type SortDir } from "./hangar-utils";
 
 interface FleetListProps {
   ships: HangarShip[];
 }
 
+// FEAT 2026-04-26: ordenamiento clickeable por columna. Cuando el user
+// clickea un header se sortea ese campo. Toggle asc/desc al re-clickear.
+type FleetSortKey = "name" | "type" | "insurance" | "location" | "pledge" | "date";
+
 export function FleetList({ ships }: FleetListProps) {
+  const [sortKey, setSortKey] = useState<FleetSortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const handleSort = (key: FleetSortKey) => {
+    // Default desc para columnas numéricas/fecha, asc para texto.
+    const defaultDir: SortDir = key === "pledge" || key === "date" ? "desc" : "asc";
+    const next = nextSortState(sortKey, sortDir, key, defaultDir);
+    setSortKey(next.sortKey);
+    setSortDir(next.sortDir);
+  };
+
+  const sortedShips = useMemo(() => {
+    if (!sortKey) return ships; // sin sort local → respeta el orden del padre
+    const arr = [...ships];
+    arr.sort((a, b) => {
+      let av: any, bv: any;
+      switch (sortKey) {
+        case "name": av = a.shipName ?? a.pledgeName ?? ""; bv = b.shipName ?? b.pledgeName ?? ""; break;
+        case "type": av = a.itemCategory ?? "other"; bv = b.itemCategory ?? "other"; break;
+        case "insurance": av = a.insuranceType ?? "unknown"; bv = b.insuranceType ?? "unknown"; break;
+        case "location": av = a.location ?? ""; bv = b.location ?? ""; break;
+        case "pledge": av = a.price ?? 0; bv = b.price ?? 0; break;
+        case "date": av = a.purchasedDate ?? ""; bv = b.purchasedDate ?? ""; break;
+      }
+      return compareValues(av, bv, sortDir);
+    });
+    return arr;
+  }, [ships, sortKey, sortDir]);
+
   if (ships.length === 0) {
     return (
       <div className="flex items-center justify-center py-12 border border-zinc-800/50 rounded-sm bg-zinc-900/30">
@@ -39,20 +73,44 @@ export function FleetList({ ships }: FleetListProps) {
 
   return (
     <div className="overflow-hidden rounded-sm border border-zinc-800/60 bg-zinc-900/40">
-      {/* Header */}
+      {/* Header con sort por columna */}
       <div className="hidden md:flex items-center gap-3 px-3 py-2 border-b border-zinc-800/60 bg-zinc-900/60 text-[9px] tracking-[0.15em] uppercase text-zinc-500 font-mono">
         <div className="w-12">Img</div>
-        <div className="flex-1">Name</div>
-        <div className="w-20 text-center">Type</div>
-        <div className="w-20 text-center">Insurance</div>
-        <div className="w-24 text-center">Location</div>
-        <div className="w-20 text-right">Pledge</div>
-        <div className="w-24 text-center">Date</div>
+        <SortableHeader<FleetSortKey>
+          sortKey="name" label="Name"
+          activeKey={sortKey} activeDir={sortDir} onClick={handleSort}
+          className="flex-1"
+        />
+        <SortableHeader<FleetSortKey>
+          sortKey="type" label="Type"
+          activeKey={sortKey} activeDir={sortDir} onClick={handleSort}
+          className="w-20" align="center"
+        />
+        <SortableHeader<FleetSortKey>
+          sortKey="insurance" label="Insurance"
+          activeKey={sortKey} activeDir={sortDir} onClick={handleSort}
+          className="w-20" align="center"
+        />
+        <SortableHeader<FleetSortKey>
+          sortKey="location" label="Location"
+          activeKey={sortKey} activeDir={sortDir} onClick={handleSort}
+          className="w-24" align="center"
+        />
+        <SortableHeader<FleetSortKey>
+          sortKey="pledge" label="Pledge"
+          activeKey={sortKey} activeDir={sortDir} onClick={handleSort}
+          className="w-20" align="right"
+        />
+        <SortableHeader<FleetSortKey>
+          sortKey="date" label="Date"
+          activeKey={sortKey} activeDir={sortDir} onClick={handleSort}
+          className="w-24" align="center"
+        />
         <div className="w-32 text-right">Actions</div>
       </div>
       {/* Rows */}
       <div className="divide-y divide-zinc-800/40">
-        {ships.map((ship) => (
+        {sortedShips.map((ship) => (
           <FleetRow key={ship.id} ship={ship} />
         ))}
       </div>

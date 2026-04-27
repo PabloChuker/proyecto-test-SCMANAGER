@@ -4,9 +4,10 @@
 // WishlistList — vista lista de la wishlist (Fase T)
 // =============================================================================
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useHangarStore, type HangarWishlistItem, type WishlistPriority } from "@/store/useHangarStore";
+import { SortableHeader, nextSortState, compareValues, type SortDir } from "./hangar-utils";
 
 const PRIORITY_CONFIG: Record<WishlistPriority, { label: string; color: string; border: string; bg: string }> = {
   high:   { label: "Alta",  color: "text-red-300",   border: "border-red-500/40",   bg: "bg-red-500/15" },
@@ -14,11 +15,48 @@ const PRIORITY_CONFIG: Record<WishlistPriority, { label: string; color: string; 
   low:    { label: "Baja",  color: "text-zinc-400",  border: "border-zinc-600/40",  bg: "bg-zinc-700/15" },
 };
 
+const PRIORITY_ORDER: Record<WishlistPriority, number> = { high: 0, medium: 1, low: 2 };
+
 interface WishlistListProps {
   items: HangarWishlistItem[];
 }
 
+// FEAT 2026-04-26: ordenamiento por columna en wishlist.
+type WishlistSortKey = "ship" | "manufacturer" | "priority" | "target" | "added";
+
 export function WishlistList({ items }: WishlistListProps) {
+  const [sortKey, setSortKey] = useState<WishlistSortKey | null>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const handleSort = (key: WishlistSortKey) => {
+    const defaultDir: SortDir = key === "target" || key === "added" ? "desc" : "asc";
+    const next = nextSortState(sortKey, sortDir, key, defaultDir);
+    setSortKey(next.sortKey);
+    setSortDir(next.sortDir);
+  };
+
+  const sortedItems = useMemo(() => {
+    if (!sortKey) return items;
+    const arr = [...items];
+    arr.sort((a, b) => {
+      let av: any, bv: any;
+      switch (sortKey) {
+        case "ship": av = a.shipName ?? ""; bv = b.shipName ?? ""; break;
+        case "manufacturer": av = a.manufacturer ?? ""; bv = b.manufacturer ?? ""; break;
+        case "priority":
+          // priority es enum — usar orden semántico (high < medium < low en orden de
+          // urgencia, así con asc primero aparecen las "alta")
+          av = PRIORITY_ORDER[a.priority] ?? 99;
+          bv = PRIORITY_ORDER[b.priority] ?? 99;
+          break;
+        case "target": av = a.targetPrice ?? null; bv = b.targetPrice ?? null; break;
+        case "added": av = a.addedDate ?? ""; bv = b.addedDate ?? ""; break;
+      }
+      return compareValues(av, bv, sortDir);
+    });
+    return arr;
+  }, [items, sortKey, sortDir]);
+
   if (items.length === 0) {
     return (
       <div className="text-center py-12 px-8 border border-zinc-800/50 rounded-sm bg-zinc-900/30">
@@ -36,16 +74,36 @@ export function WishlistList({ items }: WishlistListProps) {
   return (
     <div className="overflow-hidden rounded-sm border border-zinc-800/60 bg-zinc-900/40">
       <div className="hidden md:flex items-center gap-3 px-3 py-2 border-b border-zinc-800/60 bg-zinc-900/60 text-[9px] tracking-[0.15em] uppercase text-zinc-500 font-mono">
-        <div className="flex-1">Ship</div>
-        <div className="w-32 text-center">Manufacturer</div>
-        <div className="w-20 text-center">Priority</div>
-        <div className="w-24 text-right">Target $</div>
-        <div className="w-24 text-center">Added</div>
+        <SortableHeader<WishlistSortKey>
+          sortKey="ship" label="Ship"
+          activeKey={sortKey} activeDir={sortDir} onClick={handleSort}
+          className="flex-1"
+        />
+        <SortableHeader<WishlistSortKey>
+          sortKey="manufacturer" label="Manufacturer"
+          activeKey={sortKey} activeDir={sortDir} onClick={handleSort}
+          className="w-32" align="center"
+        />
+        <SortableHeader<WishlistSortKey>
+          sortKey="priority" label="Priority"
+          activeKey={sortKey} activeDir={sortDir} onClick={handleSort}
+          className="w-20" align="center"
+        />
+        <SortableHeader<WishlistSortKey>
+          sortKey="target" label="Target $"
+          activeKey={sortKey} activeDir={sortDir} onClick={handleSort}
+          className="w-24" align="right"
+        />
+        <SortableHeader<WishlistSortKey>
+          sortKey="added" label="Added"
+          activeKey={sortKey} activeDir={sortDir} onClick={handleSort}
+          className="w-24" align="center"
+        />
         <div className="flex-1 max-w-[220px]">Notes</div>
         <div className="w-32 text-right">Actions</div>
       </div>
       <div className="divide-y divide-zinc-800/40">
-        {items.map((item) => (
+        {sortedItems.map((item) => (
           <WishlistRow key={item.id} item={item} />
         ))}
       </div>

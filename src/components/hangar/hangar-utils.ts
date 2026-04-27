@@ -69,3 +69,130 @@ export function maskCoupon(name: string | null | undefined): CouponInfo {
  */
 export const COUPON_AUTO_HIDE_MS = 8000;
 export { REVEAL_HOLD_MS };
+
+// =============================================================================
+// SortableTableHeader — header reutilizable para columnas con ordenamiento
+//
+// Patrón: cada columna sortable tiene una `key` (string única). El padre
+// mantiene state { sortKey, sortDir } y un handler `onSort(key)` que toggle
+// dir si la misma key, o cambia key + setea dir default según tipo.
+//
+// Usado en: FleetList, BuybackList, WishlistList, CCUList, ChainList. La
+// idea es que TODAS las tablas del Hangar tengan el mismo patrón.
+// =============================================================================
+
+import * as React from "react";
+
+export type SortDir = "asc" | "desc";
+
+export interface SortableHeaderProps<K extends string> {
+  /** Key única de esta columna (ej. "name", "pledge", "date"). */
+  sortKey: K;
+  /** Texto que se muestra en el header. */
+  label: string;
+  /** Key actualmente activa en el padre (null = sin sort local). */
+  activeKey: K | null;
+  /** Dirección actual ("asc" | "desc"). */
+  activeDir: SortDir;
+  /** Callback al click — el padre decide si toggle dir o cambia de key. */
+  onClick: (key: K) => void;
+  /** Clases tailwind del wrapper (ancho, alineamiento, etc.). */
+  className?: string;
+  /** Alineamiento del label dentro del button. Default "left". */
+  align?: "left" | "center" | "right";
+  /** Si true, no es clickeable (columna no-sortable). Default false. */
+  disabled?: boolean;
+}
+
+/**
+ * Header de columna sortable. Muestra el label + indicador asc/desc cuando
+ * la columna está activa.
+ */
+export function SortableHeader<K extends string>({
+  sortKey,
+  label,
+  activeKey,
+  activeDir,
+  onClick,
+  className = "",
+  align = "left",
+  disabled = false,
+}: SortableHeaderProps<K>) {
+  const isActive = activeKey === sortKey;
+  const justify =
+    align === "center" ? "justify-center" :
+    align === "right" ? "justify-end" :
+    "justify-start";
+
+  if (disabled) {
+    return React.createElement(
+      "div",
+      { className: `${className} ${justify} flex items-center gap-1` },
+      label,
+    );
+  }
+
+  const arrow = isActive ? (activeDir === "asc" ? "▲" : "▼") : "↕";
+  const arrowColor = isActive ? "text-amber-400" : "text-zinc-700";
+
+  return React.createElement(
+    "button",
+    {
+      type: "button",
+      onClick: () => onClick(sortKey),
+      className: `${className} ${justify} flex items-center gap-1 hover:text-zinc-300 transition-colors cursor-pointer`,
+    },
+    React.createElement("span", null, label),
+    React.createElement(
+      "span",
+      { className: `text-[8px] ${arrowColor}` },
+      arrow,
+    ),
+  );
+}
+
+/**
+ * Helper para el handler común: toggle dir si misma key, sino cambia key
+ * con dir default.
+ *
+ * @param prevKey - sort key actual
+ * @param prevDir - dirección actual
+ * @param newKey - key clickeada
+ * @param defaultDir - dir a usar si la key cambia (suele ser "asc" para
+ *   strings y "desc" para números/fechas)
+ * @returns nuevo { sortKey, sortDir }
+ */
+export function nextSortState<K extends string>(
+  prevKey: K | null,
+  prevDir: SortDir,
+  newKey: K,
+  defaultDir: SortDir = "asc",
+): { sortKey: K; sortDir: SortDir } {
+  if (prevKey === newKey) {
+    return { sortKey: newKey, sortDir: prevDir === "asc" ? "desc" : "asc" };
+  }
+  return { sortKey: newKey, sortDir: defaultDir };
+}
+
+/**
+ * Compara dos strings o números para ordenamiento. Maneja null/undefined
+ * empujándolos al final independientemente de la dirección.
+ */
+export function compareValues(
+  a: any,
+  b: any,
+  dir: SortDir,
+): number {
+  const aNull = a === null || a === undefined || a === "";
+  const bNull = b === null || b === undefined || b === "";
+  if (aNull && bNull) return 0;
+  if (aNull) return 1;
+  if (bNull) return -1;
+  if (typeof a === "number" && typeof b === "number") {
+    return dir === "asc" ? a - b : b - a;
+  }
+  const sa = String(a).toLowerCase();
+  const sb = String(b).toLowerCase();
+  const cmp = sa.localeCompare(sb);
+  return dir === "asc" ? cmp : -cmp;
+}
