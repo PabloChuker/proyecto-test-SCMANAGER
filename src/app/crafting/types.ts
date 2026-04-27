@@ -36,6 +36,19 @@ export interface RewardPool {
   poolKey: string;
 }
 
+/** Base stats del item resultante (de la tabla armor_items, joineado por output_class). */
+export interface BaseStats {
+  /** Damage reduction como decimal (0.4 = 40%). */
+  damageReduction: number | null;
+  /** Temperatura mínima soportada en °C. */
+  tempMinCelsius: number | null;
+  /** Temperatura máxima soportada en °C. */
+  tempMaxCelsius: number | null;
+  radiationCapacityRem: number | null;
+  radiationScrubRemS: number | null;
+  carryingCapacityUscu: number | null;
+}
+
 export interface Blueprint {
   uuid: string;
   key: string;
@@ -51,6 +64,8 @@ export interface Blueprint {
   parts: Part[];
   qualityEffects: Record<string, { atMinQuality: number; atMaxQuality: number }>;
   rewardPools: RewardPool[];
+  /** Stats base del item de salida (null si no es armadura craftable o no hay datos). */
+  baseStats: BaseStats | null;
 }
 
 export interface SubCategory {

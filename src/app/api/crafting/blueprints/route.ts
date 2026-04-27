@@ -47,6 +47,15 @@ interface RewardPool {
   poolKey: string;
 }
 
+interface BaseStats {
+  damageReduction: number | null;          // 0.4 = 40%
+  tempMinCelsius: number | null;           // -70
+  tempMaxCelsius: number | null;           // 100
+  radiationCapacityRem: number | null;
+  radiationScrubRemS: number | null;
+  carryingCapacityUscu: number | null;
+}
+
 interface Blueprint {
   uuid: string;
   key: string;
@@ -62,6 +71,7 @@ interface Blueprint {
   parts: Part[];
   qualityEffects: Record<string, { atMinQuality: number; atMaxQuality: number }>;
   rewardPools: RewardPool[];
+  baseStats: BaseStats | null;             // null si no es armadura craftable
 }
 
 interface SubCategory {
@@ -119,6 +129,21 @@ export async function GET() {
       ORDER BY blueprint_uuid
     `, []);
 
+    // ── 3b. Load armor base stats indexed by class_name. Joineamos por
+    //        class_name (= blueprints.output_class). Usamos DISTINCT ON para
+    //        que si en el futuro hay varias game_versions cogemos la fila más
+    //        reciente sin duplicados. Para el cálculo FINAL = BASE × (1+pct/100)
+    //        en el frontend.
+    const armorRows: any[] = await sql.unsafe(`
+      SELECT DISTINCT ON (class_name)
+        class_name, damage_reduction,
+        temp_min_celsius, temp_max_celsius,
+        radiation_capacity_rem, radiation_scrub_rem_s,
+        carrying_capacity_uscu
+      FROM armor_items
+      ORDER BY class_name, game_version DESC
+    `, []);
+
     // ── 4. Index materials by blueprint_uuid ──
     const matByBp = new Map<string, any[]>();
     for (const row of matRows) {
@@ -135,6 +160,21 @@ export async function GET() {
       poolByBp.get(bpId)!.push({
         poolUuid: String(row.pool_uuid),
         poolKey: row.pool_key || "",
+      });
+    }
+
+    // ── 5b. Index armor base stats by class_name ──
+    const armorByClass = new Map<string, BaseStats>();
+    for (const row of armorRows) {
+      const cn = row.class_name;
+      if (!cn) continue;
+      armorByClass.set(cn, {
+        damageReduction:      row.damage_reduction       === null ? null : Number(row.damage_reduction),
+        tempMinCelsius:       row.temp_min_celsius        === null ? null : Number(row.temp_min_celsius),
+        tempMaxCelsius:       row.temp_max_celsius        === null ? null : Number(row.temp_max_celsius),
+        radiationCapacityRem: row.radiation_capacity_rem  === null ? null : Number(row.radiation_capacity_rem),
+        radiationScrubRemS:   row.radiation_scrub_rem_s   === null ? null : Number(row.radiation_scrub_rem_s),
+        carryingCapacityUscu: row.carrying_capacity_uscu  === null ? null : Number(row.carrying_capacity_uscu),
       });
     }
 
@@ -249,6 +289,7 @@ export async function GET() {
         parts: Array.from(partMap.values()),
         qualityEffects,
         rewardPools: poolByBp.get(bpId) || [],
+        baseStats: armorByClass.get(bp.output_class) || null,
       });
     }
 

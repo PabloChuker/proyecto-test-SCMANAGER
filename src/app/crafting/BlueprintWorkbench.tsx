@@ -480,6 +480,15 @@ export default function BlueprintWorkbench() {
     "weapon_recoil_smoothness",
   ]), []);
 
+  // Mapping de propertyKey → campo en blueprint.baseStats + formato de display.
+  // FINAL = BASE × (1 + combinedPct / 100). Si la propiedad no está aquí (e.g.
+  // weapon_*) no se muestra BASE/FINAL.
+  const BASE_STAT_MAP = useMemo(() => ({
+    armor_damagemitigation: { key: "damageReduction"  as const, unit: "",     decimals: 2 },
+    armor_temperaturemin:   { key: "tempMinCelsius"   as const, unit: " °C",  decimals: 1 },
+    armor_temperaturemax:   { key: "tempMaxCelsius"   as const, unit: " °C",  decimals: 1 },
+  }), []);
+
   // Compute the percentage effect of a single raw modifier value.
   // SCCrafter convention: the implicit neutral is the NEAREST POWER OF 10 to
   // each value, computed independently. Examples verified against SCCrafter:
@@ -879,6 +888,17 @@ export default function BlueprintWorkbench() {
                 const isNeg = currentPct < 0;
                 const range = atMaxPct - atMinPct;
                 const progress = range !== 0 ? Math.max(0, Math.min(100, ((currentPct - atMinPct) / range) * 100)) : 0;
+
+                // BASE / FINAL — solo si tenemos baseStats del item y la propiedad
+                // está mapeada (armor_damagemitigation, armor_temperaturemin/max).
+                const mapping = BASE_STAT_MAP[stat as keyof typeof BASE_STAT_MAP];
+                const baseValue = mapping && selectedBlueprint?.baseStats
+                  ? selectedBlueprint.baseStats[mapping.key]
+                  : null;
+                const finalValue = baseValue !== null && baseValue !== undefined
+                  ? baseValue * (1 + currentPct / 100)
+                  : null;
+
                 return (
                   <div key={stat} className="border border-zinc-800/40 rounded-xl p-3 bg-zinc-950/20">
                     <div className="flex justify-between items-center mb-1.5">
@@ -897,6 +917,22 @@ export default function BlueprintWorkbench() {
                         style={{ width: `${progress}%` }}
                       />
                     </div>
+                    {mapping && baseValue !== null && finalValue !== null && (
+                      <div className="grid grid-cols-2 mt-2 pt-2 border-t border-zinc-800/40 text-[10px]">
+                        <div>
+                          <div className="text-zinc-600 uppercase tracking-wider mb-0.5">Base</div>
+                          <div className="font-mono text-zinc-400">
+                            {baseValue.toFixed(mapping.decimals)}{mapping.unit}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-zinc-600 uppercase tracking-wider mb-0.5">Final</div>
+                          <div className={`font-mono font-bold ${isNeg ? "text-red-400" : "text-emerald-400"}`}>
+                            {finalValue.toFixed(mapping.decimals)}{mapping.unit}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
