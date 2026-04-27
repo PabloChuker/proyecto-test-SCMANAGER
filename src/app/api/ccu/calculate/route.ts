@@ -189,20 +189,28 @@ export async function POST(request: NextRequest) {
           // Standard price = target MSRP - source MSRP
           const standardPrice = existing?.standard || (to.msrpUsd - from.msrpUsd);
 
-          // Warbond price calculation with realistic caps
+          // Warbond price calculation with realistic caps.
+          // FIX 2026-04-26: en modo "Esperar y Ahorrar" aplicamos el CAP
+          // TEÓRICO también al warbond real de BD para protegernos contra
+          // outliers — entries scrape-adas de eventos pasados (CitizenCon,
+          // IAE) donde CIG dio descuentos agresivos y temporales que ya no
+          // son continuos. Sin esto, el algoritmo creía que un salto Hull A
+          // ($90) → MOTH ($315) costaba $5 warbond (descuento del 97%) y
+          // armaba paths irreales con muchos saltos warbond imposibles.
           let warbondPrice: number | null = null;
           let isWarbondAvailable = false;
 
+          const maxDiscount = getMaxWarbondDiscount(to.msrpUsd);
+
           if (existing?.warbond != null && existing.warbond > 0) {
-            // Use existing DB warbond price (real data)
-            warbondPrice = existing.warbond;
-            isWarbondAvailable = true;
+            // Tomamos el warbond real PERO capeamos el descuento implícito.
+            const realDiscount = standardPrice - existing.warbond;
+            const cappedDiscount = Math.min(Math.max(realDiscount, 0), maxDiscount);
+            warbondPrice = standardPrice - cappedDiscount;
+            isWarbondAvailable = cappedDiscount > 0;
           } else if (to.warbondUsd != null && to.warbondUsd > 0 && standardPrice > 0) {
             // Calculate theoretical warbond CCU with realistic discount cap
-            // The raw ship discount is: target.msrp - target.warbond
             const rawShipDiscount = to.msrpUsd - to.warbondUsd;
-            // Cap to realistic CCU warbond discount
-            const maxDiscount = getMaxWarbondDiscount(to.msrpUsd);
             const cappedDiscount = Math.min(rawShipDiscount, maxDiscount);
             const theoreticalWB = standardPrice - cappedDiscount;
 
