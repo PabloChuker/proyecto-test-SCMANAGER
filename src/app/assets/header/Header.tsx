@@ -11,6 +11,7 @@ import NotificationBell from "@/components/notifications/NotificationBell";
 import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
 import PerformanceToggle from "@/components/shared/PerformanceToggle";
 import ReferralRotator from "@/components/shared/ReferralRotator";
+import { DonateButton } from "@/components/shared/DonateButton";
 
 interface HeaderProps {
   subtitle?: string;
@@ -168,6 +169,9 @@ export default function Header({ subtitle }: HeaderProps) {
             toggle FULL/LITE. Se oculta solo en mobile (<md). */}
         <div className="flex items-center gap-2 justify-end">
           <ReferralRotator />
+          {/* FEAT 2026-04-26: botón de donación PayPal (hosted_button_id en
+              el componente). Visible desde sm+, escondido en mobile. */}
+          <DonateButton />
           <PerformanceToggle />
           <LanguageSwitcher />
           {loading ? (
