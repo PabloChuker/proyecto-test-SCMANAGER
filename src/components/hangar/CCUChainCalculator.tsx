@@ -485,7 +485,24 @@ export function CCUChainCalculator() {
       setAlternatives(data.alternatives || []);
 
       if (!data.chain) {
-        setError("No upgrade path found between these ships. The target ship may be limited or ineligible for CCU.");
+        // FIX 2026-04-26: mensaje contextual según el modo. En "Armarla Ya"
+        // muchas concept ships (Ironclad Assault, Galaxy, Expanse, etc.) no
+        // tienen edges en ccu_prices porque CIG todavía no vende CCUs
+        // continuos hacia ellas — sólo se consiguen via warbond en eventos.
+        // En ese caso "Esperar y Ahorrar" sí encuentra path porque genera
+        // edges teóricos a precio standard cap. Lo decimos explícitamente.
+        if (onlyAvailableNow) {
+          setError(
+            `No hay path disponible en "Armarla Ya" — ${toShip?.name ?? "el destino"} ` +
+            `probablemente sea CONCEPT o limited (CIG no tiene CCU continuo hacia ella). ` +
+            `Cambiá a "Esperar y Ahorrar" para ver el path teórico (precios estimados).`,
+          );
+        } else {
+          setError(
+            `No se encontró cadena entre estas naves. El destino puede no ser ` +
+            `elegible para CCU (concept reciente o discontinuada).`,
+          );
+        }
       }
     } catch (err: any) {
       setError(err.message || "Calculation failed");
@@ -746,8 +763,18 @@ export function CCUChainCalculator() {
 
       {/* ── Error ── */}
       {error && (
-        <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-sm px-3 py-2">
-          {error}
+        <div className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-sm px-3 py-2 flex items-center gap-3">
+          <span className="flex-1">{error}</span>
+          {/* FIX 2026-04-26: si el error fue por modo "Armarla Ya" sin path,
+              ofrecemos cambiar al modo teórico de un click. */}
+          {onlyAvailableNow && error.includes("Armarla Ya") && (
+            <button
+              onClick={() => { setOnlyAvailableNow(false); setError(null); }}
+              className="text-[11px] px-2.5 py-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 rounded-sm hover:bg-emerald-500/30 transition-all whitespace-nowrap"
+            >
+              ↻ Probar con &quot;Esperar y Ahorrar&quot;
+            </button>
+          )}
         </div>
       )}
 

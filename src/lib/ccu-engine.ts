@@ -211,7 +211,11 @@ export function findCheapestChain(
     if (opts.onlyAvailable && !edge.isOwned && edge.isLimited) continue;
 
     const toShip = ships.get(edge.toShipId);
-    if (toShip && !toShip.isCcuEligible && edge.toShipId !== targetShipId) continue;
+    // FIX 2026-04-26: respetar edges owned aunque la nave destino tenga
+    // isCcuEligible=false. Si el user ya compró la CCU hacia esa nave,
+    // sigue siendo válida (CIG no le quita el CCU al usuario aunque la
+    // nave salga del catálogo de CCUs continuos).
+    if (toShip && !toShip.isCcuEligible && edge.toShipId !== targetShipId && !edge.isOwned) continue;
 
     if (!adjacency.has(edge.fromShipId)) {
       adjacency.set(edge.fromShipId, []);
@@ -591,7 +595,8 @@ export function mergeUserInventory(
   }
 
   // Mark edges as owned with location info
-  return edges.map(edge => {
+  // Mark edges that ARE in the graph as owned
+  const markedEdges = edges.map(edge => {
     const key = `${edge.fromShipId}->${edge.toShipId}`;
     const owned = ownedMap.get(key);
     if (owned) {
@@ -604,4 +609,35 @@ export function mergeUserInventory(
     }
     return edge;
   });
+
+  // FIX 2026-04-26: si el user tiene una CCU del inventario hacia un par
+  // que NO existe en el grafo (típicamente porque la nave destino es CONCEPT
+  // y CIG no la vende continuamente, o porque is_ccu_eligible=false), antes
+  // se perdía silenciosamente. Acá la agregamos como edge nuevo "owned-only"
+  // así el algoritmo puede llegar al destino aunque no haya CCU disponible
+  // a la venta hoy.
+  const existingPairs = new Set(edges.map((e) => `${e.fromShipId}->${e.toShipId}`));
+  const extraEdges: CCUEdge[] = [];
+  for (const [key, owned] of ownedMap) {
+    if (existingPairs.has(key)) continue;
+    const [fromShipId, toShipId] = key.split("->");
+    const fromShip = ships.get(fromShipId);
+    const toShip = ships.get(toShipId);
+    if (!fromShip || !toShip) continue;
+    // Standard price = MSRP delta. No warbond porque no hay datos reales.
+    const standardPrice = Math.max(0, toShip.msrpUsd - fromShip.msrpUsd);
+    extraEdges.push({
+      fromShipId,
+      toShipId,
+      standardPrice,
+      warbondPrice: null,
+      isWarbondAvailable: false,
+      isOwned: true,
+      ownedLocation: owned.location,
+      ownedPricePaid: owned.pricePaid,
+      isLimited: false, // owned CCUs no se filtran por isLimited
+    });
+  }
+
+  return [...markedEdges, ...extraEdges];
 }
