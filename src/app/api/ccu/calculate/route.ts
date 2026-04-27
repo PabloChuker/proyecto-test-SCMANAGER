@@ -159,20 +159,20 @@ export async function POST(request: NextRequest) {
       edges = [];
 
       // ── Realistic warbond discount caps ──
-      // CIG warbond CCU discounts are modest and scale with ship price.
-      // Based on real store data:
-      //   - Ships <$100:  ~$5 discount  (e.g. Titan $55→$50)
-      //   - Ships $100-200: ~$10 discount (e.g. Prospector $155→$145, Wolf $120→$110)
-      //   - Ships $200-400: ~$15-25 discount (e.g. Valkyrie $375→$350)
-      //   - Ships $400-700: ~$25-40 discount
-      //   - Ships $700+: ~$40-75 discount
+      // CIG warbond CCU discounts son consistentemente ~10% del MSRP del
+      // target. Datos verificados en Pledge Store (2026-04-26):
+      //   L-22 Alpha Wolf  $120 → $110 (8%)
+      //   Prospector       $155 → $145 (6.5%)
+      //   RAFT             $190 → $175 (8%)
+      //   Hull B           $280 → $260 (7%)
+      //   Valkyrie         $375 → $350 (7%)
+      //   C2 Hercules      $400 → $360 (10%)
+      //   Hull E           $750 → $675 (10%)
+      // Antes usaba caps por rangos absolutos que se quedaban cortos para
+      // naves >$300 (Hull E $750 capeaba a $40 cuando real era $75). Cap por
+      // porcentaje fijo refleja mejor la realidad.
       function getMaxWarbondDiscount(targetMsrp: number): number {
-        if (targetMsrp < 80) return 5;
-        if (targetMsrp < 150) return 10;
-        if (targetMsrp < 300) return 15;
-        if (targetMsrp < 500) return 25;
-        if (targetMsrp < 800) return 40;
-        return 75; // Capital ships
+        return Math.ceil(targetMsrp * 0.10);
       }
 
       // Generate edges for all pairs where target MSRP > source MSRP
