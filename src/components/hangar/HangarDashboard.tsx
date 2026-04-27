@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useHangarStore, type InsuranceType, type ItemCategory, type CCUChain, type WishlistPriority, type HangarShip } from "@/store/useHangarStore";
 import { getLoanersFor } from "@/lib/loaners";
 import { FleetGrid } from "./FleetGrid";
@@ -43,8 +44,34 @@ const isPledgeShip = (s: HangarShip) =>
   (s.acquisitionType ?? "pledge") === "pledge" &&
   !s.isLoaner;
 
+// FEAT 2026-04-26: deep linking via ?tab= query param. El header ahora tiene
+// dropdown del Hangar con links directos a cada tab (Fleet/Buyback/Wishlist/
+// CCU Chains). Si la URL incluye ?tab=X, abrimos el tab correspondiente al
+// montar el dashboard.
+const TAB_FROM_QUERY: Record<string, TabType> = {
+  fleet: "My Fleet",
+  hangar: "My Fleet",
+  buyback: "Buyback",
+  wishlist: "Wishlist",
+  "ccu-chains": "CCU Chains",
+  ccu: "CCU Chains",
+};
+
 export function HangarDashboard() {
-  const [activeTab, setActiveTab] = useState<TabType>("My Fleet");
+  const searchParams = useSearchParams();
+  const initialTab: TabType = (() => {
+    const q = (searchParams?.get("tab") ?? "").toLowerCase();
+    return TAB_FROM_QUERY[q] ?? "My Fleet";
+  })();
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab);
+  // Cuando la URL cambia (ej. el user navega del header a otro tab del Hangar
+  // desde el mismo dashboard), sincronizar el tab activo.
+  useEffect(() => {
+    const q = (searchParams?.get("tab") ?? "").toLowerCase();
+    const t = TAB_FROM_QUERY[q];
+    if (t && t !== activeTab) setActiveTab(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAddShipModal, setShowAddShipModal] = useState(false);
   const [showAddCCUModal, setShowAddCCUModal] = useState(false);
