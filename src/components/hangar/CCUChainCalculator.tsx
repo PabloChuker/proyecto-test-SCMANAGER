@@ -376,19 +376,31 @@ export function CCUChainCalculator() {
   const [error, setError] = useState<string | null>(null);
 
   const [fromSource, setFromSource] = useState<"store" | "fleet">("store");
+  // FEAT 2026-04-26: filtros del selector "Mi Flota" — location (hangar/
+  // buyback) y tipo de seguro. Aplicables simultáneamente.
+  const [fleetLocationFilter, setFleetLocationFilter] = useState<"all" | "hangar" | "buyback">("all");
+  const [fleetInsuranceFilter, setFleetInsuranceFilter] = useState<"all" | "LTI" | "120_months" | "72_months" | "48_months" | "24_months" | "6_months" | "3_months">("all");
 
   // Get user's owned CCUs and ships from hangar store
   const ccus = useHangarStore((s) => s.ccus);
   const hangarShips = useHangarStore((s) => s.ships);
 
-  // Build fleet ship options from user's hangar
+  // Build fleet ship options from user's hangar.
+  // FEAT 2026-04-26: aplica filtros de location e insurance. Estos se
+  // evalúan ANTES del dedupe por nombre, así si tenés dos RAFT (una LTI en
+  // hangar, otra 72m en buyback) el filtro las distingue antes de quedarse
+  // con la primera.
   const fleetShipOptions = useMemo(() => {
-    // Only standalone ships and game packages
     const ownedNames = new Set<string>();
     const results: ShipOption[] = [];
 
     for (const hs of hangarShips) {
       if (hs.itemCategory !== "standalone_ship" && hs.itemCategory !== "game_package") continue;
+
+      // Filtros de columna izquierda
+      if (fleetLocationFilter !== "all" && hs.location !== fleetLocationFilter) continue;
+      if (fleetInsuranceFilter !== "all" && hs.insuranceType !== fleetInsuranceFilter) continue;
+
       const name = hs.shipName.toLowerCase();
       if (ownedNames.has(name)) continue;
       ownedNames.add(name);
@@ -401,15 +413,25 @@ export function CCUChainCalculator() {
           name.endsWith(" " + sName.split(" ").slice(1).join(" ").toLowerCase());
       });
       if (match) {
+        // Tag visible: location + insurance (resumida)
+        const insTag = hs.insuranceType === "LTI" ? "LTI"
+          : hs.insuranceType === "120_months" ? "120m"
+          : hs.insuranceType === "72_months" ? "72m"
+          : hs.insuranceType === "48_months" ? "48m"
+          : hs.insuranceType === "24_months" ? "24m"
+          : hs.insuranceType === "6_months" ? "6m"
+          : hs.insuranceType === "3_months" ? "3m"
+          : "";
+        const locTag = hs.location === "buyback" ? "Buyback" : "Hangar";
+        const tag = insTag ? `${locTag} · ${insTag}` : locTag;
         results.push({
           ...match,
-          // Override with display info
-          name: `${match.name} (${hs.location === "buyback" ? "Buyback" : "Hangar"})`,
+          name: `${match.name} (${tag})`,
         });
       }
     }
     return results.sort((a, b) => a.msrpUsd - b.msrpUsd);
-  }, [hangarShips, ships]);
+  }, [hangarShips, ships, fleetLocationFilter, fleetInsuranceFilter]);
 
   // ── Load ships list ──
   useEffect(() => {
@@ -498,10 +520,14 @@ export function CCUChainCalculator() {
       </div>
 
       {/* ── Ship Selection ── */}
+      {/* FIX 2026-04-26: layout en grid con DOS columnas que cada una tiene
+          su propio div interno con header (toggle/spacer) + selector. Así
+          quedan alineados verticalmente. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* Columna izquierda: Nave Base */}
         <div>
           {/* From Ship source toggle */}
-          <div className="flex items-center gap-1 mb-2">
+          <div className="flex items-center gap-1 mb-2 h-7">
             <button
               onClick={() => { setFromSource("fleet"); setFromShip(null); }}
               className={`px-2.5 py-1 text-[11px] rounded-sm transition-all ${
@@ -530,15 +556,69 @@ export function CCUChainCalculator() {
             ships={fromSource === "fleet" ? fleetShipOptions : ships}
             excludeId={toShip?.id}
           />
+          {/* FEAT 2026-04-26: filtros location + insurance, sólo en modo
+              "Mi Flota". Aplicables simultáneamente. */}
+          {fromSource === "fleet" && (
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[10px]">
+              {/* Location */}
+              <div className="flex items-center gap-1">
+                <span className="text-zinc-500 uppercase tracking-wider mr-0.5">Ubic:</span>
+                {(["all", "hangar", "buyback"] as const).map((opt) => (
+                  <button
+                    key={opt}
+                    onClick={() => { setFleetLocationFilter(opt); setFromShip(null); }}
+                    className={`px-1.5 py-0.5 rounded-sm transition-all ${
+                      fleetLocationFilter === opt
+                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                        : "text-zinc-500 hover:text-zinc-400 border border-transparent"
+                    }`}
+                  >
+                    {opt === "all" ? "Todas" : opt === "hangar" ? "Hangar" : "Buyback"}
+                  </button>
+                ))}
+              </div>
+              {/* Insurance */}
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="text-zinc-500 uppercase tracking-wider mr-0.5">Seg:</span>
+                {([
+                  { v: "all" as const, l: "Todos" },
+                  { v: "LTI" as const, l: "LTI" },
+                  { v: "120_months" as const, l: "120m" },
+                  { v: "72_months" as const, l: "72m" },
+                  { v: "48_months" as const, l: "48m" },
+                  { v: "24_months" as const, l: "24m" },
+                  { v: "6_months" as const, l: "6m" },
+                  { v: "3_months" as const, l: "3m" },
+                ]).map((opt) => (
+                  <button
+                    key={opt.v}
+                    onClick={() => { setFleetInsuranceFilter(opt.v); setFromShip(null); }}
+                    className={`px-1.5 py-0.5 rounded-sm transition-all ${
+                      fleetInsuranceFilter === opt.v
+                        ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                        : "text-zinc-500 hover:text-zinc-400 border border-transparent"
+                    }`}
+                  >
+                    {opt.l}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-        <ShipSearchSelect
-          label="Nave Objetivo"
-          value={toShip}
-          onChange={setToShip}
-          ships={ships}
-          excludeId={fromShip?.id}
-          filterFn={fromShip ? (s) => s.msrpUsd > fromShip.msrpUsd : undefined}
-        />
+        {/* Columna derecha: Nave Objetivo. Spacer del mismo alto que el
+            toggle (h-7 + mb-2 = 36px) para mantener la grilla alineada. */}
+        <div>
+          <div className="h-7 mb-2" aria-hidden="true" />
+          <ShipSearchSelect
+            label="Nave Objetivo"
+            value={toShip}
+            onChange={setToShip}
+            ships={ships}
+            excludeId={fromShip?.id}
+            filterFn={fromShip ? (s) => s.msrpUsd > fromShip.msrpUsd : undefined}
+          />
+        </div>
       </div>
 
       {/* ── Validation message ── */}
