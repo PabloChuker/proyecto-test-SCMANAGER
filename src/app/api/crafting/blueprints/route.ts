@@ -48,12 +48,16 @@ interface RewardPool {
 }
 
 interface BaseStats {
+  // ── Armor ──
   damageReduction: number | null;          // 0.4 = 40%
   tempMinCelsius: number | null;           // -70
   tempMaxCelsius: number | null;           // 100
   radiationCapacityRem: number | null;
   radiationScrubRemS: number | null;
   carryingCapacityUscu: number | null;
+  // ── Weapon ──
+  weaponDamageAlpha: number | null;        // alpha damage per shot (sum all types)
+  weaponRateOfFireRpm: number | null;      // RPM (from DescriptionData display)
 }
 
 interface Blueprint {
@@ -144,6 +148,18 @@ export async function GET() {
       ORDER BY class_name, game_version DESC
     `, []);
 
+    // ── 3c. Load weapon base stats. Mismo patrón que armor: DISTINCT ON
+    //        (class_name) cogiendo la game_version más reciente. Solo cargamos
+    //        las stats que se usan como BASE en el frontend (damage alpha,
+    //        rate of fire). El resto está disponible en fps_weapon_items para
+    //        otros módulos.
+    const weaponRows: any[] = await sql.unsafe(`
+      SELECT DISTINCT ON (class_name)
+        class_name, damage_alpha_total, rate_of_fire_rpm
+      FROM fps_weapon_items
+      ORDER BY class_name, game_version DESC
+    `, []);
+
     // ── 4. Index materials by blueprint_uuid ──
     const matByBp = new Map<string, any[]>();
     for (const row of matRows) {
@@ -163,19 +179,36 @@ export async function GET() {
       });
     }
 
-    // ── 5b. Index armor base stats by class_name ──
-    const armorByClass = new Map<string, BaseStats>();
+    // ── 5b. Index armor + weapon base stats by class_name ──
+    // Cada blueprint solo es de uno u otro tipo (armor xor weapon), así que
+    // mergeamos en una única lookup. Los campos no aplicables van como null.
+    const baseStatsByClass = new Map<string, BaseStats>();
     for (const row of armorRows) {
       const cn = row.class_name;
       if (!cn) continue;
-      armorByClass.set(cn, {
+      baseStatsByClass.set(cn, {
         damageReduction:      row.damage_reduction       === null ? null : Number(row.damage_reduction),
         tempMinCelsius:       row.temp_min_celsius        === null ? null : Number(row.temp_min_celsius),
         tempMaxCelsius:       row.temp_max_celsius        === null ? null : Number(row.temp_max_celsius),
         radiationCapacityRem: row.radiation_capacity_rem  === null ? null : Number(row.radiation_capacity_rem),
         radiationScrubRemS:   row.radiation_scrub_rem_s   === null ? null : Number(row.radiation_scrub_rem_s),
         carryingCapacityUscu: row.carrying_capacity_uscu  === null ? null : Number(row.carrying_capacity_uscu),
+        weaponDamageAlpha:    null,
+        weaponRateOfFireRpm:  null,
       });
+    }
+    for (const row of weaponRows) {
+      const cn = row.class_name;
+      if (!cn) continue;
+      const existing = baseStatsByClass.get(cn);
+      const stats: BaseStats = existing ?? {
+        damageReduction: null, tempMinCelsius: null, tempMaxCelsius: null,
+        radiationCapacityRem: null, radiationScrubRemS: null, carryingCapacityUscu: null,
+        weaponDamageAlpha: null, weaponRateOfFireRpm: null,
+      };
+      stats.weaponDamageAlpha   = row.damage_alpha_total === null ? null : Number(row.damage_alpha_total);
+      stats.weaponRateOfFireRpm = row.rate_of_fire_rpm   === null ? null : Number(row.rate_of_fire_rpm);
+      baseStatsByClass.set(cn, stats);
     }
 
     // ── 6. Build blueprint objects ──
@@ -289,7 +322,7 @@ export async function GET() {
         parts: Array.from(partMap.values()),
         qualityEffects,
         rewardPools: poolByBp.get(bpId) || [],
-        baseStats: armorByClass.get(bp.output_class) || null,
+        baseStats: baseStatsByClass.get(bp.output_class) || null,
       });
     }
 

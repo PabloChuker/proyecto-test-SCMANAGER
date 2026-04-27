@@ -36,8 +36,9 @@ export interface RewardPool {
   poolKey: string;
 }
 
-/** Base stats del item resultante (de la tabla armor_items, joineado por output_class). */
+/** Base stats del item resultante (mergeo de armor_items + fps_weapon_items, joineado por output_class). */
 export interface BaseStats {
+  // ── Armor (de armor_items) ──
   /** Damage reduction como decimal (0.4 = 40%). */
   damageReduction: number | null;
   /** Temperatura mínima soportada en °C. */
@@ -47,6 +48,11 @@ export interface BaseStats {
   radiationCapacityRem: number | null;
   radiationScrubRemS: number | null;
   carryingCapacityUscu: number | null;
+  // ── Weapon (de fps_weapon_items) ──
+  /** Daño por disparo (alpha total = suma de todos los tipos de daño). */
+  weaponDamageAlpha: number | null;
+  /** Cadencia de fuego en RPM (de DescriptionData). */
+  weaponRateOfFireRpm: number | null;
 }
 
 export interface Blueprint {

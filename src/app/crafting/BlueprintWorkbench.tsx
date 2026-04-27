@@ -481,12 +481,16 @@ export default function BlueprintWorkbench() {
   ]), []);
 
   // Mapping de propertyKey → campo en blueprint.baseStats + formato de display.
-  // FINAL = BASE × (1 + combinedPct / 100). Si la propiedad no está aquí (e.g.
-  // weapon_*) no se muestra BASE/FINAL.
+  // FINAL = BASE × (1 + combinedPct / 100). Si la propiedad no está aquí
+  // (ej: weapon_recoil_*) no se muestra BASE/FINAL — solo el porcentaje.
   const BASE_STAT_MAP = useMemo(() => ({
-    armor_damagemitigation: { key: "damageReduction"  as const, unit: "",     decimals: 2 },
-    armor_temperaturemin:   { key: "tempMinCelsius"   as const, unit: " °C",  decimals: 1 },
-    armor_temperaturemax:   { key: "tempMaxCelsius"   as const, unit: " °C",  decimals: 1 },
+    // Armor
+    armor_damagemitigation: { key: "damageReduction"     as const, unit: "",      decimals: 2 },
+    armor_temperaturemin:   { key: "tempMinCelsius"      as const, unit: " °C",   decimals: 1 },
+    armor_temperaturemax:   { key: "tempMaxCelsius"      as const, unit: " °C",   decimals: 1 },
+    // Weapons
+    weapon_damage:          { key: "weaponDamageAlpha"   as const, unit: "",      decimals: 1 },
+    weapon_firerate:        { key: "weaponRateOfFireRpm" as const, unit: " RPM",  decimals: 0 },
   }), []);
 
   // Compute the percentage effect of a single raw modifier value.
