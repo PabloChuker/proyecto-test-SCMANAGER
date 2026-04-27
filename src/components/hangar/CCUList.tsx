@@ -25,14 +25,21 @@ interface ShipMsrpRow {
   name: string;
   manufacturer: string | null;
   msrpUsd: number;
+  flightStatus?: string | null;
+}
+
+// Info devuelta por el lookup: msrp + meta para mostrar badges (CONCEPT, etc.)
+interface ShipInfo {
+  msrp: number;
+  flightStatus: string | null;
 }
 
 interface MsrpIndex {
-  exact: Map<string, number>;
-  // Fuzzy: lista de naves del catálogo con sus tokens (sin manufacturer) y msrp.
-  // Sirve para matchear "C2 Hercules" (CCU) contra "Crusader C2 Hercules
+  exact: Map<string, ShipInfo>;
+  // Fuzzy: lista de naves del catálogo con sus tokens (sin manufacturer), msrp,
+  // y meta. Sirve para matchear "C2 Hercules" (CCU) contra "Crusader C2 Hercules
   // Starlifter" (BD) — el CCU es subset del nombre de BD.
-  fuzzy: Array<{ tokens: Set<string>; msrp: number; name: string }>;
+  fuzzy: Array<{ tokens: Set<string>; msrp: number; flightStatus: string | null; name: string }>;
 }
 
 // Marcas de fabricante (códigos + nombres comunes) que se strippean del nombre
@@ -108,17 +115,18 @@ function useShipMsrpMap(): MsrpIndex {
     };
   }, []);
   return useMemo<MsrpIndex>(() => {
-    const exact = new Map<string, number>();
+    const exact = new Map<string, ShipInfo>();
     const fuzzy: MsrpIndex["fuzzy"] = [];
     for (const s of ships) {
       if (!(s.msrpUsd > 0)) continue;
-      if (s.reference) exact.set(s.reference.toLowerCase(), s.msrpUsd);
+      const info: ShipInfo = { msrp: s.msrpUsd, flightStatus: s.flightStatus ?? null };
+      if (s.reference) exact.set(s.reference.toLowerCase(), info);
       if (s.name) {
-        exact.set(normalizeShipKey(s.name), s.msrpUsd);
-        exact.set(s.name.toLowerCase(), s.msrpUsd);
+        exact.set(normalizeShipKey(s.name), info);
+        exact.set(s.name.toLowerCase(), info);
         const tokens = stripManufacturer(tokenize(s.name));
         if (tokens.length > 0) {
-          fuzzy.push({ tokens: new Set(tokens), msrp: s.msrpUsd, name: s.name });
+          fuzzy.push({ tokens: new Set(tokens), msrp: s.msrpUsd, flightStatus: s.flightStatus ?? null, name: s.name });
         }
       }
     }
@@ -133,14 +141,15 @@ function useShipMsrpMap(): MsrpIndex {
   }, [ships]);
 }
 
-/** Busca msrp por nombre. Prueba exact match primero (class_name o normalized);
- *  si no encuentra, hace subset match contra los nombres del catálogo
- *  (todos los tokens del CCU presentes en algún ship de la BD). */
-function lookupMsrp(
+/** Busca info de la nave (msrp + flightStatus) por nombre. Prueba exact match
+ *  primero (class_name o normalized); si no encuentra, hace subset match
+ *  contra los nombres del catálogo (todos los tokens del CCU presentes en
+ *  algún ship de la BD). Devuelve `null` si no matchea. */
+function lookupShipInfo(
   reference: string | undefined,
   shipName: string,
   index: MsrpIndex,
-): number | null {
+): ShipInfo | null {
   if (reference) {
     const v = index.exact.get(reference.toLowerCase());
     if (v !== undefined) return v;
@@ -171,7 +180,7 @@ function lookupMsrp(
         break;
       }
     }
-    if (allPresent) return candidate.msrp;
+    if (allPresent) return { msrp: candidate.msrp, flightStatus: candidate.flightStatus };
   }
 
   // Pase 2: candidate ⊆ query. Caso inverso: CCU dice "600i Explorer" (2 tok)
@@ -188,9 +197,18 @@ function lookupMsrp(
         break;
       }
     }
-    if (allPresent) return candidate.msrp;
+    if (allPresent) return { msrp: candidate.msrp, flightStatus: candidate.flightStatus };
   }
   return null;
+}
+
+/** Compatibilidad: devuelve sólo el msrp (algunos lugares no necesitan meta). */
+function lookupMsrp(
+  reference: string | undefined,
+  shipName: string,
+  index: MsrpIndex,
+): number | null {
+  return lookupShipInfo(reference, shipName, index)?.msrp ?? null;
 }
 
 function fmtUSD(n: number | null | undefined): string {
@@ -387,11 +405,22 @@ function CCURow({ ccu, msrpIndex }: { ccu: HangarCCU; msrpIndex: MsrpIndex }) {
   const removeCCU = useHangarStore((s) => s.removeCCU);
   const location = LOCATION_COLORS[ccu.location];
 
-  // MSRPs vía lookup (reference → exacto → fuzzy subset). Los CCUs importados
-  // desde la extensión guardan `fromShipReference` vacío, así que el lookup
-  // cae al matching por nombre tokenizado contra el catálogo.
-  const fromMsrp = lookupMsrp(ccu.fromShipReference, ccu.fromShip, msrpIndex);
-  const toMsrp = lookupMsrp(ccu.toShipReference, ccu.toShip, msrpIndex);
+  // MSRPs + meta vía lookup (reference → exacto → fuzzy subset). Los CCUs
+  // importados desde la extensión guardan `fromShipReference` vacío, así que
+  // el lookup cae al matching por nombre tokenizado contra el catálogo.
+  // SECURITY: el endpoint /api/ccu/ships ya filtra por flight_ready de hecho
+  // (devuelve flightStatus para que acá podamos marcar visualmente las
+  // concept ships con un badge "precio sujeto a cambio").
+  const fromInfo = lookupShipInfo(ccu.fromShipReference, ccu.fromShip, msrpIndex);
+  const toInfo = lookupShipInfo(ccu.toShipReference, ccu.toShip, msrpIndex);
+  const fromMsrp = fromInfo?.msrp ?? null;
+  const toMsrp = toInfo?.msrp ?? null;
+  // Si destino u origen es concept, el precio puede cambiar al lanzamiento del
+  // juego — marcamos visualmente para que el cálculo de ahorro tome en cuenta
+  // ese riesgo. (CIG históricamente sube los precios cuando una nave pasa de
+  // concept a flight-ready.)
+  const isConcept =
+    fromInfo?.flightStatus === "concept" || toInfo?.flightStatus === "concept";
   // Salto real (puro): destino − origen. Si falta cualquiera, null.
   const jumpValue =
     fromMsrp !== null && toMsrp !== null ? toMsrp - fromMsrp : null;
@@ -421,8 +450,18 @@ function CCURow({ ccu, msrpIndex }: { ccu: HangarCCU; msrpIndex: MsrpIndex }) {
       {/* Desde — nombre nave origen */}
       <div className="flex-1 min-w-0 truncate text-zinc-300">{ccu.fromShip}</div>
 
-      {/* Hacia — nombre nave destino */}
-      <div className="flex-1 min-w-0 truncate text-cyan-300">{ccu.toShip}</div>
+      {/* Hacia — nombre nave destino. Si es concept, badge inline. */}
+      <div className="flex-1 min-w-0 truncate text-cyan-300 flex items-center gap-1.5">
+        <span className="truncate">{ccu.toShip}</span>
+        {isConcept && (
+          <span
+            title="Una de las naves de este CCU es CONCEPT — el precio puede cambiar al lanzamiento (CIG históricamente sube los precios concept→flight-ready)."
+            className="text-[8px] font-mono uppercase tracking-wider px-1 py-0.5 rounded-[2px] border bg-amber-500/10 text-amber-300 border-amber-500/40 shrink-0"
+          >
+            CONCEPT
+          </span>
+        )}
+      </div>
 
       {/* $To — precio de la nave destino */}
       <div className="w-16 text-right hidden md:block font-mono tabular-nums text-cyan-300/80">

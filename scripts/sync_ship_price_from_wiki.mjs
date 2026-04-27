@@ -161,11 +161,20 @@ const WIKI_PRICES = {
   "ST": 40,
 };
 
-// Manufacturers tokens — para stripear de los nombres antes de comparar
+// Manufacturers tokens — para stripear de los nombres antes de comparar.
+// AMPLIADO 2026-04-26: la BD trae el manufacturer como "Gatac Manufacture",
+// "Aegis Dynamics", "Anvil Aerospace", etc., entonces necesitamos tokenizar
+// TODOS los términos del nombre del fabricante para que el matching ande.
 const MFR_TOKENS = new Set([
+  // Manufacturer roots
   "rsi", "anvil", "aegis", "drake", "origin", "misc", "crusader",
   "argo", "consolidated", "outland", "tumbril", "esperia", "banu",
   "vanduul", "xian", "kruger", "intergalactic", "ag",
+  "gatac", "mirai", "aopoa", "musashi", "roberts", "greycat",
+  // Manufacturer suffixes (palabras que aparecen en los nombres completos)
+  "manufacture", "dynamics", "aerospace", "industries", "industrial",
+  "starflight", "concern", "jumpworks", "astronautics", "land",
+  "systems", "space", "interstellar", "international",
 ]);
 
 function tokenize(s) {
@@ -197,22 +206,43 @@ function lookupPrice(name, manufacturer) {
   }
 
   // 4. Tokenized intersection (más laxo)
+  // Pase A: candidate ⊆ query CON mismo tamaño — match más conservador.
+  // Pase B: candidate ⊆ query con diferencia <= 1 token (típicamente cuando
+  //         el manufacturer no se pudo strippear porque no estaba en MFR_TOKENS).
+  //         Lo permitimos sólo si el candidato tiene >= 2 tokens (para evitar
+  //         que "Hull" matchee con "Constellation Hull").
   const queryTokens = new Set(tokenize(name).filter((t) => !MFR_TOKENS.has(t)));
   if (queryTokens.size === 0) return null;
+
+  // Recolectamos TODOS los matches y elegimos el más específico (más tokens).
+  const matches = [];
   for (const [k, v] of Object.entries(WIKI_PRICES)) {
     const candTokens = new Set(tokenize(k).filter((t) => !MFR_TOKENS.has(t)));
     if (candTokens.size === 0) continue;
-    // candidate ⊆ query (ej. "Carrack" ⊆ "Anvil Carrack Expedition" — pero
-    // sólo si TODO el candidate está en el query; evita matches espurios)
     let allPresent = true;
     for (const t of candTokens) {
       if (!queryTokens.has(t)) { allPresent = false; break; }
     }
-    if (allPresent && candTokens.size === queryTokens.size) {
-      return { price: v, how: "token-equal" };
+    if (!allPresent) continue;
+
+    const diff = queryTokens.size - candTokens.size;
+    if (diff === 0) {
+      matches.push({ k, v, score: 100, how: "token-equal" });
+    } else if (diff === 1 && candTokens.size >= 2) {
+      // Permitido: candidato más corto por 1 token (ej. mfr no strippeado).
+      matches.push({ k, v, score: 80, how: "token-loose" });
+    } else if (diff >= 1 && candTokens.size === 1) {
+      // Candidato de 1 token contra query más largo (ej. "Railen" vs "Gatac Railen"
+      // donde Gatac no está en MFR_TOKENS). Sólo si el query.size <= 2.
+      if (queryTokens.size <= 2) {
+        matches.push({ k, v, score: 60, how: "token-single" });
+      }
     }
   }
-  return null;
+
+  if (matches.length === 0) return null;
+  matches.sort((a, b) => b.score - a.score || b.k.length - a.k.length);
+  return { price: matches[0].v, how: matches[0].how };
 }
 
 async function main() {
