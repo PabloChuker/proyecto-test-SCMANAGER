@@ -201,10 +201,14 @@ export function findCheapestChain(
 
   for (const edge of edges) {
     if (excludeSet.has(edge.fromShipId) || excludeSet.has(edge.toShipId)) continue;
-    if (opts.onlyAvailable && !edge.isOwned) {
-      // Skip unavailable CCUs (unless user owns them)
-      // Note: standard CCUs are always "available" if both ships exist
-    }
+
+    // FIX 2026-04-26: cuando el usuario pide "Armarla Ya" (onlyAvailable=true),
+    // descartamos CCUs limited/event-only que NO sean del inventario propio del
+    // user — esas son las que no están a la venta hoy. Las CCUs standard del
+    // catálogo siempre se consideran disponibles (CIG las vende continuamente).
+    // Antes este bloque tenía el comentario pero faltaba el `continue;` y por
+    // eso el flag "Armarla Ya" no filtraba nada.
+    if (opts.onlyAvailable && !edge.isOwned && edge.isLimited) continue;
 
     const toShip = ships.get(edge.toShipId);
     if (toShip && !toShip.isCcuEligible && edge.toShipId !== targetShipId) continue;
@@ -219,10 +223,16 @@ export function findCheapestChain(
   const dist = new Map<string, number>();    // shipId → minimum cost to reach
   const prev = new Map<string, { edge: CCUEdge; priceType: PriceType }>();
   const stepCount = new Map<string, number>();
+  // FIX 2026-04-26 (#44): tie-breaker por uso de inventario propio. Cuando dos
+  // paths empatan en costo total, queremos preferir el que use MÁS items owned
+  // (hangar/buyback) para reducir cash out-of-pocket. Si todavía empatan, el
+  // que tenga MENOS pasos (menos fricción operativa).
+  const ownedCountAt = new Map<string, number>(); // shipId → owned items en best path
   const visited = new Set<string>();
 
   dist.set(startShipId, 0);
   stepCount.set(startShipId, 0);
+  ownedCountAt.set(startShipId, 0);
 
   const heap = new MinHeap();
   heap.push({ shipId: startShipId, cost: 0, steps: 0 });
@@ -249,10 +259,26 @@ export function findCheapestChain(
       const newCost = current.cost + effectivePrice;
       const newSteps = current.steps + 1;
 
+      const isOwnedStep =
+        opts.includeOwned && edge.isOwned &&
+        (edge.ownedLocation === "hangar" || edge.ownedLocation === "buyback");
+      const newOwnedCount = (ownedCountAt.get(current.shipId) ?? 0) + (isOwnedStep ? 1 : 0);
+
       const currentBest = dist.get(edge.toShipId) ?? Infinity;
-      if (newCost < currentBest) {
+      const currentOwned = ownedCountAt.get(edge.toShipId) ?? -1;
+      const currentSteps = stepCount.get(edge.toShipId) ?? Infinity;
+
+      // Update si: (a) costo estrictamente menor, o (b) costo igual + más
+      // owned items, o (c) costo y owned iguales + menos pasos.
+      const isStrictlyCheaper = newCost < currentBest;
+      const isTiedButMoreOwned = newCost === currentBest && newOwnedCount > currentOwned;
+      const isTiedAndShorter =
+        newCost === currentBest && newOwnedCount === currentOwned && newSteps < currentSteps;
+
+      if (isStrictlyCheaper || isTiedButMoreOwned || isTiedAndShorter) {
         dist.set(edge.toShipId, newCost);
         stepCount.set(edge.toShipId, newSteps);
+        ownedCountAt.set(edge.toShipId, newOwnedCount);
         prev.set(edge.toShipId, {
           edge,
           priceType: determinePriceType(edge, opts),
@@ -309,16 +335,26 @@ function getEffectivePrice(edge: CCUEdge, opts: CalculateOptions): number {
     if (edge.ownedLocation === "buyback") {
       // Buyback costs the standard CCU price to reclaim.
       if (opts.hasBuybackToken) {
-        // With token → paid in credits. Apply priority factor:
+        // With token → paid in credits. Apply priority factor.
+        // FIX 2026-04-26 (#45): bumped balanced 0.95 → 0.90 (10% off) para
+        // que el algoritmo realmente prefiera usar el token cuando lo tiene.
+        // Antes el incentivo de 5% era muy débil — en cadenas largas se
+        // perdía contra cash standard por márgenes chicos.
         const creditFactor =
           opts.paymentPriority === "prefer-credits" ? 0.80 :
           opts.paymentPriority === "prefer-cash" ? 1.15 :
-          0.95; // balanced
+          0.90; // balanced
         return edge.standardPrice * creditFactor;
       }
-      // Without token → paid in cash, apply cash factor
+      // Without token → paid in cash. Apply cash factor.
+      // FIX 2026-04-26 (#45): bumped balanced 1.0 → 1.02 (2% penalty) — usar
+      // un slot de buyback sin token gasta un recurso limitado del usuario
+      // y conviene que el algoritmo prefiera comprar standard nuevo cuando
+      // los precios son parejos. Sigue siendo más barato que con prefer-credits.
       const cashFactor =
-        opts.paymentPriority === "prefer-credits" ? 1.10 : 1.0;
+        opts.paymentPriority === "prefer-credits" ? 1.10 :
+        opts.paymentPriority === "prefer-cash" ? 1.0 :
+        1.02; // balanced
       return edge.standardPrice * cashFactor;
     }
     return 0; // fallback for legacy

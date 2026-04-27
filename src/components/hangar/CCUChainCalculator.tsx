@@ -331,7 +331,14 @@ function SavingsSummary({ chain }: { chain: ChainResult }) {
           <p className={`text-xl font-mono font-bold mt-1 ${
             chain.totalSavingsVsDirect > 0 ? "text-emerald-400" : "text-red-400"
           }`}>
-            {chain.totalSavingsVsDirect > 0 ? "-" : "+"}${Math.abs(chain.totalSavingsVsDirect).toFixed(2)}
+            {/* FIX 2026-04-26: signos estaban invertidos. Ahorro positivo
+                ahora muestra "+$X" (verde), cadena más cara que directo
+                muestra "-$X" (rojo), cero muestra "$0". */}
+            {chain.totalSavingsVsDirect > 0
+              ? `+$${chain.totalSavingsVsDirect.toFixed(2)}`
+              : chain.totalSavingsVsDirect < 0
+                ? `-$${Math.abs(chain.totalSavingsVsDirect).toFixed(2)}`
+                : `$0.00`}
           </p>
         </div>
         <div className="bg-zinc-900/60 border border-zinc-800/50 rounded-sm p-3">
