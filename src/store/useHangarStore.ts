@@ -82,6 +82,11 @@ export interface HangarCCU {
   isWarbond: boolean;
   location: Exclude<ItemLocation, "ccu_chain">; // "hangar" | "buyback"
   notes: string;
+  // FEAT 2026-04-26: reservar una CCU para una chain guardada. La CCU
+  // sigue apareciendo en la lista pero con badge visual indicando que está
+  // "apartada" para una cadena en progreso. NO se oculta del catálogo del
+  // chain calculator — sólo es informativo para el usuario.
+  reservedForChainId?: string;
 }
 
 export interface CCUChainStep {
@@ -138,11 +143,16 @@ export interface HangarStoreState {
   addCCU: (ccu: Omit<HangarCCU, "id">) => void;
   removeCCU: (id: string) => void;
   updateCCU: (id: string, updates: Partial<HangarCCU>) => void;
+  // FEAT 2026-04-26: reservar/desreservar una CCU para una chain.
+  setCCUReservation: (ccuId: string, chainId: string | null) => void;
 
   // Chain actions
-  addChain: (chain: Omit<CCUChain, "id">) => void;
+  addChain: (chain: Omit<CCUChain, "id">) => string; // returns new chain id
   removeChain: (id: string) => void;
   updateChain: (id: string, updates: Partial<CCUChain>) => void;
+  // FEAT 2026-04-26: marcar un step de una chain como completado/no.
+  // Re-evalúa el status global de la chain (planning → in_progress → completed).
+  setChainStepCompleted: (chainId: string, stepIndex: number, completed: boolean) => void;
 
   // Wishlist actions
   addToWishlist: (item: Omit<HangarWishlistItem, "id" | "addedDate">) => void;
@@ -754,25 +764,45 @@ export const useHangarStore = create<HangarStoreState>()(
         }));
       },
 
+      // FEAT 2026-04-26: reservar/desreservar una CCU para una chain.
+      // Pasar `chainId=null` libera la CCU.
+      setCCUReservation: (ccuId, chainId) => {
+        set((state) => ({
+          ccus: state.ccus.map((ccu) =>
+            ccu.id === ccuId
+              ? { ...ccu, reservedForChainId: chainId ?? undefined }
+              : ccu
+          ),
+        }));
+      },
+
       // =========================================================================
       // Chain Actions
       // =========================================================================
 
       addChain: (chain) => {
+        const id = generateUUID();
         set((state) => ({
           chains: [
             ...state.chains,
             {
               ...chain,
-              id: generateUUID(),
+              id,
             },
           ],
         }));
+        return id;
       },
 
       removeChain: (id) => {
         set((state) => ({
           chains: state.chains.filter((chain) => chain.id !== id),
+          // Liberar CCUs que estaban reservadas para esta chain
+          ccus: state.ccus.map((ccu) =>
+            ccu.reservedForChainId === id
+              ? { ...ccu, reservedForChainId: undefined }
+              : ccu
+          ),
         }));
       },
 
@@ -781,6 +811,28 @@ export const useHangarStore = create<HangarStoreState>()(
           chains: state.chains.map((chain) =>
             chain.id === id ? { ...chain, ...updates } : chain
           ),
+        }));
+      },
+
+      // FEAT 2026-04-26: marcar un step de la chain como completado o no.
+      // Re-evalúa el status global: si todos los steps están completados →
+      // "completed", si al menos uno → "in_progress", si ninguno → "planning".
+      setChainStepCompleted: (chainId, stepIndex, completed) => {
+        set((state) => ({
+          chains: state.chains.map((chain) => {
+            if (chain.id !== chainId) return chain;
+            const newSteps = chain.steps.map((s, i) =>
+              i === stepIndex ? { ...s, isCompleted: completed } : s
+            );
+            const completedCount = newSteps.filter((s) => s.isCompleted).length;
+            const status: CCUChain["status"] =
+              completedCount === newSteps.length && newSteps.length > 0
+                ? "completed"
+                : completedCount > 0
+                  ? "in_progress"
+                  : "planning";
+            return { ...chain, steps: newSteps, status };
+          }),
         }));
       },
 

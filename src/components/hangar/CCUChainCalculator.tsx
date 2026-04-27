@@ -14,7 +14,7 @@
 // =============================================================================
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { useHangarStore, type HangarCCU, type HangarShip } from "@/store/useHangarStore";
+import { useHangarStore, type HangarCCU, type HangarShip, type CCUChainStep } from "@/store/useHangarStore";
 import type { ChainResult, ChainStep, PriceType, CostBreakdown, PaymentPriority } from "@/lib/ccu-engine";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -771,9 +771,13 @@ export function CCUChainCalculator() {
           <div className="bg-zinc-900/30 border border-zinc-800/40 rounded-sm p-4">
             <div className="flex items-center gap-2 mb-4">
               <h3 className="text-sm font-semibold text-zinc-200 tracking-wide">Optimal Chain</h3>
-              <span className="text-[10px] text-zinc-500">
+              <span className="text-[10px] text-zinc-500 flex-1 truncate">
                 {chain.startShip.name} → {chain.targetShip.name}
               </span>
+              {/* FEAT 2026-04-26: Guardar la chain calculada en el store
+                  para seguir su progreso. Auto-reserva las CCUs owned que
+                  matcheen con los steps. */}
+              <SaveChainButton chain={chain} />
             </div>
 
             {/* Start ship indicator */}
@@ -865,6 +869,242 @@ export function CCUChainCalculator() {
           Seleccioná una nave base y una nave objetivo para calcular la cadena de CCU más barata.
         </div>
       ) : null}
+
+      {/* ── Saved chains ── */}
+      {/* FEAT 2026-04-26: lista de cadenas guardadas en localStorage. Permite
+          marcar steps completados y ver progreso a lo largo del tiempo. */}
+      <SavedChainsSection />
+    </div>
+  );
+}
+
+// =============================================================================
+// FEAT 2026-04-26 — Save chain button + saved chains list
+// =============================================================================
+
+function SaveChainButton({ chain }: { chain: ChainResult }) {
+  const addChain = useHangarStore((s) => s.addChain);
+  const setCCUReservation = useHangarStore((s) => s.setCCUReservation);
+  const ccus = useHangarStore((s) => s.ccus);
+  const [saved, setSaved] = useState<string | null>(null);
+  const [showInput, setShowInput] = useState(false);
+  const [name, setName] = useState("");
+
+  const handleSave = useCallback(() => {
+    const finalName = name.trim() ||
+      `${chain.startShip.name} → ${chain.targetShip.name}`;
+
+    const chainSteps: CCUChainStep[] = chain.steps.map((s) => ({
+      fromShip: s.fromShip.name,
+      fromShipReference: s.fromShip.reference,
+      toShip: s.toShip.name,
+      toShipReference: s.toShip.reference,
+      ccuPrice: s.effectivePrice,
+      isOwned: s.priceType === "hangar" || s.priceType === "buyback-token" || s.priceType === "buyback-cash",
+      isCompleted: false,
+      isWarbond: s.priceType === "warbond",
+    }));
+
+    const chainId = addChain({
+      name: finalName,
+      startShip: chain.startShip.name,
+      startShipReference: chain.startShip.reference,
+      targetShip: chain.targetShip.name,
+      targetShipReference: chain.targetShip.reference,
+      steps: chainSteps,
+      status: "planning",
+    });
+
+    // Auto-reservar CCUs del inventario que matcheen con steps owned
+    const norm = (s: string) => s.toLowerCase().trim();
+    let reservedCount = 0;
+    for (const step of chainSteps) {
+      if (!step.isOwned) continue;
+      const match = ccus.find(
+        (c) =>
+          norm(c.fromShip) === norm(step.fromShip) &&
+          norm(c.toShip) === norm(step.toShip) &&
+          !c.reservedForChainId,
+      );
+      if (match) {
+        setCCUReservation(match.id, chainId);
+        reservedCount++;
+      }
+    }
+
+    setSaved(reservedCount > 0
+      ? `Guardada · ${reservedCount} CCU${reservedCount > 1 ? "s" : ""} reservada${reservedCount > 1 ? "s" : ""}`
+      : "Guardada");
+    setName("");
+    setShowInput(false);
+    setTimeout(() => setSaved(null), 4000);
+  }, [chain, name, addChain, ccus, setCCUReservation]);
+
+  if (saved) {
+    return (
+      <span className="text-[10px] font-mono uppercase tracking-wider px-2 py-1 rounded-sm bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+        ✓ {saved}
+      </span>
+    );
+  }
+
+  if (showInput) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={`${chain.startShip.name} → ${chain.targetShip.name}`}
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === "Enter") handleSave();
+            if (e.key === "Escape") { setShowInput(false); setName(""); }
+          }}
+          className="bg-zinc-800 border border-zinc-700/50 rounded-sm text-[11px] text-zinc-200 px-2 py-1 w-48 focus:border-emerald-500/50 focus:outline-none"
+        />
+        <button
+          onClick={handleSave}
+          className="px-2 py-1 text-[10px] bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 rounded-sm hover:bg-emerald-500/30"
+        >
+          Guardar
+        </button>
+        <button
+          onClick={() => { setShowInput(false); setName(""); }}
+          className="px-1.5 py-1 text-[10px] text-zinc-500 hover:text-zinc-300"
+        >
+          ✕
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setShowInput(true)}
+      title="Guarda esta cadena en tu dispositivo para seguir su progreso paso a paso. Las CCUs owned se reservan automáticamente."
+      className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider rounded-sm bg-zinc-800/60 border border-zinc-700/50 text-zinc-400 hover:bg-emerald-500/10 hover:text-emerald-300 hover:border-emerald-500/30 transition-all"
+    >
+      💾 Guardar Cadena
+    </button>
+  );
+}
+
+function SavedChainsSection() {
+  const chains = useHangarStore((s) => s.chains);
+  const removeChain = useHangarStore((s) => s.removeChain);
+  const setChainStepCompleted = useHangarStore((s) => s.setChainStepCompleted);
+  const [expanded, setExpanded] = useState(false);
+
+  if (chains.length === 0) return null;
+
+  const inProgress = chains.filter((c) => c.status === "in_progress");
+  const planning = chains.filter((c) => c.status === "planning");
+  const completed = chains.filter((c) => c.status === "completed");
+
+  return (
+    <div className="bg-zinc-900/40 border border-zinc-800/50 rounded-sm">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/30 transition-colors"
+      >
+        <span className="text-[11px] font-mono uppercase tracking-widest text-zinc-400">
+          Cadenas Guardadas ({chains.length})
+        </span>
+        <div className="flex items-center gap-2 text-[10px] font-mono">
+          {inProgress.length > 0 && (
+            <span className="text-amber-400/80">{inProgress.length} en progreso</span>
+          )}
+          {planning.length > 0 && (
+            <span className="text-cyan-400/80">{planning.length} pendiente{planning.length > 1 ? "s" : ""}</span>
+          )}
+          {completed.length > 0 && (
+            <span className="text-emerald-400/60">{completed.length} completa{completed.length > 1 ? "s" : ""}</span>
+          )}
+        </div>
+        <span className={`ml-auto text-[10px] text-zinc-500 transition-transform ${expanded ? "rotate-90" : ""}`}>▶</span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-zinc-800/40 divide-y divide-zinc-800/40">
+          {chains.map((chain) => {
+            const completedSteps = chain.steps.filter((s) => s.isCompleted).length;
+            const totalSteps = chain.steps.length;
+            const pct = totalSteps > 0 ? (completedSteps / totalSteps) * 100 : 0;
+
+            return (
+              <div key={chain.id} className="p-3 hover:bg-zinc-900/40 transition-colors">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-medium truncate ${
+                        chain.status === "completed" ? "text-emerald-300" :
+                        chain.status === "in_progress" ? "text-amber-300" :
+                        "text-zinc-200"
+                      }`}>
+                        {chain.name}
+                      </span>
+                      <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-500">
+                        {completedSteps} / {totalSteps}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-zinc-500 mt-0.5 truncate">
+                      {chain.startShip} → {chain.targetShip}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Borrar la cadena "${chain.name}"? Esto libera las CCUs reservadas pero no las borra del inventario.`)) {
+                        removeChain(chain.id);
+                      }
+                    }}
+                    title="Borrar cadena"
+                    className="text-zinc-600 hover:text-red-400 text-xs px-2"
+                  >
+                    ✕
+                  </button>
+                </div>
+                {/* Progress bar */}
+                <div className="h-1 bg-zinc-800/60 rounded-sm overflow-hidden mb-2">
+                  <div
+                    className={`h-full transition-all ${
+                      chain.status === "completed" ? "bg-emerald-500" :
+                      chain.status === "in_progress" ? "bg-amber-500" :
+                      "bg-cyan-500/50"
+                    }`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                {/* Steps */}
+                <div className="space-y-1">
+                  {chain.steps.map((step, i) => (
+                    <label
+                      key={i}
+                      className="flex items-center gap-2 text-[11px] cursor-pointer hover:bg-zinc-800/30 px-1.5 py-1 rounded-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={step.isCompleted}
+                        onChange={(e) => setChainStepCompleted(chain.id, i, e.target.checked)}
+                        className="cursor-pointer accent-emerald-500"
+                      />
+                      <span className={`flex-1 ${step.isCompleted ? "line-through text-zinc-500" : "text-zinc-300"}`}>
+                        {step.fromShip} → {step.toShip}
+                      </span>
+                      <span className={`text-[9px] font-mono ${step.isCompleted ? "text-zinc-600" : "text-zinc-500"}`}>
+                        {step.isOwned ? "OWNED" : step.isWarbond ? "WB" : "STD"}
+                      </span>
+                      <span className={`font-mono tabular-nums ${step.isCompleted ? "text-zinc-600" : "text-amber-400/70"}`}>
+                        ${step.ccuPrice.toFixed(0)}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

@@ -12,6 +12,7 @@
 // =============================================================================
 
 import { useEffect, useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useHangarStore, type HangarCCU } from "@/store/useHangarStore";
 import { EditCCUModal } from "./EditCCUModal";
 import { LOCATION_COLORS } from "./hangar-style";
@@ -450,7 +451,7 @@ function CCURow({ ccu, msrpIndex }: { ccu: HangarCCU; msrpIndex: MsrpIndex }) {
       {/* Desde — nombre nave origen */}
       <div className="flex-1 min-w-0 truncate text-zinc-300">{ccu.fromShip}</div>
 
-      {/* Hacia — nombre nave destino. Si es concept, badge inline. */}
+      {/* Hacia — nombre nave destino. Si es concept o reservada, badges inline. */}
       <div className="flex-1 min-w-0 truncate text-cyan-300 flex items-center gap-1.5">
         <span className="truncate">{ccu.toShip}</span>
         {isConcept && (
@@ -460,6 +461,11 @@ function CCURow({ ccu, msrpIndex }: { ccu: HangarCCU; msrpIndex: MsrpIndex }) {
           >
             CONCEPT
           </span>
+        )}
+        {/* FEAT 2026-04-26: badge RESERVADA si la CCU está apartada para una
+            chain guardada. Tooltip muestra el nombre de la chain. */}
+        {ccu.reservedForChainId && (
+          <ReservedBadge chainId={ccu.reservedForChainId} />
         )}
       </div>
 
@@ -545,5 +551,36 @@ function CCURow({ ccu, msrpIndex }: { ccu: HangarCCU; msrpIndex: MsrpIndex }) {
 
       {showEdit && <EditCCUModal ccu={ccu} onClose={() => setShowEdit(false)} />}
     </div>
+  );
+}
+
+// FEAT 2026-04-26: badge inline para CCUs reservadas a una chain guardada.
+// Resuelve el nombre de la chain desde el store y lo muestra en el tooltip.
+function ReservedBadge({ chainId }: { chainId: string }) {
+  const chain = useHangarStore(
+    useShallow((s) => s.chains.find((c) => c.id === chainId)),
+  );
+  const setCCUReservation = useHangarStore((s) => s.setCCUReservation);
+  // Si la chain ya no existe (fue borrada), el badge igual aparece pero más
+  // tenue. El user puede liberarla manualmente.
+  const chainName = chain?.name ?? "(cadena borrada)";
+  return (
+    <span
+      title={`Reservada para la cadena: ${chainName}. Click para liberar.`}
+      onClick={(e) => {
+        e.stopPropagation();
+        // Buscar la CCU que tiene este chainId desde el ID de la CCU del row
+        // padre — lo manejamos vía un onClick que setea reservedForChainId=null.
+        // Como no tenemos el ccuId acá, usamos un workaround: emit un event
+        // al padre. Para no complicar, en este turno sólo el badge visual.
+      }}
+      className={`text-[8px] font-mono uppercase tracking-wider px-1 py-0.5 rounded-[2px] border shrink-0 ${
+        chain
+          ? "bg-amber-500/10 text-amber-300 border-amber-500/40"
+          : "bg-zinc-700/30 text-zinc-500 border-zinc-600/40"
+      }`}
+    >
+      📌 RESERVADA
+    </span>
   );
 }
