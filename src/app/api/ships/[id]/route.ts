@@ -1096,6 +1096,15 @@ export async function GET(
     }
 
     const ship = shipRows[0];
+    // FIX 2026-04-26: log para diagnosticar 500s. Vamos a ver en Vercel
+    // qué reference y qué id está pidiendo el cliente cuando rompe.
+    console.log("[ships/[id]] loading", {
+      requested: id,
+      resolved_id: ship.id,
+      reference: ship.reference,
+      name: ship.name,
+      game_version: ship.game_version,
+    });
 
     // ── 2. Load satellite data in parallel ──
     const [flightStats, fuelStats, powerRef, poolRows, resistances, insurance] = await Promise.all([
@@ -1120,12 +1129,22 @@ export async function GET(
     ]);
 
     // ── 3. Get hardpoints from NEW schema (match by ship reference) ──
-    const hardpointRows: any[] = await sql.unsafe(
-      `SELECT * FROM ship_hardpoints
-       WHERE ship_reference = $1
-       ORDER BY hardpoint_type, max_size DESC, hardpoint_name ASC`,
-      [String(ship.reference)],
-    );
+    // FIX 2026-04-26: catch defensive — naves recién insertadas sin entries en
+    // ship_hardpoints (caso Hull B, naves de 4.7.x agregadas manualmente)
+    // tienen que devolver array vacío en vez de tirar 500. Si ship.reference
+    // es NULL la query también devuelve [] sin error, pero por si acaso.
+    let hardpointRows: any[] = [];
+    try {
+      hardpointRows = await sql.unsafe(
+        `SELECT * FROM ship_hardpoints
+         WHERE ship_reference = $1
+         ORDER BY hardpoint_type, max_size DESC, hardpoint_name ASC`,
+        [String(ship.reference ?? "")],
+      );
+    } catch (e: any) {
+      console.warn("[ships/[id]] ship_hardpoints query failed (ship may be new):", e?.message);
+      hardpointRows = [];
+    }
 
     // ── 4. Collect all default_item_class values for batch lookup ──
     const allClasses = hardpointRows
@@ -1809,7 +1828,17 @@ export async function GET(
       },
     );
   } catch (error: any) {
-    console.error("[API /ships/[id]] Error:", error?.message || error);
+    // FIX 2026-04-26: log mucho más rico para diagnosticar 500s en naves
+    // recién insertadas que no tienen todos los satellites (caso Hull B y
+    // futuras naves de 4.7.x agregadas manualmente vía add_missing_ships_4_7_x).
+    console.error("[API /ships/[id]] Error 500", {
+      message: error?.message || String(error),
+      stack: error?.stack,
+      code: error?.code,            // postgres error codes (23505, etc.)
+      detail: error?.detail,        // postgres detail
+      query_text: error?.query,     // last query that failed (postgres lib)
+      query_params: error?.parameters,
+    });
     return NextResponse.json(
       { error: "Error interno", detail: error?.message || "Unknown" },
       { status: 500 },
