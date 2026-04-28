@@ -12,13 +12,17 @@ import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
 import PerformanceToggle from "@/components/shared/PerformanceToggle";
 import ReferralRotator from "@/components/shared/ReferralRotator";
 import { DonateButton } from "@/components/shared/DonateButton";
-// REVERT 2026-04-28: GameVersionToggle removido del header. Lo había
-// implementado basado en supuestos sobre la estructura de Supabase, sin
-// verificar la realidad de las tablas. Garnok migró las tablas pero todavía
-// no sabemos exactamente cómo distingue LIVE vs PTU (¿columna branch?
-// ¿version string? ¿is_current?). Hay que correr scripts/diagnose_game_versions.mjs
-// y scripts/audit_game_version_columns.mjs para ver la BD real, después
-// rediseñar el toggle desde cero con esa info concreta.
+import dynamic from "next/dynamic";
+
+// REINSTALL 2026-04-28: GameVersionToggle re-implementado basado en datos
+// reales de Supabase. Confirmamos formato "X.Y.Z-{branch}.{build}" en el
+// row "4.7.0-LIVE.11518367" del Avenger Titan. Se carga client-only via
+// dynamic({ssr:false}) para evitar romper el SSR si el store/endpoint
+// tienen cualquier issue.
+const GameVersionToggle = dynamic(
+  () => import("@/components/shared/GameVersionToggle"),
+  { ssr: false, loading: () => null },
+);
 
 interface HeaderProps {
   subtitle?: string;
@@ -91,7 +95,10 @@ export default function Header({ subtitle }: HeaderProps) {
               </span>
             </>
           )}
-          {/* GameVersionToggle: removido temporalmente, ver REVERT note arriba. */}
+          {/* Toggle Live / PTU. Cada módulo que toque tablas con game_version
+              debe usar useGameVersionParam() para concatenar `?gv=` al fetch. */}
+          <div className="h-4 w-px bg-zinc-800 ml-1" />
+          <GameVersionToggle />
         </div>
 
         {/* ── Center: Section nav — grid column keeps it truly centered ── */}

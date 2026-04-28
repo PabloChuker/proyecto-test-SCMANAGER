@@ -1072,29 +1072,60 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
+    // FEAT 2026-04-28: el header tiene un toggle Live/PTU que pasa la versión
+    // activa como ?gv=. Si viene, preferimos el row de ese game_version.
+    // Si no viene, fallback al match_rank existente (compat back).
+    const gvParam = request.nextUrl.searchParams.get("gv");
 
     // ── 1. Find the ship (exact matches prioritized over partial) ──
-    const shipRows: any[] = await sql.unsafe(
-      `SELECT s.*, s.class_name AS reference, sp.msrp_usd, sp.warbond_usd, sp.acquisition_method, m.name AS manufacturer,
-         CASE
-           WHEN s.class_name = $1 THEN 0
-           WHEN s.class_name ILIKE $1 THEN 1
-           WHEN s.id::text = $1 THEN 2
-           WHEN s.name ILIKE $1 THEN 3
-           WHEN s.class_name ILIKE '%' || $1 || '%' THEN 4
-         END AS match_rank
-       FROM ships s
-       LEFT JOIN ship_price sp ON sp.id = s.id
-       LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
-       WHERE s.class_name = $1
-          OR s.class_name ILIKE $1
-          OR s.name ILIKE $1
-          OR s.id::text = $1
-          OR s.class_name ILIKE '%' || $1 || '%'
-       ORDER BY match_rank ASC
-       LIMIT 1`,
-      [String(id)],
-    );
+    // Cuando hay gv, la prioridad es: match exacto + game_version coincide.
+    // Cuando no hay gv, la prioridad es: solo match exacto (toma cualquier
+    // versión, normalmente la única o la más vieja por orden de ID).
+    const shipRows: any[] = gvParam
+      ? await sql.unsafe(
+          `SELECT s.*, s.class_name AS reference, sp.msrp_usd, sp.warbond_usd, sp.acquisition_method, m.name AS manufacturer,
+             CASE
+               WHEN s.class_name = $1 THEN 0
+               WHEN s.class_name ILIKE $1 THEN 1
+               WHEN s.id::text = $1 THEN 2
+               WHEN s.name ILIKE $1 THEN 3
+               WHEN s.class_name ILIKE '%' || $1 || '%' THEN 4
+             END AS match_rank,
+             -- Boost para que el row con gv coincidente gane si existe
+             CASE WHEN s.game_version = $2 THEN 0 ELSE 1 END AS gv_rank
+           FROM ships s
+           LEFT JOIN ship_price sp ON sp.id = s.id
+           LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
+           WHERE s.class_name = $1
+              OR s.class_name ILIKE $1
+              OR s.name ILIKE $1
+              OR s.id::text = $1
+              OR s.class_name ILIKE '%' || $1 || '%'
+           ORDER BY gv_rank ASC, match_rank ASC
+           LIMIT 1`,
+          [String(id), String(gvParam)],
+        )
+      : await sql.unsafe(
+          `SELECT s.*, s.class_name AS reference, sp.msrp_usd, sp.warbond_usd, sp.acquisition_method, m.name AS manufacturer,
+             CASE
+               WHEN s.class_name = $1 THEN 0
+               WHEN s.class_name ILIKE $1 THEN 1
+               WHEN s.id::text = $1 THEN 2
+               WHEN s.name ILIKE $1 THEN 3
+               WHEN s.class_name ILIKE '%' || $1 || '%' THEN 4
+             END AS match_rank
+           FROM ships s
+           LEFT JOIN ship_price sp ON sp.id = s.id
+           LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
+           WHERE s.class_name = $1
+              OR s.class_name ILIKE $1
+              OR s.name ILIKE $1
+              OR s.id::text = $1
+              OR s.class_name ILIKE '%' || $1 || '%'
+           ORDER BY match_rank ASC
+           LIMIT 1`,
+          [String(id)],
+        );
 
     if (shipRows.length === 0) {
       return NextResponse.json({ error: "Nave no encontrada" }, { status: 404 });

@@ -1105,13 +1105,22 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   getSystemHardpoints: () => get().hardpoints.filter(hp => SYSTEM_CATS.has(hp.resolvedCategory)),
 
   loadShip: async (id, buildParam) => {
-    const dedupKey = id + "|" + (buildParam ?? "");
+    // FEAT 2026-04-28: pasar la game version activa al endpoint para que
+    // pickee el row correcto cuando hay LIVE+PTU cargados. Lee el store
+    // de game version sincrónicamente (sin React hook — esto corre en
+    // contexto de zustand action).
+    const { useGameVersionStore } = await import("@/store/useGameVersionStore");
+    const gvState = useGameVersionStore.getState();
+    const activeVersion = gvState.branch === "PTU" ? gvState.ptuVersion : gvState.liveVersion;
+    const gvQuery = activeVersion ? `?gv=${encodeURIComponent(activeVersion)}` : "";
+
+    const dedupKey = id + "|" + (buildParam ?? "") + "|" + (activeVersion ?? "");
     const inflight = _loadingShips.get(dedupKey);
     if (inflight) return inflight;
     const p = (async () => {
     set({ isLoading: true, error: null });
     try {
-      const res = await fetch("/api/ships/" + encodeURIComponent(id));
+      const res = await fetch("/api/ships/" + encodeURIComponent(id) + gvQuery);
       if (!res.ok) throw new Error("HTTP " + res.status);
       const json = await res.json();
       const data = json.data; const sd = data?.ship;
