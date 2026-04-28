@@ -42,6 +42,20 @@ function detectBranch(version: string): "LIVE" | "PTU" {
   return "LIVE"; // default
 }
 
+/**
+ * Filtra entries de game_versions que NO parecen versiones reales de SC.
+ * La tabla puede tener strings sueltos tipo "concept" o "test" que no
+ * deberían aparecer en el toggle del header.
+ *
+ * Versiones válidas: formato `N.M[.P[.Q]][-LIVE|-PTU][...]` (ej. "4.7.2",
+ * "4.7.0-LIVE.11518367", "4.7.3-PTU"). Cualquier cosa que no arranque con
+ * un dígito-punto-dígito queda fuera.
+ */
+function isValidVersionString(s: unknown): boolean {
+  if (typeof s !== "string") return false;
+  return /^\d+\.\d+(\.\d+)?/.test(s.trim());
+}
+
 export async function GET() {
   try {
     // Query defensiva: no asumimos qué columnas extras existen en game_versions.
@@ -64,11 +78,13 @@ export async function GET() {
       `, []);
     }
 
-    // Separar por branch
+    // Separar por branch — descartando entries que no parecen versiones reales
+    // (caso "concept", "test", etc. que pueden vivir en la tabla por motivos
+    // distintos a tracking de versions del juego).
     const live: GameVersionRow[] = [];
     const ptu: GameVersionRow[] = [];
     for (const row of rows as GameVersionRow[]) {
-      if (!row?.version) continue;
+      if (!row?.version || !isValidVersionString(row.version)) continue;
       if (detectBranch(row.version) === "PTU") {
         ptu.push(row);
       } else {
@@ -109,9 +125,11 @@ export async function GET() {
     );
   } catch (err: any) {
     console.error("[API /game-versions] Error:", err?.message || err);
+    // Devolvemos 200 con null/null para no romper el header del frontend.
+    // El toggle se va a mostrar como "Live —" y "PTU —".
     return NextResponse.json(
       { live: null, ptu: null, error: err?.message ?? "Unknown" },
-      { status: 500 },
+      { status: 200 },
     );
   }
 }

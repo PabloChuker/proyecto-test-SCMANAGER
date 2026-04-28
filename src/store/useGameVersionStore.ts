@@ -32,6 +32,21 @@ import { persist, createJSONStorage } from "zustand/middleware";
 
 export type GameBranch = "LIVE" | "PTU";
 
+// FIX 2026-04-28: storage SSR-safe. En Next.js durante el server-side render
+// no existe `window` ni `localStorage` — si zustand intenta accederlo se
+// rompe el render del componente y la página entera devuelve HTTP 500.
+// Devolvemos un noop en server, y el localStorage real solo en client.
+const ssrSafeStorage = createJSONStorage(() => {
+  if (typeof window === "undefined") {
+    return {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {},
+    };
+  }
+  return localStorage;
+});
+
 export interface GameVersionInfo {
   version: string;       // "4.7.2"
   branch: GameBranch;    // "LIVE" | "PTU"
@@ -90,8 +105,12 @@ export const useGameVersionStore = create<GameVersionState>()(
     }),
     {
       name: "sc-labs-game-version",
-      storage: createJSONStorage(() => localStorage),
+      storage: ssrSafeStorage,
       partialize: (s) => ({ branch: s.branch }), // sólo persistimos branch
+      // Skip hydration en SSR para evitar mismatch entre el render server
+      // (que no tiene localStorage) y el client (que sí). El store se
+      // hidrata cuando el client monta el componente.
+      skipHydration: typeof window === "undefined",
     },
   ),
 );

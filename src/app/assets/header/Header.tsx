@@ -12,7 +12,17 @@ import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
 import PerformanceToggle from "@/components/shared/PerformanceToggle";
 import ReferralRotator from "@/components/shared/ReferralRotator";
 import { DonateButton } from "@/components/shared/DonateButton";
-import GameVersionToggle from "@/components/shared/GameVersionToggle";
+import dynamic from "next/dynamic";
+
+// FIX 2026-04-28: GameVersionToggle se carga client-only con dynamic({ssr:false}).
+// El store interno (zustand persist) accede a localStorage en mount y eso
+// puede romper el SSR si no es safe. Aislándolo en dynamic SSR=false
+// garantizamos que cualquier issue del toggle no afecte el render server-side
+// de las páginas que usan el Header (loadout, ships, hangar, etc.).
+const GameVersionToggle = dynamic(
+  () => import("@/components/shared/GameVersionToggle"),
+  { ssr: false, loading: () => null },
+);
 
 interface HeaderProps {
   subtitle?: string;
