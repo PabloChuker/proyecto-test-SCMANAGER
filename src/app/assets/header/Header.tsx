@@ -12,6 +12,7 @@ import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
 import PerformanceToggle from "@/components/shared/PerformanceToggle";
 import ReferralRotator from "@/components/shared/ReferralRotator";
 import { DonateButton } from "@/components/shared/DonateButton";
+import GameVersionToggle from "@/components/shared/GameVersionToggle";
 
 interface HeaderProps {
   subtitle?: string;
@@ -84,6 +85,14 @@ export default function Header({ subtitle }: HeaderProps) {
               </span>
             </>
           )}
+
+          {/* FEAT 2026-04-27: Game Version Toggle (LIVE / PTU). Va entre el
+              cartelito de sección y el menú central. Estado global en
+              useGameVersionStore (persistido). Cada módulo que toque tablas
+              con `game_version` debe usar useGameVersionParam() para pasar
+              `?gv=...` en sus fetches. */}
+          <div className="h-4 w-px bg-zinc-800 ml-1" />
+          <GameVersionToggle />
         </div>
 
         {/* ── Center: Section nav — grid column keeps it truly centered ── */}
