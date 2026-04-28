@@ -24,6 +24,10 @@ function numOrNull(v: any): number | null {
 }
 
 function col(row: any, ...keys: string[]): any {
+  // FIX 2026-04-28: guard contra null/undefined. Casos como Hull B (insertada
+  // manualmente sin satellites) llegaban con flightStats=null, fuelStats=null,
+  // etc., y col(null, "scm_speed") tiraba "Cannot read properties of null".
+  if (!row) return null;
   for (const k of keys) {
     if (row[k] !== undefined && row[k] !== null) return row[k];
   }
