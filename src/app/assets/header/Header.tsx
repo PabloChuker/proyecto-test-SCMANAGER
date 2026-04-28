@@ -12,17 +12,13 @@ import LanguageSwitcher from "@/components/shared/LanguageSwitcher";
 import PerformanceToggle from "@/components/shared/PerformanceToggle";
 import ReferralRotator from "@/components/shared/ReferralRotator";
 import { DonateButton } from "@/components/shared/DonateButton";
-import dynamic from "next/dynamic";
-
-// FIX 2026-04-28: GameVersionToggle se carga client-only con dynamic({ssr:false}).
-// El store interno (zustand persist) accede a localStorage en mount y eso
-// puede romper el SSR si no es safe. Aislándolo en dynamic SSR=false
-// garantizamos que cualquier issue del toggle no afecte el render server-side
-// de las páginas que usan el Header (loadout, ships, hangar, etc.).
-const GameVersionToggle = dynamic(
-  () => import("@/components/shared/GameVersionToggle"),
-  { ssr: false, loading: () => null },
-);
+// REVERT 2026-04-28: GameVersionToggle removido del header. Lo había
+// implementado basado en supuestos sobre la estructura de Supabase, sin
+// verificar la realidad de las tablas. Garnok migró las tablas pero todavía
+// no sabemos exactamente cómo distingue LIVE vs PTU (¿columna branch?
+// ¿version string? ¿is_current?). Hay que correr scripts/diagnose_game_versions.mjs
+// y scripts/audit_game_version_columns.mjs para ver la BD real, después
+// rediseñar el toggle desde cero con esa info concreta.
 
 interface HeaderProps {
   subtitle?: string;
@@ -95,14 +91,7 @@ export default function Header({ subtitle }: HeaderProps) {
               </span>
             </>
           )}
-
-          {/* FEAT 2026-04-27: Game Version Toggle (LIVE / PTU). Va entre el
-              cartelito de sección y el menú central. Estado global en
-              useGameVersionStore (persistido). Cada módulo que toque tablas
-              con `game_version` debe usar useGameVersionParam() para pasar
-              `?gv=...` en sus fetches. */}
-          <div className="h-4 w-px bg-zinc-800 ml-1" />
-          <GameVersionToggle />
+          {/* GameVersionToggle: removido temporalmente, ver REVERT note arriba. */}
         </div>
 
         {/* ── Center: Section nav — grid column keeps it truly centered ── */}
