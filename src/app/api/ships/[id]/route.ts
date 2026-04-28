@@ -1136,19 +1136,47 @@ export async function GET(
     // ── 3. Get hardpoints from NEW schema (match by ship reference) ──
     // FIX 2026-04-26: catch defensive — naves recién insertadas sin entries en
     // ship_hardpoints (caso Hull B, naves de 4.7.x agregadas manualmente)
-    // tienen que devolver array vacío en vez de tirar 500. Si ship.reference
-    // es NULL la query también devuelve [] sin error, pero por si acaso.
+    // tienen que devolver array vacío en vez de tirar 500.
+    //
+    // FIX 2026-04-28: filtrar por ship.game_version para evitar duplicación.
+    // Cuando Garnok carga dos versiones del juego (ej. LIVE 4.7.2 + PTU 4.7.3),
+    // cada hardpoint aparecía 2x porque la misma ship_reference tiene rows con
+    // distinto game_version. Filtramos por la game_version del ship principal
+    // para devolver solo el set consistente. Si ship_hardpoints no tiene la
+    // columna `game_version`, el catch hace fallback al query sin filtro.
     let hardpointRows: any[] = [];
+    const shipGV = ship.game_version ?? null;
     try {
-      hardpointRows = await sql.unsafe(
-        `SELECT * FROM ship_hardpoints
-         WHERE ship_reference = $1
-         ORDER BY hardpoint_type, max_size DESC, hardpoint_name ASC`,
-        [String(ship.reference ?? "")],
-      );
+      if (shipGV) {
+        hardpointRows = await sql.unsafe(
+          `SELECT * FROM ship_hardpoints
+           WHERE ship_reference = $1 AND game_version = $2
+           ORDER BY hardpoint_type, max_size DESC, hardpoint_name ASC`,
+          [String(ship.reference ?? ""), String(shipGV)],
+        );
+      } else {
+        hardpointRows = await sql.unsafe(
+          `SELECT * FROM ship_hardpoints
+           WHERE ship_reference = $1
+           ORDER BY hardpoint_type, max_size DESC, hardpoint_name ASC`,
+          [String(ship.reference ?? "")],
+        );
+      }
     } catch (e: any) {
-      console.warn("[ships/[id]] ship_hardpoints query failed (ship may be new):", e?.message);
-      hardpointRows = [];
+      console.warn("[ships/[id]] ship_hardpoints with game_version filter failed, retrying without:", e?.message);
+      // Fallback sin filtro de game_version (por si la columna no existe en
+      // la tabla de algún ambiente).
+      try {
+        hardpointRows = await sql.unsafe(
+          `SELECT * FROM ship_hardpoints
+           WHERE ship_reference = $1
+           ORDER BY hardpoint_type, max_size DESC, hardpoint_name ASC`,
+          [String(ship.reference ?? "")],
+        );
+      } catch (e2: any) {
+        console.warn("[ships/[id]] ship_hardpoints query failed (ship may be new):", e2?.message);
+        hardpointRows = [];
+      }
     }
 
     // ── 4. Collect all default_item_class values for batch lookup ──
