@@ -120,8 +120,13 @@ const HP_TYPE_TO_CATEGORY: Record<string, string> = {
   QuantumInterdictionGenerator: "QIG",
 };
 
-function hpCategory(hpType: string, hpName: string): string {
-  const n = hpName.toLowerCase();
+function hpCategory(hpType: string | null | undefined, hpName: string | null | undefined): string {
+  // FIX 2026-04-28: defensive contra hardpoint_type/name null en BD. Causa
+  // identificada: rows en ship_hardpoints con hardpoint_type=NULL (data que
+  // Garnok migró/agregó sin ese campo) hacían crashear hpType.split(".") y
+  // toda la nave devolvía 500 — afectaba TODAS las naves no solo Hull B.
+  const safeType = (hpType ?? "").toString();
+  const n = (hpName ?? "").toLowerCase();
 
   // 2026-04-17: industrial name detection gana SIEMPRE sobre HP_TYPE_TO_CATEGORY.
   // Razón: en el Reclaimer los salvage arms vienen como hpType="Turret", así que
@@ -134,10 +139,10 @@ function hpCategory(hpType: string, hpName: string): string {
   // QIG names como `hardpoint_quantum_interdiction_*` o `hardpoint_qed_*`.
   if (n.includes("interdict") || n.includes("qed") || n.includes("qig") || n.includes("qdmp")) return "QIG";
 
-  if (HP_TYPE_TO_CATEGORY[hpType]) return HP_TYPE_TO_CATEGORY[hpType];
+  if (HP_TYPE_TO_CATEGORY[safeType]) return HP_TYPE_TO_CATEGORY[safeType];
   // Try base type (e.g. "LifeSupportGenerator.UNDEFINED" → "LifeSupportGenerator")
-  const baseType = hpType.split(".")[0];
-  if (baseType !== hpType && HP_TYPE_TO_CATEGORY[baseType]) return HP_TYPE_TO_CATEGORY[baseType];
+  const baseType = safeType.split(".")[0];
+  if (baseType && baseType !== safeType && HP_TYPE_TO_CATEGORY[baseType]) return HP_TYPE_TO_CATEGORY[baseType];
   // Fallback: infer from name (resto de categorías no-industriales)
   if (n.includes("turret")) return "TURRET";
   if (n.includes("weapon") || n.includes("gun")) return "WEAPON";
