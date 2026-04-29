@@ -186,14 +186,87 @@ export function PowerManagementPanel({
                   ? Math.min(inst.totalPips, Math.max(1, Math.ceil(inst.powerMin)))
                   : 0;
 
-                // Build cell list: merge min-zone cells into one big cell
-                // We render bottom-to-top (flex-col-reverse), so row 0 = bottom
+                // Build cell list: merge min-zone cells into one big cell.
+                // We render bottom-to-top (flex-col-reverse), so row 0 = bottom.
+                //
+                // Fase U.5b (2026-04-29): si la instance trae `subShields[]`
+                // (caso de la columna combinada de shields), la min-zone se
+                // subdivide en N sub-bloques (uno por shield físico) en vez
+                // del único bloque grande con el número total. Cada sub-bloque
+                // togglea su propio hardpoint independientemente — Pablo
+                // quería poder apagar 1 generador de la Avenger Titan sin
+                // tirar el otro.
                 const cells: React.ReactNode[] = [];
                 let row = 0;
                 while (row < ROWS) {
                   const locked = row >= inst.totalPips;
                   const allocated = !locked && row < inst.allocatedPips && inst.isOn;
                   const isMinZone = !locked && row < minPips;
+
+                  // Special case: shields with sub-shields → render the min
+                  // zone as N stacked sub-blocks, each toggling its own hardpoint.
+                  if (
+                    row === 0 &&
+                    minPips > 0 &&
+                    !locked &&
+                    inst.subShields &&
+                    inst.subShields.length > 1
+                  ) {
+                    let subStart = 0;
+                    inst.subShields.forEach((sub, subIdx) => {
+                      const subPips = Math.max(1, Math.min(minPips - subStart, sub.pipsForMin));
+                      if (subPips <= 0) return;
+                      const subHeight = subPips * 14 + (subPips - 1) * 2;
+                      const subAllocated = sub.isOn && inst.isOn && inst.allocatedPips > subStart;
+
+                      let bg: string;
+                      let borderC: string;
+                      let opacity = 1;
+                      if (!sub.isOn) {
+                        bg = "#1f1f23"; borderC = "#2a2a2e"; opacity = 0.35;
+                      } else if (subAllocated) {
+                        bg = color; borderC = color;
+                      } else {
+                        bg = AVAILABLE_BG; borderC = AVAILABLE_BORDER;
+                      }
+
+                      cells.push(
+                        <div
+                          key={`sub-${subIdx}-${sub.hardpointName}`}
+                          onClick={() => toggleComponent(sub.hardpointName)}
+                          style={{
+                            width: 24,
+                            height: subHeight,
+                            backgroundColor: bg,
+                            border: `1px solid ${borderC}`,
+                            borderRadius: 2,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            opacity,
+                            transition: "all 100ms",
+                          }}
+                          title={`${sub.componentName} — ${sub.isOn ? "ON" : "OFF"} · click para alternar`}
+                        >
+                          {sub.isOn && subAllocated && (
+                            <span style={{
+                              fontSize: 8,
+                              fontWeight: 800,
+                              fontFamily: "monospace",
+                              color: "#000",
+                              lineHeight: 1,
+                            }}>
+                              {subPips}
+                            </span>
+                          )}
+                        </div>
+                      );
+                      subStart += subPips;
+                    });
+                    row = minPips;
+                    continue;
+                  }
 
                   // If this is the start of the min zone and minPips > 1, merge into one cell
                   if (row === 0 && minPips > 1 && !locked) {

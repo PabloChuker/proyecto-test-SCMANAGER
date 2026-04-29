@@ -129,6 +129,22 @@ export interface ComponentPowerInstance {
   emMax: number;
   irMax: number;
   isOn: boolean;
+  /**
+   * Sub-componentes físicos detrás de esta columna combinada (Fase U.5b,
+   * 2026-04-29). Solo se usa hoy para la columna de shields: la ship Avenger
+   * Titan tiene 2 generadores que comparten una columna pero queremos poder
+   * apagarlos individualmente. Cada entry corresponde a un hardpoint físico
+   * con sus pips de minimum draw. La zona "min" del render se divide en
+   * sub-bloques proporcionales a `pipsForMin` y cada sub-bloque togglea su
+   * propio hardpoint. Si la columna no es combinada, queda undefined.
+   */
+  subShields?: Array<{
+    hardpointName: string;
+    componentName: string;
+    pipsForMin: number;
+    regenFull: number;
+    isOn: boolean;
+  }>;
 }
 
 export interface CategoryPowerInfo { minDraw: number; allocated: number; componentCount: number; activeCount: number; }
@@ -384,15 +400,31 @@ function computeStats(
   let weaponTotalIndividualPips = 0;  // sum of each weapon's totalPips
   const WEAPON_POWER_ID = "__weapons_combined__";
 
-  // ── Shields: una columna por generador físico (Fase U.5, 2026-04-29) ──
-  // Antes acumulábamos todos los shields en una sola "columna combinada" estilo
-  // HUD del juego, pero eso impedía apagar/encender cada generador por separado
-  // (caso Avenger Titan con 2 shields → 1 bloque de 4 pips combinado). Ahora
-  // cada SHIELD hardpoint genera su propia ComponentPowerInstance y aparece
-  // como columna independiente en el Power Grid. shieldRegen se reescala al
-  // final iterando las instances de shields para respetar la pip ratio
-  // individual de cada generador.
+  // ── Shields (Fase U.5b, 2026-04-29): una sola columna combinada estilo HUD,
+  // pero la "min zone" se subdivide en N sub-bloques (uno por shield físico)
+  // para poder togglear cada generador por separado. Acumulamos los datos
+  // que necesita el render: pMin/pMax suma, pips totales, regen full por hp,
+  // y un array `subShieldsInfo` que se inyecta en la instance combinada.
+  let shieldPowerMin = 0;
+  let shieldPowerMax = 0;
+  let shieldEmMax = 0;
+  let shieldIrMax = 0;
+  let shieldGenPower = 0;
+  let shieldGenCoolant = 0;
+  let shieldCount = 0;
+  let shieldActiveCount = 0;
+  let shieldTotalIndividualPips = 0;
+  let shieldFirstHpName: string | null = null;
+  const SHIELD_POWER_ID = "__shields_combined__";
+  // Por-shield: necesario para escalar regen y para subdividir la min-zone.
   const shieldRegenByHp: Record<string, number> = {};
+  const subShieldsInfo: Array<{
+    hardpointName: string;
+    componentName: string;
+    pipsForMin: number;
+    regenFull: number;
+    isOn: boolean;
+  }> = [];
 
   for (const hp of hardpoints) {
     const cat = hp.resolvedCategory;
@@ -473,6 +505,44 @@ function computeStats(
           weaponTotalIndividualPips += totalPips;
           weaponCount++;
           if (isOn) weaponActiveCount++;
+        }
+      } else if (pCat === "shields") {
+        // SHIELDS → columna combinada (Fase U.5b). Acumulamos para el push
+        // único y además registramos el sub-shield para que el render
+        // subdivida la min-zone en N bloques (uno por hardpoint físico).
+        // OJO: este branch corre ANTES del `if (!isOn) continue`, así que
+        // sub-shields apagados también se registran (con isOn=false) — eso
+        // es lo que queremos para que aparezcan en el render aunque off.
+        if (totalPips > 0) {
+          shieldPowerMin += powerMin;
+          shieldPowerMax += powerMax;
+          shieldEmMax += pn?.em ?? pickNum(s, "emSignature");
+          shieldIrMax += pn?.ir ?? pickNum(s, "irSignature");
+          shieldGenPower += pn?.genP ?? 0;
+          shieldGenCoolant += pn?.genC ?? 0;
+          shieldTotalIndividualPips += totalPips;
+          shieldCount++;
+          if (isOn) shieldActiveCount++;
+          if (!shieldFirstHpName) shieldFirstHpName = hp.hardpointName;
+          // Pips que ocupa este shield en la min-zone visual. Default = ceil(powerMin)
+          // (lo mínimo que el shield necesita para mantenerse encendido).
+          // Si powerMin es 0 (raro), reservamos al menos 1 pip para que tenga
+          // celda toggleable.
+          const pipsForMin = Math.max(1, Math.ceil(powerMin));
+          // Capturamos regen full ahora (acá tenemos `s` accesible aunque el
+          // shield esté apagado). El regen del item es independiente de su
+          // estado on/off — es propiedad del componente.
+          const regenFull = pickNum(s, "shieldRegen", "regenRate");
+          subShieldsInfo.push({
+            hardpointName: hp.hardpointName,
+            componentName: item.name,
+            pipsForMin,
+            regenFull,
+            isOn,
+          });
+          // shieldRegenByHp lo dejamos también acá — antes se llenaba en el
+          // bloque `if (cat === "SHIELD")` que está después de !isOn continue.
+          shieldRegenByHp[hp.hardpointName] = regenFull;
         }
       } else if (totalPips > 0) {
         // Non-weapons: individual instance per component (as before)
@@ -579,11 +649,11 @@ function computeStats(
         missileAlpha += a;
       }
       if (cat === "SHIELD") {
+        // shieldHp solo cuenta cuando el shield está ON (este bloque corre
+        // tras `if (!isOn) continue`). El regen full ya se capturó arriba en
+        // el branch `else if (pCat === "shields")` para que sub-shields
+        // apagados también queden con su regenFull en subShieldsInfo.
         shieldHp += pickNum(s, "shieldHp", "maxHp");
-        // Fase U.5: NO acumulamos shieldRegen acá. Lo guardamos por hardpoint
-        // para escalarlo individualmente al final según la pip ratio de cada
-        // generador (ahora cada shield es su propia ComponentPowerInstance).
-        shieldRegenByHp[hp.hardpointName] = pickNum(s, "shieldRegen", "regenRate");
       }
       if (cat === "COOLER") { coolingRate += pickNum(s, "coolingRate"); }
       if (!pn) accumBase(s);
@@ -718,12 +788,42 @@ function computeStats(
     weaponAlpha = 0;
   }
 
-  // Fase U.5 (2026-04-29): el push de la "columna combinada" de shields fue
-  // eliminado. Cada SHIELD hardpoint ya emitió su propia ComponentPowerInstance
-  // dentro del loop principal (vía el path `else if (totalPips > 0)`), así
-  // que el Power Grid renderiza N columnas independientes con sus pips, su
-  // toggle y su pip ratio individual. El escalado de shieldRegen se hace
-  // abajo iterando esas instances.
+  // ── Push columna combinada de shields (Fase U.5b, 2026-04-29) ──────────────
+  // Volvemos a UNA columna pero con `subShields[]` adentro. La min-zone del
+  // render se subdivide en N sub-bloques (uno por hardpoint físico) — cada
+  // uno toggleable por separado. Conserva el comportamiento HUD-style del
+  // juego (todos los shields como un único conjunto) pero permite apagar
+  // un generador individual sin tocar los otros.
+  if (shieldCount > 0) {
+    const shieldAllocPips = instancePower[SHIELD_POWER_ID] ?? 0;
+    const ugScmShld = usedGroupedScm?.Shield ?? 0;
+    const shldPoolPips = pools?.Shield ?? 0;
+    const combinedShieldPips = Math.min(8, Math.max(
+      ugScmShld,
+      shieldTotalIndividualPips,
+      shldPoolPips,
+      Math.max(1, Math.ceil(shieldPowerMax)),
+    ));
+    cats.shields.allocated = shieldAllocPips;
+    instances.push({
+      hardpointId: SHIELD_POWER_ID,
+      hardpointName: SHIELD_POWER_ID,
+      componentName: `Shields (${shieldCount})`,
+      category: "shields",
+      type: "Shield",
+      totalPips: combinedShieldPips,
+      allocatedPips: Math.min(shieldAllocPips, combinedShieldPips),
+      ranges: [{ start: 0, modifier: 1, range: combinedShieldPips }],
+      powerMin: shieldPowerMin,
+      powerMax: shieldPowerMax,
+      genPower: shieldGenPower,
+      genCoolant: shieldGenCoolant,
+      emMax: shieldEmMax,
+      irMax: shieldIrMax,
+      isOn: shieldActiveCount > 0,
+      subShields: subShieldsInfo,
+    });
+  }
 
   // Apply diminishing returns to combine multiple power plants.
   // Empirical formula derived from in-game observations (2026-04):
@@ -865,37 +965,35 @@ function computeStats(
     irSig = baseIr * irMult;
   }
 
-  // ── Shield regen scaling per-shield (Fase U.5, 2026-04-29) ────────────────
-  // Antes había una sola "shield instance combinada" cuyo pip ratio escalaba
-  // el shieldRegen total. Ahora cada shield es su propia instance, así que
-  // sumamos contribuciones individuales: cada generador aporta su regen FULL
-  // (guardado en shieldRegenByHp durante el loop) escalado por su propia pip
-  // ratio. Un shield apagado o sin pips no aporta regen.
-  //
-  // Game mechanic: en Star Citizen el shieldRegen escala con power allocation,
-  // pero el shield auto-consume su powerMin del grid mientras esté ON aunque
-  // el slider esté abajo. effectivePips = max(allocated, ceil(powerMin)) para
-  // que un shield recién encendido no muestre regen=0.
-  let shieldRegenScaled = 0;
-  let anyShieldInstance = false;
-  for (const inst of instances) {
-    if (inst.category !== "shields") continue;
-    anyShieldInstance = true;
-    if (!inst.isOn || inst.totalPips === 0) continue;
-    const fullRegen = shieldRegenByHp[inst.hardpointName] ?? 0;
-    if (fullRegen <= 0) continue;
-    const minPips = Math.min(inst.totalPips, Math.max(1, Math.ceil(inst.powerMin)));
-    const effectivePips = Math.max(minPips, inst.allocatedPips);
-    const ratio = Math.min(1, Math.max(0, effectivePips / inst.totalPips));
-    shieldRegenScaled += fullRegen * ratio;
+  // ── Shield regen scaling (Fase U.5b, 2026-04-29) ──────────────────────────
+  // Hay UNA columna combinada con subShields[]. La pip ratio de la columna
+  // entera escala el shieldRegen total, PERO cada sub-shield apagado debe
+  // dejar de aportar su regen full. Combinamos ambos efectos:
+  //   total = sum( regenFullPorShield × (isOn ? 1 : 0) ) × pipRatioCombinado
+  // pipRatioCombinado = max(allocated, ceil(powerMin)) / totalPips de la
+  // instance combinada.
+  const shieldInstForScale = instances.find(i => i.hardpointId === SHIELD_POWER_ID);
+  if (shieldInstForScale && shieldInstForScale.isOn && shieldInstForScale.totalPips > 0) {
+    const minPips = Math.min(
+      shieldInstForScale.totalPips,
+      Math.max(1, Math.ceil(shieldInstForScale.powerMin)),
+    );
+    const effectivePips = Math.max(minPips, shieldInstForScale.allocatedPips);
+    const shieldRatio = Math.min(1, Math.max(0, effectivePips / shieldInstForScale.totalPips));
+    // Recomputar regen sumando solo los sub-shields encendidos.
+    let activeRegenFull = 0;
+    if (shieldInstForScale.subShields && shieldInstForScale.subShields.length > 0) {
+      for (const sub of shieldInstForScale.subShields) {
+        if (sub.isOn) activeRegenFull += sub.regenFull;
+      }
+    } else {
+      // Edge case sin subShields — usar el shieldRegen acumulado en el loop.
+      activeRegenFull = shieldRegen;
+    }
+    shieldRegen = activeRegenFull * shieldRatio;
+  } else if (shieldInstForScale && !shieldInstForScale.isOn) {
+    shieldRegen = 0;
   }
-  if (anyShieldInstance) {
-    shieldRegen = shieldRegenScaled;
-  }
-  // Si no había ninguna shield instance, dejamos shieldRegen como vino del loop
-  // (caso edge: shield equipado pero sin powerNetwork, el modelo viejo todavía
-  // acumulaba en línea 602 — esa rama ya no acumula, así que shieldRegen quedará
-  // en 0 que es correcto: sin pip data no hay forma de escalar).
 
   // Coolers — scale each cooler's contribution by its own pip ratio
   let coolingScaled = 0;
