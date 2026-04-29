@@ -42,7 +42,11 @@ import {
   FlightDynamicsToolbar,
   useFlightDynamicsView,
 } from "./widgets/FlightDynamicsWidget";
-import { FlightDynamics3dContent } from "./widgets/FlightDynamics3dWidget";
+import {
+  FlightDynamics3dContent,
+  FlightDynamics3dHeaderActions,
+  useFlightDynamics3dBoost,
+} from "./widgets/FlightDynamics3dWidget";
 import { ShipCardContent }        from "./widgets/ShipCardWidget";
 import { LoadoutDetailContent }   from "./widgets/LoadoutDetailWidget";
 // Three.js (ShipFlightDynamicsSingle + shipGlbCandidates) moved to FlightDynamics3dWidget.tsx
@@ -439,6 +443,25 @@ function FlightDynamicsCard() {
   );
 }
 
+// ── FlightDynamics3dCard (Fase U.6b) ────────────────────────────────────────
+// Misma idea que FlightDynamicsCard: el card maneja el estado boost para
+// poder inyectar el toggle "Boost" en el header del shell sin sacrificar
+// espacio del contenido. El body recibe el `boost` y elige qué rates pasar.
+function FlightDynamics3dCard({ wId }: { wId: WidgetId }) {
+  const { boost, setBoost, hasBoost } = useFlightDynamics3dBoost();
+  return (
+    <WidgetShell
+      id={wId}
+      label={WIDGET_LABELS[wId]}
+      headerActions={
+        <FlightDynamics3dHeaderActions boost={boost} setBoost={setBoost} hasBoost={hasBoost} />
+      }
+    >
+      <FlightDynamics3dContent boost={boost} />
+    </WidgetShell>
+  );
+}
+
 // ── Widget renderer — maps a WidgetId to its JSX content ──────────────────
 // Stateful widgets (charts, ship-card, stats panels) are now imported from
 // ./widgets/* and read the store themselves — they receive NO props from ctx,
@@ -475,7 +498,10 @@ function renderWidget(
       // porque necesitamos `headerActions` + estado compartido.
       return <FlightDynamicsCard />;
     case "flight-dynamics-3d":
-      return W(<FlightDynamics3dContent />);
+      // Fase U.6b: Card dedicada (igual patrón que FlightDynamicsCard) para
+      // poder inyectar el toggle BOOST en el header del shell. El estado se
+      // comparte vía useFlightDynamics3dBoost.
+      return <FlightDynamics3dCard wId={wId} />;
     case "quantum": {
       // Fase P.1 (2026-04-25): el widget QT DRIVES ahora muestra TANTO
       // QUANTUM_DRIVE (motor de salto local) COMO JUMP_DRIVE (módulo
