@@ -384,19 +384,15 @@ function computeStats(
   let weaponTotalIndividualPips = 0;  // sum of each weapon's totalPips
   const WEAPON_POWER_ID = "__weapons_combined__";
 
-  // ── Shields: accumulate into a single combined power column ──
-  // (game mechanic: in Star Citizen shields are always represented as 1 column)
-  let shieldPowerMin = 0;
-  let shieldPowerMax = 0;
-  let shieldEmMax = 0;
-  let shieldIrMax = 0;
-  let shieldGenPower = 0;
-  let shieldGenCoolant = 0;
-  let shieldCount = 0;
-  let shieldActiveCount = 0;
-  let shieldTotalIndividualPips = 0;  // sum of each shield's totalPips
-  let shieldFirstHpName: string | null = null;
-  const SHIELD_POWER_ID = "__shields_combined__";
+  // ── Shields: una columna por generador físico (Fase U.5, 2026-04-29) ──
+  // Antes acumulábamos todos los shields en una sola "columna combinada" estilo
+  // HUD del juego, pero eso impedía apagar/encender cada generador por separado
+  // (caso Avenger Titan con 2 shields → 1 bloque de 4 pips combinado). Ahora
+  // cada SHIELD hardpoint genera su propia ComponentPowerInstance y aparece
+  // como columna independiente en el Power Grid. shieldRegen se reescala al
+  // final iterando las instances de shields para respetar la pip ratio
+  // individual de cada generador.
+  const shieldRegenByHp: Record<string, number> = {};
 
   for (const hp of hardpoints) {
     const cat = hp.resolvedCategory;
@@ -477,23 +473,6 @@ function computeStats(
           weaponTotalIndividualPips += totalPips;
           weaponCount++;
           if (isOn) weaponActiveCount++;
-        }
-      } else if (pCat === "shields") {
-        // SHIELDS → accumulate into single combined column
-        // (in Star Citizen the HUD always shows shields as a unified single column)
-        if (totalPips > 0) {
-          shieldPowerMin += powerMin;
-          shieldPowerMax += powerMax;
-          shieldEmMax += pn?.em ?? pickNum(s, "emSignature");
-          shieldIrMax += pn?.ir ?? pickNum(s, "irSignature");
-          shieldGenPower += pn?.genP ?? 0;
-          shieldGenCoolant += pn?.genC ?? 0;
-          shieldTotalIndividualPips += totalPips;
-          shieldCount++;
-          if (isOn) shieldActiveCount++;
-          // Remember the first shield hardpointName so the merged column
-          // can control allocation/toggle via an existing store key.
-          if (!shieldFirstHpName) shieldFirstHpName = hp.hardpointName;
         }
       } else if (totalPips > 0) {
         // Non-weapons: individual instance per component (as before)
@@ -599,7 +578,13 @@ function computeStats(
         totalAlpha += a;
         missileAlpha += a;
       }
-      if (cat === "SHIELD") { shieldHp += pickNum(s, "shieldHp", "maxHp"); shieldRegen += pickNum(s, "shieldRegen", "regenRate"); }
+      if (cat === "SHIELD") {
+        shieldHp += pickNum(s, "shieldHp", "maxHp");
+        // Fase U.5: NO acumulamos shieldRegen acá. Lo guardamos por hardpoint
+        // para escalarlo individualmente al final según la pip ratio de cada
+        // generador (ahora cada shield es su propia ComponentPowerInstance).
+        shieldRegenByHp[hp.hardpointName] = pickNum(s, "shieldRegen", "regenRate");
+      }
       if (cat === "COOLER") { coolingRate += pickNum(s, "coolingRate"); }
       if (!pn) accumBase(s);
     }
@@ -733,44 +718,12 @@ function computeStats(
     weaponAlpha = 0;
   }
 
-  // ── Push single combined shields column ──
-  // In Star Citizen the HUD always shows a single shield column, regardless
-  // of how many shield generators the ship has. We aggregate all shield
-  // generators into one visual column matching the weapons treatment.
-  if (shieldCount > 0) {
-    const shieldAllocPips = instancePower[SHIELD_POWER_ID] ?? 0;
-    // Best pip source priority: usedGroupedScm > sum of individual pips > pools > ceil(pMax)
-    const ugScmShld = usedGroupedScm?.Shield ?? 0;
-    const shldPoolPips = pools?.Shield ?? 0;
-    const combinedShieldPips = Math.min(8, Math.max(
-      ugScmShld,
-      shieldTotalIndividualPips,
-      shldPoolPips,
-      Math.max(1, Math.ceil(shieldPowerMax)),
-    ));
-    // Override the per-shield allocated counts with the single combined allocation
-    cats.shields.allocated = shieldAllocPips;
-    // Shield minimum = sum of individual shield pMin values (each shield needs minimum power)
-    // For Asgard: 4 shields × pMin=1 = 4 minimum pips
-    const shieldMinPips = Math.min(combinedShieldPips, Math.max(1, Math.ceil(shieldPowerMin)));
-    instances.push({
-      hardpointId: SHIELD_POWER_ID,
-      hardpointName: SHIELD_POWER_ID,
-      componentName: `Shields (${shieldCount})`,
-      category: "shields",
-      type: "Shield",
-      totalPips: combinedShieldPips,
-      allocatedPips: Math.min(shieldAllocPips, combinedShieldPips),
-      ranges: [{ start: 0, modifier: 1, range: combinedShieldPips }],
-      powerMin: shieldPowerMin,  // sum of individual shield minimums (e.g. 4 shields × pMin=1 = 4)
-      powerMax: shieldPowerMax,
-      genPower: shieldGenPower,
-      genCoolant: shieldGenCoolant,
-      emMax: shieldEmMax,
-      irMax: shieldIrMax,
-      isOn: shieldActiveCount > 0,
-    });
-  }
+  // Fase U.5 (2026-04-29): el push de la "columna combinada" de shields fue
+  // eliminado. Cada SHIELD hardpoint ya emitió su propia ComponentPowerInstance
+  // dentro del loop principal (vía el path `else if (totalPips > 0)`), así
+  // que el Power Grid renderiza N columnas independientes con sus pips, su
+  // toggle y su pip ratio individual. El escalado de shieldRegen se hace
+  // abajo iterando esas instances.
 
   // Apply diminishing returns to combine multiple power plants.
   // Empirical formula derived from in-game observations (2026-04):
@@ -912,28 +865,37 @@ function computeStats(
     irSig = baseIr * irMult;
   }
 
-  // ── Shield regen + cooling scaling with pip allocation (F2.4) ─────────────
-  // In Star Citizen, shield regen and cooling rate scale with power allocation.
-  // Full pips → full value; reduced pips → proportionally reduced.
-  // Max shield HP does NOT scale — it's fixed by the shield component.
+  // ── Shield regen scaling per-shield (Fase U.5, 2026-04-29) ────────────────
+  // Antes había una sola "shield instance combinada" cuyo pip ratio escalaba
+  // el shieldRegen total. Ahora cada shield es su propia instance, así que
+  // sumamos contribuciones individuales: cada generador aporta su regen FULL
+  // (guardado en shieldRegenByHp durante el loop) escalado por su propia pip
+  // ratio. Un shield apagado o sin pips no aporta regen.
   //
-  // IMPORTANT: Shields auto-draw their minimum power (powerMin) from the grid
-  // as long as they're ON, even if the user's allocation slider is below that.
-  // So the effective pip count for regen = max(allocatedPips, ceil(powerMin)).
-  // This prevents shieldRegen from showing 0 on initial load when auto-alloc
-  // gives shields only 1-2 pips even though their min required draw is higher.
-  const shieldInstForScale = instances.find(i => i.hardpointId === SHIELD_POWER_ID);
-  if (shieldInstForScale && shieldInstForScale.isOn && shieldInstForScale.totalPips > 0) {
-    const minPips = Math.min(
-      shieldInstForScale.totalPips,
-      Math.max(1, Math.ceil(shieldInstForScale.powerMin)),
-    );
-    const effectivePips = Math.max(minPips, shieldInstForScale.allocatedPips);
-    const shieldRatio = Math.min(1, Math.max(0, effectivePips / shieldInstForScale.totalPips));
-    shieldRegen = shieldRegen * shieldRatio;
-  } else if (shieldInstForScale && !shieldInstForScale.isOn) {
-    shieldRegen = 0;
+  // Game mechanic: en Star Citizen el shieldRegen escala con power allocation,
+  // pero el shield auto-consume su powerMin del grid mientras esté ON aunque
+  // el slider esté abajo. effectivePips = max(allocated, ceil(powerMin)) para
+  // que un shield recién encendido no muestre regen=0.
+  let shieldRegenScaled = 0;
+  let anyShieldInstance = false;
+  for (const inst of instances) {
+    if (inst.category !== "shields") continue;
+    anyShieldInstance = true;
+    if (!inst.isOn || inst.totalPips === 0) continue;
+    const fullRegen = shieldRegenByHp[inst.hardpointName] ?? 0;
+    if (fullRegen <= 0) continue;
+    const minPips = Math.min(inst.totalPips, Math.max(1, Math.ceil(inst.powerMin)));
+    const effectivePips = Math.max(minPips, inst.allocatedPips);
+    const ratio = Math.min(1, Math.max(0, effectivePips / inst.totalPips));
+    shieldRegenScaled += fullRegen * ratio;
   }
+  if (anyShieldInstance) {
+    shieldRegen = shieldRegenScaled;
+  }
+  // Si no había ninguna shield instance, dejamos shieldRegen como vino del loop
+  // (caso edge: shield equipado pero sin powerNetwork, el modelo viejo todavía
+  // acumulaba en línea 602 — esa rama ya no acumula, así que shieldRegen quedará
+  // en 0 que es correcto: sin pip data no hay forma de escalar).
 
   // Coolers — scale each cooler's contribution by its own pip ratio
   let coolingScaled = 0;

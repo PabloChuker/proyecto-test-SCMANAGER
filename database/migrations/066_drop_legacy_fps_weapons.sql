@@ -1,0 +1,47 @@
+-- =============================================================================
+-- Migración: 066_drop_legacy_fps_weapons
+-- Módulo:    Tools — cleanup post-unificación con fps_weapon_items
+-- Generado:  2026-04-27 (post Garnok rename weapon_items → fps_weapon_items)
+-- =============================================================================
+--
+-- CONTEXTO
+--
+-- La tabla `fps_weapons` (migración 061) fue creada para alimentar la página
+-- /tools/fps-weapons con stats de armas FPS desde un Excel manual de Pablo
+-- (296 rows). El equipo de DBs creó después `fps_weapon_items` (migración
+-- 065) alimentada desde scunpacked con datos más ricos (397 rows con damage
+-- por tipo, spread, dps por tipo, manufacturer, raw_data JSONB, ammo_speed).
+--
+-- El endpoint /api/fps-weapons fue refactoreado el 2026-04-27 para leer de
+-- `fps_weapon_items` con el mismo shape de respuesta que antes (los modos
+-- single/burst/rapid se extraen de raw_data->Modes[]).
+--
+-- ESTA MIGRACIÓN
+--
+-- Una vez validado en prod que la página /tools/fps-weapons sigue funcionando
+-- correctamente con la nueva fuente, ejecutar este script para dropear la
+-- tabla legacy `fps_weapons` y eliminar la duplicación.
+--
+-- VERIFICACIÓN ANTES DE APLICAR
+--
+-- Confirmar manualmente:
+--   1. https://sclabs.space/tools/fps-weapons carga la lista completa.
+--   2. Los filtros por type funcionan (Ballistic, Energy (Laser), etc.).
+--   3. El sort por DPS Max muestra valores razonables.
+--   4. Los modos Single/Burst/Rapid muestran datos donde aplica.
+--   5. En prod no hay otra ref a `fps_weapons` (rg "fps_weapons" en repo
+--      debería devolver solo este archivo y los archivos de archivo).
+--
+-- ROLLBACK
+--
+-- No aplica de forma trivial — `fps_weapons` se llenaba a mano desde Excel.
+-- Si hay que revertir, reaplicar migración 061 + correr de nuevo
+-- scripts/import-fps-weapons.mjs (que también queda como legacy).
+-- =============================================================================
+
+-- Drop de la tabla legacy (idempotente).
+DROP TABLE IF EXISTS public.fps_weapons CASCADE;
+
+-- Smoke test post-drop:
+-- SELECT COUNT(*) FROM fps_weapon_items WHERE type = 'WeaponPersonal';
+-- (debe devolver ~349 según la verificación de Garnok del 2026-04-27)

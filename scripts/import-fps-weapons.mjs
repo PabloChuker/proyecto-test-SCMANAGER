@@ -1,12 +1,22 @@
 #!/usr/bin/env node
 // =============================================================================
-// SC Labs — FPS Weapons importer
+// SC Labs — FPS Weapons importer    ⚠ DEPRECATED 2026-04-27
+// =============================================================================
 //
-// Lee scripts/data/fps-weapons.json y hace bulk upsert en `fps_weapons`.
-// Idempotente — corré después de actualizar el JSON cuando CIG balancea
-// armas o se suman nuevas. Source: planilla curada por Pablo.
+// Este script alimentaba la tabla legacy `fps_weapons` (migración 061) desde
+// el Excel curado por Pablo. La fuente de verdad pasó a ser la tabla
+// `fps_weapon_items` (migración 065), alimentada desde scunpacked por el
+// equipo de DBs vía `scripts/fps_items/import_fps_items.py` (el de Garnok).
 //
-// Uso:
+// El endpoint /api/fps-weapons fue refactoreado para leer de la tabla
+// nueva — ya no depende de este script. La migración 066 dropea la tabla
+// legacy cuando el equipo de DBs apruebe.
+//
+// NO CORRER en prod. Se mantiene como referencia histórica del Excel.
+// =============================================================================
+//
+// Uso ORIGINAL (LEGACY, no usar):
+//
 //   node scripts/import-fps-weapons.mjs            # aplica
 //   node scripts/import-fps-weapons.mjs --dry      # cuenta sin escribir
 //

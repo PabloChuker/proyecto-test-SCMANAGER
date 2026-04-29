@@ -1085,6 +1085,11 @@ export async function GET(
     // Cuando hay gv, la prioridad es: match exacto + game_version coincide.
     // Cuando no hay gv, la prioridad es: solo match exacto (toma cualquier
     // versión, normalmente la única o la más vieja por orden de ID).
+    // FIX 2026-04-28 (sin tocar BD): cuando hay duplicados con el mismo
+    // (class_name, game_version), preferir la fila que SÍ tiene flight_stats.
+    // Garnok deja filas "shell" preparadas para PTU/import futuro — son
+    // intencionales, no las borramos. El endpoint solo elige cuál servir al
+    // cliente (la que tiene datos), pero la fila vacía sigue existiendo en BD.
     const shipRows: any[] = gvParam
       ? await sql.unsafe(
           `SELECT s.*, s.class_name AS reference, sp.msrp_usd, sp.warbond_usd, sp.acquisition_method, m.name AS manufacturer,
@@ -1095,8 +1100,8 @@ export async function GET(
                WHEN s.name ILIKE $1 THEN 3
                WHEN s.class_name ILIKE '%' || $1 || '%' THEN 4
              END AS match_rank,
-             -- Boost para que el row con gv coincidente gane si existe
-             CASE WHEN s.game_version = $2 THEN 0 ELSE 1 END AS gv_rank
+             CASE WHEN s.game_version = $2 THEN 0 ELSE 1 END AS gv_rank,
+             CASE WHEN EXISTS(SELECT 1 FROM ship_flight_stats fs WHERE fs.ship_id = s.id) THEN 0 ELSE 1 END AS has_satellites_rank
            FROM ships s
            LEFT JOIN ship_price sp ON sp.id = s.id
            LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
@@ -1105,7 +1110,7 @@ export async function GET(
               OR s.name ILIKE $1
               OR s.id::text = $1
               OR s.class_name ILIKE '%' || $1 || '%'
-           ORDER BY gv_rank ASC, match_rank ASC
+           ORDER BY gv_rank ASC, match_rank ASC, has_satellites_rank ASC
            LIMIT 1`,
           [String(id), String(gvParam)],
         )
@@ -1117,7 +1122,8 @@ export async function GET(
                WHEN s.id::text = $1 THEN 2
                WHEN s.name ILIKE $1 THEN 3
                WHEN s.class_name ILIKE '%' || $1 || '%' THEN 4
-             END AS match_rank
+             END AS match_rank,
+             CASE WHEN EXISTS(SELECT 1 FROM ship_flight_stats fs WHERE fs.ship_id = s.id) THEN 0 ELSE 1 END AS has_satellites_rank
            FROM ships s
            LEFT JOIN ship_price sp ON sp.id = s.id
            LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
@@ -1126,7 +1132,7 @@ export async function GET(
               OR s.name ILIKE $1
               OR s.id::text = $1
               OR s.class_name ILIKE '%' || $1 || '%'
-           ORDER BY match_rank ASC
+           ORDER BY match_rank ASC, has_satellites_rank ASC
            LIMIT 1`,
           [String(id)],
         );
