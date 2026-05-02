@@ -36,6 +36,8 @@ export default function Header({ subtitle }: HeaderProps) {
   const { user, profile, loading, signInWithDiscord, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
+  // Fase R.5 (2026-05-02): drawer móvil — sólo visible <md.
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const navRef = useRef<HTMLDivElement>(null);
 
@@ -51,6 +53,11 @@ export default function Header({ subtitle }: HeaderProps) {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  // Cerrar drawer móvil cuando el usuario navega a una ruta nueva.
+  useEffect(() => {
+    setMobileDrawerOpen(false);
+  }, [pathname]);
 
   const isSectionActive = (section: (typeof NAV_SECTIONS)[number]) => {
     if (section.items) {
@@ -96,9 +103,36 @@ export default function Header({ subtitle }: HeaderProps) {
             </>
           )}
           {/* Toggle Live / PTU. Cada módulo que toque tablas con game_version
-              debe usar useGameVersionParam() para concatenar `?gv=` al fetch. */}
-          <div className="h-4 w-px bg-zinc-800 ml-1" />
-          <GameVersionToggle />
+              debe usar useGameVersionParam() para concatenar `?gv=` al fetch.
+              Móvil (<md): se mueve al drawer (sigue accesible, libera espacio). */}
+          <div className="hidden md:flex items-center gap-3">
+            <div className="h-4 w-px bg-zinc-800 ml-1" />
+            <GameVersionToggle />
+          </div>
+
+          {/* Hamburger — visible sólo <md. Toggle del drawer móvil. */}
+          <button
+            type="button"
+            onClick={() => setMobileDrawerOpen((v) => !v)}
+            className="md:hidden ml-1 w-9 h-9 flex items-center justify-center rounded hover:bg-zinc-800/40 transition-colors text-zinc-300"
+            aria-label={mobileDrawerOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileDrawerOpen}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              {mobileDrawerOpen ? (
+                <>
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </>
+              ) : (
+                <>
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </>
+              )}
+            </svg>
+          </button>
         </div>
 
         {/* ── Center: Section nav — grid column keeps it truly centered ── */}
@@ -181,14 +215,17 @@ export default function Header({ subtitle }: HeaderProps) {
         {/* ── Right: Referral rotator + Performance + Lang + Auth ──
             Fase S (2026-04-25): ReferralRotator queda al inicio de la zona
             derecha — visualmente entre el último menú central (TOOLS) y el
-            toggle FULL/LITE. Se oculta solo en mobile (<md). */}
+            toggle FULL/LITE. Se oculta solo en mobile (<md).
+            Fase R.5 (2026-05-02): cada item secundario se esconde por
+            breakpoint para evitar overflow en móvil. NotificationBell + auth
+            siempre visibles. Lo escondido aparece dentro del drawer móvil. */}
         <div className="flex items-center gap-2 justify-end">
-          <ReferralRotator />
+          <div className="hidden md:flex items-center"><ReferralRotator /></div>
           {/* FEAT 2026-04-26: botón de donación PayPal (hosted_button_id en
               el componente). Visible desde sm+, escondido en mobile. */}
-          <DonateButton />
-          <PerformanceToggle />
-          <LanguageSwitcher />
+          <div className="hidden md:flex items-center"><DonateButton /></div>
+          <div className="hidden lg:flex items-center"><PerformanceToggle /></div>
+          <div className="hidden sm:flex items-center"><LanguageSwitcher /></div>
           {loading ? (
             <div className="w-6 h-6 rounded-full bg-zinc-800 animate-pulse" />
           ) : user ? (
@@ -262,6 +299,75 @@ export default function Header({ subtitle }: HeaderProps) {
           )}
         </div>
       </div>
+
+      {/* ── Mobile drawer (Fase R.5) — sólo se renderiza/visible <md ──
+          Se despliega hacia abajo del header sticky. Replica las 5 NAV_SECTIONS
+          como accordion expandido + los items secundarios (GVT / Referral /
+          Donate / Lang) que en desktop viven en las zonas left/right. */}
+      {mobileDrawerOpen && (
+        <div className="md:hidden border-t border-zinc-800/50 bg-zinc-950/95 backdrop-blur-xl max-h-[80vh] overflow-y-auto">
+          <div className="px-4 py-3 space-y-3">
+
+            {/* Game Version Toggle (movido del left) */}
+            <div className="flex items-center justify-between border-b border-zinc-800/50 pb-3">
+              <span className="text-[10px] tracking-[0.15em] uppercase text-zinc-500">Game Version</span>
+              <GameVersionToggle />
+            </div>
+
+            {/* Navegación: las 5 secciones expandidas */}
+            <nav className="space-y-1">
+              {NAV_SECTIONS.map((section) => {
+                const sectionLabel = t.has(section.key) ? t(section.key) : section.label;
+                if (!section.items) {
+                  return (
+                    <Link
+                      key={section.key}
+                      href={section.href!}
+                      onClick={() => setMobileDrawerOpen(false)}
+                      className="block px-3 py-2.5 text-sm tracking-wide text-zinc-200 hover:bg-zinc-800/40 rounded transition-colors"
+                    >
+                      {sectionLabel}
+                    </Link>
+                  );
+                }
+                return (
+                  <div key={section.key} className="space-y-0.5">
+                    <div className="px-3 pt-3 pb-1 text-[10px] tracking-[0.18em] uppercase text-amber-500/80 font-medium">
+                      {sectionLabel}
+                    </div>
+                    {section.items.map((item) => {
+                      const itemActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                      return (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => setMobileDrawerOpen(false)}
+                          className={`block px-5 py-2 text-sm tracking-wide rounded transition-colors ${
+                            itemActive
+                              ? "text-amber-400 bg-amber-500/10"
+                              : "text-zinc-300 hover:bg-zinc-800/40 hover:text-zinc-100"
+                          }`}
+                        >
+                          {item.label}
+                        </Link>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </nav>
+
+            {/* Items secundarios (movidos del right) — alineados horizontalmente */}
+            <div className="border-t border-zinc-800/50 pt-3 flex items-center justify-between gap-3 flex-wrap">
+              <ReferralRotator />
+              <div className="flex items-center gap-2">
+                <DonateButton />
+                <LanguageSwitcher />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </header>
   );
 }

@@ -330,8 +330,11 @@ export function ShipComparator() {
       )}
 
       {/* ── Comparative charts: radar overview + flight dynamics 3D ──── */}
+      {/* Móvil: 1 col (stack). Tablet (md+): 2 cols. Desktop (lg+) intacto.
+          Antes saltaba `grid-cols-1 lg:grid-cols-2` → en md (768-1023px)
+          quedaba 1 col gigante. Ahora md ya muestra los 2 charts lado a lado. */}
       {!loading && activeShips.length >= 2 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* Radar overview */}
           <div className="bg-zinc-900/30 border border-zinc-800/40 rounded p-4">
             <div className="flex items-center gap-3 mb-3">
