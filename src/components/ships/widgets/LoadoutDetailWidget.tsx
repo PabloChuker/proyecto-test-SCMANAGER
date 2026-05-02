@@ -12,6 +12,7 @@ import Image from "next/image";
 import { useLoadoutStore } from "@/store/useLoadoutStore";
 import { useShallow } from "zustand/react/shallow";
 import { fmtStat, fmtDps } from "@/components/ships/loadout-utils";
+import { ArmorCheckPanel } from "@/components/domain/loadout/ArmorCheckPanel";
 
 // ── Pequeña píldora de resistencia (shield) ──────────────────────────────────
 function ResistancePill({ label, pct, color }: { label: string; pct: number | null | undefined; color: string }) {
@@ -56,6 +57,26 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
     useShallow(s => ({ shipInfo: s.shipInfo, overrides: s.overrides, flightMode: s.flightMode }))
   );
   const getStats = useLoadoutStore(s => s.getStats);
+
+  // Fase W.13 (2026-05-02): Radar Lock Range. Suscribir a PRIMITIVOS para
+  // evitar el infinite re-render que rompió W.9 → arreglado en W.11.
+  const radarRangeMin = useLoadoutStore(s => {
+    const hp = s.hardpoints.find(h => h.resolvedCategory === "RADAR");
+    const cs: any = hp?.defaultItem?.componentStats;
+    const v = cs?.rangeMinM;
+    return typeof v === "number" ? v : null;
+  });
+  const radarRangeMax = useLoadoutStore(s => {
+    const hp = s.hardpoints.find(h => h.resolvedCategory === "RADAR");
+    const cs: any = hp?.defaultItem?.componentStats;
+    const v = cs?.rangeMaxM;
+    return typeof v === "number" ? v : null;
+  });
+  const radarPipFraction = useLoadoutStore(s => {
+    const inst = s.getStats().powerNetwork.instances.find(i => i.category === "radar");
+    if (!inst || inst.totalPips <= 0) return 1;
+    return Math.min(1, Math.max(0, inst.allocatedPips / inst.totalPips));
+  });
 
   if (!shipInfo) return null;
 
@@ -157,6 +178,38 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
             <DeflectionChip label="Physical"   deflection={si.deflectionPhysical}   dmgMult={res.dmgMultPhysical}   color="#fbbf24" />
             <DeflectionChip label="Energy"     deflection={si.deflectionEnergy}     dmgMult={res.dmgMultEnergy}     color="#22d3ee" />
             <DeflectionChip label="Distortion" deflection={si.deflectionDistortion} dmgMult={res.dmgMultDistortion} color="#a78bfa" />
+          </div>
+        </div>
+      )}
+
+      {/* ── ARMOR CHECK (Fase W.12, VerseTools §6.1) ───────────────────────── */}
+      {hasArmorBlock && (si.deflectionPhysical || si.deflectionEnergy) && (
+        <div className="border-t border-zinc-800/40 pt-2">
+          <ArmorCheckPanel
+            deflectionPhysical={si.deflectionPhysical ?? null}
+            deflectionEnergy={si.deflectionEnergy ?? null}
+            gameVersion={si.gameVersion ?? null}
+          />
+        </div>
+      )}
+
+      {/* ── RADAR LOCK RANGE (Fase W.13, VerseTools §10) ──────────────────── */}
+      {radarRangeMin != null && radarRangeMax != null && radarRangeMax > 0 && (
+        <div className="border-t border-zinc-800/40 pt-2">
+          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.15em] uppercase mb-1">Radar Lock Range</div>
+          <div className="flex items-baseline gap-3">
+            <Image src="/icons/interdict_pulse.png" alt="" width={16} height={16} style={{ opacity: 0.5 }} />
+            <span className="text-xl font-mono font-bold tabular-nums text-cyan-400">
+              {fmtStat(
+                Math.round(
+                  radarRangeMin + (radarRangeMax - radarRangeMin) * radarPipFraction,
+                ) / 1000,
+              )}
+            </span>
+            <span className="text-[10px] font-mono text-zinc-500">km</span>
+            <span className="text-[8px] font-mono text-zinc-600 ml-2">
+              ({fmtStat(radarRangeMin / 1000)}–{fmtStat(radarRangeMax / 1000)} km · {Math.round(radarPipFraction * 100)}% pips)
+            </span>
           </div>
         </div>
       )}
