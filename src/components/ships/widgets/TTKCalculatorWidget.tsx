@@ -59,27 +59,62 @@ export const TTKCalculatorContent = memo(function TTKCalculatorContent() {
 
   const attackerWeapons = useMemo<AttackerWeapon[]>(() => {
     const result: AttackerWeapon[] = [];
-    for (const hp of hardpoints) {
-      const cat = hp.resolvedCategory;
-      if (cat !== "WEAPON" && cat !== "TURRET") continue;
-      const item = overrides.has(hp.id) ? overrides.get(hp.id) : hp.defaultItem;
-      const cs: any = item?.componentStats;
-      if (!cs) continue;
+
+    // Empuja un weapon al resultado SI tiene alpha o sustainedDps. Filtra
+    // ítems vacíos (slots sin equipar).
+    const pushWeapon = (
+      hpName: string,
+      item: any,
+      cs: any,
+    ) => {
+      if (!cs) return;
       const alphaP = Number(cs.alphaPhysical ?? 0);
       const alphaE = Number(cs.alphaEnergy ?? 0);
       const alphaD = Number(cs.alphaDistortion ?? 0);
       const alphaSum = alphaP + alphaE + alphaD;
       const alphaTotal = alphaSum > 0 ? alphaSum : Number(cs.alphaDamage ?? 0);
+      const dps = Number(cs.sustainedDps ?? cs.dps ?? 0);
+      if (alphaTotal <= 0 && dps <= 0) return; // gimbal vacío / item sin daño
       result.push({
-        hardpointName: hp.hardpointName,
-        weaponName: item?.name ?? hp.hardpointName,
-        size: typeof cs.size === "number" ? cs.size : (item as any)?.size ?? null,
+        hardpointName: hpName,
+        weaponName: item?.name ?? hpName,
+        size:
+          typeof cs.size === "number" ? cs.size : (item?.size ?? null),
         alphaPhysical: alphaP,
         alphaEnergy: alphaE,
         alphaDistortion: alphaD,
         alphaTotal,
-        sustainedDps: Number(cs.sustainedDps ?? cs.dps ?? 0),
+        sustainedDps: dps,
       });
+    };
+
+    // Recorrer top-level + children. Las armas reales suelen ser children
+    // de turrets / gimbals (ej: Revenant Gatling es child de VariPuck S4
+    // Gimbal Mount en el Avenger Titan). El gimbal padre no tiene alpha,
+    // entonces si solo iteramos top-level vemos 0 armas. Reproducimos la
+    // misma lógica que computeStats: pop the children when present.
+    for (const hp of hardpoints) {
+      const cat = hp.resolvedCategory;
+      if (cat !== "WEAPON" && cat !== "TURRET") continue;
+      const parentItem = overrides.has(hp.id)
+        ? overrides.get(hp.id)
+        : hp.defaultItem;
+      const parentCs: any = parentItem?.componentStats;
+
+      // Caso 1: tiene children → sumar children con sus propios items.
+      if (Array.isArray(hp.children) && hp.children.length > 0) {
+        for (const child of hp.children) {
+          const childItem = overrides.has(child.id)
+            ? overrides.get(child.id)
+            : child.equippedItem;
+          const cs: any = (childItem as any)?.componentStats;
+          pushWeapon(child.hardpointName, childItem, cs);
+        }
+        continue;
+      }
+
+      // Caso 2: weapon directo en el slot (sin gimbal/turret intermedio).
+      pushWeapon(hp.hardpointName, parentItem, parentCs);
     }
     return result;
   }, [hardpoints, overrides]);
@@ -151,11 +186,17 @@ export const TTKCalculatorContent = memo(function TTKCalculatorContent() {
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60 p-3 space-y-2">
       {/* Header con dropdown de target */}
-      <div className="space-y-1">
-        <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase">
-          Atacante: {shipInfo?.name ?? "—"}
-          <span className="text-zinc-600 ml-2">
-            · {attackerWeapons.length} armas
+      <div className="space-y-1.5">
+        <div className="text-[11px] font-mono text-zinc-300 tracking-[0.05em]">
+          <span className="text-zinc-500 tracking-[0.15em] uppercase mr-1.5">Atacante</span>
+          {shipInfo?.name ?? "—"}
+          <span
+            className={
+              "ml-2 font-bold " +
+              (attackerWeapons.length === 0 ? "text-red-400" : "text-amber-400")
+            }
+          >
+            · {attackerWeapons.length} arma{attackerWeapons.length === 1 ? "" : "s"}
           </span>
         </div>
         <div className="relative">
@@ -167,7 +208,7 @@ export const TTKCalculatorContent = memo(function TTKCalculatorContent() {
               setTargetSearch(e.target.value);
               setTargetId(""); // limpiar selección al editar
             }}
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-sm px-2 py-1.5 text-[11px] font-mono text-zinc-100 outline-none focus:border-amber-500/60"
+            className="w-full bg-zinc-950 border border-zinc-800 rounded-sm px-2.5 py-2 text-[12px] font-mono text-zinc-100 outline-none focus:border-amber-500/60"
           />
           {targetSearch && !targetId && filteredShips.length > 0 && (
             <div className="absolute top-full left-0 right-0 mt-0.5 max-h-60 overflow-auto bg-zinc-950 border border-zinc-800 rounded-sm shadow-xl z-20">
@@ -176,7 +217,7 @@ export const TTKCalculatorContent = memo(function TTKCalculatorContent() {
                   key={s.id}
                   type="button"
                   onClick={() => handleSelect(s.id, s.name)}
-                  className="w-full text-left px-2 py-1 text-[10px] font-mono text-zinc-300 hover:bg-zinc-800/60 hover:text-zinc-100 cursor-pointer"
+                  className="w-full text-left px-2.5 py-1.5 text-[11px] font-mono text-zinc-300 hover:bg-zinc-800/60 hover:text-zinc-100 cursor-pointer"
                 >
                   {s.name}
                   {s.className && s.className !== s.name && (
@@ -188,11 +229,13 @@ export const TTKCalculatorContent = memo(function TTKCalculatorContent() {
           )}
         </div>
         {targetDef && (
-          <div className="flex items-center justify-between text-[8px] font-mono text-zinc-600 px-1">
+          <div className="flex items-center justify-between text-[10px] font-mono text-zinc-400 px-1 pt-1">
             <span>
-              Shield {fmtNum(targetDef.shieldHp)} hp · Hull {fmtNum(targetDef.hullHp)} hp
+              Shield <span className="text-blue-400 font-bold">{fmtNum(targetDef.shieldHp)}</span> hp
+              <span className="mx-1.5 text-zinc-700">·</span>
+              Hull <span className="text-zinc-200 font-bold">{fmtNum(targetDef.hullHp)}</span> hp
             </span>
-            <span>
+            <span className="text-zinc-500">
               Deflect P{Math.round(targetDef.deflectionPhysical ?? 0)} / E{Math.round(targetDef.deflectionEnergy ?? 0)}
             </span>
           </div>
@@ -202,7 +245,7 @@ export const TTKCalculatorContent = memo(function TTKCalculatorContent() {
       {/* Slider del shield pip ratio del target */}
       {targetDef && (
         <div className="flex items-center gap-2 px-1">
-          <span className="text-[8px] font-mono text-zinc-600 tracking-wider uppercase whitespace-nowrap">
+          <span className="text-[10px] font-mono text-zinc-400 tracking-wider uppercase whitespace-nowrap">
             Target shield pips
           </span>
           <input
@@ -213,7 +256,7 @@ export const TTKCalculatorContent = memo(function TTKCalculatorContent() {
             onChange={(e) => setShieldPipFraction(Number(e.target.value) / 100)}
             className="flex-1"
           />
-          <span className="text-[9px] font-mono tabular-nums text-zinc-400 w-8 text-right">
+          <span className="text-[11px] font-mono font-bold tabular-nums text-amber-400 w-10 text-right">
             {Math.round(shieldPipFraction * 100)}%
           </span>
         </div>
@@ -221,10 +264,10 @@ export const TTKCalculatorContent = memo(function TTKCalculatorContent() {
 
       {/* Resultado TTK */}
       {loading && !ttk && (
-        <div className="text-[10px] font-mono text-zinc-600 italic px-1">cargando target…</div>
+        <div className="text-[11px] font-mono text-zinc-400 italic px-1 py-2">cargando target…</div>
       )}
       {!loading && !targetId && (
-        <div className="text-[10px] font-mono text-zinc-600 italic px-1">
+        <div className="text-[11px] font-mono text-zinc-400 italic px-1 py-2">
           Seleccioná una nave objetivo para calcular el tiempo de matanza.
         </div>
       )}
@@ -235,31 +278,31 @@ export const TTKCalculatorContent = memo(function TTKCalculatorContent() {
             <TimeStat label="Hull" sec={ttk.ttkHullSec} color="#a3a3a3" />
             <TimeStat label="Total" sec={ttk.ttkTotalSec} color="#f59e0b" highlight />
           </div>
-          <div className="grid grid-cols-3 gap-1 text-[8px] font-mono text-zinc-600 px-1">
-            <span>Shield DPS efectivo: {fmtNum(ttk.shieldDpsTotal)}</span>
-            <span>Bleed DPS al hull: {fmtNum(ttk.bleedDpsTotal)}</span>
-            <span>Hull DPS (post-shield): {fmtNum(ttk.directDpsTotal)}</span>
+          <div className="grid grid-cols-3 gap-1 text-[10px] font-mono text-zinc-400 px-1">
+            <span>Shield DPS: <span className="text-blue-400 font-bold">{fmtNum(ttk.shieldDpsTotal)}</span></span>
+            <span>Bleed DPS: <span className="text-zinc-200 font-bold">{fmtNum(ttk.bleedDpsTotal)}</span></span>
+            <span>Hull DPS: <span className="text-amber-400 font-bold">{fmtNum(ttk.directDpsTotal)}</span></span>
           </div>
 
           {/* Per-weapon breakdown */}
           {ttk.perWeapon.length > 0 && (
             <div className="border-t border-zinc-800/60 pt-2">
-              <div className="text-[8px] font-mono text-zinc-600 tracking-wider uppercase mb-1">
+              <div className="text-[10px] font-mono text-zinc-400 tracking-wider uppercase mb-1.5">
                 Contribución por arma
               </div>
-              <div className="space-y-0.5">
+              <div className="space-y-1">
                 {ttk.perWeapon.map((w) => {
                   const total = w.shieldDps + w.directDps;
                   return (
                     <div
                       key={w.hardpointName}
-                      className="flex items-center justify-between gap-2 text-[10px] font-mono py-0.5 px-1 bg-zinc-950/40 rounded-sm"
+                      className="flex items-center justify-between gap-2 text-[11px] font-mono py-1 px-2 bg-zinc-950/40 rounded-sm"
                       title={`Shield ${fmtNum(w.shieldDps)} · Bleed ${fmtNum(w.bleedDps)} · Hull ${fmtNum(w.directDps)}`}
                     >
-                      <span className="text-zinc-300 truncate">
+                      <span className="text-zinc-200 truncate">
                         {w.size != null ? `S${w.size} · ` : ""}{w.weaponName}
                       </span>
-                      <span className="tabular-nums text-zinc-400">
+                      <span className="tabular-nums text-amber-400 font-bold">
                         {fmtNum(total)} dps
                       </span>
                     </div>
@@ -271,7 +314,7 @@ export const TTKCalculatorContent = memo(function TTKCalculatorContent() {
         </div>
       )}
 
-      <div className="text-[7px] font-mono text-zinc-700 italic">
+      <div className="text-[9px] font-mono text-zinc-500 italic pt-1">
         Modelo VerseTools §4 + §6 (resists, absorptions, deflect, dmgMult).
         Ignora regen del shield mientras el atacante dispara.
       </div>
@@ -292,14 +335,16 @@ function TimeStat({
 }) {
   return (
     <div
-      className="flex flex-col items-center justify-center py-2 rounded-sm"
+      className="flex flex-col items-center justify-center py-2.5 rounded-sm"
       style={{
-        backgroundColor: highlight ? `${color}14` : "#0c0c0d",
-        border: `1px solid ${highlight ? color + "60" : "#27272a"}`,
+        backgroundColor: highlight ? `${color}1f` : "#0c0c0d",
+        border: `1px solid ${highlight ? color + "80" : "#27272a"}`,
       }}
     >
-      <span className="text-[7px] font-mono tracking-wider uppercase text-zinc-500">{label}</span>
-      <span className="text-base font-mono font-bold tabular-nums" style={{ color }}>
+      <span className="text-[10px] font-mono font-semibold tracking-[0.12em] uppercase text-zinc-400">
+        {label}
+      </span>
+      <span className="text-xl font-mono font-bold tabular-nums leading-tight" style={{ color }}>
         {fmtSec(sec)}
       </span>
     </div>
