@@ -111,10 +111,19 @@ export function StatsPanel() {
         ))}
       </div>
 
-      {/* ── Signatures & Flight ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      {/* ── Signatures & Flight ──
+          Fase W.10 (2026-05-02): agregamos CS (Cross-Section, VerseTools §5.3)
+          al lado de EM/IR. Si el valor es estimado (no hay base hull validado),
+          se muestra con sufijo "EST" en gris. */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         <SignatureStat label="EM" value={stats.emSignature} max={20000} color="#a855f7" />
         <SignatureStat label="IR" value={stats.irSignature} max={20000} color="#f97316" />
+        <SignatureStat
+          label={stats.csIsEstimate ? "CS·EST" : "CS"}
+          value={stats.csSignature}
+          max={50000}
+          color="#10b981"
+        />
         <FlightStat label="SCM" value={shipInfo.scmSpeed} unit="m/s" />
         <FlightStat label="NAV" value={shipInfo.afterburnerSpeed} unit="m/s" />
       </div>

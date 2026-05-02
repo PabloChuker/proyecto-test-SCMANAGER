@@ -70,16 +70,56 @@ export function FlightDynamics3dHeaderActions({
 }
 
 // ── Body del widget — recibe el modo del wrapper (no maneja estado propio) ──
+//
+// Fase W.9 (2026-05-02): rotación interpolada por pips reales de thrusters
+// según VerseTools §8.1:
+//
+//     ThrusterMult = (currentPips - 1) / (maxPips - 1)   (clamp 0..1)
+//     Rate = Base + ThrusterMult × (Boosted - Base)
+//
+// El toggle "Boost" del header del widget sigue siendo el override manual:
+// cuando está activo, fuerza ThrusterMult = 1 (rate = boosted) sin importar
+// los pips. Con toggle OFF la rotación responde al power grid en vivo.
+function interpolateRate(
+  base: number | null | undefined,
+  boosted: number | null | undefined,
+  mult: number,
+): number | null {
+  if (base == null || base <= 0) return null;
+  if (boosted == null || boosted <= 0) return base;
+  return base + Math.max(0, Math.min(1, mult)) * (boosted - base);
+}
+
 export const FlightDynamics3dContent = memo(function FlightDynamics3dContent({
   boost,
 }: { boost: boolean }) {
   const shipInfo = useLoadoutStore(s => s.shipInfo);
+  // Re-render cuando cambian los pips o la lista de instances. Suscribir
+  // por slice estable evita renders innecesarios en el resto del store.
+  const thrusterPower = useLoadoutStore(s => {
+    const inst = s.getStats().powerNetwork.instances.find(
+      (i) => i.category === "thrusters",
+    );
+    return inst
+      ? { allocated: inst.allocatedPips, total: inst.totalPips }
+      : null;
+  });
   if (!shipInfo) return null;
   const si = shipInfo as any;
 
-  const pitch = boost && si.boostedPitch != null ? si.boostedPitch : si.pitchRate;
-  const yaw   = boost && si.boostedYaw   != null ? si.boostedYaw   : si.yawRate;
-  const roll  = boost && si.boostedRoll  != null ? si.boostedRoll  : si.rollRate;
+  const thrPips = thrusterPower?.allocated ?? 0;
+  const thrMaxPips = thrusterPower?.total ?? 0;
+  // VerseTools define ThrusterMult con (pips - 1) / (maxPips - 1). Cuando
+  // maxPips ≤ 1 (no hay slider real) el multiplier queda 1 (full).
+  const computedMult = thrMaxPips > 1
+    ? Math.max(0, Math.min(1, (thrPips - 1) / (thrMaxPips - 1)))
+    : 1;
+  // Toggle Boost (manual override): fuerza el extremo boosted.
+  const mult = boost ? 1 : computedMult;
+
+  const pitch = interpolateRate(si.pitchRate, si.boostedPitch, mult);
+  const yaw   = interpolateRate(si.yawRate,   si.boostedYaw,   mult);
+  const roll  = interpolateRate(si.rollRate,  si.boostedRoll,  mult);
 
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">

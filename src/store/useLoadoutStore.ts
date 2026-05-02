@@ -11,6 +11,7 @@
 // =============================================================================
 
 import { create } from "zustand";
+import { computeCoolingDemand, computeCoolerSupply } from "@/lib/cooling";
 
 // =============================================================================
 // Types
@@ -170,6 +171,10 @@ export interface ComputedStats {
   powerOutput: number; powerDraw: number; powerBalance: number;
   coolingRate: number; thermalOutput: number; thermalBalance: number;
   emSignature: number; irSignature: number;
+  /** Cross-section (CS): VerseTools §5.3. Hull base × armor sigMultCS, o estimación. */
+  csSignature: number;
+  /** True cuando csSignature es estimación (no valor validado in-game). */
+  csIsEstimate: boolean;
   effectiveSpeed: number | null; effectiveSpeedLabel: string;
   powerNetwork: PowerNetworkState;
   weaponMaxPips: number;
@@ -1012,24 +1017,71 @@ function computeStats(
     shieldRegen = 0;
   }
 
-  // Coolers — scale each cooler's contribution by its own pip ratio
+  // ── Cooling supply (VerseTools §7.1, Fase W.8) ────────────────────────────
+  // Supply = coolingRate × pips × bandMod / maxPips, maxPips = powerMax - 1.
+  // Si pips = 0 → 0. bandMod = 1 cuando no hay tier explícito.
   let coolingScaled = 0;
   for (const inst of instances) {
     if (inst.category !== "coolers" || !inst.isOn) continue;
     if (inst.totalPips === 0) continue;
-    // Find the underlying cooler hardpoint to pull its raw coolingRate
     const hp = hardpoints.find(h => h.hardpointName === inst.hardpointName);
     if (!hp) continue;
     const item = overrides.has(hp.id) ? (overrides.get(hp.id) ?? null) : hp.defaultItem;
     if (!item) continue;
     const rawCooling = pickNum(item.componentStats, "coolingRate");
-    const ratio = Math.min(1, Math.max(0, inst.allocatedPips / inst.totalPips));
-    coolingScaled += rawCooling * ratio;
+    const pips = inst.allocatedPips;
+    const maxPips = Math.max(1, inst.totalPips - 1);
+    coolingScaled += computeCoolerSupply({
+      coolingRate: rawCooling,
+      pips,
+      maxPips,
+      bandMod: 1, // VerseTools usa el bandMod cuando hay bandas; instances ya
+                  // resuelven la eficiencia vía allocatedPips, así que con 1
+                  // queda equivalente. Si en el futuro queremos respetar bandMod
+                  // explícito, leerlo de inst.ranges.
+    });
   }
-  // Replace raw sum with pip-scaled total only if we had any cooler instances
   const hasCoolerInstances = instances.some(i => i.category === "coolers");
   if (hasCoolerInstances) {
     coolingRate = coolingScaled;
+  }
+
+  // ── Cooling demand 2-tier (VerseTools §7.2, Fase W.7) ─────────────────────
+  // Reemplazamos el thermalOutput plano del catálogo por la fórmula:
+  //   Total Demand = PP_IDLE + Σ( pips × weight_per_category )
+  // Pesos validados in-game (max error 2% en 5 ships). Esto refleja overload
+  // térmico real cuando los pips de Shields/Radar/QD suben y los coolers no
+  // siguen el ritmo. Mantenemos el thermalOutput previo como fallback solo
+  // si no hubo NINGUNA instance de power (caso edge: ship sin loadout).
+  if (instances.length > 0) {
+    const computedDemand = computeCoolingDemand(
+      instances.map((i) => ({
+        category: i.category as string,
+        allocatedPips: i.allocatedPips,
+        isOn: i.isOn,
+      })),
+    );
+    thermalOutput = computedDemand;
+  }
+
+  // ── Cross-Section (Fase W.10, VerseTools §5.3) ────────────────────────────
+  // CS = Base Hull CS × Armor CS Multiplier. Si la nave tiene baseCsSignature
+  // (validado o importado), lo usamos. Si no, estimación 253 × mass^0.33 ×
+  // mult^1.4 (aproximación de VerseTools, ±10% en fighters / ±25% capitales).
+  let csSignature = 0;
+  let csIsEstimate = false;
+  {
+    const csMult = _res?.sigMultCrossSection ?? 1;
+    const baseCs = _res?.baseCsSignature ?? 0;
+    if (baseCs > 0) {
+      csSignature = baseCs * csMult;
+    } else {
+      const mass = shipInfo?.mass ?? 0;
+      if (mass > 0) {
+        csSignature = 253 * Math.pow(mass, 0.33) * Math.pow(csMult || 1, 1.4);
+        csIsEstimate = true;
+      }
+    }
   }
 
   summary.activeComponents = activeComponents; summary.totalComponents = totalComponents;
@@ -1038,7 +1090,9 @@ function computeStats(
     totalDps: r(totalDps), burstDps: r(totalDps), sustainedDps: r(totalSustainedDps), totalAlpha: r(totalAlpha), weaponAlpha: r(weaponAlpha), missileAlpha: r(missileAlpha), shieldHp: r(shieldHp), shieldRegen: r(shieldRegen),
     powerOutput: r(totalPO), powerDraw: r(totalMinDraw), powerBalance: r(totalPO - totalMinDraw),
     coolingRate: r(coolingRate), thermalOutput: r(thermalOutput), thermalBalance: r(coolingRate - thermalOutput),
-    emSignature: r(emSig), irSignature: r(irSig), effectiveSpeed, effectiveSpeedLabel,
+    emSignature: r(emSig), irSignature: r(irSig),
+    csSignature: r(csSignature), csIsEstimate,
+    effectiveSpeed, effectiveSpeedLabel,
     powerNetwork: { totalOutput: totalPO, totalAllocated, totalMinDraw: Math.round(totalMinDraw), totalActualDraw, consumptionPercent, freePoints: totalPO - totalAllocated, isOverloaded: consumptionPercent > 100, categories: cats, activeCategories, instances },
     weaponMaxPips: pools?.WeaponGun ?? 0,
     summary,
@@ -1051,7 +1105,7 @@ function computeStats(
 
 const ZERO_ALLOC: Record<PowerCategory, number> = { weapons: 0, thrusters: 0, shields: 0, quantum: 0, radar: 0, coolers: 0, lifesupport: 0, qig: 0 };
 const EMPTY_NET: PowerNetworkState = { totalOutput: 0, totalAllocated: 0, totalMinDraw: 0, totalActualDraw: 0, consumptionPercent: 0, freePoints: 0, isOverloaded: false, categories: (() => { const c = {} as any; for (const k of POWER_CATEGORIES) c[k] = emptyCat(); return c; })(), activeCategories: [], instances: [] };
-const EMPTY_STATS: ComputedStats = { totalDps: 0, burstDps: 0, sustainedDps: 0, totalAlpha: 0, weaponAlpha: 0, missileAlpha: 0, shieldHp: 0, shieldRegen: 0, powerOutput: 0, powerDraw: 0, powerBalance: 0, coolingRate: 0, thermalOutput: 0, thermalBalance: 0, emSignature: 0, irSignature: 0, effectiveSpeed: null, effectiveSpeedLabel: "SCM", powerNetwork: EMPTY_NET, weaponMaxPips: 0, summary: { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0, activeComponents: 0, totalComponents: 0 } };
+const EMPTY_STATS: ComputedStats = { totalDps: 0, burstDps: 0, sustainedDps: 0, totalAlpha: 0, weaponAlpha: 0, missileAlpha: 0, shieldHp: 0, shieldRegen: 0, powerOutput: 0, powerDraw: 0, powerBalance: 0, coolingRate: 0, thermalOutput: 0, thermalBalance: 0, emSignature: 0, irSignature: 0, csSignature: 0, csIsEstimate: false, effectiveSpeed: null, effectiveSpeedLabel: "SCM", powerNetwork: EMPTY_NET, weaponMaxPips: 0, summary: { weapons: 0, missiles: 0, shields: 0, coolers: 0, powerPlants: 0, quantumDrives: 0, activeComponents: 0, totalComponents: 0 } };
 
 // =============================================================================
 // Module-level performance helpers
