@@ -58,13 +58,16 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
   );
   const getStats = useLoadoutStore(s => s.getStats);
 
-  // Fase W.13 (2026-05-02): Radar Lock Range. Suscribir a PRIMITIVOS para
-  // evitar el infinite re-render que rompió W.9 → arreglado en W.11.
+  // Fase W.13 (2026-05-02): Radar Lock Range. Solo renderizamos cuando los
+  // datos REALES están en BD. La fórmula §10 de VerseTools es trivial; el
+  // dato faltante es range_min_m/max_m. Suscribir a PRIMITIVOS evita el
+  // infinite re-render bug que rompió en W.9 (arreglado en W.11).
   //
-  // Fase W.13b: la BD hoy NO popula `range_min_m`/`range_max_m` (Garnok no
-  // los importó todavía). Aplicamos fallback por size con valores típicos
-  // del juego en metros. Cuando la BD esté completa, los reales tendrán
-  // precedencia. Marcamos `radarRangeIsEstimate` para mostrar "EST".
+  // NOTA: hoy la tabla `radars` tiene esos campos en NULL para todos los
+  // radares (Garnok no los importó — el scunpacked tampoco los expone, hay
+  // que recolectarlos in-game igual que las accelerations). Mientras la
+  // tabla no se complete, esta sección queda oculta — preferimos no mostrar
+  // nada antes que mostrar números inventados. Ver Fase X (backlog).
   const radarRangeMin = useLoadoutStore(s => {
     const hp = s.hardpoints.find(h => h.resolvedCategory === "RADAR");
     const cs: any = hp?.defaultItem?.componentStats;
@@ -77,30 +80,11 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
     const v = cs?.rangeMaxM;
     return typeof v === "number" && v > 0 ? v : null;
   });
-  const radarSize = useLoadoutStore(s => {
-    const hp = s.hardpoints.find(h => h.resolvedCategory === "RADAR");
-    const cs: any = hp?.defaultItem?.componentStats;
-    return cs?.size ?? hp?.maxSize ?? null;
-  });
   const radarPipFraction = useLoadoutStore(s => {
     const inst = s.getStats().powerNetwork.instances.find(i => i.category === "radar");
     if (!inst || inst.totalPips <= 0) return 1;
     return Math.min(1, Math.max(0, inst.allocatedPips / inst.totalPips));
   });
-
-  // Fallback typical SC ranges per size class (metros). Aproximación basada en
-  // observación in-game; reemplazado cuando la BD popule rangeMin/Max reales.
-  const RADAR_FALLBACK: Record<number, { min: number; max: number }> = {
-    0: { min: 1000,  max: 4000 },
-    1: { min: 5000,  max: 10000 },
-    2: { min: 7000,  max: 15000 },
-    3: { min: 12000, max: 25000 },
-    4: { min: 20000, max: 40000 },
-  };
-  const fallback = radarSize != null ? RADAR_FALLBACK[radarSize] : null;
-  const effRangeMin = radarRangeMin ?? fallback?.min ?? null;
-  const effRangeMax = radarRangeMax ?? fallback?.max ?? null;
-  const radarRangeIsEstimate = (radarRangeMin == null || radarRangeMax == null) && fallback != null;
 
   if (!shipInfo) return null;
 
@@ -250,27 +234,28 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
         </div>
       )}
 
-      {/* ── RADAR LOCK RANGE (Fase W.13, VerseTools §10) ──────────────────── */}
-      {effRangeMin != null && effRangeMax != null && effRangeMax > 0 && (
+      {/* ── RADAR LOCK RANGE (Fase W.13, VerseTools §10) ────────────────────
+          Solo renderizamos cuando rangeMin y rangeMax tienen valores REALES
+          en BD. Hoy todos los radares tienen NULL en esos campos (ver Fase X
+          backlog). Cuando se importen los datos reales, esta sección
+          empezará a mostrarse automáticamente sin más cambios. */}
+      {radarRangeMin != null && radarRangeMax != null && radarRangeMax > 0 && (
         <div className="border-t border-zinc-800/40 pt-2">
           <div className="text-[9px] font-mono text-zinc-500 tracking-[0.15em] uppercase mb-1">
             Radar Lock Range
-            {radarRangeIsEstimate && (
-              <span className="ml-1 text-zinc-600">(EST · S{radarSize})</span>
-            )}
           </div>
           <div className="flex items-baseline gap-3">
             <Image src="/icons/interdict_pulse.png" alt="" width={16} height={16} style={{ opacity: 0.5 }} />
             <span className="text-xl font-mono font-bold tabular-nums text-cyan-400">
               {fmtStat(
                 Math.round(
-                  effRangeMin + (effRangeMax - effRangeMin) * radarPipFraction,
+                  radarRangeMin + (radarRangeMax - radarRangeMin) * radarPipFraction,
                 ) / 1000,
               )}
             </span>
             <span className="text-[10px] font-mono text-zinc-500">km</span>
             <span className="text-[8px] font-mono text-zinc-600 ml-2">
-              ({fmtStat(effRangeMin / 1000)}–{fmtStat(effRangeMax / 1000)} km · {Math.round(radarPipFraction * 100)}% pips)
+              ({fmtStat(radarRangeMin / 1000)}–{fmtStat(radarRangeMax / 1000)} km · {Math.round(radarPipFraction * 100)}% pips)
             </span>
           </div>
         </div>
