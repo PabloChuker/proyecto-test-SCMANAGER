@@ -79,16 +79,20 @@ export default function Header({ subtitle }: HeaderProps) {
         {/* ── Left: Logo + optional subtitle ── */}
         {/* Móvil: gap reducido (más aire) y solo el logo. Desktop: gap-3 + texto. */}
         <div className="flex items-center gap-2 sm:gap-3">
+          {/* Branding.1 (2026-05-02): logo header +30% (44 → 58) con drop-shadow
+              ambar para resaltar la insignia. relative z-10 garantiza que pueda
+              sobresalir del header (h-72) sin ser tapado por el border-b. */}
           <Link
             href="/"
-            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+            className="relative z-10 flex items-center gap-2 hover:opacity-80 transition-opacity"
           >
             <Image
               src="/sclabs-logo.png"
               alt="SC LABS"
-              width={44}
-              height={44}
-              className="rounded-sm"
+              width={58}
+              height={58}
+              className="rounded-sm drop-shadow-[0_0_10px_rgba(232,137,12,0.3)]"
+              priority
             />
             {/* "SC Labs" textual solo desde sm+ — en móvil el logo basta y libera espacio. */}
             <span className="hidden sm:inline text-xs tracking-[0.15em] uppercase text-zinc-500 hover:text-zinc-300 transition-colors">

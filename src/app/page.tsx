@@ -34,14 +34,26 @@ const PANELS = [
 
 export default function Home() {
   const [phase, setPhase] = useState<"logo" | "reveal" | "ready">("logo");
+  // Branding.1 (2026-05-02): mounted dispara el fade-in inicial — antes
+  // el logo aparecía de golpe (transitionDuration: 0ms) y se sentía como
+  // un "salto". Ahora arranca con opacity 0 + scale 0.6 + blur, y al
+  // primer paint pasa a estado normal con una transición de 1800ms.
+  const [mounted, setMounted] = useState(false);
   const [hoveredPanel, setHoveredPanel] = useState<string | null>(null);
   const router = useRouter();
   const t = useTranslations("Landing");
 
   useEffect(() => {
-    const t1 = setTimeout(() => setPhase("reveal"), 2700);
-    const t2 = setTimeout(() => setPhase("ready"), 3900);
+    // Trigger fade-in en el siguiente frame (importante: que sea después
+    // del primer paint para que el browser haga la transición).
+    const m = requestAnimationFrame(() => setMounted(true));
+    // Hold logo grande: antes 2700ms, ahora 4500ms (+67% más tiempo).
+    // Reveal complete: antes 3900ms, ahora 5700ms (mantiene 1200ms para
+    // la transición center → top-left).
+    const t1 = setTimeout(() => setPhase("reveal"), 4500);
+    const t2 = setTimeout(() => setPhase("ready"), 5700);
     return () => {
+      cancelAnimationFrame(m);
       clearTimeout(t1);
       clearTimeout(t2);
     };
@@ -71,17 +83,26 @@ export default function Home() {
             ? {
                 top: "50%",
                 left: "50%",
-                transform: "translate(-50%, -50%) scale(1)",
-                // Móvil: clamp a 80vw para que no se salga en pantallas <420px.
-                // Desktop: 420px exactos (idéntico al render anterior).
-                width: "min(420px, 80vw)",
-                height: "min(420px, 80vw)",
-                transitionDuration: "0ms",
+                // Branding.1: entrada "desde las sombras" — antes de mounted
+                // (primer paint) el logo está oculto y reducido; al activarse
+                // mounted=true el browser anima opacity/scale/blur durante 1800ms.
+                transform: mounted
+                  ? "translate(-50%, -50%) scale(1)"
+                  : "translate(-50%, -50%) scale(0.6)",
+                opacity: mounted ? 1 : 0,
+                filter: mounted ? "blur(0px)" : "blur(24px)",
+                // Logo +50%: antes 420px, ahora 630px. Móvil: clamp a 90vw.
+                width: "min(630px, 90vw)",
+                height: "min(630px, 90vw)",
+                transitionDuration: "1800ms",
+                transitionProperty: "opacity, transform, filter",
               }
             : {
                 top: "16px",
                 left: "24px",
                 transform: "translate(0, 0) scale(1)",
+                opacity: 1,
+                filter: "blur(0px)",
                 width: "52px",
                 height: "52px",
                 transitionDuration: "1200ms",
@@ -97,20 +118,25 @@ export default function Home() {
         />
       </div>
 
-      {/* Glow detrás del logo centrado */}
+      {/* Glow detrás del logo centrado — escalado al nuevo tamaño del logo
+          (+50%: antes 600px, ahora 900px) y sincronizado con el fade-in del
+          mounted state para que aparezca junto con el logo. */}
       <div
-        className="fixed z-40 pointer-events-none transition-opacity duration-700"
+        className="fixed z-40 pointer-events-none"
         style={{
           top: "50%",
           left: "50%",
           transform: "translate(-50%, -50%)",
-          // Móvil: clamp a 90vw/90vh para que no se desborde por los costados.
-          // Desktop: 600px exactos (idéntico al render anterior).
-          width: "min(600px, 90vw)",
-          height: "min(600px, 90vh)",
+          // Móvil: clamp a 95vw/95vh para que no se desborde por los costados.
+          width: "min(900px, 95vw)",
+          height: "min(900px, 95vh)",
           background:
-            "radial-gradient(circle, rgba(232,137,12,0.15) 0%, transparent 70%)",
-          opacity: phase === "logo" ? 1 : 0,
+            "radial-gradient(circle, rgba(232,137,12,0.18) 0%, transparent 70%)",
+          opacity: phase === "logo" && mounted ? 1 : 0,
+          // Fade-in lento al inicio, fade-out rápido al retirarse.
+          transition: phase === "logo"
+            ? "opacity 1800ms ease-out"
+            : "opacity 700ms ease-in",
         }}
       />
 
