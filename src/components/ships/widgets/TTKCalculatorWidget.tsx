@@ -18,6 +18,7 @@
 // =============================================================================
 
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useLoadoutStore } from "@/store/useLoadoutStore";
 import { computeTtk, type AttackerWeapon, type TargetShipDef } from "@/lib/ttkCompute";
 
@@ -46,38 +47,46 @@ const fmtNum = (n: number): string => {
 export const TTKCalculatorContent = memo(function TTKCalculatorContent() {
   const shipInfo = useLoadoutStore(s => s.shipInfo);
 
-  // Lista de attacker weapons. Subscribe a primitivos / array shallow, NO
-  // un objeto custom (el bug de W.11). Recompute en cada render — barato
-  // porque solo lee `hardpoints` que ya está estable.
-  const attackerWeapons = useLoadoutStore<AttackerWeapon[]>(s => {
+  // Fase W.16b (2026-05-02): suscribir a `hardpoints` y `overrides` por
+  // referencia ESTABLE (no recomputar arrays nuevos dentro del selector).
+  // El bug de W.11 (selector que crea un objeto nuevo cada llamada) volvió
+  // a romper /loadout — Chrome mata el tab por el infinite re-render.
+  // Solución: leer las refs estables, computar `attackerWeapons` con useMemo
+  // con esas refs como deps. Zustand compara por === los selectors → solo
+  // retriggea cuando hardpoints/overrides cambian de identidad real.
+  const hardpoints = useLoadoutStore(s => s.hardpoints);
+  const overrides = useLoadoutStore(s => s.overrides);
+
+  const attackerWeapons = useMemo<AttackerWeapon[]>(() => {
     const result: AttackerWeapon[] = [];
-    for (const hp of s.hardpoints) {
+    for (const hp of hardpoints) {
       const cat = hp.resolvedCategory;
       if (cat !== "WEAPON" && cat !== "TURRET") continue;
-      // El attacker incluye el item equipado (override o default).
-      const item = s.overrides.has(hp.id) ? s.overrides.get(hp.id) : hp.defaultItem;
+      const item = overrides.has(hp.id) ? overrides.get(hp.id) : hp.defaultItem;
       const cs: any = item?.componentStats;
       if (!cs) continue;
+      const alphaP = Number(cs.alphaPhysical ?? 0);
+      const alphaE = Number(cs.alphaEnergy ?? 0);
+      const alphaD = Number(cs.alphaDistortion ?? 0);
+      const alphaSum = alphaP + alphaE + alphaD;
+      const alphaTotal = alphaSum > 0 ? alphaSum : Number(cs.alphaDamage ?? 0);
       result.push({
         hardpointName: hp.hardpointName,
         weaponName: item?.name ?? hp.hardpointName,
         size: typeof cs.size === "number" ? cs.size : (item as any)?.size ?? null,
-        alphaPhysical: Number(cs.alphaPhysical ?? 0),
-        alphaEnergy: Number(cs.alphaEnergy ?? 0),
-        alphaDistortion: Number(cs.alphaDistortion ?? 0),
-        alphaTotal:
-          Number(cs.alphaDamage ?? cs.alphaPhysical ?? 0) +
-          (cs.alphaDamage == null ? Number(cs.alphaEnergy ?? 0) + Number(cs.alphaDistortion ?? 0) : 0),
+        alphaPhysical: alphaP,
+        alphaEnergy: alphaE,
+        alphaDistortion: alphaD,
+        alphaTotal,
         sustainedDps: Number(cs.sustainedDps ?? cs.dps ?? 0),
       });
-      // Si el alpha breakdown no suma (alphaDamage ya es el total), recalcular.
-      const last = result[result.length - 1];
-      if (last.alphaTotal === 0) {
-        last.alphaTotal = last.alphaPhysical + last.alphaEnergy + last.alphaDistortion;
-      }
     }
     return result;
-  });
+  }, [hardpoints, overrides]);
+  // useShallow no se necesita porque hardpoints es una array que solo cambia
+  // de identidad cuando loadShip rebuild. overrides es un Map que cambia con
+  // cada toggle. Ambos triggers son los correctos.
+  void useShallow;
 
   const [targetId, setTargetId] = useState<string>("");
   const [targetSearch, setTargetSearch] = useState<string>("");
