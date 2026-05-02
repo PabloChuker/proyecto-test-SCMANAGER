@@ -1178,8 +1178,36 @@ export async function GET(
     const { id } = await params;
     // FEAT 2026-04-28: el header tiene un toggle Live/PTU que pasa la versión
     // activa como ?gv=. Si viene, preferimos el row de ese game_version.
-    // Si no viene, fallback al match_rank existente (compat back).
-    const gvParam = request.nextUrl.searchParams.get("gv");
+    //
+    // Fase Y.2 (2026-05-02): si el client NO manda ?gv (race condition del
+    // game version store en la primera carga, antes de que /api/game-versions
+    // resuelva), resolvemos default = latest LIVE en el server. Así el endpoint
+    // es agnóstico al timing del client. El síntoma sin esto era: primera carga
+    // muestra hardpoints de la versión vieja (4.7.0-LIVE.11518367) con shape
+    // distinta, F5 arreglaba porque el segundo fetch ya tenía gv resuelto.
+    let gvParam = request.nextUrl.searchParams.get("gv");
+    if (!gvParam) {
+      try {
+        // game_versions schema: version, source, "processedAt", notes, online.
+        // Filtramos PTU, formato semver-ish y online=true. Ordenamos por
+        // processedAt desc para tomar la última importada como default LIVE.
+        const latest: any[] = await sql.unsafe(
+          `SELECT version FROM game_versions
+            WHERE version !~* 'PTU'
+              AND version ~ '^[0-9]+\\.[0-9]+'
+              AND COALESCE(online, true) = true
+            ORDER BY "processedAt" DESC NULLS LAST, version DESC
+            LIMIT 1`,
+          [],
+        );
+        if (latest[0]?.version) {
+          gvParam = String(latest[0].version);
+        }
+      } catch {
+        // Si la query falla (tabla missing en algún ambiente), seguimos
+        // sin gv y caemos al match_rank básico.
+      }
+    }
 
     // ── 1. Find the ship (exact matches prioritized over partial) ──
     // Cuando hay gv, la prioridad es: match exacto + game_version coincide.
