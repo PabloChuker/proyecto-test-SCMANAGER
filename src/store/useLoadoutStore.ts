@@ -370,17 +370,16 @@ function computeStats(
     if (dps === 0 && alpha > 0 && fireRate > 0) dps = alpha * (fireRate / 60);
     totalDps += dps;
     totalAlpha += alpha;
-    // Pablo (2026-04-25): Sustained DPS = sumatoria pura del DPS de cada
-    // arma. NO aplicar duty cycle (heat / capacitor) — eso confundía al
-    // usuario porque el panel mostraba un número menor a la suma simple
-    // de los DPS individuales que ven en cada slot. El gate binario por
-    // energía de armas (todo/nada) se aplica más abajo en el bucket.
-    // Si en el futuro queremos exponer el "DPS real con throttle por
-    // overheat/capacitor", lo agregamos como métrica separada (ej.
-    // realisticDps) — el modelo de duty cycle quedó comentado por las
-    // fórmulas que lo calculaban (heat: tToOverheat / (t + fixTime);
-    // capacitor: fireTime / (fireTime + reloadTime)).
-    totalSustainedDps += dps;
+    // Fase W.2 (2026-05-02): sustainedDps ahora viene calculado por arma
+    // desde el endpoint /api/ships/[id] usando la fórmula de VerseTools
+    // (duty cycle por regen energético / overheat balístico). Si el campo
+    // no está presente (componente sin data o item sintético), fallback
+    // al burst DPS — que es el comportamiento previo. Esto fixea el caso
+    // donde el panel mostraba sustained = burst. Ahora burst = sum(dps),
+    // sustained = sum(dps × ratio_per_weapon). Ej: arma energy con
+    // magazine 75, regenRate 15/s, cooldown 1s → ratio típico ~0.6.
+    const sustained = pickNum(s, "sustainedDps");
+    totalSustainedDps += sustained > 0 ? sustained : dps;
   };
 
   const accumBase = (s: ComponentStatsData | null | undefined) => {
@@ -913,8 +912,18 @@ function computeStats(
     emSigScaled += (inst.emMax ?? 0) * ratio;
     irSigScaled += (inst.irMax ?? 0) * ratio;
   }
-  // Power plants don't appear in instances[] (no pip slider). Re-add them
-  // at full emission when ON — they always run.
+  // Power plants don't appear in instances[] (no pip slider). Reañadir
+  // su emisión cuando están ON.
+  //
+  // Fase W.4 (2026-05-02): según VerseTools la EM de los PP escala con la
+  // utilización de potencia (PP em = emMax × Total Power Used / Total Output).
+  // Antes lo sumábamos full siempre, sobreestimando cuando hay pocos pips
+  // usados. El factor de utilización lo calculamos abajo con totalPO+
+  // totalActualDraw que ya están disponibles. IR de PP queda full porque
+  // VerseTools no especifica scaling para IR de PP (los coolers dominan).
+  const ppUtilization = totalPO > 0
+    ? Math.min(1, Math.max(0, totalActualDraw / totalPO))
+    : 0;
   for (const hp of hardpoints) {
     if (hp.resolvedCategory !== "POWER_PLANT") continue;
     const item = overrides.has(hp.id) ? (overrides.get(hp.id) ?? null) : hp.defaultItem;
@@ -922,8 +931,10 @@ function computeStats(
     const isOn = componentStates[hp.hardpointName] !== false;
     if (!isOn) continue;
     const pn = item.powerNetwork;
-    emSigScaled += pn?.em ?? pickNum(item.componentStats, "emSignature");
-    irSigScaled += pn?.ir ?? pickNum(item.componentStats, "irSignature");
+    const ppEm = pn?.em ?? pickNum(item.componentStats, "emSignature");
+    const ppIr = pn?.ir ?? pickNum(item.componentStats, "irSignature");
+    emSigScaled += ppEm * ppUtilization;
+    irSigScaled += ppIr;
   }
   const _res = shipInfo?.resistances;
   const baseEm = _res?.baseEmSignature ?? 0;
@@ -965,13 +976,15 @@ function computeStats(
     irSig = baseIr * irMult;
   }
 
-  // ── Shield regen scaling (Fase U.5b, 2026-04-29) ──────────────────────────
-  // Hay UNA columna combinada con subShields[]. La pip ratio de la columna
-  // entera escala el shieldRegen total, PERO cada sub-shield apagado debe
-  // dejar de aportar su regen full. Combinamos ambos efectos:
-  //   total = sum( regenFullPorShield × (isOn ? 1 : 0) ) × pipRatioCombinado
-  // pipRatioCombinado = max(allocated, ceil(powerMin)) / totalPips de la
-  // instance combinada.
+  // ── Shield regen scaling (Fase U.5b + W.3, 2026-05-02) ────────────────────
+  // VerseTools especifica que SOLO los primeros 2 escudos ("primary") regenan.
+  // Los del 3° en adelante son "reserve": aportan HP al pool pero no regen.
+  // Caso: Asgard (4 shields), Polaris (4), Idris (5+). Si sumamos regen full
+  // de todos sobreestimamos. Filtramos subShields a los primeros 2.
+  //
+  // Pip ratio sigue siendo el de la columna combinada — el pool de pips se
+  // distribuye entre TODOS los shields (incluso reserve), pero el regen
+  // efectivo viene solo de los primary.
   const shieldInstForScale = instances.find(i => i.hardpointId === SHIELD_POWER_ID);
   if (shieldInstForScale && shieldInstForScale.isOn && shieldInstForScale.totalPips > 0) {
     const minPips = Math.min(
@@ -980,10 +993,14 @@ function computeStats(
     );
     const effectivePips = Math.max(minPips, shieldInstForScale.allocatedPips);
     const shieldRatio = Math.min(1, Math.max(0, effectivePips / shieldInstForScale.totalPips));
-    // Recomputar regen sumando solo los sub-shields encendidos.
+    // Recomputar regen sumando solo los sub-shields encendidos Y dentro de
+    // los primary slots (primeros 2). El orden de subShieldsInfo respeta el
+    // orden de aparición de los hardpoints SHIELD en la nave.
     let activeRegenFull = 0;
     if (shieldInstForScale.subShields && shieldInstForScale.subShields.length > 0) {
-      for (const sub of shieldInstForScale.subShields) {
+      const PRIMARY_LIMIT = 2;
+      const primary = shieldInstForScale.subShields.slice(0, PRIMARY_LIMIT);
+      for (const sub of primary) {
         if (sub.isOn) activeRegenFull += sub.regenFull;
       }
     } else {

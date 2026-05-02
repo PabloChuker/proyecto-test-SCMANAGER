@@ -44,27 +44,59 @@ export async function GET() {
       ORDER BY s.name ASC
     `;
 
-    const data = rows.map((r) => ({
-      id:           String(r.ship_id),
-      name:         String(r.ship_name),
-      manufacturer: String(r.manufacturer ?? ""),
-      totalSCU:     Number(r.cargo_capacity ?? 0),
-      grids:        (r.grids as Array<{
+    // Fase W.5 (2026-05-02): fallback de SCU calculado desde dimensiones del
+    // grid según VerseTools (SCU = floor(W/1.25) × floor(L/1.25) × floor(H/1.25)).
+    // Si la BD no tiene cargo_capacity poblado para la nave (caso típico:
+    // ships agregadas a mano por add_missing_ships_4_7_x sin satellites),
+    // usamos el computed para no mostrar 0. Si tampoco hay dimensions
+    // válidas, queda en 0.
+    const SCU_UNIT_M = 1.25;
+    const computeGridScu = (dims: { x?: number; y?: number; z?: number }, instances: number): number => {
+      const x = Number(dims?.x ?? 0);
+      const y = Number(dims?.y ?? 0);
+      const z = Number(dims?.z ?? 0);
+      if (x <= 0 || y <= 0 || z <= 0) return 0;
+      const per = Math.floor(x / SCU_UNIT_M) * Math.floor(y / SCU_UNIT_M) * Math.floor(z / SCU_UNIT_M);
+      return per * Math.max(1, instances);
+    };
+
+    const data = rows.map((r) => {
+      const grids = (r.grids as Array<{
         id: string;
         className: string;
         scuCapacity: number;
         dimensions: { x: number; y: number; z: number };
         instanceCount: number;
         displayOrder: number;
-      }>).map((g) => ({
-        id:            String(g.id),
-        className:     String(g.className),
-        scuCapacity:   Number(g.scuCapacity),
-        dimensions:    g.dimensions,
-        instanceCount: Number(g.instanceCount ?? 1),
-        displayOrder:  Number(g.displayOrder ?? 0),
-      })),
-    }));
+      }>).map((g) => {
+        const dims = g.dimensions ?? { x: 0, y: 0, z: 0 };
+        const dbScu = Number(g.scuCapacity ?? 0);
+        const computed = computeGridScu(dims, Number(g.instanceCount ?? 1));
+        return {
+          id:            String(g.id),
+          className:     String(g.className),
+          // scuCapacity = lo que la BD indica si está, sino el computed.
+          scuCapacity:   dbScu > 0 ? dbScu : computed,
+          scuCapacityListed: dbScu, // por si en UI queremos mostrar diff
+          scuCapacityComputed: computed,
+          dimensions:    dims,
+          instanceCount: Number(g.instanceCount ?? 1),
+          displayOrder:  Number(g.displayOrder ?? 0),
+        };
+      });
+
+      const dbTotal = Number(r.cargo_capacity ?? 0);
+      const computedTotal = grids.reduce((acc, g) => acc + g.scuCapacity, 0);
+      return {
+        id:           String(r.ship_id),
+        name:         String(r.ship_name),
+        manufacturer: String(r.manufacturer ?? ""),
+        totalSCU:     dbTotal > 0 ? dbTotal : computedTotal,
+        totalSCUListed:   dbTotal,
+        totalSCUComputed: computedTotal,
+        grids,
+      };
+    });
 
     return NextResponse.json({ data }, { headers: secureHeaders() });
   } catch (error) {

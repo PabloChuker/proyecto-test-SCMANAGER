@@ -9,6 +9,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { computeRealFireRate } from "@/lib/fireRate";
+import { computeSustainedDps } from "@/lib/sustainedDps";
 // Fallback: static JSON for data not yet in DB (flight controllers, etc.)
 import powerNetworkLookup from "@/data/power-network-lookup.json";
 import shipPowerData from "@/data/ship-power-data.json";
@@ -169,7 +171,7 @@ function hpCategory(hpType: string | null | undefined, hpName: string | null | u
 // ─── Build equippedItem from component row ──────────────────────────────────
 
 function buildWeaponItem(row: any): any {
-  const dps_total =
+  const dps_total_listed =
     (numOrNull(row.dps_physical) ?? 0) +
     (numOrNull(row.dps_energy) ?? 0) +
     (numOrNull(row.dps_distortion) ?? 0) +
@@ -185,6 +187,38 @@ function buildWeaponItem(row: any): any {
     (numOrNull(row.alpha_biochemical) ?? 0) +
     (numOrNull(row.alpha_stun) ?? 0);
 
+  // Fase W.1 (2026-05-02): aplicar tick-quantization de VerseTools al
+  // rate_of_fire para sequence weapons (repeaters/cannons). Gatlings y
+  // cannons low-RPM quedan exentos. El dps que viene del catálogo se
+  // calculó al RPM listado, así que lo escalamos por (real/listado).
+  // Caso paradigmático: Sawbuck S2 825 listado → 600 real → -27% dps.
+  const fireRateInfo = computeRealFireRate({
+    listed: numOrNull(row.rate_of_fire) ?? 0,
+    className: row.class_name ?? null,
+    name: row.name ?? row.item_name ?? null,
+    fireMode: row.fire_mode ?? null,
+  });
+  const fireRateScale = fireRateInfo.listed > 0
+    ? fireRateInfo.real / fireRateInfo.listed
+    : 1;
+  const dps_total = dps_total_listed * fireRateScale;
+
+  // Fase W.2 (2026-05-02): sustained DPS con duty cycle por regen (energy)
+  // o por overheat (ballistic). El número que sale acá es lo que el LoadoutBuilder
+  // suma como "Sustained DPS" — captura el downtime real entre bursts/recargas
+  // que el burst plano (sum simple) ignora.
+  const sustained = computeSustainedDps({
+    fireRateRpm: fireRateInfo.real,
+    burstDps: dps_total,
+    isEnergy: !!row.is_energy_weapon,
+    magazine: numOrNull(row.max_ammo_load),
+    regenRatePerSec: numOrNull(row.ammo_regen_per_sec) ?? numOrNull(row.max_regen_per_sec),
+    regenCooldown: numOrNull(row.regen_cooldown),
+    heatCapacity: numOrNull(row.overheat_temperature),
+    heatPerShot: numOrNull(row.heat_per_shot),
+    overheatFixTime: numOrNull(row.overheat_fix_time),
+  });
+
   return {
     id: row.id || row.class_name,
     reference: row.class_name || "",
@@ -197,8 +231,15 @@ function buildWeaponItem(row: any): any {
     manufacturer: row.manufacturer_id ?? null,
     componentStats: {
       alphaDamage: alpha_total,
-      dps: dps_total,
-      fireRate: numOrNull(row.rate_of_fire),
+      dps: dps_total,                   // burst DPS (post-tick-quantization)
+      sustainedDps: sustained.sustainedDps, // VerseTools: con duty cycle real
+      sustainedRatio: sustained.sustainedRatio,
+      // Campos auxiliares que el frontend puede mostrar como "ideal vs real"
+      // o usar como tooltip en el slot del arma.
+      dpsListed: dps_total_listed,
+      fireRate: fireRateInfo.real,
+      fireRateListed: fireRateInfo.listed,
+      fireRateQuantized: fireRateInfo.isQuantized,
       damagePerShot: numOrNull(row.damage_per_shot),
       alphaPhysical: numOrNull(row.alpha_physical),
       alphaEnergy: numOrNull(row.alpha_energy),
@@ -1711,11 +1752,41 @@ export async function GET(
           col(fuelStats, "hydrogen_capacity", "hydrogenCapacity"),
         ),
         quantumFuelCapacity: numOrNull(
-          col(fuelStats, "quantum_fuel_capacity", "quantumFuelCapacity"),
+          col(fuelStats, "quantum_fuel_capacity", "quantumFuelCapacity")
+            ?? col(fuelStats, "quantum_capacity"),
         ),
-        quantumRange: numOrNull(
-          col(fuelStats, "quantum_range", "quantumRange"),
-        ),
+        // Fase W.6 (2026-05-02): si la BD no tiene quantum_range pre-calculado,
+        // derivarlo de fuel + drive según VerseTools:
+        //   Range (Gm) = QuantumFuelCapacity (SCU) / FuelRate (SCU/Gm)
+        //              = QuantumFuelCapacity (SCU) × 1000 / FuelRate (mSCU/Gm)
+        // Usamos el primer QUANTUM_DRIVE equipado como default. Si tampoco hay
+        // QD equipado o falta fuelRate, queda null (mostramos "—" en UI).
+        quantumRange: (() => {
+          const stored = numOrNull(col(fuelStats, "quantum_range", "quantumRange"));
+          if (stored != null && stored > 0) return stored;
+          const fuelCap = numOrNull(
+            col(fuelStats, "quantum_fuel_capacity", "quantumFuelCapacity")
+              ?? col(fuelStats, "quantum_capacity"),
+          );
+          // Buscar el primer QD del default loadout para extraer fuelRate.
+          // hardpointRows tiene un campo loadout_json con los entries que
+          // hidratamos en componentMap más arriba; el tipo del componente
+          // es QuantumDrive con la columna fuel_rate (mSCU/Gm).
+          const qdRow = (() => {
+            for (const hp of hardpointRows) {
+              const cls = hp.default_item_class;
+              if (!cls) continue;
+              const c = componentMap.get(cls);
+              if (c && c.table === "quantum_drives") return c.row;
+            }
+            return null;
+          })();
+          const fuelRateMSCUperGm = qdRow ? numOrNull(qdRow.fuel_rate) : null;
+          if (fuelCap && fuelCap > 0 && fuelRateMSCUperGm && fuelRateMSCUperGm > 0) {
+            return Math.round((fuelCap * 1000) / fuelRateMSCUperGm);
+          }
+          return null;
+        })(),
         shieldHpTotal: numOrNull(
           col(fuelStats, "shield_hp_total", "shieldHpTotal"),
         ),
