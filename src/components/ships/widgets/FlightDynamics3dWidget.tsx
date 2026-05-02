@@ -94,21 +94,20 @@ export const FlightDynamics3dContent = memo(function FlightDynamics3dContent({
   boost,
 }: { boost: boolean }) {
   const shipInfo = useLoadoutStore(s => s.shipInfo);
-  // Re-render cuando cambian los pips o la lista de instances. Suscribir
-  // por slice estable evita renders innecesarios en el resto del store.
-  const thrusterPower = useLoadoutStore(s => {
-    const inst = s.getStats().powerNetwork.instances.find(
-      (i) => i.category === "thrusters",
-    );
-    return inst
-      ? { allocated: inst.allocatedPips, total: inst.totalPips }
-      : null;
-  });
+  // Fase W.11 (2026-05-02): suscribir a PRIMITIVOS en vez de un objeto.
+  // El selector original devolvía `{ allocated, total }` que es una nueva
+  // referencia en cada llamada → zustand detecta cambio → re-render infinito
+  // → "This page couldn't load" en /loadout. Dos selectors primitivos
+  // separados son comparados por `===` y solo retriggean cuando el valor
+  // numérico real cambia.
+  const thrPips = useLoadoutStore(s =>
+    s.getStats().powerNetwork.instances.find(i => i.category === "thrusters")?.allocatedPips ?? 0
+  );
+  const thrMaxPips = useLoadoutStore(s =>
+    s.getStats().powerNetwork.instances.find(i => i.category === "thrusters")?.totalPips ?? 0
+  );
   if (!shipInfo) return null;
   const si = shipInfo as any;
-
-  const thrPips = thrusterPower?.allocated ?? 0;
-  const thrMaxPips = thrusterPower?.total ?? 0;
   // VerseTools define ThrusterMult con (pips - 1) / (maxPips - 1). Cuando
   // maxPips ≤ 1 (no hay slider real) el multiplier queda 1 (full).
   const computedMult = thrMaxPips > 1
