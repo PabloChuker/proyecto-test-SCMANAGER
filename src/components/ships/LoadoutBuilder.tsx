@@ -49,6 +49,7 @@ import {
 } from "./widgets/FlightDynamics3dWidget";
 import { ShipCardContent }        from "./widgets/ShipCardWidget";
 import { LoadoutDetailContent }   from "./widgets/LoadoutDetailWidget";
+import { TTKCalculatorContent }   from "./widgets/TTKCalculatorWidget";
 // Three.js (ShipFlightDynamicsSingle + shipGlbCandidates) moved to FlightDynamics3dWidget.tsx
 import { useDpsGridLayout } from "@/lib/loadout-grid/useLoadoutGridLayout";
 import { DpsGridCanvas } from "@/components/domain/loadout/LoadoutGridCanvas";
@@ -94,7 +95,8 @@ type WidgetId =
   | "mining" | "salvage" | "qig"
   | "power-grid"
   | "ship-selector" | "ship-card" | "loadout-detail"
-  | "flight-dynamics" | "flight-dynamics-3d";
+  | "flight-dynamics" | "flight-dynamics-3d"
+  | "ttk-calculator";
 
 // ── Industrial ship detection (Pablo, 2026-04-17) ────────────────────────────
 // Solo estas naves muestran los widgets MINING / SALVAGE para no sobrecargar
@@ -159,6 +161,7 @@ const WIDGET_WIDTH: Record<WidgetId, CardWidth> = {
   "loadout-detail": 1,          // stays 1-col
   "flight-dynamics": 2,         // unified 3-en-1 card (Fase G.1) → 2-col
   "flight-dynamics-3d": 2,      // 3D viewer → 2-col
+  "ttk-calculator": 1,          // W.16 — Time To Kill calc compacto (1 col)
 };
 
 const WIDGET_LABELS: Record<WidgetId, string> = {
@@ -171,6 +174,7 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   "ship-selector": "SEARCH", "ship-card": "SHIP CARD", "loadout-detail": "LOADOUT DETAIL",
   "flight-dynamics": "FLIGHT DYNAMICS",
   "flight-dynamics-3d": "FLIGHT DYNAMICS 3D",
+  "ttk-calculator": "TTK CALCULATOR",
 };
 
 const ALL_WIDGET_IDS: WidgetId[] = [
@@ -181,6 +185,7 @@ const ALL_WIDGET_IDS: WidgetId[] = [
   "power-grid",
   "ship-selector", "ship-card", "loadout-detail",
   "flight-dynamics", "flight-dynamics-3d",
+  "ttk-calculator",
 ];
 
 // ─── Geometric helpers ──────────────────────────────────────────────────────
@@ -262,6 +267,10 @@ function getWidgetBlocks(
     // Necesita alto suficiente para el radar 6-ejes y los labels perimetrales.
     case "flight-dynamics":    return 6;
     case "flight-dynamics-3d": return 5;
+    // ttk-calculator (W.16): dropdown + 3 stat cards + lista weapons.
+    // Altura razonable para fighters con ~6 weapons; en capitales puede
+    // necesitar scroll, pero el bloque de 6 cubre el caso default.
+    case "ttk-calculator":     return 6;
   }
 }
 
@@ -284,8 +293,8 @@ const COLUMN_PLAN_1COL: WidgetId[][] = [
   ["ship-card", "weapons", "mining", "salvage", "qig", "missiles"],
   // Col 1 — DEFENSE + POWER + NAV/SENSORS
   ["shields", "powerplants", "coolers", "quantum", "radar"],
-  // Col 2 — ANALYTICS: power grid + combat summary + utility hardpoints
-  ["power-grid", "loadout-detail", "utility"],
+  // Col 2 — ANALYTICS: power grid + combat summary + ttk + utility hardpoints
+  ["power-grid", "loadout-detail", "ttk-calculator", "utility"],
 ];
 
 // Sidebar 2-col (cols 3-4). Widgets hero apilados vertical.
@@ -554,6 +563,8 @@ function renderWidget(
       return W(<ShipCardContent />);
     case "loadout-detail":
       return W(<LoadoutDetailContent />);
+    case "ttk-calculator":
+      return W(<TTKCalculatorContent />);
     default: return null;
   }
 }

@@ -16,7 +16,8 @@ export type WidgetId =
   | "mining" | "salvage" | "qig"
   | "power-grid"
   | "ship-selector" | "ship-card" | "loadout-detail"
-  | "flight-dynamics" | "flight-dynamics-3d";
+  | "flight-dynamics" | "flight-dynamics-3d"
+  | "ttk-calculator";
 
 // ── Ancho de tarjeta en columnas (1 ó 2) ─────────────────────────────────────
 export type CardWidth = 1 | 2;
