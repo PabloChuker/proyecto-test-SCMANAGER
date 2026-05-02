@@ -72,8 +72,10 @@ export default function Home() {
                 top: "50%",
                 left: "50%",
                 transform: "translate(-50%, -50%) scale(1)",
-                width: "420px",
-                height: "420px",
+                // Móvil: clamp a 80vw para que no se salga en pantallas <420px.
+                // Desktop: 420px exactos (idéntico al render anterior).
+                width: "min(420px, 80vw)",
+                height: "min(420px, 80vw)",
                 transitionDuration: "0ms",
               }
             : {
@@ -102,17 +104,21 @@ export default function Home() {
           top: "50%",
           left: "50%",
           transform: "translate(-50%, -50%)",
-          width: "600px",
-          height: "600px",
+          // Móvil: clamp a 90vw/90vh para que no se desborde por los costados.
+          // Desktop: 600px exactos (idéntico al render anterior).
+          width: "min(600px, 90vw)",
+          height: "min(600px, 90vh)",
           background:
             "radial-gradient(circle, rgba(232,137,12,0.15) 0%, transparent 70%)",
           opacity: phase === "logo" ? 1 : 0,
         }}
       />
 
-      {/* ── Contenido: 4 paneles verticales ── */}
+      {/* ── Contenido: 4 paneles ──
+          Desktop: paneles verticales side-by-side (flex-row implícito).
+          Móvil:   paneles apilados en columna (banda horizontal cada uno). */}
       <div
-        className="relative z-10 h-full w-full flex transition-all duration-700 ease-out"
+        className="relative z-10 h-full w-full flex flex-col md:flex-row transition-all duration-700 ease-out"
         style={{
           opacity: phase === "ready" ? 1 : 0,
         }}
@@ -125,7 +131,9 @@ export default function Home() {
           return (
             <div
               key={panel.id}
-              className="relative h-full cursor-pointer overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)]"
+              // Móvil: cada panel ocupa 25vh (banda horizontal — los 4 paneles llenan el viewport).
+              // Desktop: h-full + flex inline manda (idéntico al render anterior).
+              className="relative h-[25vh] md:h-full cursor-pointer overflow-hidden transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)]"
               style={{
                 flex: isHovered ? 2.5 : isOther ? 0.7 : 1,
               }}

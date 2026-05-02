@@ -188,6 +188,31 @@ const ALL_WIDGET_IDS: WidgetId[] = [
   "ttk-calculator",
 ];
 
+// ── Mobile fallback (Fase R.4, 2026-05-02) ───────────────────────────────────
+// En `< md` (window < 768px) NO se monta react-grid-layout/dnd-kit: los widgets
+// se apilan verticalmente en este orden (los más útiles primero). El layout
+// desktop sigue idéntico — este array sólo se consume en móvil.
+const MOBILE_WIDGET_ORDER: WidgetId[] = [
+  "ship-card",
+  "loadout-detail",
+  "ttk-calculator",
+  "weapons",
+  "missiles",
+  "shields",
+  "powerplants",
+  "coolers",
+  "power-grid",
+  "quantum",
+  "flight-dynamics",
+  "flight-dynamics-3d",
+  "radar",
+  "utility",
+  "mining",
+  "salvage",
+  "qig",
+  "ship-selector",
+];
+
 // ─── Geometric helpers ──────────────────────────────────────────────────────
 // getUnit: calcula el ancho de 1 columna en px a partir del contenedor.
 function getUnit(containerWidth: number): number {
@@ -736,6 +761,20 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     return out;
   }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount, miningCount, salvageCount, qigCount]);
 
+  // ─── Mobile detection (Fase R.4) ──────────────────────────────────────────
+  // Arranca en `false` (desktop) para evitar SSR mismatch — al hidratar en
+  // cliente se actualiza al estado real del viewport. En móvil saltamos el
+  // grid absolute-positioned y renderizamos un stack vertical más abajo.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+
   // ─── Layout v12 — useDpsGridLayout + DpsGridCanvas ──────────────────────
   const gridLayout = useDpsGridLayout({
     visibleIds,
@@ -935,7 +974,9 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     <div className="space-y-2">
       {/* ── Top Bar ── */}
       <div className="flex items-center justify-end px-2.5 py-1.5 bg-zinc-900/80 border border-zinc-800/60">
-        <div className="flex items-center gap-1.5">
+        {/* Móvil: los 5 botones se envuelven a 2 filas si no caben.
+            Desktop (md+): se mantienen en una sola fila como siempre. */}
+        <div className="flex flex-wrap md:flex-nowrap items-center gap-1.5">
           {/* SHARE — copies a URL with ship + build code */}
           <button onClick={handleShare} className={copied ? "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border bg-green-950/30 text-green-500 border-green-800/50" : "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-yellow-500 hover:border-yellow-800/50 transition-colors"} title="Copy shareable link with this loadout">
             {copied ? "✓ COPIED" : "SHARE"}
@@ -963,15 +1004,29 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
         </div>
       </div>
 
-      {/* ── Main Grid — DpsGridCanvas (v11, absolute positioning + dnd-kit) ── */}
-      {/* El canvas posiciona cada tarjeta en px absolutos derivados de la
-          geometría UNIT. No hay flex/grid gap: el spacing sale de la spec. */}
-      <div className="w-full mx-auto" style={{ maxWidth: 1900 }}>
-        <DpsGridCanvas
-          layout={gridLayout}
-          renderWidget={(id) => renderWidget(id, ctx)}
-        />
-      </div>
+      {/* ── Main Grid ── */}
+      {/* En móvil (<md): stack vertical con WidgetShells full-width, sin
+          react-grid-layout/dnd-kit. El orden viene de MOBILE_WIDGET_ORDER y
+          se filtra contra `visibleIds` para respetar la lógica condicional
+          de combat/industrial.
+          En desktop (>=md): DpsGridCanvas v11 — absolute positioning + dnd-kit
+          + localStorage al-filo-layout-v3. Idéntico al render anterior. */}
+      {isMobile ? (
+        <div className="space-y-3 px-1">
+          {MOBILE_WIDGET_ORDER.filter((id) => visibleIds.has(id)).map((id) => (
+            <div key={id} className="w-full">
+              {renderWidget(id, ctx)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="w-full mx-auto" style={{ maxWidth: 1900 }}>
+          <DpsGridCanvas
+            layout={gridLayout}
+            renderWidget={(id) => renderWidget(id, ctx)}
+          />
+        </div>
+      )}
 
       {pickerHp && <ComponentPicker hardpoint={pickerHp} parentItem={pickerParentItem} currentItemId={getEffectiveItem(pickerHp.id)?.id ?? null} onSelect={handleSelect} onClear={handleClear} onClose={() => setPickerHp(null)} />}
 
