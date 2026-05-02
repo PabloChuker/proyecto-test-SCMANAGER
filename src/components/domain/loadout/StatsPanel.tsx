@@ -12,6 +12,7 @@
 import { useLoadoutStore } from "@/store/useLoadoutStore";
 import { RadarChart } from "@/components/shared/charts/RadarChart";
 import { PowerStatusGrid } from "./PowerStatusGrid";
+import { ArmorCheckPanel } from "./ArmorCheckPanel";
 
 const fmt = (v: number) => {
   if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + "M";
@@ -23,6 +24,23 @@ const fmt = (v: number) => {
 export function StatsPanel() {
   const { shipInfo, getStats, flightMode } = useLoadoutStore();
   const stats = getStats();
+
+  // Fase W.13 (2026-05-02): leer el primer radar equipado (RADAR hardpoint)
+  // y los pips actuales del power grid. Suscribir a PRIMITIVOS (number)
+  // para evitar el infinite re-render que rompió /loadout en W.9 → W.11.
+  const radarRangeMin = useLoadoutStore(s => {
+    const hp = s.hardpoints.find(h => h.resolvedCategory === "RADAR");
+    return hp?.defaultItem?.componentStats?.rangeMinM ?? null;
+  });
+  const radarRangeMax = useLoadoutStore(s => {
+    const hp = s.hardpoints.find(h => h.resolvedCategory === "RADAR");
+    return hp?.defaultItem?.componentStats?.rangeMaxM ?? null;
+  });
+  const radarPipFraction = useLoadoutStore(s => {
+    const inst = s.getStats().powerNetwork.instances.find(i => i.category === "radar");
+    if (!inst || inst.totalPips <= 0) return 1;
+    return Math.min(1, Math.max(0, inst.allocatedPips / inst.totalPips));
+  });
 
   if (!shipInfo) return null;
 
@@ -128,6 +146,29 @@ export function StatsPanel() {
         <FlightStat label="NAV" value={shipInfo.afterburnerSpeed} unit="m/s" />
       </div>
 
+      {/* ── Radar Lock Range (Fase W.13, VerseTools §10) ──
+          Lineal entre rangeMin y rangeMax según pip fraction del power grid.
+          Si la nave no tiene radar equipado o los rangos faltan, no se
+          renderiza nada. Mostramos en km para legibilidad. */}
+      {radarRangeMin != null && radarRangeMax != null && radarRangeMax > 0 && (
+        <div className="bg-zinc-900/80 border border-zinc-800/60 px-3 py-2 flex items-center justify-between">
+          <span className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase">
+            Radar Lock Range
+          </span>
+          <span className="text-sm font-mono font-bold tabular-nums text-cyan-400">
+            {fmt(
+              Math.round(
+                radarRangeMin + (radarRangeMax - radarRangeMin) * radarPipFraction,
+              ) / 1000,
+            )}
+            <span className="text-[9px] text-zinc-500 ml-1">km</span>
+            <span className="text-[8px] text-zinc-600 ml-2">
+              ({fmt(radarRangeMin / 1000)}–{fmt(radarRangeMax / 1000)} km · {Math.round(radarPipFraction * 100)}% pips)
+            </span>
+          </span>
+        </div>
+      )}
+
       {/* ── Hull Resistances (Erkul-style damage multipliers) ── */}
       {shipInfo.resistances && (
         <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
@@ -188,6 +229,13 @@ export function StatsPanel() {
           )}
         </div>
       )}
+
+      {/* ── Armor Check (Fase W.12, VerseTools §6.1) ── */}
+      <ArmorCheckPanel
+        deflectionPhysical={shipData.deflectionPhysical ?? null}
+        deflectionEnergy={shipData.deflectionEnergy ?? null}
+        gameVersion={shipData.gameVersion ?? null}
+      />
     </div>
   );
 }

@@ -501,6 +501,38 @@ function buildBombItem(row: any): any {
   };
 }
 
+// Build a Radar item — Fase W.13 (2026-05-02). Hidrata las stats del radar
+// equipado (range_min/max, sub_type) para que el StatsPanel pueda computar
+// el lock range dinámico según los pips actuales del Power Grid.
+function buildRadarItem(row: any): any {
+  return {
+    id: row.uuid || row.class_name,
+    reference: row.class_name || "",
+    name: row.name || row.class_name || "",
+    localizedName: null,
+    className: row.class_name,
+    type: "RADAR",
+    size: numOrNull(row.size),
+    grade: gradeToLetter(row.grade),
+    manufacturer: row.manufacturer_id ?? null,
+    componentStats: {
+      // VerseTools §10: lock range scales linearly between min and max.
+      rangeMinM: numOrNull(row.range_min_m),
+      rangeMaxM: numOrNull(row.range_max_m),
+      sensitivity: numOrNull(row.sensitivity),
+      piercing: numOrNull(row.piercing),
+      subType: row.sub_type ?? null,
+      powerDraw: numOrNull(row.power_consumption_max),
+      powerDrawMin: numOrNull(row.power_consumption_min),
+      powerDrawMax: numOrNull(row.power_consumption_max),
+      emSignature: numOrNull(row.em_max),
+      irSignature: numOrNull(row.ir_max),
+      health: numOrNull(row.health),
+    },
+    powerNetwork: buildPowerNetwork(row, "Radar"),
+  };
+}
+
 // Build a generic item from ship_hardpoints data (no component table match)
 function buildGenericItem(hp: any): any {
   if (!hp.default_item_name || hp.default_item_name === "") return null;
@@ -1322,6 +1354,9 @@ export async function GET(
       // a buildGenericItem y los slots child se renderizan vacíos.
       batchFetch("missile_launchers", "class_name", uniqueClasses),
       batchFetch("bombs", "class_name", uniqueClasses),
+      // Fase W.13 (2026-05-02): hidratamos radar stats (range_min/max + sub_type)
+      // para que el StatsPanel pueda mostrar el lock range dinámico por pips.
+      batchFetch("radars", "class_name", uniqueClasses),
     ]);
 
     // Build weapon map for child resolution
@@ -1427,6 +1462,9 @@ export async function GET(
               break;
             case "bombs":
               equippedItem = buildBombItem(row);
+              break;
+            case "radars":
+              equippedItem = buildRadarItem(row);
               break;
           }
         }
