@@ -94,11 +94,23 @@ async function main() {
     "volume_micro_scu",
   ];
 
-  // Estrategia: TRUNCATE + bulk insert. Más rápido y predecible que un loop
-  // de upserts. Como `name` es la PK, esto reemplaza cualquier fila con
-  // mismo nombre por la nueva versión del JSON.
-  await sql`TRUNCATE TABLE fps_weapons`;
-  await sql`INSERT INTO fps_weapons ${sql(rows, ...cols)}`;
+  await sql`
+    INSERT INTO fps_weapons ${sql(rows, ...cols)}
+    ON CONFLICT (name) DO UPDATE SET
+      type             = EXCLUDED.type,
+      magazine         = EXCLUDED.magazine,
+      bullet_speed     = EXCLUDED.bullet_speed,
+      alpha_damage     = EXCLUDED.alpha_damage,
+      max_firerate     = EXCLUDED.max_firerate,
+      max_dps          = EXCLUDED.max_dps,
+      single_firerate  = EXCLUDED.single_firerate,
+      single_dps       = EXCLUDED.single_dps,
+      burst_firerate   = EXCLUDED.burst_firerate,
+      burst_dps        = EXCLUDED.burst_dps,
+      rapid_firerate   = EXCLUDED.rapid_firerate,
+      rapid_dps        = EXCLUDED.rapid_dps,
+      volume_micro_scu = EXCLUDED.volume_micro_scu
+  `;
   const [{ count }] = await sql`SELECT COUNT(*)::int AS count FROM fps_weapons`;
   console.log(`[OK] Filas en fps_weapons: ${count}`);
 

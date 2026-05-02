@@ -1,4 +1,27 @@
 #!/usr/bin/env node
+// =============================================================================
+// Análisis de la discrepancia Panther S3 vs Erkul (auditoría 2026-04-26)
+//
+// Erkul muestra 192 rounds @ 4 pips para el Panther S3.
+// Nuestra fórmula (045_weapon_capacitor_fields.sql):
+//   rounds = requested_ammo_load × (pips / max_weapon_pips) / regen_cost_per_bullet
+//
+// El ejemplo de esa migración usa el Panther en el Asgard (max_weapon_pips=4):
+//   4 pips / 4 → 100% → 18187 / 48.5 ≈ 375 rounds   ← NO coincide con Erkul
+//
+// Hipótesis más probable (verificar con la query de abajo):
+//   El Panther S3 tiene max_weapon_pips ≠ 4. Si max=8:
+//   4 pips / 8 → 50% → requested_ammo_load / (2 × regen_cost_per_bullet) ≈ 192
+//
+// Para validar:
+//   1. Ejecutar este script contra prod y ver requested_ammo_load / regen_cost_per_bullet del S3.
+//   2. Consultar ship_pools.max_pips del Panther S3 en los hardpoints donde monta.
+//   3. Verificar en scunpacked-data el campo SWeaponRegenConsumerParams del S3.
+//
+// Fix probable: el ingest asume max_weapon_pips=4 globalmente en lugar de leerlo
+// del loadout de cada nave/hardpoint. El extractor versión-aware debe joinear
+// ship_hardpoints → ship_pools para derivar el pips real por contexto de nave.
+// =============================================================================
 import postgres from "postgres";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";

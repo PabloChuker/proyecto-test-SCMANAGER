@@ -20,11 +20,13 @@
 import postgres from "postgres";
 import "dotenv/config";
 import { readFileSync, readdirSync, existsSync } from "fs";
-import { join, basename } from "path";
+import { join, basename, resolve } from "path";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 const VERBOSE = process.argv.includes("--verbose");
-const SCUNPACKED = join(process.cwd(), "scunpacked");
+const SCUNPACKED = process.env.SCUNPACKED_LOCAL_PATH
+  ? resolve(process.env.SCUNPACKED_LOCAL_PATH)
+  : join(process.cwd(), "scunpacked");
 
 // ─── DB Connection ────────────────────────────────────────────────────────────
 

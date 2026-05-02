@@ -1,5 +1,7 @@
 -- Migration: Create manneuver_thrusters table
 -- Description: Stores maneuver thruster components for ships
+-- NOTA: El nombre "manneuver" es un typo heredado del origen scunpacked.
+-- No renombrar sin una migración coordinada — seeds, scripts y código lo referencian igual.
 
 create table if not exists manneuver_thrusters (
     uuid uuid primary key,
