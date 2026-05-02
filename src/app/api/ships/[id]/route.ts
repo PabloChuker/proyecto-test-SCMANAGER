@@ -553,17 +553,36 @@ function buildGenericItem(hp: any): any {
 
 // ─── Build children from loadout_json ───────────────────────────────────────
 
+/**
+ * Fase Y (2026-05-02): Garnok cambió la shape de loadout_json. Antes era un
+ * array directo de entries `[{Name, Type, ClassName, ...}, ...]`. Ahora es
+ * un objeto que envuelve el wrapper del hardpoint con un campo `Loadout`
+ * adentro: `{Name: "VariPuck...", Type: "Turret.GunTurret", Loadout: [...]}`.
+ *
+ * Normalizamos: si es array → entries directos; si es objeto → tomar `Loadout`.
+ * Caso edge: objeto sin Loadout (controllers, regen pools) → vacío.
+ */
+function normalizeLoadoutEntries(loadoutJson: any): any[] {
+  if (Array.isArray(loadoutJson)) return loadoutJson;
+  if (loadoutJson && typeof loadoutJson === "object") {
+    const inner = loadoutJson.Loadout;
+    if (Array.isArray(inner)) return inner;
+  }
+  return [];
+}
+
 function buildChildren(
-  loadoutJson: any[] | null,
+  loadoutJson: any,
   weaponMap: Map<string, any>,
   missileMap: Map<string, any>,
 ): any[] {
-  if (!loadoutJson || !Array.isArray(loadoutJson)) return [];
+  const entries = normalizeLoadoutEntries(loadoutJson);
+  if (entries.length === 0) return [];
 
   const results: any[] = [];
 
-  for (let idx = 0; idx < loadoutJson.length; idx++) {
-    const entry = loadoutJson[idx];
+  for (let idx = 0; idx < entries.length; idx++) {
+    const entry = entries[idx];
     const className = entry.ClassName || entry.className || "";
     let equippedItem: any = null;
 
@@ -572,10 +591,18 @@ function buildChildren(
       entry.Type?.includes("Turret.GunTurret") ||
       entry.Type?.includes("TurretBase");
 
-    if (isGimbal && Array.isArray(entry.Children) && entry.Children.length > 0) {
+    // Fase Y: gimbals legacy traían `entry.Children`; en la shape nueva
+    // los sub-weapons viven en `entry.Loadout`. Aceptar ambos.
+    const gimbalChildren: any[] = Array.isArray(entry.Children)
+      ? entry.Children
+      : Array.isArray(entry.Loadout)
+        ? entry.Loadout
+        : [];
+
+    if (isGimbal && gimbalChildren.length > 0) {
       // This is a gimbal inside a turret — flatten to show the actual weapons
-      for (let ci = 0; ci < entry.Children.length; ci++) {
-        const child = entry.Children[ci];
+      for (let ci = 0; ci < gimbalChildren.length; ci++) {
+        const child = gimbalChildren[ci];
         const childClassName = child.ClassName || child.className || "";
         let childItem: any = null;
 
@@ -1298,21 +1325,27 @@ export async function GET(
       .map((hp) => hp.default_item_class)
       .filter((c) => c && c !== "");
 
-    // Also collect class names from loadout_json children (including nested Children)
+    // Also collect class names from loadout_json children (including nested
+    // Children/Loadout). Fase Y (2026-05-02): Garnok cambió la shape del
+    // loadout_json: antes `[{...}, {...}]`, ahora `{Name, Type, Loadout: [...]}`
+    // donde Loadout es el array. El recorrido ahora normaliza a entries y
+    // dentro de cada entry busca tanto `Children` (legacy) como `Loadout`
+    // (nuevo) para soportar mixed states durante la migración.
     const childClasses: string[] = [];
     for (const hp of hardpointRows) {
-      const loadout = hp.loadout_json;
-      if (Array.isArray(loadout)) {
-        for (const entry of loadout) {
-          if (entry.ClassName) childClasses.push(entry.ClassName);
-          if (entry.className) childClasses.push(entry.className);
-          // Turret gimbals may have nested Children with the actual weapons
-          if (Array.isArray(entry.Children)) {
-            for (const child of entry.Children) {
-              if (child.ClassName) childClasses.push(child.ClassName);
-              if (child.className) childClasses.push(child.className);
-            }
-          }
+      const entries = normalizeLoadoutEntries(hp.loadout_json);
+      for (const entry of entries) {
+        if (entry.ClassName) childClasses.push(entry.ClassName);
+        if (entry.className) childClasses.push(entry.className);
+        // Nested children: prefer Loadout (nuevo), fallback Children (legacy).
+        const subEntries: any[] = Array.isArray(entry.Loadout)
+          ? entry.Loadout
+          : Array.isArray(entry.Children)
+            ? entry.Children
+            : [];
+        for (const child of subEntries) {
+          if (child.ClassName) childClasses.push(child.ClassName);
+          if (child.className) childClasses.push(child.className);
         }
       }
     }
@@ -1376,9 +1409,9 @@ export async function GET(
       // lookup en buildChildren matchee sin importar cuál esté disponible.
       const missileKeys = new Set<string>();
       for (const hp of hardpointRows) {
-        const lj = hp.loadout_json;
-        if (!Array.isArray(lj)) continue;
-        for (const e of lj) {
+        // Fase Y: normalizar loadout_json (objeto.Loadout o array directo).
+        const entries = normalizeLoadoutEntries(hp.loadout_json);
+        for (const e of entries) {
           const t = String(e?.Type ?? "");
           const it = String(e?.ItemTypes ?? "");
           if (t.includes("Missile") || it.includes("Missile")) {
