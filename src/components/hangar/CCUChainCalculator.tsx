@@ -288,7 +288,9 @@ function SavingsSummary({ chain }: { chain: ChainResult }) {
   return (
     <div className="space-y-4">
       {/* Cost breakdown: Efectivo / Créditos / En Hangar */}
-      <div className="grid grid-cols-3 gap-3">
+      {/* Móvil: apilado vertical (cada tarjeta ocupa todo el ancho).
+          sm+ (>=640px): las 3 tarjetas lado a lado como en desktop. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="bg-zinc-900/60 border border-amber-500/30 rounded-sm p-3">
           <p className="text-[10px] text-amber-400 uppercase tracking-widest">Efectivo Necesario</p>
           <p className="text-xl font-mono font-bold text-amber-400 mt-1">${bd.cashTotal.toFixed(2)}</p>

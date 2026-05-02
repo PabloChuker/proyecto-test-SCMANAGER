@@ -48,7 +48,9 @@ export default function MyAccountPage() {
       <Header subtitle={t("subtitle")} />
 
       <div className="flex flex-1 min-h-0">
-        <aside className="w-12 sm:w-14 flex-shrink-0 bg-zinc-950/90 border-r border-zinc-800/50 flex flex-col items-center py-3 gap-1 z-20 sticky top-12 h-[calc(100vh-3rem)] overflow-y-auto">
+        {/* Sidebar — oculto en móvil/sm porque el hamburger drawer (Fase R.5)
+            ya cubre toda la nav. En md+ se ve idéntico a antes. */}
+        <aside className="hidden md:flex w-12 sm:w-14 flex-shrink-0 bg-zinc-950/90 border-r border-zinc-800/50 flex-col items-center py-3 gap-1 z-20 sticky top-12 h-[calc(100vh-3rem)] overflow-y-auto">
           {SIDEBAR_ITEMS.map((item) => (
             <Link key={item.key} href={item.href} title={item.label} className="w-9 h-9 sm:w-10 sm:h-10 rounded flex items-center justify-center hover:bg-zinc-800/40">
               <Image src={item.icon} alt={item.label} width={22} height={22} className="opacity-40 hover:opacity-70" />
@@ -58,13 +60,14 @@ export default function MyAccountPage() {
 
         <div className="flex-1 z-10 relative px-4 py-6 overflow-y-auto">
           <div className="max-w-4xl mx-auto space-y-6">
-            {/* Tabs */}
-            <div className="flex gap-2 border-b border-zinc-800/60 pb-2">
+            {/* Tabs — overflow-x-auto por seguridad si los labels son largos
+                en idiomas que traducen "Loadouts/Inventory/Wishlist" más largo. */}
+            <div className="flex gap-2 border-b border-zinc-800/60 pb-2 overflow-x-auto">
               {tabs.map((t) => (
                 <button
                   key={t.key}
                   onClick={() => setTab(t.key)}
-                  className={`px-4 py-2 text-sm tracking-wider uppercase transition-all ${
+                  className={`px-2 sm:px-4 py-2 text-sm tracking-wider uppercase whitespace-nowrap transition-all ${
                     tab === t.key
                       ? "text-amber-400 border-b-2 border-amber-500"
                       : "text-zinc-500 hover:text-zinc-400 border-b-2 border-transparent"

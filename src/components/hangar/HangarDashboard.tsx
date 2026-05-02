@@ -331,14 +331,14 @@ export function HangarDashboard() {
         <div className="space-y-5">
           {/* Stats */}
           {activeTab === "My Fleet" ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               <StatCard label="Active Ships" value={fleetShipCount.toString()} accent="cyan" />
               <StatCard label="Fleet Value" value={`$${fleetValue.toLocaleString()}`} accent="emerald" />
               <StatCard label="All Items" value={(fleetShips.length + fleetCCUs.length).toString()} />
               <StatCard label="Total Investment" value={`$${(fleetValue + buybackValue + totalCCUValue).toLocaleString()}`} accent="amber" />
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               <StatCard label="Buyback Items" value={(buybackShips.length + buybackCCUs.length).toString()} accent="orange" />
               <StatCard label="Buyback Value" value={`$${buybackValue.toLocaleString()}`} accent="amber" />
               <StatCard label="Ships" value={buybackShips.filter((s) => s.itemCategory === "standalone_ship" || s.itemCategory === "game_package").length.toString()} />
@@ -480,7 +480,7 @@ export function HangarDashboard() {
       {activeTab === "Wishlist" && (
         <div className="space-y-5">
           {/* Stats */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             <StatCard label="Total Wishlist" value={wishlist.length.toString()} accent="purple" />
             <StatCard label="Alta Prioridad" value={wishlistHighPriority.toString()} accent="orange" />
             <StatCard label="Presupuesto Estimado" value={`$${wishlistTotalValue.toLocaleString()}`} accent="amber" />
@@ -564,7 +564,7 @@ export function HangarDashboard() {
 
           {/* ── Manual Chain Builder (existing) ── */}
           <div className="space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               <StatCard label="Total Chains" value={chains.length.toString()} accent="purple" />
               <StatCard label="Total Chain Cost" value={`$${chains.reduce((sum, chain) => sum + chain.steps.reduce((s, step) => s + step.ccuPrice, 0), 0).toLocaleString()}`} />
               <StatCard label="Status" value={`Active: ${chains.filter((c) => c.status === "in_progress").length} | Done: ${chains.filter((c) => c.status === "completed").length}`} />
