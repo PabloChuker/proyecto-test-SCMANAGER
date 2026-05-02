@@ -409,12 +409,19 @@ export function PowerManagementPanel({
         </div>
       </div>
 
-      {/* ── Signatures (EM / IR) — Fase Q.4: PWR y THM removidos.
-          EM e IR son los relevantes en este panel; el balance de power
-          ya se ve en la barra superior y el thermal en los bars. */}
-      <div className="border-t border-zinc-800/50 px-3 py-3 grid grid-cols-2 gap-x-6">
+      {/* ── Signatures (EM / IR / CS) ──
+          Fase Q.4: PWR y THM removidos. Fase W.10b (2026-05-02): agregamos
+          CS (Cross-Section, VerseTools §5.3). Si el valor es estimado (no
+          hay base hull validado in-game), se muestra el label "CS·EST". */}
+      <div className="border-t border-zinc-800/50 px-3 py-3 grid grid-cols-3 gap-x-3">
         <BigStat icon="⚡" label="EM" value={stats.emSignature} color="#a855f7" />
         <BigStat icon="🔥" label="IR" value={stats.irSignature} color="#f97316" />
+        <BigStat
+          icon="◎"
+          label={stats.csIsEstimate ? "CS·EST" : "CS"}
+          value={stats.csSignature}
+          color="#10b981"
+        />
       </div>
     </div>
   );

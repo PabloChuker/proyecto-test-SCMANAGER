@@ -170,6 +170,39 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
         </div>
       )}
 
+      {/* ── COOLING BALANCE (Fase W.7/W.8) ────────────────────────────────────
+          Demand viene de la fórmula 2-tier de VerseTools §7.2 (Life Support
+          2.300/pip, QD 2.070, Radar 1.988, Shields 1.978, Thrusters 1.032,
+          Tools 0.966, Coolers 0.939, Weapons 0.900 + PP_IDLE 0.04). Supply
+          de coolers escala por pips × bandMod / maxPips. Si demand > supply
+          la nave entra en overload térmico (color rojo). */}
+      {(stats.coolingRate > 0 || stats.thermalOutput > 0) && (
+        <div className="border-t border-zinc-800/40 pt-2">
+          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.15em] uppercase mb-1">
+            Thermal balance
+          </div>
+          <div className="flex items-baseline gap-3">
+            <Image src="/icons/coolers.png" alt="" width={16} height={16} style={{ opacity: 0.5 }} />
+            <span
+              className="text-lg font-mono font-bold tabular-nums"
+              style={{
+                color:
+                  stats.thermalBalance >= 0 ? "#06b6d4" : "#ef4444",
+              }}
+            >
+              {stats.thermalBalance >= 0 ? "+" : ""}{fmtStat(stats.thermalBalance)}
+            </span>
+            <span className="text-[10px] font-mono text-zinc-500">balance</span>
+            <span className="text-[8px] font-mono text-zinc-600 ml-2">
+              supply {fmtStat(stats.coolingRate)} · demand {fmtStat(stats.thermalOutput)}
+            </span>
+            {stats.thermalBalance < 0 && (
+              <span className="text-[9px] font-mono text-red-500 ml-1">⚠ overload</span>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── ARMOR DEFLECTION + DAMAGE MULTIPLIERS ──────────────────────────── */}
       {hasArmorBlock && (
         <div className="border-t border-zinc-800/40 pt-2">
