@@ -96,6 +96,20 @@ export function HangarDashboard() {
     if (typeof window !== "undefined") localStorage.setItem("sc-labs-hangar-view", viewMode);
   }, [viewMode]);
 
+  // Fase R.9 (2026-05-02): en móvil (<md) la list view tiene 7 columnas que
+  // no caben legible en 380px. Forzamos cards en móvil sin pisar el state del
+  // user — cuando vuelva a desktop sigue viendo "list" si lo había elegido.
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  const effectiveViewMode: "cards" | "list" = isMobile ? "cards" : viewMode;
+
   const ships = useHangarStore((state) => state.ships);
   const ccus = useHangarStore((state) => state.ccus);
   const chains = useHangarStore((state) => state.chains);
@@ -427,16 +441,22 @@ export function HangarDashboard() {
                   <option value="price">Sort: Price</option>
                   <option value="date">Sort: Date</option>
                 </select>
-                <ViewModeToggle viewMode={viewMode} setViewMode={setViewMode} />
+                {/* Toggle oculto en móvil: el list view queda forzado a cards <md.
+                    `hidden md:contents` mantiene el flex layout en desktop sin un
+                    wrapper extra (el span desaparece y el ViewModeToggle queda
+                    como sibling directo de los otros botones). */}
+                <span className="hidden md:contents">
+                  <ViewModeToggle viewMode={viewMode} setViewMode={setViewMode} />
+                </span>
                 <button onClick={() => setShowAddShipModal(true)} className="px-4 py-2 bg-amber-500/20 border border-amber-500/50 rounded-sm text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-all duration-300">Add Ship</button>
                 {(filterCategory === "all" || filterCategory === "ccu") && (
                   <button onClick={() => setShowAddCCUModal(true)} className="px-4 py-2 bg-cyan-500/20 border border-cyan-500/50 rounded-sm text-cyan-400 text-sm font-medium hover:bg-cyan-500/30 transition-all duration-300">Add CCU</button>
                 )}
               </div>
 
-              {/* Items grid o list según viewMode */}
+              {/* Items grid o list según viewMode (forzado a "cards" en móvil) */}
               {filteredShips.length > 0 && (
-                viewMode === "list"
+                effectiveViewMode === "list"
                   ? <FleetList ships={filteredShips} />
                   : <FleetGrid ships={filteredShips} />
               )}
@@ -528,13 +548,19 @@ export function HangarDashboard() {
                   onChange={(e) => setWishlistSearch(e.target.value)}
                   className="flex-1 px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-fuchsia-500/50 transition-all duration-300"
                 />
-                <ViewModeToggle viewMode={viewMode} setViewMode={setViewMode} />
+                {/* Toggle oculto en móvil: el list view queda forzado a cards <md.
+                    `hidden md:contents` mantiene el flex layout en desktop sin un
+                    wrapper extra (el span desaparece y el ViewModeToggle queda
+                    como sibling directo de los otros botones). */}
+                <span className="hidden md:contents">
+                  <ViewModeToggle viewMode={viewMode} setViewMode={setViewMode} />
+                </span>
               </div>
             </>
           )}
 
-          {/* Wishlist render: cards o list según viewMode */}
-          {viewMode === "list"
+          {/* Wishlist render: cards o list según viewMode (forzado cards en móvil) */}
+          {effectiveViewMode === "list"
             ? <WishlistList items={filteredWishlist} />
             : <WishlistGrid items={filteredWishlist} />}
 

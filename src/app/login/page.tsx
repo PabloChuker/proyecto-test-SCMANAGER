@@ -27,7 +27,9 @@ function LoginContent() {
 
   return (
     <div className="flex-1 flex items-center justify-center z-10 relative">
-      <div className="max-w-md w-full mx-4 space-y-8">
+      {/* Móvil: max-w-md (~448px) con mx-4 para no tocar bordes.
+          Tablet+: md:max-w-lg (~512px) — más aire en pantallas medianas. */}
+      <div className="max-w-md md:max-w-lg w-full mx-4 space-y-8">
         {/* Logo / Title */}
         <div className="text-center space-y-3">
           <div className="text-5xl">🚀</div>
