@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import {
   X, Lock, ChevronDown, Shield,
   Settings, CreditCard, Heart, Bell, Eye, Check, Link2, Share2,
+  Upload, Loader2,
 } from "lucide-react";
 import Header from "@/app/assets/header/Header";
 import { SIDEBAR_ITEMS } from "@/app/assets/header/navigation";
@@ -360,8 +361,57 @@ function ReferralPanel({ onClose }: { onClose: () => void }) {
 
 // ── Panel: Organización ────────────────────────────────────────────────────
 
-function OrgInfoPanel({ orgName, onClose }: { orgName: string | null; onClose: () => void }) {
+function OrgInfoPanel({
+  orgName,
+  orgId,
+  logoUrl,
+  onLogoUpdated,
+  onClose,
+}: {
+  orgName: string | null;
+  orgId: string | null;
+  logoUrl: string | null;
+  onLogoUpdated: (url: string | null) => void;
+  onClose: () => void;
+}) {
   const t = useTranslations("Profile.org");
+  const supabase = createClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !orgId) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setUploadError("Max 2MB");
+      return;
+    }
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "png";
+      const path = `${orgId}/logo-${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("org-logos")
+        .upload(path, file, { upsert: true, cacheControl: "3600" });
+      if (upErr) throw upErr;
+      const { data } = supabase.storage.from("org-logos").getPublicUrl(path);
+      const publicUrl = data.publicUrl;
+      const { error: dbErr } = await supabase
+        .from("organizations")
+        .update({ logo_url: publicUrl })
+        .eq("id", orgId);
+      if (dbErr) throw dbErr;
+      onLogoUpdated(publicUrl);
+    } catch (err: any) {
+      setUploadError(err?.message ?? "Upload error");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
@@ -378,8 +428,41 @@ function OrgInfoPanel({ orgName, onClose }: { orgName: string | null; onClose: (
           <>
             {/* Org header */}
             <div className="flex items-center gap-4 p-4 rounded-xl border border-zinc-800/50 bg-zinc-900/30">
-              <div className="w-[64px] h-[64px] rounded-xl border border-amber-600/30 bg-zinc-900/60 flex items-center justify-center flex-shrink-0 overflow-hidden p-1">
-                <img src="/sclabs-logo.png" alt="org logo" className="w-full h-full object-contain drop-shadow-[0_0_8px_rgba(232,137,12,0.4)]" />
+              <div className="relative group flex-shrink-0">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  onChange={handleLogoUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading || !orgId}
+                  className="w-[64px] h-[64px] rounded-xl border border-amber-600/30 bg-zinc-900/60 flex items-center justify-center overflow-hidden p-1 cursor-pointer hover:border-amber-500/60 transition-colors disabled:cursor-not-allowed"
+                  title="Subir logo de organización"
+                >
+                  {logoUrl ? (
+                    <img
+                      src={logoUrl}
+                      alt="org logo"
+                      className="w-full h-full object-contain drop-shadow-[0_0_8px_rgba(232,137,12,0.4)]"
+                    />
+                  ) : (
+                    <Shield size={28} className="text-zinc-700" />
+                  )}
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-xl">
+                    {uploading ? (
+                      <Loader2 size={18} className="text-amber-400 animate-spin" />
+                    ) : (
+                      <Upload size={18} className="text-amber-400" />
+                    )}
+                  </div>
+                </button>
+                {uploadError && (
+                  <div className="absolute -bottom-5 left-0 text-[10px] text-rose-400 whitespace-nowrap">{uploadError}</div>
+                )}
               </div>
               <div>
                 <div className="text-lg font-bold text-zinc-100 tracking-wide">{orgName}</div>
@@ -445,6 +528,7 @@ export default function ProfilePage() {
   const [displayName, setDisplayName] = useState("");
   const [country,     setCountry]     = useState("");
   const [orgName,     setOrgName]     = useState<string | null>(null);
+  const [orgLogoUrl,  setOrgLogoUrl]  = useState<string | null>(null);
 
   // Auth redirect
   // useEffect(() => {
@@ -459,15 +543,18 @@ export default function ProfilePage() {
     }
   }, [profile]);
 
-  // Fetch org name from organizations table
+  // Fetch org name + logo from organizations table
   useEffect(() => {
-    if (!profile?.org_id) { setOrgName("SC Labs"); return; } // preview fallback
+    if (!profile?.org_id) { setOrgName("SC Labs"); setOrgLogoUrl(null); return; } // preview fallback
     supabase
       .from("organizations")
-      .select("name")
+      .select("name, logo_url")
       .eq("id", profile.org_id)
       .single()
-      .then(({ data }) => setOrgName(data?.name ?? null));
+      .then(({ data }) => {
+        setOrgName(data?.name ?? null);
+        setOrgLogoUrl(data?.logo_url ?? null);
+      });
   }, [profile?.org_id]);
 
   useEffect(() => {
@@ -670,7 +757,7 @@ export default function ProfilePage() {
                   <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(245,158,11,0.3) transparent" }}>
                     {activeSection === "config" && <ConfigPanel onClose={() => setActiveSection(null)} discordName={linkedDiscord} discordAvatar={discordAvatar} />}
                     {activeSection === "subs"   && <SubsPanel onClose={() => setActiveSection(null)} />}
-                    {activeSection === "org"    && <OrgInfoPanel orgName={orgName} onClose={() => setActiveSection(null)} />}
+                    {activeSection === "org"    && <OrgInfoPanel orgName={orgName} orgId={profile?.org_id ?? null} logoUrl={orgLogoUrl} onLogoUpdated={setOrgLogoUrl} onClose={() => setActiveSection(null)} />}
                   </div>
                 </>
               ) : (
@@ -888,7 +975,7 @@ export default function ProfilePage() {
                   {activeSection === "config"   && id === "config"   && <ConfigPanel onClose={() => setActiveSection(null)} discordName={linkedDiscord} discordAvatar={discordAvatar} />}
                   {activeSection === "referral" && id === "referral" && <ReferralPanel onClose={() => setActiveSection(null)} />}
                   {activeSection === "subs"     && id === "subs"     && <SubsPanel onClose={() => setActiveSection(null)} />}
-                  {activeSection === "org"      && id === "org"      && <OrgInfoPanel orgName={orgName} onClose={() => setActiveSection(null)} />}
+                  {activeSection === "org"      && id === "org"      && <OrgInfoPanel orgName={orgName} orgId={profile?.org_id ?? null} logoUrl={orgLogoUrl} onLogoUpdated={setOrgLogoUrl} onClose={() => setActiveSection(null)} />}
                 </div>
               ))}
             </div>
