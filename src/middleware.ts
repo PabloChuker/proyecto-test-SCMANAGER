@@ -160,6 +160,6 @@ h1{font-size:2rem;color:#3B82F6}p{color:#94A3B8}</style></head>
 // Only run on pages and API routes (skip static assets)
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|ships/|media/|fonts/).*)",
+    "/((?!_next/static|_next/image|favicon.ico|ships/|media/|fonts/|.*\\.html$).*)",
   ],
 };
