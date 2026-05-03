@@ -58,27 +58,42 @@ export async function POST(request: NextRequest) {
     }
 
     // ── 1. Load all ships with MSRP ──
+    // CCU.5 (2026-05-03): LEFT JOIN con ship_prices_canonical para obtener
+    // warbond_usd REAL del Wiki (mejor que el cap teórico del 10%). Si la
+    // tabla canónica no tiene match, cae a sp.warbond_usd local. La columna
+    // `warbond_usd_real` se prioriza en el cálculo de edges abajo.
     const shipRows: any[] = await sql.unsafe(`
       SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer, sp.msrp_usd, sp.warbond_usd,
+             spc.warbond_usd AS warbond_usd_real,
              COALESCE(sp.is_ccu_eligible, true) AS is_ccu_eligible,
              COALESCE(sp.is_limited, false) AS is_limited,
              COALESCE(s.flight_status, 'flight_ready') AS flight_status
       FROM ships s
       LEFT JOIN ship_price sp ON sp.id = s.id
       LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
+      LEFT JOIN ship_prices_canonical spc ON spc.ship_id = s.id
       WHERE sp.msrp_usd IS NOT NULL AND sp.msrp_usd > 0
       ORDER BY sp.msrp_usd ASC
     `, []);
 
     const ships = new Map<string, ShipNode>();
+    // Map auxiliar: shipId → warbond REAL del Wiki (si existe). Lo usamos en
+    // mode "Esperar y Ahorrar" antes de aplicar el cap teórico.
+    const realWarbondByShipId = new Map<string, number>();
     for (const row of shipRows) {
-      ships.set(String(row.id), {
-        id: String(row.id),
+      const id = String(row.id);
+      // Preferir warbond REAL del Wiki sobre el local. Si ninguno existe, null.
+      const realWarbond = row.warbond_usd_real != null ? Number(row.warbond_usd_real) : null;
+      const localWarbond = row.warbond_usd != null ? Number(row.warbond_usd) : null;
+      const effectiveWarbond = realWarbond ?? localWarbond;
+      if (realWarbond != null) realWarbondByShipId.set(id, realWarbond);
+      ships.set(id, {
+        id,
         reference: row.reference || "",
         name: row.name || "",
         manufacturer: row.manufacturer || null,
         msrpUsd: Number(row.msrp_usd) || 0,
-        warbondUsd: row.warbond_usd ? Number(row.warbond_usd) : null,
+        warbondUsd: effectiveWarbond,
         isCcuEligible: row.is_ccu_eligible !== false,
         isLimited: row.is_limited === true,
         flightStatus: row.flight_status || "flight_ready",
@@ -202,21 +217,35 @@ export async function POST(request: NextRequest) {
           // son continuos. Sin esto, el algoritmo creía que un salto Hull A
           // ($90) → MOTH ($315) costaba $5 warbond (descuento del 97%) y
           // armaba paths irreales con muchos saltos warbond imposibles.
+          //
+          // CCU.5 (2026-05-03): cuando tenemos warbond REAL del Wiki
+          // (`realWarbondByShipId.has(to.id)`), NO aplicamos el cap. El cap
+          // teórico (10% MSRP) es solo un fallback para naves sin datos —
+          // 41% de las naves tienen discount real > 10% (RAFT 42%, Cyclone
+          // 27%, Idris-P 21%) y cap-earlas falsea las cadenas resultantes.
           let warbondPrice: number | null = null;
           let isWarbondAvailable = false;
 
           const maxDiscount = getMaxWarbondDiscount(to.msrpUsd);
+          const hasRealWarbond = realWarbondByShipId.has(to.id);
 
           if (existing?.warbond != null && existing.warbond > 0) {
-            // Tomamos el warbond real PERO capeamos el descuento implícito.
+            // Si tenemos warbond REAL del Wiki para esta nave, confiar en
+            // existing.warbond sin capear. Si no, mantener el cap defensivo.
             const realDiscount = standardPrice - existing.warbond;
-            const cappedDiscount = Math.min(Math.max(realDiscount, 0), maxDiscount);
+            const cappedDiscount = hasRealWarbond
+              ? Math.max(realDiscount, 0)
+              : Math.min(Math.max(realDiscount, 0), maxDiscount);
             warbondPrice = standardPrice - cappedDiscount;
             isWarbondAvailable = cappedDiscount > 0;
           } else if (to.warbondUsd != null && to.warbondUsd > 0 && standardPrice > 0) {
-            // Calculate theoretical warbond CCU with realistic discount cap
+            // to.warbondUsd YA fue priorizado al real del Wiki en el SELECT
+            // inicial (ver `effectiveWarbond`). Si el ship tiene real, NO
+            // capear; sino, aplicar cap teórico contra outliers de BD local.
             const rawShipDiscount = to.msrpUsd - to.warbondUsd;
-            const cappedDiscount = Math.min(rawShipDiscount, maxDiscount);
+            const cappedDiscount = hasRealWarbond
+              ? Math.max(rawShipDiscount, 0)
+              : Math.min(rawShipDiscount, maxDiscount);
             const theoreticalWB = standardPrice - cappedDiscount;
 
             if (theoreticalWB > 0 && cappedDiscount > 0) {
