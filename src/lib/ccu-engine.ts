@@ -38,6 +38,14 @@ export interface ShipNode {
   isCcuEligible: boolean;
   isLimited: boolean;
   flightStatus: string;
+  /**
+   * CCU.6 (2026-05-03): pledge_availability del Wiki.
+   * Valores típicos: 'Always available' | 'Time-limited sales' |
+   * 'Quantity-limited sales' | 'Limited edition*' | 'Out of production' |
+   * 'Reward - Not available for sale' | 'Not available for sale' | null
+   * Lo categorizamos en la UI con `categorizeAvailability()`.
+   */
+  pledgeAvailability: string | null;
 }
 
 export type PriceType =
@@ -62,6 +70,13 @@ export interface ChainStep {
   targetMsrp: number;        // MSRP of the target ship at this step (store value)
   acquiredCost: number;      // Total real cost to have this ship via chain (baseShipCost + cumulativeCCUs)
   savingsVsMsrp: number;     // targetMsrp - acquiredCost (how much you save vs buying outright)
+  /**
+   * CCU.6 (2026-05-03): availability del TARGET de este step (toShip).
+   * Sale de ship_prices_canonical.pledge_availability. La UI lo categoriza
+   * para mostrar badge ✓ / 🕒 / 🚫 y avisar al user si la cadena requiere
+   * esperar a un evento o si tiene steps no-comprables hoy.
+   */
+  targetAvailability: string | null;
 }
 
 export interface CostBreakdown {
@@ -462,6 +477,7 @@ function reconstructPath(
       targetMsrp: toShip.msrpUsd,
       acquiredCost: 0,       // Will be calculated below
       savingsVsMsrp: 0,      // Will be calculated below
+      targetAvailability: toShip.pledgeAvailability ?? null,
     });
 
     current = entry.edge.fromShipId;

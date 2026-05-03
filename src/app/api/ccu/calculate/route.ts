@@ -65,6 +65,7 @@ export async function POST(request: NextRequest) {
     const shipRows: any[] = await sql.unsafe(`
       SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer, sp.msrp_usd, sp.warbond_usd,
              spc.warbond_usd AS warbond_usd_real,
+             spc.pledge_availability,
              COALESCE(sp.is_ccu_eligible, true) AS is_ccu_eligible,
              COALESCE(sp.is_limited, false) AS is_limited,
              COALESCE(s.flight_status, 'flight_ready') AS flight_status
@@ -97,6 +98,9 @@ export async function POST(request: NextRequest) {
         isCcuEligible: row.is_ccu_eligible !== false,
         isLimited: row.is_limited === true,
         flightStatus: row.flight_status || "flight_ready",
+        // CCU.6: pledgeAvailability del Wiki, propagado hasta cada ChainStep
+        // para que la UI muestre badges ✓/🕒/🚫 según disponibilidad real.
+        pledgeAvailability: row.pledge_availability || null,
       });
     }
 

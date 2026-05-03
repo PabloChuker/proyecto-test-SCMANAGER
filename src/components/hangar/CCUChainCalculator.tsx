@@ -153,6 +153,59 @@ function ShipSearchSelect({
   );
 }
 
+// ─── Availability badge helpers (CCU.6, 2026-05-03) ────────────────────────
+// Categoriza el `pledge_availability` raw del Wiki en 3 buckets visuales:
+//   "available" → ✓ verde (no se muestra badge, es el default esperado)
+//   "limited"   → 🕒 ámbar — solo en eventos (Time-limited / Quantity-limited)
+//   "unavailable" → 🚫 rojo — no se vende hoy (Reward-only, Out of production,
+//                              Limited edition discontinued, etc.)
+//   "unknown"   → sin badge (data faltante en ship_prices_canonical, no
+//                            asumimos nada; el solver igual usa el cap teórico)
+type AvailabilityCategory = "available" | "limited" | "unavailable" | "unknown";
+
+function categorizeAvailability(raw: string | null | undefined): AvailabilityCategory {
+  if (!raw) return "unknown";
+  const r = raw.toLowerCase();
+  if (r === "always available") return "available";
+  if (r.includes("time-limited") || r === "time limited" || r.includes("quantity-limited")) {
+    return "limited";
+  }
+  // Cualquier flavor de "limited edition", "reward", "not available", "out of
+  // production", "no longer available", "promotion only" → no comprable hoy.
+  if (
+    r.includes("limited edition") ||
+    r.includes("reward") ||
+    r.includes("not available") ||
+    r.includes("out of production") ||
+    r.includes("no longer available") ||
+    r.includes("promotion") ||
+    r.includes("limited availability")
+  ) {
+    return "unavailable";
+  }
+  return "unknown";
+}
+
+function AvailabilityBadge({ raw, compact = false }: { raw: string | null | undefined; compact?: boolean }) {
+  const cat = categorizeAvailability(raw);
+  if (cat === "available" || cat === "unknown") return null; // no badge
+  const isLimited = cat === "limited";
+  const icon = isLimited ? "🕒" : "🚫";
+  const cls = isLimited
+    ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+    : "bg-red-500/15 text-red-400 border-red-500/30";
+  const label = isLimited ? "EVENTO" : "NO DISPONIBLE";
+  return (
+    <span
+      className={`inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border ${cls}`}
+      title={raw ?? undefined}
+    >
+      <span>{icon}</span>
+      {!compact && <span>{label}</span>}
+    </span>
+  );
+}
+
 // ─── Chain Step Visual ──────────────────────────────────────────────────────
 
 function ChainStepCard({ step, index, isLast }: { step: ChainStep; index: number; isLast: boolean }) {
@@ -231,6 +284,9 @@ function ChainStepCard({ step, index, isLast }: { step: ChainStep; index: number
                   Save ${step.savingsVsStandard.toFixed(2)}
                 </span>
               )}
+              {/* CCU.6: badge de disponibilidad del target. Sólo aparece si el
+                  target NO es Always available (el caso bueno default). */}
+              <AvailabilityBadge raw={step.targetAvailability} />
             </div>
           </div>
 
@@ -296,8 +352,57 @@ function SavingsSummary({ chain }: { chain: ChainResult }) {
 
   const bd = chain.costBreakdown;
 
+  // CCU.6 (2026-05-03): contar steps por categoría de availability para el
+  // badge global. "limited" = espera evento; "unavailable" = no comprable hoy.
+  const availCounts = chain.steps.reduce(
+    (acc, s) => {
+      const cat = categorizeAvailability(s.targetAvailability);
+      acc[cat] = (acc[cat] ?? 0) + 1;
+      return acc;
+    },
+    { available: 0, limited: 0, unavailable: 0, unknown: 0 } as Record<AvailabilityCategory, number>,
+  );
+  const totalSteps = chain.steps.length;
+  const blockingSteps = availCounts.unavailable;
+  const eventSteps   = availCounts.limited;
+  const completable  = blockingSteps === 0 && eventSteps === 0;
+
   return (
     <div className="space-y-4">
+      {/* CCU.6: Badge global de disponibilidad — "Completable hoy" si todos los
+          steps son Always available; "Requiere evento" si hay limited;
+          "No completable" si hay unavailable. */}
+      <div className={`rounded-sm border px-3 py-2 flex items-center gap-3 text-[12px] ${
+        completable
+          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+          : blockingSteps > 0
+            ? "bg-red-500/10 border-red-500/30 text-red-300"
+            : "bg-amber-500/10 border-amber-500/30 text-amber-300"
+      }`}>
+        <span className="text-base">{completable ? "✓" : blockingSteps > 0 ? "🚫" : "🕒"}</span>
+        <span className="flex-1 font-medium">
+          {completable && "Cadena completable hoy — todos los pasos están a la venta."}
+          {!completable && blockingSteps > 0 && (
+            <>
+              {blockingSteps} {blockingSteps === 1 ? "paso requiere" : "pasos requieren"} naves no disponibles hoy
+              {eventSteps > 0 && <> · {eventSteps} {eventSteps === 1 ? "paso solo" : "pasos solo"} en evento</>}
+              {" · cadena teórica"}
+            </>
+          )}
+          {!completable && blockingSteps === 0 && eventSteps > 0 && (
+            <>
+              {eventSteps} {eventSteps === 1 ? "paso solo se vende" : "pasos solo se venden"} en eventos (Time-limited).
+              Vas a tener que esperar al próximo IAE / Invictus para completarla.
+            </>
+          )}
+        </span>
+        <span className="text-[10px] opacity-70">
+          {availCounts.available}/{totalSteps} ✓
+          {eventSteps > 0 && ` · ${eventSteps} 🕒`}
+          {blockingSteps > 0 && ` · ${blockingSteps} 🚫`}
+        </span>
+      </div>
+
       {/* Cost breakdown: Efectivo / Créditos / En Hangar */}
       {/* Móvil: apilado vertical (cada tarjeta ocupa todo el ancho).
           sm+ (>=640px): las 3 tarjetas lado a lado como en desktop. */}
