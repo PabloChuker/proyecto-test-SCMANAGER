@@ -1218,10 +1218,23 @@ export async function GET(
     // Garnok deja filas "shell" preparadas para PTU/import futuro — son
     // intencionales, no las borramos. El endpoint solo elige cuál servir al
     // cliente (la que tiene datos), pero la fila vacía sigue existiendo en BD.
+    // Ships.1c (2026-05-03): los precios (msrp_usd / warbond_usd / aUEC) NO son
+    // version-specific — la misma Reclaimer cuesta lo mismo en 4.7.0 y 4.7.2.
+    // Pero `ship_price` y `ship_prices_canonical` tienen UNA fila por nave, linkeada
+    // al `ships.id` de UNA versión (típicamente 4.7.0-LIVE, la que importó RSI primero).
+    // Si el toggle fuerza gv=4.7.2 (PTU shells de Garnok sin precio propio), el JOIN
+    // exacto devuelve NULL y los chips no se muestran.
+    // Fix: matchear precios por CUALQUIER fila hermana del mismo `class_name` —
+    // un solo subquery LIMIT 1 por columna mantiene perf bajo (LIMIT 1 outer).
     const shipRows: any[] = gvParam
       ? await sql.unsafe(
-          `SELECT s.*, s.class_name AS reference, sp.msrp_usd, sp.warbond_usd, sp.acquisition_method, m.name AS manufacturer,
-             spc.avg_purchase_auec, spc.avg_daily_rental_auec,
+          `SELECT s.*, s.class_name AS reference,
+             COALESCE(sp.msrp_usd, (SELECT sp2.msrp_usd FROM ships s2 JOIN ship_price sp2 ON sp2.id = s2.id WHERE s2.class_name = s.class_name AND sp2.msrp_usd IS NOT NULL LIMIT 1)) AS msrp_usd,
+             COALESCE(sp.warbond_usd, (SELECT sp2.warbond_usd FROM ships s2 JOIN ship_price sp2 ON sp2.id = s2.id WHERE s2.class_name = s.class_name AND sp2.warbond_usd IS NOT NULL LIMIT 1)) AS warbond_usd,
+             COALESCE(sp.acquisition_method, (SELECT sp2.acquisition_method FROM ships s2 JOIN ship_price sp2 ON sp2.id = s2.id WHERE s2.class_name = s.class_name AND sp2.acquisition_method IS NOT NULL LIMIT 1)) AS acquisition_method,
+             m.name AS manufacturer,
+             COALESCE(spc.avg_purchase_auec, (SELECT spc2.avg_purchase_auec FROM ships s2 JOIN ship_prices_canonical spc2 ON spc2.ship_id = s2.id WHERE s2.class_name = s.class_name AND spc2.avg_purchase_auec IS NOT NULL LIMIT 1)) AS avg_purchase_auec,
+             COALESCE(spc.avg_daily_rental_auec, (SELECT spc2.avg_daily_rental_auec FROM ships s2 JOIN ship_prices_canonical spc2 ON spc2.ship_id = s2.id WHERE s2.class_name = s.class_name AND spc2.avg_daily_rental_auec IS NOT NULL LIMIT 1)) AS avg_daily_rental_auec,
              CASE
                WHEN s.class_name = $1 THEN 0
                WHEN s.class_name ILIKE $1 THEN 1
@@ -1245,8 +1258,13 @@ export async function GET(
           [String(id), String(gvParam)],
         )
       : await sql.unsafe(
-          `SELECT s.*, s.class_name AS reference, sp.msrp_usd, sp.warbond_usd, sp.acquisition_method, m.name AS manufacturer,
-             spc.avg_purchase_auec, spc.avg_daily_rental_auec,
+          `SELECT s.*, s.class_name AS reference,
+             COALESCE(sp.msrp_usd, (SELECT sp2.msrp_usd FROM ships s2 JOIN ship_price sp2 ON sp2.id = s2.id WHERE s2.class_name = s.class_name AND sp2.msrp_usd IS NOT NULL LIMIT 1)) AS msrp_usd,
+             COALESCE(sp.warbond_usd, (SELECT sp2.warbond_usd FROM ships s2 JOIN ship_price sp2 ON sp2.id = s2.id WHERE s2.class_name = s.class_name AND sp2.warbond_usd IS NOT NULL LIMIT 1)) AS warbond_usd,
+             COALESCE(sp.acquisition_method, (SELECT sp2.acquisition_method FROM ships s2 JOIN ship_price sp2 ON sp2.id = s2.id WHERE s2.class_name = s.class_name AND sp2.acquisition_method IS NOT NULL LIMIT 1)) AS acquisition_method,
+             m.name AS manufacturer,
+             COALESCE(spc.avg_purchase_auec, (SELECT spc2.avg_purchase_auec FROM ships s2 JOIN ship_prices_canonical spc2 ON spc2.ship_id = s2.id WHERE s2.class_name = s.class_name AND spc2.avg_purchase_auec IS NOT NULL LIMIT 1)) AS avg_purchase_auec,
+             COALESCE(spc.avg_daily_rental_auec, (SELECT spc2.avg_daily_rental_auec FROM ships s2 JOIN ship_prices_canonical spc2 ON spc2.ship_id = s2.id WHERE s2.class_name = s.class_name AND spc2.avg_daily_rental_auec IS NOT NULL LIMIT 1)) AS avg_daily_rental_auec,
              CASE
                WHEN s.class_name = $1 THEN 0
                WHEN s.class_name ILIKE $1 THEN 1
