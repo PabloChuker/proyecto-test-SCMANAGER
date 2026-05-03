@@ -25,7 +25,11 @@
 CREATE TABLE IF NOT EXISTS ship_prices_canonical (
   id                       SERIAL PRIMARY KEY,
   ship_name                TEXT        NOT NULL UNIQUE,
-  ship_id                  UUID        NULL REFERENCES ships(id) ON DELETE SET NULL,
+  -- ship_id sin FK formal: ships tiene PK compuesta (id, game_version),
+  -- y este lookup canónico es version-agnostic. El match se hace soft-link
+  -- por el script de carga; la integridad referencial NO es necesaria
+  -- porque la tabla es derived data del Wiki (re-cargable cuando sea).
+  ship_id                  UUID        NULL,
   manufacturer             TEXT,
   career                   TEXT,
   role                     TEXT,
