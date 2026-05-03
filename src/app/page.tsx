@@ -34,26 +34,23 @@ const PANELS = [
 
 export default function Home() {
   const [phase, setPhase] = useState<"logo" | "reveal" | "ready">("logo");
-  // Branding.1 (2026-05-02): mounted dispara el fade-in inicial — antes
-  // el logo aparecía de golpe (transitionDuration: 0ms) y se sentía como
-  // un "salto". Ahora arranca con opacity 0 + scale 0.6 + blur, y al
-  // primer paint pasa a estado normal con una transición de 1800ms.
-  const [mounted, setMounted] = useState(false);
   const [hoveredPanel, setHoveredPanel] = useState<string | null>(null);
   const router = useRouter();
   const t = useTranslations("Landing");
 
   useEffect(() => {
-    // Trigger fade-in en el siguiente frame (importante: que sea después
-    // del primer paint para que el browser haga la transición).
-    const m = requestAnimationFrame(() => setMounted(true));
-    // Hold logo grande: antes 2700ms, ahora 4500ms (+67% más tiempo).
-    // Reveal complete: antes 3900ms, ahora 5700ms (mantiene 1200ms para
-    // la transición center → top-left).
-    const t1 = setTimeout(() => setPhase("reveal"), 4500);
-    const t2 = setTimeout(() => setPhase("ready"), 5700);
+    // Branding.2 (2026-05-02): el logo estático fue reemplazado por el video
+    // SCLABS_logo_intro.mp4 (8s). El video tiene su propia entrada "desde las
+    // sombras" — ya no necesitamos el `mounted` state que hacía fade-in.
+    //
+    // Timing sincronizado con duración del video:
+    //   t=0      → video empieza a reproducirse (autoPlay)
+    //   t=8000   → video termina + phase pasa a "reveal" (logo grande hace
+    //              fade-out, logo estático top-left hace fade-in)
+    //   t=9200   → phase pasa a "ready" (los 4 paneles del landing aparecen)
+    const t1 = setTimeout(() => setPhase("reveal"), 8000);
+    const t2 = setTimeout(() => setPhase("ready"), 9200);
     return () => {
-      cancelAnimationFrame(m);
       clearTimeout(t1);
       clearTimeout(t2);
     };
@@ -75,70 +72,69 @@ export default function Home() {
       {/* Overlay oscuro sobre el video */}
       <div className="absolute inset-0 bg-black/40 pointer-events-none" />
 
-      {/* ── Logo animado ── */}
+      {/* ── Logo intro animado (video) ──
+          Branding.2 (2026-05-02): el video reemplaza al logo estático. Para
+          mezclarse con el video de fondo (bg.mp4) usa:
+            · mix-blend-mode: screen   → los píxeles negros del video se vuelven
+                                          transparentes; solo se ve el logo +
+                                          chispas + glow del propio video.
+            · mask-image radial         → feather suave de los bordes en forma
+                                          de elipse; sin "borde rectangular"
+                                          visible al ojo.
+          Cuando phase pasa a "reveal" (a los 8s, justo cuando el video termina)
+          este container hace fade-out y el logo estático del top-left aparece. */}
       <div
-        className="fixed z-50 transition-all ease-[cubic-bezier(0.22,1,0.36,1)]"
+        className="fixed z-50 pointer-events-none"
         style={{
-          ...(phase === "logo"
-            ? {
-                top: "50%",
-                left: "50%",
-                // Branding.1: entrada "desde las sombras" — antes de mounted
-                // (primer paint) el logo está oculto y reducido; al activarse
-                // mounted=true el browser anima opacity/scale/blur durante 1800ms.
-                transform: mounted
-                  ? "translate(-50%, -50%) scale(1)"
-                  : "translate(-50%, -50%) scale(0.6)",
-                opacity: mounted ? 1 : 0,
-                filter: mounted ? "blur(0px)" : "blur(24px)",
-                // Logo +50%: antes 420px, ahora 630px. Móvil: clamp a 90vw.
-                width: "min(630px, 90vw)",
-                height: "min(630px, 90vw)",
-                transitionDuration: "1800ms",
-                transitionProperty: "opacity, transform, filter",
-              }
-            : {
-                top: "16px",
-                left: "24px",
-                transform: "translate(0, 0) scale(1)",
-                opacity: 1,
-                filter: "blur(0px)",
-                width: "52px",
-                height: "52px",
-                transitionDuration: "1200ms",
-              }),
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          // Container con aspect del video (16:9). Tamaño generoso para que
+          // el logo se vea grande pero deje aire para el feather.
+          width: "min(960px, 95vw)",
+          aspectRatio: "16 / 9",
+          opacity: phase === "logo" ? 1 : 0,
+          // Fade-out de 1200ms cuando el video termina y entra phase=reveal.
+          transition: "opacity 1200ms ease-out",
         }}
+      >
+        <video
+          autoPlay
+          muted
+          playsInline
+          // No loop: el video termina justo cuando phase cambia a "reveal".
+          className="w-full h-full object-contain"
+          style={{
+            // Negro → transparente sobre el bg.mp4 que está debajo.
+            mixBlendMode: "screen",
+            // Feather radial suave: opaco en el centro 60%, fade hasta 100%.
+            // Elipse para adaptarse al aspect ratio 16:9 del container.
+            WebkitMaskImage:
+              "radial-gradient(ellipse 60% 70% at center, black 50%, transparent 100%)",
+            maskImage:
+              "radial-gradient(ellipse 60% 70% at center, black 50%, transparent 100%)",
+          }}
+        >
+          <source src="/videos/sclabs-logo-intro.mp4" type="video/mp4" />
+        </video>
+      </div>
+
+      {/* ── Logo estático top-left ──
+          Aparece con fade-in cuando phase != "logo" (después de los 8s del
+          video). Es el logo definitivo que queda en la esquina mientras se
+          navega por el sitio. */}
+      <div
+        className="fixed top-4 left-6 z-50 w-[52px] h-[52px] transition-opacity duration-700 ease-in-out"
+        style={{ opacity: phase === "logo" ? 0 : 1 }}
       >
         <Image
           src="/sclabs-logo.png"
           alt="SC LABS"
           fill
-          className="object-contain drop-shadow-[0_0_40px_rgba(232,137,12,0.35)]"
+          className="object-contain drop-shadow-[0_0_20px_rgba(232,137,12,0.4)]"
           priority
         />
       </div>
-
-      {/* Glow detrás del logo centrado — escalado al nuevo tamaño del logo
-          (+50%: antes 600px, ahora 900px) y sincronizado con el fade-in del
-          mounted state para que aparezca junto con el logo. */}
-      <div
-        className="fixed z-40 pointer-events-none"
-        style={{
-          top: "50%",
-          left: "50%",
-          transform: "translate(-50%, -50%)",
-          // Móvil: clamp a 95vw/95vh para que no se desborde por los costados.
-          width: "min(900px, 95vw)",
-          height: "min(900px, 95vh)",
-          background:
-            "radial-gradient(circle, rgba(232,137,12,0.18) 0%, transparent 70%)",
-          opacity: phase === "logo" && mounted ? 1 : 0,
-          // Fade-in lento al inicio, fade-out rápido al retirarse.
-          transition: phase === "logo"
-            ? "opacity 1800ms ease-out"
-            : "opacity 700ms ease-in",
-        }}
-      />
 
       {/* ── Contenido: 4 paneles ──
           Desktop: paneles verticales side-by-side (flex-row implícito).
