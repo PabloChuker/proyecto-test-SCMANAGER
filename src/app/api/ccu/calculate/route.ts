@@ -19,6 +19,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import {
   findCheapestChain,
+  findCheapestChainWithWaypoints,
   findAlternativeChains,
   mergeUserInventory,
   type ShipNode,
@@ -43,6 +44,10 @@ export async function POST(request: NextRequest) {
       maxSteps = 15,
       excludeShipIds = [],
       includeAlternatives = true,
+      // CCU.2 / CCU.3 (2026-05-03): preferencias globales del user persistidas
+      // en localStorage via ccuChainPolicy. La UI las pasa en cada call.
+      forceExcludeShipIds = [],
+      forceIncludeShipIds = [],
     } = body;
 
     if (!fromShipId || !toShipId) {
@@ -251,11 +256,15 @@ export async function POST(request: NextRequest) {
       hasBuybackToken,
       paymentPriority: paymentPriority as "balanced" | "prefer-cash" | "prefer-credits",
       maxSteps,
-      excludeShipIds: excludeShipIds.map(String),
+      excludeShipIds: (excludeShipIds as unknown[]).map(String),
       onlyAvailable,
+      forceExcludeShipIds: (forceExcludeShipIds as unknown[]).map(String),
+      forceIncludeShipIds: (forceIncludeShipIds as unknown[]).map(String),
     };
 
-    const chain = findCheapestChain(
+    // Si el user marcó waypoints obligatorios usamos la variante con sub-Dijkstras.
+    // Sin waypoints, ambas funciones son equivalentes (la "WithWaypoints" delega).
+    const chain = findCheapestChainWithWaypoints(
       String(fromShipId),
       String(toShipId),
       ships,

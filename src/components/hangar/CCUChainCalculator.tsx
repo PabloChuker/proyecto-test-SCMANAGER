@@ -16,6 +16,17 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useHangarStore, type HangarCCU, type HangarShip, type CCUChainStep } from "@/store/useHangarStore";
 import type { ChainResult, ChainStep, PriceType, CostBreakdown, PaymentPriority } from "@/lib/ccu-engine";
+// CCU.4 (2026-05-03): policy global persistida en localStorage para restringir
+// el solver. Incluir = waypoints obligatorios; Excluir = ships globalmente prohibidos.
+import {
+  useChainPolicy,
+  addForceInclude,
+  removeForceInclude,
+  addForceExclude,
+  removeForceExclude,
+  clearForceInclude,
+  clearForceExclude,
+} from "@/lib/ccuChainPolicy";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -356,6 +367,233 @@ function SavingsSummary({ chain }: { chain: ChainResult }) {
   );
 }
 
+// ─── Policy Panel (Forzar Inclusión / Exclusión) ───────────────────────────
+// CCU.4 (2026-05-03): inspirado en ccugame.app — listas globales del user
+// para forzar que la cadena pase por X (waypoints) y/o nunca use Y. Persistido
+// en localStorage via ccuChainPolicy.ts. Aplica a TODAS las cadenas hasta que
+// el user borre las restricciones.
+
+function PolicyPanel({
+  ships,
+  fromMsrp,
+  toMsrp,
+}: {
+  ships: ShipOption[];
+  fromMsrp: number | null;
+  toMsrp: number | null;
+}) {
+  const policy = useChainPolicy();
+  const [expanded, setExpanded] = useState(
+    () => policy.include.length > 0 || policy.exclude.length > 0
+  );
+  const [pickerMode, setPickerMode] = useState<"include" | "exclude" | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const includeShips = useMemo(
+    () => policy.include.map((id) => ships.find((s) => s.id === id)).filter((s): s is ShipOption => !!s),
+    [policy.include, ships],
+  );
+  const excludeShips = useMemo(
+    () => policy.exclude.map((id) => ships.find((s) => s.id === id)).filter((s): s is ShipOption => !!s),
+    [policy.exclude, ships],
+  );
+
+  // Validación de waypoints: deben estar dentro del rango (fromMsrp, toMsrp).
+  const isWaypointValid = useCallback(
+    (msrp: number) => {
+      if (fromMsrp == null || toMsrp == null) return true;
+      return msrp > fromMsrp && msrp < toMsrp;
+    },
+    [fromMsrp, toMsrp],
+  );
+
+  // Lista filtrada para el picker.
+  const pickerResults = useMemo(() => {
+    if (!pickerMode) return [];
+    const excludedIds = new Set(pickerMode === "include" ? policy.include : policy.exclude);
+    const q = searchQuery.trim().toLowerCase();
+    return ships
+      .filter((s) => !excludedIds.has(s.id))
+      .filter((s) => !q || s.name.toLowerCase().includes(q) || (s.manufacturer ?? "").toLowerCase().includes(q))
+      .sort((a, b) => a.msrpUsd - b.msrpUsd)
+      .slice(0, 30);
+  }, [pickerMode, searchQuery, ships, policy.include, policy.exclude]);
+
+  const handleAdd = useCallback(
+    (shipId: string) => {
+      if (pickerMode === "include") addForceInclude(shipId);
+      else if (pickerMode === "exclude") addForceExclude(shipId);
+      setPickerMode(null);
+      setSearchQuery("");
+    },
+    [pickerMode],
+  );
+
+  const total = policy.include.length + policy.exclude.length;
+
+  return (
+    <div className="border border-zinc-800/60 rounded-sm bg-zinc-900/30">
+      {/* Header colapsable */}
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-zinc-800/30 transition-colors rounded-sm"
+      >
+        <svg
+          width="10"
+          height="10"
+          viewBox="0 0 10 10"
+          className={`text-zinc-400 transition-transform duration-200 ${expanded ? "" : "-rotate-90"}`}
+        >
+          <path d="M2 3.5 L5 6.5 L8 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span className="text-[11px] font-mono uppercase tracking-[0.15em] text-zinc-300">Restricciones globales</span>
+        {total > 0 && (
+          <span className="text-[10px] text-zinc-500">
+            • {policy.include.length} incluidas, {policy.exclude.length} excluidas
+          </span>
+        )}
+        <span className="ml-auto text-[10px] text-zinc-600">aplica a todas tus cadenas</span>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-zinc-800/60 p-3 space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {/* Forzar Inclusión */}
+            <div className="space-y-2">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-emerald-400">
+                Forzar Inclusión <span className="text-zinc-600">({includeShips.length})</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 min-h-[28px]">
+                {includeShips.length === 0 && (
+                  <span className="text-[11px] text-zinc-600 italic">Ninguna nave forzada</span>
+                )}
+                {includeShips.map((ship) => {
+                  const valid = isWaypointValid(ship.msrpUsd);
+                  return (
+                    <span
+                      key={ship.id}
+                      className={`flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-sm border ${
+                        valid
+                          ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
+                          : "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                      }`}
+                      title={valid ? `${ship.name} ($${ship.msrpUsd})` : `${ship.name} ($${ship.msrpUsd}) — fuera del rango actual de la cadena`}
+                    >
+                      {!valid && <span>⚠</span>}
+                      {ship.name} <span className="opacity-60">${ship.msrpUsd}</span>
+                      <button
+                        onClick={() => removeForceInclude(ship.id)}
+                        className="ml-0.5 hover:text-white"
+                        aria-label={`Quitar ${ship.name} de forzar inclusión`}
+                      >×</button>
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setPickerMode(pickerMode === "include" ? null : "include"); setSearchQuery(""); }}
+                  className="text-[10px] px-2 py-1 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 rounded-sm transition-colors"
+                >
+                  {pickerMode === "include" ? "Cerrar" : "+ Agregar nave"}
+                </button>
+                {includeShips.length > 0 && (
+                  <button
+                    onClick={() => clearForceInclude()}
+                    className="text-[10px] px-2 py-1 text-zinc-500 hover:text-red-400 transition-colors"
+                  >
+                    Limpiar todas
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Forzar Exclusión */}
+            <div className="space-y-2">
+              <div className="text-[10px] font-mono uppercase tracking-widest text-red-400">
+                Forzar Exclusión <span className="text-zinc-600">({excludeShips.length})</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5 min-h-[28px]">
+                {excludeShips.length === 0 && (
+                  <span className="text-[11px] text-zinc-600 italic">Ninguna nave bloqueada</span>
+                )}
+                {excludeShips.map((ship) => (
+                  <span
+                    key={ship.id}
+                    className="flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-sm border bg-red-500/10 border-red-500/30 text-red-300"
+                    title={`${ship.name} ($${ship.msrpUsd})`}
+                  >
+                    {ship.name} <span className="opacity-60">${ship.msrpUsd}</span>
+                    <button
+                      onClick={() => removeForceExclude(ship.id)}
+                      className="ml-0.5 hover:text-white"
+                      aria-label={`Quitar ${ship.name} de forzar exclusión`}
+                    >×</button>
+                  </span>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setPickerMode(pickerMode === "exclude" ? null : "exclude"); setSearchQuery(""); }}
+                  className="text-[10px] px-2 py-1 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-sm transition-colors"
+                >
+                  {pickerMode === "exclude" ? "Cerrar" : "+ Agregar nave"}
+                </button>
+                {excludeShips.length > 0 && (
+                  <button
+                    onClick={() => clearForceExclude()}
+                    className="text-[10px] px-2 py-1 text-zinc-500 hover:text-red-400 transition-colors"
+                  >
+                    Limpiar todas
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Picker — search + lista filtrada */}
+          {pickerMode && (
+            <div className={`border rounded-sm p-2 space-y-2 ${
+              pickerMode === "include" ? "border-emerald-500/30 bg-emerald-500/5" : "border-red-500/30 bg-red-500/5"
+            }`}>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={`Buscar nave para ${pickerMode === "include" ? "FORZAR INCLUSIÓN" : "FORZAR EXCLUSIÓN"}...`}
+                autoFocus
+                className="w-full bg-zinc-900/80 border border-zinc-700/60 rounded-sm px-2.5 py-1.5 text-[12px] text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-500/60"
+              />
+              <div className="max-h-64 overflow-y-auto divide-y divide-zinc-800/50">
+                {pickerResults.length === 0 && (
+                  <div className="text-[11px] text-zinc-600 text-center py-4">Sin resultados</div>
+                )}
+                {pickerResults.map((ship) => (
+                  <button
+                    key={ship.id}
+                    onClick={() => handleAdd(ship.id)}
+                    className="w-full flex items-center justify-between px-2 py-1.5 hover:bg-zinc-800/40 transition-colors"
+                  >
+                    <span className="text-[12px] text-zinc-200">{ship.name}</span>
+                    <span className="text-[11px] text-zinc-500">${ship.msrpUsd}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Tip explicativo */}
+          <p className="text-[10px] text-zinc-600 leading-relaxed">
+            Las naves <span className="text-emerald-400">incluidas</span> son <strong>waypoints obligatorios</strong> — la cadena pasará por todas ellas en orden ascendente de MSRP.
+            Las <span className="text-red-400">excluidas</span> nunca aparecerán en la cadena.
+            <span className="text-amber-400"> ⚠</span> indica que un waypoint está fuera del rango (start, target) y no puede aplicar — quitalo o cambiá las naves.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export function CCUChainCalculator() {
@@ -371,6 +609,12 @@ export function CCUChainCalculator() {
   const [paymentPriority, setPaymentPriority] = useState<PaymentPriority>("balanced");
   const [onlyAvailableNow, setOnlyAvailableNow] = useState(true); // true = armarla ya, false = esperar mejores precios
   const [maxSteps, setMaxSteps] = useState(15);
+
+  // CCU.4 (2026-05-03): policy global del user (Forzar Inclusión/Exclusión).
+  // Persistido en localStorage. El hook devuelve un objeto referencialmente
+  // estable (cache en useSyncExternalStore) → no triggea re-render trap.
+  const policy = useChainPolicy();
+  const policyKey = useMemo(() => policy.include.join(",") + "|" + policy.exclude.join(","), [policy]);
 
   const [chain, setChain] = useState<ChainResult | null>(null);
   const [alternatives, setAlternatives] = useState<ChainResult[]>([]);
@@ -477,6 +721,9 @@ export function CCUChainCalculator() {
           onlyAvailable: onlyAvailableNow,
           maxSteps,
           includeAlternatives: true,
+          // CCU.4: policy global persistida en localStorage.
+          forceIncludeShipIds: policy.include,
+          forceExcludeShipIds: policy.exclude,
         }),
       });
 
@@ -511,7 +758,9 @@ export function CCUChainCalculator() {
     } finally {
       setCalculating(false);
     }
-  }, [fromShip, toShip, preferWarbond, useOwnedCCUs, hasBuybackToken, paymentPriority, onlyAvailableNow, maxSteps, ccus]);
+    // policyKey es la representación stable string-ificada de policy.include +
+    // policy.exclude. Cambia solo cuando cambian las listas → recalcula.
+  }, [fromShip, toShip, preferWarbond, useOwnedCCUs, hasBuybackToken, paymentPriority, onlyAvailableNow, maxSteps, ccus, policy.include, policy.exclude, policyKey]);
 
   // ── Auto-calculate when ships change ──
   useEffect(() => {
@@ -521,7 +770,7 @@ export function CCUChainCalculator() {
       setChain(null);
       setAlternatives([]);
     }
-  }, [fromShip, toShip, preferWarbond, useOwnedCCUs, hasBuybackToken, paymentPriority, onlyAvailableNow, maxSteps]);
+  }, [fromShip, toShip, preferWarbond, useOwnedCCUs, hasBuybackToken, paymentPriority, onlyAvailableNow, maxSteps, policyKey]);
 
   return (
     <div className="space-y-6">
@@ -762,6 +1011,15 @@ export function CCUChainCalculator() {
           {calculating ? "Calculating..." : "Recalculate"}
         </button>
       </div>
+
+      {/* ── Restricciones globales (CCU.4) ──
+          Panel inline colapsable. Default: colapsado si las listas están vacías,
+          expandido si el user ya tiene restricciones (para que las vea siempre). */}
+      <PolicyPanel
+        ships={ships}
+        fromMsrp={fromShip?.msrpUsd ?? null}
+        toMsrp={toShip?.msrpUsd ?? null}
+      />
 
       {/* ── Error ── */}
       {error && (

@@ -99,8 +99,25 @@ export interface CalculateOptions {
   hasBuybackToken: boolean;     // User has a buyback token available
   paymentPriority: PaymentPriority; // Cash vs credits priority
   maxSteps: number;             // Maximum chain length (default 15)
-  excludeShipIds: string[];     // Ships to avoid in the chain
+  excludeShipIds: string[];     // Ships to avoid in this specific chain calc
   onlyAvailable: boolean;       // Only use currently available CCUs
+  /**
+   * CCU.2 (2026-05-03): IDs de ships globalmente bloqueados por el user
+   * (Forzar Exclusión, persistido en localStorage via ccuChainPolicy).
+   * Se mergean con `excludeShipIds` al construir el adjacency. La diferencia
+   * semántica es de scope: excludeShipIds es per-cadena (lo manda el caller
+   * para una corrida), forceExcludeShipIds es preferencia global del user.
+   */
+  forceExcludeShipIds: string[];
+  /**
+   * CCU.3 (2026-05-03): waypoints obligatorios (Forzar Inclusión). Si la lista
+   * está vacía se usa el solver normal. Si tiene IDs, `findCheapestChainWithWaypoints`
+   * concatena sub-Dijkstras start→w1→w2→…→wn→target. Los waypoints se ordenan
+   * automáticamente por msrpUsd ascendente (CCUs solo van hacia arriba).
+   * Si algún waypoint está fuera del rango [start.msrp, target.msrp] o no
+   * tiene path, devuelve null.
+   */
+  forceIncludeShipIds: string[];
 }
 
 const DEFAULT_OPTIONS: CalculateOptions = {
@@ -111,6 +128,8 @@ const DEFAULT_OPTIONS: CalculateOptions = {
   maxSteps: 15,
   excludeShipIds: [],
   onlyAvailable: true,
+  forceExcludeShipIds: [],
+  forceIncludeShipIds: [],
 };
 
 // ─── Priority Queue (Min-Heap) ──────────────────────────────────────────────
@@ -197,7 +216,18 @@ export function findCheapestChain(
 
   // Build adjacency list: fromShipId → [edges]
   const adjacency = new Map<string, CCUEdge[]>();
-  const excludeSet = new Set(opts.excludeShipIds);
+  // CCU.2 (2026-05-03): mergeamos exclusiones per-cadena (excludeShipIds) con
+  // las globales del user (forceExcludeShipIds, persistidas en localStorage).
+  // Cualquier ship en cualquiera de las dos listas queda fuera del grafo.
+  // Importante: NO excluimos start/target aunque estén en la lista — el solver
+  // los necesita para arrancar/llegar; si el user los puso ahí es decisión
+  // suya y la UI debería avisarle (ver validación en CCUChainCalculator).
+  const excludeSet = new Set<string>([
+    ...opts.excludeShipIds,
+    ...(opts.forceExcludeShipIds ?? []),
+  ]);
+  excludeSet.delete(startShipId);
+  excludeSet.delete(targetShipId);
 
   for (const edge of edges) {
     if (excludeSet.has(edge.fromShipId) || excludeSet.has(edge.toShipId)) continue;
@@ -504,6 +534,148 @@ function reconstructPath(
     stepsCount: steps.length,
     ownedStepsCount: steps.filter(s => s.priceType === "hangar" || s.priceType === "buyback-token" || s.priceType === "buyback-cash").length,
     warbondStepsCount: steps.filter(s => s.priceType === "warbond").length,
+  };
+}
+
+// ─── Waypoints (Forzar Inclusión) ───────────────────────────────────────────
+
+/**
+ * Variante de findCheapestChain que respeta una lista de waypoints obligatorios.
+ *
+ * La cadena devuelta DEBE pasar por todos los ships en `options.forceIncludeShipIds`.
+ * Algoritmo: ordena los waypoints por MSRP ascendente y ejecuta N+1 sub-Dijkstras
+ * encadenados (start→w1, w1→w2, ..., wn→target). Concatena los steps y suma los
+ * cost breakdowns parciales.
+ *
+ * Devuelve null si:
+ *   · Algún waypoint no existe en el catálogo `ships`
+ *   · Algún waypoint está fuera del rango (start.msrp, target.msrp) — CCUs solo
+ *     suben en MSRP
+ *   · Algún sub-tramo no tiene path con las opciones dadas
+ *
+ * IMPORTANTE: en las sub-llamadas se setea `forceIncludeShipIds: []` para evitar
+ * recursión infinita. La validación detallada (mensajes amigables al user) es
+ * responsabilidad del caller — esta función solo devuelve null sin distinguir
+ * la causa.
+ *
+ * Si la lista de waypoints está vacía, delega directo a `findCheapestChain` sin
+ * overhead extra.
+ */
+export function findCheapestChainWithWaypoints(
+  startShipId: string,
+  targetShipId: string,
+  ships: Map<string, ShipNode>,
+  edges: CCUEdge[],
+  options: Partial<CalculateOptions> = {},
+): ChainResult | null {
+  const waypoints = options.forceIncludeShipIds ?? [];
+  if (waypoints.length === 0) {
+    return findCheapestChain(startShipId, targetShipId, ships, edges, options);
+  }
+
+  const startShip = ships.get(startShipId);
+  const targetShip = ships.get(targetShipId);
+  if (!startShip || !targetShip) return null;
+
+  // Resolver waypoints: dedupe + filtrar redundantes (==start || ==target).
+  const waypointSet = new Set(waypoints);
+  waypointSet.delete(startShipId);
+  waypointSet.delete(targetShipId);
+  const waypointShips: ShipNode[] = [];
+  for (const wId of waypointSet) {
+    const ws = ships.get(wId);
+    if (!ws) return null; // waypoint inexistente → fail
+    waypointShips.push(ws);
+  }
+  if (waypointShips.length === 0) {
+    // Todos los waypoints eran == start/target — equivale a sin waypoints.
+    return findCheapestChain(startShipId, targetShipId, ships, edges, options);
+  }
+  // Ordenar ascendente por MSRP (CCUs solo suben).
+  waypointShips.sort((a, b) => a.msrpUsd - b.msrpUsd);
+
+  // Validar monotonicidad estricta start < w1 < w2 < ... < wn < target.
+  if (waypointShips[0].msrpUsd <= startShip.msrpUsd) return null;
+  if (waypointShips[waypointShips.length - 1].msrpUsd >= targetShip.msrpUsd) return null;
+  for (let i = 1; i < waypointShips.length; i++) {
+    if (waypointShips[i].msrpUsd <= waypointShips[i - 1].msrpUsd) return null;
+  }
+
+  // Ruta completa: [start, w0, w1, ..., wn, target].
+  const route: ShipNode[] = [startShip, ...waypointShips, targetShip];
+
+  // Sub-llamadas SIN waypoints para evitar recursión infinita.
+  const subOptions: Partial<CalculateOptions> = {
+    ...options,
+    forceIncludeShipIds: [],
+  };
+
+  const allSteps: ChainStep[] = [];
+  let cumulativeCost = 0;
+  let cumulativeSavings = 0;
+  const breakdown: CostBreakdown = {
+    cashTotal: 0,
+    creditsTotal: 0,
+    hangarValue: 0,
+    hangarCount: 0,
+    buybackTokenCount: 0,
+    buybackCashCount: 0,
+    warbondCount: 0,
+    standardCount: 0,
+  };
+  let ownedStepsCount = 0;
+  let warbondStepsCount = 0;
+
+  for (let i = 0; i < route.length - 1; i++) {
+    const segment = findCheapestChain(route[i].id, route[i + 1].id, ships, edges, subOptions);
+    if (!segment) return null; // tramo sin path → toda la cadena falla
+
+    // Re-anclar cumulativeCost / cumulativeSavings / acquiredCost al global,
+    // porque cada sub-Dijkstra los calcula desde 0 con su propio start.
+    for (const step of segment.steps) {
+      cumulativeCost += step.effectivePrice;
+      cumulativeSavings += step.savingsVsStandard;
+      const adjusted: ChainStep = {
+        ...step,
+        cumulativeCost,
+        cumulativeSavings,
+        acquiredCost: startShip.msrpUsd + cumulativeCost,
+        savingsVsMsrp: step.targetMsrp - (startShip.msrpUsd + cumulativeCost),
+      };
+      allSteps.push(adjusted);
+    }
+
+    breakdown.cashTotal         += segment.costBreakdown.cashTotal;
+    breakdown.creditsTotal      += segment.costBreakdown.creditsTotal;
+    breakdown.hangarValue       += segment.costBreakdown.hangarValue;
+    breakdown.hangarCount       += segment.costBreakdown.hangarCount;
+    breakdown.buybackTokenCount += segment.costBreakdown.buybackTokenCount;
+    breakdown.buybackCashCount  += segment.costBreakdown.buybackCashCount;
+    breakdown.warbondCount      += segment.costBreakdown.warbondCount;
+    breakdown.standardCount     += segment.costBreakdown.standardCount;
+    ownedStepsCount   += segment.ownedStepsCount;
+    warbondStepsCount += segment.warbondStepsCount;
+  }
+
+  // directUpgradeCost: el costo SI hubiera un CCU directo start→target sin
+  // waypoints. Lo aproximamos con un cheapest-chain sin restricciones.
+  const directChain = findCheapestChain(startShipId, targetShipId, ships, edges, {
+    ...options,
+    forceIncludeShipIds: [],
+  });
+  const directUpgradeCost = directChain?.totalCost ?? (targetShip.msrpUsd - startShip.msrpUsd);
+
+  return {
+    steps: allSteps,
+    totalCost: cumulativeCost,
+    totalSavingsVsDirect: directUpgradeCost - cumulativeCost,
+    directUpgradeCost,
+    costBreakdown: breakdown,
+    startShip,
+    targetShip,
+    stepsCount: allSteps.length,
+    ownedStepsCount,
+    warbondStepsCount,
   };
 }
 
