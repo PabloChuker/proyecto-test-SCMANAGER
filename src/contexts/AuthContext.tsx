@@ -83,9 +83,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         fetchProfile(s.user.id);
         // Mark online on sign in or token refresh
         if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+          const meta = s.user.user_metadata ?? {};
+          const discordUsername =
+            meta.full_name ?? meta.name ?? meta.user_name ?? null;
+          const discordId = meta.provider_id ?? meta.sub ?? null;
+          const avatarUrl = meta.avatar_url ?? null;
           supabase
             .from("profiles")
-            .update({ is_online: true, last_seen: new Date().toISOString() })
+            .update({
+              is_online: true,
+              last_seen: new Date().toISOString(),
+              ...(discordUsername && { discord_username: discordUsername }),
+              ...(discordId && { discord_id: discordId }),
+              ...(avatarUrl && { avatar_url: avatarUrl }),
+            })
             .eq("id", s.user.id)
             .then(() => {});
         }
@@ -105,9 +116,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setSession(s);
           setUser(s?.user ?? u);
           fetchProfile(u.id);
+          const meta = u.user_metadata ?? {};
+          const discordUsername =
+            meta.full_name ?? meta.name ?? meta.user_name ?? null;
+          const discordId = meta.provider_id ?? meta.sub ?? null;
+          const avatarUrl = meta.avatar_url ?? null;
           supabase
             .from("profiles")
-            .update({ is_online: true, last_seen: new Date().toISOString() })
+            .update({
+              is_online: true,
+              last_seen: new Date().toISOString(),
+              ...(discordUsername && { discord_username: discordUsername }),
+              ...(discordId && { discord_id: discordId }),
+              ...(avatarUrl && { avatar_url: avatarUrl }),
+            })
             .eq("id", u.id)
             .then(() => {});
           setLoading(false);
