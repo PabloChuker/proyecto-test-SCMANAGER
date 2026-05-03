@@ -186,9 +186,14 @@ async function handleShipsQuery(params: ShipsQueryParams) {
 
     // Fetch ships with optional LEFT JOIN to flight_stats for speed data
     const offset = (page - 1) * limit;
+    // Ships.1 (2026-05-03): LEFT JOIN extra contra ship_prices_canonical para
+    // traer avg_purchase_auec (precio in-game) y avg_daily_rental_auec. La
+    // tabla cubre 167/246 ships linked. Naves Wikelo / Reward / Limited
+    // suelen no tener precio in-game → quedan en NULL y la UI no muestra chip.
     const joinClause = `LEFT JOIN ship_flight_stats fs ON fs.ship_id = s.id
        LEFT JOIN ship_price sp ON sp.id = s.id
-       LEFT JOIN manufacturers m ON m.id = s.manufacturer_id`;
+       LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
+       LEFT JOIN ship_prices_canonical spc ON spc.ship_id = s.id`;
     const ships: any[] = await sql.unsafe(
       `${dedupCTE}
        SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer, s.role, s.size,
@@ -198,7 +203,8 @@ async function handleShipsQuery(params: ShipsQueryParams) {
               fs.scm_speed, fs.max_speed as afterburner_speed,
               s.length_m AS length_m,
               s.width_m  AS width_m,
-              s.height_m AS height_m
+              s.height_m AS height_m,
+              spc.avg_purchase_auec, spc.avg_daily_rental_auec
        FROM deduped s
        ${joinClause}
        ${whereClause} AND s.__rn = 1
@@ -251,6 +257,11 @@ async function handleShipsQuery(params: ShipsQueryParams) {
       isLimited: !!s.is_limited,
       msrpUsd: hideUsd ? null : (s.msrp_usd != null ? Number(s.msrp_usd) : null),
       warbondUsd: hideUsd ? null : (s.warbond_usd != null ? Number(s.warbond_usd) : null),
+      // Ships.1: precio in-game (aUEC) + costo de renta diaria. NO se hide
+      // por inGameOnly o referral porque para esas naves el precio in-game
+      // es PRECISAMENTE el dato útil — son obtenibles en juego.
+      avgPurchaseAuec: s.avg_purchase_auec != null ? Number(s.avg_purchase_auec) : null,
+      avgDailyRentalAuec: s.avg_daily_rental_auec != null ? Number(s.avg_daily_rental_auec) : null,
       ship: {
         maxCrew: s.crew,
         mass: s.mass != null ? Number(s.mass) : null,

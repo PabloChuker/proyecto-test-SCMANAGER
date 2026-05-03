@@ -18,6 +18,11 @@ interface ShipCardData {
   warbondUsd?: number | null;
   inGameOnly?: boolean;
   /**
+   * Ships.1 (2026-05-03): precio in-game promedio (aUEC) del Wiki SC.
+   * Cobertura ~68% — naves Wikelo / Reward / Limited suelen ser null.
+   */
+  avgPurchaseAuec?: number | null;
+  /**
    * Fase R (2026-04-25): cómo se obtiene la nave.
    * 'REFERRAL' → solo via Referral Program de RSI; el badge sustituye al precio.
    * 'STORE'    → default; muestra precio USD.
@@ -298,6 +303,18 @@ export function ShipCard({
               <StatChip label="SCU" value={fmtCargo(ship.ship?.cargo)} />
             </div>
 
+            {/* Ships.1 (2026-05-03): precio in-game (aUEC). Solo se renderiza
+                si la nave tiene dato. Wikelo / Reward / no comprables in-game
+                quedan sin esta fila \u2014 mantenemos la card limpia. */}
+            {ship.avgPurchaseAuec != null && ship.avgPurchaseAuec > 0 && (
+              <div className="flex items-center justify-between mb-3 px-2 py-1.5 rounded-sm bg-emerald-500/5 border border-emerald-500/15">
+                <span className="text-[10px] text-emerald-500/80 tracking-[0.12em] uppercase">In-game</span>
+                <span className="text-[12px] text-emerald-300 font-mono font-medium">
+                  {fmtAuec(ship.avgPurchaseAuec)} <span className="text-emerald-500/60">aUEC</span>
+                </span>
+              </div>
+            )}
+
             {/* Footer */}
             <div className="flex items-center justify-between pt-2 border-t border-zinc-800/50">
               <span className="text-[11px] text-zinc-500 tracking-wide">
@@ -336,4 +353,13 @@ function fmtCargo(cargo?: number | null): string {
   if (!cargo) return "\u2014";
   if (cargo >= 1000) return (cargo / 1000).toFixed(1) + "k";
   return Math.round(cargo).toString();
+}
+
+// Ships.1: formatter compacto para precios in-game (aUEC).
+// 1,500,000 \u2192 "1.5M" / 850,000 \u2192 "850K" / 12,000 \u2192 "12K"
+function fmtAuec(auec?: number | null): string {
+  if (!auec || auec <= 0) return "\u2014";
+  if (auec >= 1_000_000) return (auec / 1_000_000).toFixed(auec >= 10_000_000 ? 0 : 1) + "M";
+  if (auec >= 1_000)     return Math.round(auec / 1_000) + "K";
+  return Math.round(auec).toString();
 }
