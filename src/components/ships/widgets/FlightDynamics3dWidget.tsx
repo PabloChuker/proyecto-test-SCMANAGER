@@ -77,9 +77,16 @@ export function FlightDynamics3dHeaderActions({
 //     ThrusterMult = (currentPips - 1) / (maxPips - 1)   (clamp 0..1)
 //     Rate = Base + ThrusterMult × (Boosted - Base)
 //
-// El toggle "Boost" del header del widget sigue siendo el override manual:
-// cuando está activo, fuerza ThrusterMult = 1 (rate = boosted) sin importar
-// los pips. Con toggle OFF la rotación responde al power grid en vivo.
+// Branding/Loadout fix (2026-05-03, Pablo): la fórmula sigue intacta, pero
+// ahora SOLO aplica cuando boost está ON.
+//   · SCM  (boost OFF): mult = 0   → Rate = Base SIEMPRE.
+//                                    Las rotaciones son estables; los pips de
+//                                    motores no afectan el cabeceo en vuelo
+//                                    normal de combate.
+//   · BOOST (boost ON):  mult = computedMult (pips reales)
+//                                    Rate interpola entre Base (pips=1) y
+//                                    Boosted (pips=max). Más energía a
+//                                    motores = más cerca del extremo boosted.
 function interpolateRate(
   base: number | null | undefined,
   boosted: number | null | undefined,
@@ -113,8 +120,10 @@ export const FlightDynamics3dContent = memo(function FlightDynamics3dContent({
   const computedMult = thrMaxPips > 1
     ? Math.max(0, Math.min(1, (thrPips - 1) / (thrMaxPips - 1)))
     : 1;
-  // Toggle Boost (manual override): fuerza el extremo boosted.
-  const mult = boost ? 1 : computedMult;
+  // SCM: rotación = base (pips no afectan). BOOST: interpola por pips reales.
+  // El toggle activa la mecánica de "los motores aceleran las rotaciones",
+  // que no debería notarse en vuelo de combate normal.
+  const mult = boost ? computedMult : 0;
 
   const pitch = interpolateRate(si.pitchRate, si.boostedPitch, mult);
   const yaw   = interpolateRate(si.yawRate,   si.boostedYaw,   mult);
