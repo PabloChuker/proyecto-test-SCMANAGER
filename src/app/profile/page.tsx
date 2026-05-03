@@ -365,12 +365,16 @@ function OrgInfoPanel({
   orgName,
   orgId,
   logoUrl,
+  memberCount,
+  onlineCount,
   onLogoUpdated,
   onClose,
 }: {
   orgName: string | null;
   orgId: string | null;
   logoUrl: string | null;
+  memberCount: number;
+  onlineCount: number;
   onLogoUpdated: (url: string | null) => void;
   onClose: () => void;
 }) {
@@ -468,7 +472,7 @@ function OrgInfoPanel({
                 <div className="text-lg font-bold text-zinc-100 tracking-wide">{orgName}</div>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-lime-400" />
-                  <span className="text-xs text-zinc-500 font-mono">{t("membersOnline", { count: 15 })}</span>
+                  <span className="text-xs text-zinc-500 font-mono">{t("membersOnline", { count: onlineCount })}</span>
                 </div>
               </div>
             </div>
@@ -476,12 +480,12 @@ function OrgInfoPanel({
             {/* Stats */}
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/20 p-3 text-center">
-                <div className="text-2xl font-bold text-lime-400">15</div>
+                <div className="text-2xl font-bold text-lime-400">{onlineCount}</div>
                 <div className="text-xs text-zinc-500 mt-0.5">{t("membersOnlineLabel")}</div>
               </div>
               <div className="rounded-xl border border-zinc-800/50 bg-zinc-900/20 p-3 text-center">
-                <div className="text-2xl font-bold text-amber-400">3</div>
-                <div className="text-xs text-zinc-500 mt-0.5">{t("rank")}</div>
+                <div className="text-2xl font-bold text-amber-400">{memberCount}</div>
+                <div className="text-xs text-zinc-500 mt-0.5">Miembros</div>
               </div>
             </div>
 
@@ -529,6 +533,8 @@ export default function ProfilePage() {
   const [country,     setCountry]     = useState("");
   const [orgName,     setOrgName]     = useState<string | null>(null);
   const [orgLogoUrl,  setOrgLogoUrl]  = useState<string | null>(null);
+  const [orgMemberCount, setOrgMemberCount] = useState<number>(0);
+  const [orgOnlineCount, setOrgOnlineCount] = useState<number>(0);
 
   // Auth redirect
   // useEffect(() => {
@@ -543,9 +549,15 @@ export default function ProfilePage() {
     }
   }, [profile]);
 
-  // Fetch org name + logo from organizations table
+  // Fetch org name + logo + member counts from organizations / org_members
   useEffect(() => {
-    if (!profile?.org_id) { setOrgName("SC Labs"); setOrgLogoUrl(null); return; } // preview fallback
+    if (!profile?.org_id) {
+      setOrgName("SC Labs");
+      setOrgLogoUrl(null);
+      setOrgMemberCount(0);
+      setOrgOnlineCount(0);
+      return;
+    } // preview fallback
     supabase
       .from("organizations")
       .select("name, logo_url")
@@ -554,6 +566,22 @@ export default function ProfilePage() {
       .then(({ data }) => {
         setOrgName(data?.name ?? null);
         setOrgLogoUrl(data?.logo_url ?? null);
+      });
+    // Pull member ids and join is_online from profiles
+    supabase
+      .from("org_members")
+      .select("user_id")
+      .eq("org_id", profile.org_id)
+      .then(async ({ data: members }) => {
+        const ids = (members ?? []).map((m: any) => m.user_id);
+        setOrgMemberCount(ids.length);
+        if (ids.length === 0) { setOrgOnlineCount(0); return; }
+        const { data: profs } = await supabase
+          .from("profiles")
+          .select("id, is_online")
+          .in("id", ids);
+        const online = (profs ?? []).filter((p: any) => p.is_online).length;
+        setOrgOnlineCount(online);
       });
   }, [profile?.org_id]);
 
@@ -757,7 +785,7 @@ export default function ProfilePage() {
                   <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: "thin", scrollbarColor: "rgba(245,158,11,0.3) transparent" }}>
                     {activeSection === "config" && <ConfigPanel onClose={() => setActiveSection(null)} discordName={linkedDiscord} discordAvatar={discordAvatar} />}
                     {activeSection === "subs"   && <SubsPanel onClose={() => setActiveSection(null)} />}
-                    {activeSection === "org"    && <OrgInfoPanel orgName={orgName} orgId={profile?.org_id ?? null} logoUrl={orgLogoUrl} onLogoUpdated={setOrgLogoUrl} onClose={() => setActiveSection(null)} />}
+                    {activeSection === "org"    && <OrgInfoPanel orgName={orgName} orgId={profile?.org_id ?? null} logoUrl={orgLogoUrl} memberCount={orgMemberCount} onlineCount={orgOnlineCount} onLogoUpdated={setOrgLogoUrl} onClose={() => setActiveSection(null)} />}
                   </div>
                 </>
               ) : (
@@ -975,7 +1003,7 @@ export default function ProfilePage() {
                   {activeSection === "config"   && id === "config"   && <ConfigPanel onClose={() => setActiveSection(null)} discordName={linkedDiscord} discordAvatar={discordAvatar} />}
                   {activeSection === "referral" && id === "referral" && <ReferralPanel onClose={() => setActiveSection(null)} />}
                   {activeSection === "subs"     && id === "subs"     && <SubsPanel onClose={() => setActiveSection(null)} />}
-                  {activeSection === "org"      && id === "org"      && <OrgInfoPanel orgName={orgName} orgId={profile?.org_id ?? null} logoUrl={orgLogoUrl} onLogoUpdated={setOrgLogoUrl} onClose={() => setActiveSection(null)} />}
+                  {activeSection === "org"      && id === "org"      && <OrgInfoPanel orgName={orgName} orgId={profile?.org_id ?? null} logoUrl={orgLogoUrl} memberCount={orgMemberCount} onlineCount={orgOnlineCount} onLogoUpdated={setOrgLogoUrl} onClose={() => setActiveSection(null)} />}
                 </div>
               ))}
             </div>
