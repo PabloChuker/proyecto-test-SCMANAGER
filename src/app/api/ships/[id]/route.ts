@@ -1221,6 +1221,7 @@ export async function GET(
     const shipRows: any[] = gvParam
       ? await sql.unsafe(
           `SELECT s.*, s.class_name AS reference, sp.msrp_usd, sp.warbond_usd, sp.acquisition_method, m.name AS manufacturer,
+             spc.avg_purchase_auec, spc.avg_daily_rental_auec,
              CASE
                WHEN s.class_name = $1 THEN 0
                WHEN s.class_name ILIKE $1 THEN 1
@@ -1233,6 +1234,7 @@ export async function GET(
            FROM ships s
            LEFT JOIN ship_price sp ON sp.id = s.id
            LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
+           LEFT JOIN ship_prices_canonical spc ON spc.ship_id = s.id
            WHERE s.class_name = $1
               OR s.class_name ILIKE $1
               OR s.name ILIKE $1
@@ -1244,6 +1246,7 @@ export async function GET(
         )
       : await sql.unsafe(
           `SELECT s.*, s.class_name AS reference, sp.msrp_usd, sp.warbond_usd, sp.acquisition_method, m.name AS manufacturer,
+             spc.avg_purchase_auec, spc.avg_daily_rental_auec,
              CASE
                WHEN s.class_name = $1 THEN 0
                WHEN s.class_name ILIKE $1 THEN 1
@@ -1255,6 +1258,7 @@ export async function GET(
            FROM ships s
            LEFT JOIN ship_price sp ON sp.id = s.id
            LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
+           LEFT JOIN ship_prices_canonical spc ON spc.ship_id = s.id
            WHERE s.class_name = $1
               OR s.class_name ILIKE $1
               OR s.name ILIKE $1
@@ -1802,6 +1806,11 @@ export async function GET(
       acquisitionMethod: (ship.acquisition_method ?? "STORE") as string,
       msrpUsd: ship.acquisition_method === "REFERRAL" ? null : numOrNull(ship.msrp_usd),
       warbondUsd: ship.acquisition_method === "REFERRAL" ? null : numOrNull(ship.warbond_usd),
+      // Ships.1b (2026-05-03): precio in-game (aUEC) + renta diaria desde
+      // ship_prices_canonical. NO se hide por REFERRAL — para esas naves el
+      // aUEC ES el dato útil ("se gana in-game por X aUEC").
+      avgPurchaseAuec: numOrNull(ship.avg_purchase_auec),
+      avgDailyRentalAuec: numOrNull(ship.avg_daily_rental_auec),
       ship: {
         scmSpeed,
         afterburnerSpeed,

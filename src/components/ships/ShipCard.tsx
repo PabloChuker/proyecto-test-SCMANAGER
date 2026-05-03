@@ -280,6 +280,18 @@ export function ShipCard({
               )}
             </div>
           ) : null}
+
+          {/* Ships.1b (2026-05-03): precio in-game (aUEC) como overlay en
+              esquina inferior-derecha — antes ocupaba un row del cuerpo de la
+              card y la agrandaba. Ahora flota sobre la imagen (esquina libre).
+              Solo aparece si hay dato — Wikelo / Reward / Limited quedan sin él. */}
+          {ship.avgPurchaseAuec != null && ship.avgPurchaseAuec > 0 && (
+            <div className="absolute bottom-2 right-2.5">
+              <span className="text-[10px] font-mono font-medium text-emerald-300/90 bg-zinc-950/70 backdrop-blur-sm px-1.5 py-0.5 rounded-sm border border-emerald-500/30">
+                {fmtAuec(ship.avgPurchaseAuec)} aUEC
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Card body */}
@@ -302,18 +314,6 @@ export function ShipCard({
               <StatChip label="CREW" value={ship.ship?.maxCrew?.toString() || "\u2014"} />
               <StatChip label="SCU" value={fmtCargo(ship.ship?.cargo)} />
             </div>
-
-            {/* Ships.1 (2026-05-03): precio in-game (aUEC). Solo se renderiza
-                si la nave tiene dato. Wikelo / Reward / no comprables in-game
-                quedan sin esta fila \u2014 mantenemos la card limpia. */}
-            {ship.avgPurchaseAuec != null && ship.avgPurchaseAuec > 0 && (
-              <div className="flex items-center justify-between mb-3 px-2 py-1.5 rounded-sm bg-emerald-500/5 border border-emerald-500/15">
-                <span className="text-[10px] text-emerald-500/80 tracking-[0.12em] uppercase">In-game</span>
-                <span className="text-[12px] text-emerald-300 font-mono font-medium">
-                  {fmtAuec(ship.avgPurchaseAuec)} <span className="text-emerald-500/60">aUEC</span>
-                </span>
-              </div>
-            )}
 
             {/* Footer */}
             <div className="flex items-center justify-between pt-2 border-t border-zinc-800/50">

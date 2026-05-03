@@ -209,6 +209,28 @@ export default function ShipSpecSheet({ shipId, onShipLoaded }: ShipSpecSheetPro
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-zinc-950/40 to-transparent" />
 
+        {/* Ships.1b (2026-05-03): panel de precios sobre la imagen, esquina
+            superior-derecha. Apilado vertical: USD pledge / Warbond / aUEC.
+            Cada chip aparece SOLO si tiene dato. Naves Wikelo/Reward muestran
+            solo aUEC; concepts pueden mostrar solo USD. */}
+        <div className="absolute top-4 right-4 flex flex-col items-end gap-1.5 z-10">
+          {ship.msrpUsd != null && ship.msrpUsd > 0 && (
+            <span className="text-sm font-mono font-medium text-amber-300 bg-zinc-950/75 backdrop-blur-sm px-2.5 py-1 rounded border border-amber-500/30">
+              ${ship.msrpUsd}
+            </span>
+          )}
+          {ship.warbondUsd != null && ship.warbondUsd > 0 && ship.warbondUsd !== ship.msrpUsd && (
+            <span className="text-xs font-mono text-cyan-300 bg-zinc-950/75 backdrop-blur-sm px-2.5 py-1 rounded border border-cyan-500/30">
+              WB ${ship.warbondUsd}
+            </span>
+          )}
+          {ship.avgPurchaseAuec != null && ship.avgPurchaseAuec > 0 && (
+            <span className="text-xs font-mono text-emerald-300 bg-zinc-950/75 backdrop-blur-sm px-2.5 py-1 rounded border border-emerald-500/30">
+              {fmtAuecCompact(ship.avgPurchaseAuec)} aUEC
+            </span>
+          )}
+        </div>
+
         {/* Ship info overlay */}
         <div className="absolute bottom-0 left-0 right-0 p-6">
           <div className="flex items-end justify-between">
@@ -521,4 +543,14 @@ function EquipmentSection({ title, icon, items }: { title: string; icon: string;
       </div>
     </div>
   );
+}
+
+// Ships.1b: formatter aUEC compacto. Mismo helper que ShipCard pero copy-paste
+// para evitar coupling cross-archivo (el detalle puede divergir si querés más
+// precisión en naves capitales).
+function fmtAuecCompact(auec?: number | null): string {
+  if (!auec || auec <= 0) return "—";
+  if (auec >= 1_000_000) return (auec / 1_000_000).toFixed(auec >= 10_000_000 ? 0 : 1) + "M";
+  if (auec >= 1_000)     return Math.round(auec / 1_000) + "K";
+  return Math.round(auec).toString();
 }

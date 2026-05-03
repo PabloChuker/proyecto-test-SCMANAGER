@@ -17,6 +17,9 @@ export interface ShipListItem {
   gameVersion: string;
   msrpUsd?: number | null;
   warbondUsd?: number | null;
+  // Ships.1b (2026-05-03): precio in-game (aUEC) y renta diaria — ship_prices_canonical.
+  avgPurchaseAuec?: number | null;
+  avgDailyRentalAuec?: number | null;
   inGameOnly?: boolean;
   ship: {
     maxCrew: number;
