@@ -107,12 +107,19 @@ export default function Home() {
           style={{
             // Negro → transparente sobre el bg.mp4 que está debajo.
             mixBlendMode: "screen",
-            // Feather radial suave: opaco en el centro 60%, fade hasta 100%.
-            // Elipse para adaptarse al aspect ratio 16:9 del container.
+            // Branding.2b (2026-05-02): el screen blend dejaba pasar un velo
+            // gris muy tenue por la compresión H.264 (los pixeles "casi negros"
+            // no son #000 puros sino ~#080808). El contrast(1.35) aplasta esos
+            // tonos bajos a negro real → se vuelven 100% transparentes; el
+            // brightness(1.05) compensa para que el logo no pierda luz.
+            filter: "contrast(1.35) brightness(1.05)",
+            // Mask radial más estrecho (45%/55% en lugar de 60%/70%) para que
+            // el feather empiece más cerca del logo y los bordes del video se
+            // desvanezcan antes — elimina el rectángulo sutil del fondo.
             WebkitMaskImage:
-              "radial-gradient(ellipse 60% 70% at center, black 50%, transparent 100%)",
+              "radial-gradient(ellipse 45% 55% at center, black 40%, transparent 95%)",
             maskImage:
-              "radial-gradient(ellipse 60% 70% at center, black 50%, transparent 100%)",
+              "radial-gradient(ellipse 45% 55% at center, black 40%, transparent 95%)",
           }}
         >
           <source src="/videos/sclabs-logo-intro.mp4" type="video/mp4" />
