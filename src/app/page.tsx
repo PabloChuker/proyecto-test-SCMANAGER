@@ -40,16 +40,17 @@ export default function Home() {
 
   useEffect(() => {
     // Branding.2 (2026-05-02): el logo estático fue reemplazado por el video
-    // SCLABS_logo_intro.mp4 (8s). El video tiene su propia entrada "desde las
+    // SCLABS_logo_intro.mp4. El video tiene su propia entrada "desde las
     // sombras" — ya no necesitamos el `mounted` state que hacía fade-in.
     //
-    // Timing sincronizado con duración del video:
+    // Branding.3 (2026-05-03): video acelerado 2x → ahora dura ~4s en vez
+    // de 8s (Pablo lo sentía largo). Timeouts re-sincronizados:
     //   t=0      → video empieza a reproducirse (autoPlay)
-    //   t=8000   → video termina + phase pasa a "reveal" (logo grande hace
+    //   t=4000   → video termina + phase pasa a "reveal" (logo grande hace
     //              fade-out, logo estático top-left hace fade-in)
-    //   t=9200   → phase pasa a "ready" (los 4 paneles del landing aparecen)
-    const t1 = setTimeout(() => setPhase("reveal"), 8000);
-    const t2 = setTimeout(() => setPhase("ready"), 9200);
+    //   t=5200   → phase pasa a "ready" (los 4 paneles del landing aparecen)
+    const t1 = setTimeout(() => setPhase("reveal"), 4000);
+    const t2 = setTimeout(() => setPhase("ready"), 5200);
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
