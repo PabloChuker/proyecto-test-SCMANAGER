@@ -213,6 +213,40 @@ const MOBILE_WIDGET_ORDER: WidgetId[] = [
   "ship-selector",
 ];
 
+// ─── Missile rack helpers (Loadout.2, 2026-05-03) ──────────────────────────
+// Parser canónico del nombre del rack: MSD-XYZ / CST-XYZ / similar.
+//   X = tamaño del rack (anclaje)
+//   Y = cantidad de misiles/bombas (# slots)
+//   Z = tamaño de cada misil/bomba
+// Ej: MSD-322 → S3, 2 misiles S2. CST-313 → S3, 1 bomba S3. MSD-441 → 4 misiles S1.
+//
+// PRIORIDAD: name-parse PRIMERO, componentStats fallback.
+// Motivo: la BD (missile_launchers.missile_count + ports.length) viene del
+// extractor scunpacked y para algunos racks chicos cuenta puertos físicos del
+// modelo 3D en lugar de slots lógicos del juego — ej. MSD-212 / MSD-313
+// salen como `missilePorts=2` cuando deberían ser 1. El nombre del rack es
+// la fuente más confiable porque CIG lo define con la convención XYZ.
+function parseMissileRackSpec(rack: any | null | undefined): { slots: number; portSize: number } {
+  if (!rack) return { slots: 0, portSize: 0 };
+  const nameForParse = rack.localizedName || rack.name || "";
+  const match = String(nameForParse).match(/-(\d)(\d)(\d)(?:\b|[^0-9])/);
+  if (match) {
+    return {
+      slots: Number(match[2]),
+      portSize: Number(match[3]),
+    };
+  }
+  // Fallback: para racks con naming no-estándar (raros).
+  return {
+    slots: Number(rack.componentStats?.missilePorts ?? 0),
+    portSize: Number(
+      rack.componentStats?.maxMissileSize
+        ?? rack.componentStats?.minMissileSize
+        ?? 0
+    ),
+  };
+}
+
 // ─── Geometric helpers ──────────────────────────────────────────────────────
 // getUnit: calcula el ancho de 1 columna en px a partir del contenedor.
 function getUnit(containerWidth: number): number {
@@ -794,11 +828,12 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   //
   // Identificación: los slots child sintéticos llevan id con patrón
   // `${rackHpId}:missile:${i}` (ver resolveChildSlots). El picker recibe
-  // pickerParentItem = rack equipado con componentStats.missilePorts.
+  // pickerParentItem = rack equipado; usamos parseMissileRackSpec (Loadout.2)
+  // para que el portCount coincida con la cantidad real de slots renderizados.
   const handleSelect = useCallback((item: EquippedItem) => {
     if (!pickerHp) return;
     const idMatch = pickerHp.id.match(/^(.+):missile:(\d+)$/);
-    const portCount = Number(pickerParentItem?.componentStats?.missilePorts ?? 0);
+    const portCount = parseMissileRackSpec(pickerParentItem).slots;
     if (idMatch && portCount > 1) {
       const rackHpId = idMatch[1];
       // 1) Slots sintéticos (lo que el LoadoutBuilder renderiza visualmente)
@@ -821,7 +856,8 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const handleClear = useCallback(() => {
     if (!pickerHp) return;
     const idMatch = pickerHp.id.match(/^(.+):missile:(\d+)$/);
-    const portCount = Number(pickerParentItem?.componentStats?.missilePorts ?? 0);
+    // Mismo helper que handleSelect — single source of truth para el slot count.
+    const portCount = parseMissileRackSpec(pickerParentItem).slots;
     if (idMatch && portCount > 1) {
       const rackHpId = idMatch[1];
       for (let i = 1; i <= portCount; i++) {
@@ -1196,34 +1232,13 @@ function HpGroup({ hps, onClickHp, weaponAllocatedPips, weaponMaxPips }: { hps: 
         const rack = getEffectiveItem(hp.id);
         if (!rack) return hp.children;
 
-        // Count y port size del rack: prioridad al componentStats calculado
-        // (lo que vino del /api/catalog), fallback a parsear el name del
-        // rack con la convención del juego. MSD-XYZ / CST-XYZ / similar:
-        //   X = tamaño del anclaje (rack size)
-        //   Y = cantidad de misiles/bombas (# slots)
-        //   Z = tamaño de cada misil/bomba
-        // Ej: MSD-322 = S3, 2 misiles S2. CST-313 = S3, 1 bomba S3.
-        // El default del ship loadout (endpoint ships/[id]) no enriquece
-        // componentStats, así que el name-parsing es clave para que las
-        // naves multi-rack arranquen bien sin que el user re-elija cada rack.
-        let n = Number(rack.componentStats?.missilePorts ?? 0);
-        let portSize = Number(
-          rack.componentStats?.maxMissileSize
-            ?? rack.componentStats?.minMissileSize
-            ?? 0
-        );
+        // parseMissileRackSpec usa name-parse de la convención MSD-XYZ del juego
+        // como fuente canónica (ver definición arriba). Para los racks chicos
+        // (MSD-212, MSD-313) la BD reporta missilePorts=2 incorrectamente —
+        // confiar en el nombre evita el bug de los slots fantasmas.
+        let { slots: n, portSize } = parseMissileRackSpec(rack);
 
-        if (!n || !portSize) {
-          const nameForParse = rack.localizedName || rack.name || "";
-          // Match "MSD-322", "CST-313", etc. Captura los 3 dígitos.
-          const match = nameForParse.match(/-(\d)(\d)(\d)(?:\b|[^0-9])/);
-          if (match) {
-            if (!n) n = Number(match[2]);
-            if (!portSize) portSize = Number(match[3]);
-          }
-        }
-
-        // Fallbacks finales: si ni componentStats ni name-parse resolvieron,
+        // Fallback final: si ni el nombre ni componentStats dieron datos,
         // caer al ship loadout original (no romper la UI).
         if (!n || n <= 0) return hp.children;
         if (!portSize) portSize = hp.maxSize || 1;
