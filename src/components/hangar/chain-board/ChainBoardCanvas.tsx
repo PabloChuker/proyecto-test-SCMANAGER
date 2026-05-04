@@ -22,9 +22,20 @@ interface ChainBoardCanvasProps {
   onRemove: (cardId: string) => void;
   onReorder: (fromIdx: number, toIdx: number) => void;
   onInsertAt: (idx: number, ship: Omit<BoardCard, "cardId">) => void;
+  /** CB.8g (2026-05-04): cuando el user dropea un CCU desde el inventario,
+   *  el canvas mete las dos naves al board en orden. El handler vive en el
+   *  Workspace (mismo que el botón "+ Pizarra"). */
+  onAddCcuPair?: (
+    fromShip: Omit<BoardCard, "cardId">,
+    toShip: Omit<BoardCard, "cardId">,
+  ) => void;
 }
 
-export function ChainBoardCanvas({ cards, onRemove, onReorder, onInsertAt }: ChainBoardCanvasProps) {
+// CB.8g: MIME type custom para drag-and-drop de CCUs. dataTransfer.types
+// tiene un check "includes" así que el match es exacto.
+const CCU_PAIR_MIME = "application/x-sc-ccu-pair";
+
+export function ChainBoardCanvas({ cards, onRemove, onReorder, onInsertAt, onAddCcuPair }: ChainBoardCanvasProps) {
   const isEmpty = cards.length === 0;
   const ccus = useHangarStore((s) => s.ccus);
 
@@ -88,6 +99,56 @@ export function ChainBoardCanvas({ cards, onRemove, onReorder, onInsertAt }: Cha
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
+  // CB.8g (2026-05-04): drop zone para CCUs arrastrados desde el inventario.
+  // isDragOverCcu marca el container con un highlight cuando el user está
+  // arrastrando un CCU encima — feedback visual fundamental para que el
+  // gesto se "sienta natural" (Pablo: "esto de clikear es molesto prefiero
+  // arrastrarlo se siente mas natural").
+  const [isDragOverCcu, setIsDragOverCcu] = useState(false);
+
+  /** True si el dataTransfer del evento contiene un CCU pair (no otro
+   *  tipo de drag — ej. la reorder interna usa otro mecanismo). */
+  const hasCcuPayload = (e: React.DragEvent): boolean => {
+    return Array.from(e.dataTransfer.types).includes(CCU_PAIR_MIME);
+  };
+
+  const handleCcuDragOver = (e: React.DragEvent) => {
+    if (!hasCcuPayload(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+    if (!isDragOverCcu) setIsDragOverCcu(true);
+  };
+
+  const handleCcuDragLeave = (e: React.DragEvent) => {
+    // Solo limpiar el highlight cuando el cursor sale del container — no
+    // de un hijo. relatedTarget=null o fuera de currentTarget = leave real.
+    if (
+      !e.relatedTarget ||
+      !(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)
+    ) {
+      setIsDragOverCcu(false);
+    }
+  };
+
+  const handleCcuDrop = (e: React.DragEvent) => {
+    if (!hasCcuPayload(e)) return;
+    e.preventDefault();
+    setIsDragOverCcu(false);
+    const raw = e.dataTransfer.getData(CCU_PAIR_MIME);
+    if (!raw) return;
+    try {
+      const payload = JSON.parse(raw) as {
+        from?: Omit<BoardCard, "cardId">;
+        to?: Omit<BoardCard, "cardId">;
+      };
+      if (payload.from && payload.to && onAddCcuPair) {
+        onAddCcuPair(payload.from, payload.to);
+      }
+    } catch {
+      // Silenciamos — payload corrupto no rompe la UI.
+    }
+  };
+
   // ─── Totales ──────────────────────────────────────────────────────────
   const totals = useMemo(() => {
     let valid = 0;
@@ -111,7 +172,27 @@ export function ChainBoardCanvas({ cards, onRemove, onReorder, onInsertAt }: Cha
   }, [validations]);
 
   return (
-    <div className="h-full bg-gradient-to-b from-zinc-900/50 to-zinc-950/30 border border-zinc-800/60 rounded-sm flex flex-col">
+    <div
+      className={`relative h-full bg-gradient-to-b from-zinc-900/50 to-zinc-950/30 border rounded-sm flex flex-col transition-colors ${
+        isDragOverCcu
+          ? "border-amber-500/70 ring-2 ring-amber-500/40 bg-amber-500/5"
+          : "border-zinc-800/60"
+      }`}
+      onDragOver={handleCcuDragOver}
+      onDragLeave={handleCcuDragLeave}
+      onDrop={handleCcuDrop}
+    >
+      {/* CB.8g: indicador de drop activo — overlay sutil cuando el user
+          está arrastrando un CCU encima del canvas. */}
+      {isDragOverCcu && (
+        <div className="absolute inset-0 z-10 pointer-events-none flex items-center justify-center">
+          <div className="bg-amber-500/15 border border-amber-500/50 rounded-sm px-4 py-2 backdrop-blur-sm">
+            <span className="text-[12px] font-mono uppercase tracking-wider text-amber-300">
+              ⬇ Soltá para agregar el CCU
+            </span>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="px-3 pt-3 pb-2 border-b border-zinc-800/50">
         <div className="flex items-center justify-between gap-2">

@@ -403,10 +403,40 @@ export function ChainBoardInventoryColumn({
           const toUsed = row.toMatch ? usedShipIds.has(row.toMatch.id) : false;
           const fromThumb = getShipThumbUrl(row.ccu.fromShip);
           const toThumb = getShipThumbUrl(row.ccu.toShip);
+          // CB.8g (2026-05-04): drag-and-drop nativo. La card entera del CCU
+          // es draggable cuando ambas naves matchearon en el catálogo y al
+          // menos una no está aún en la pizarra. El payload viaja como JSON
+          // bajo el MIME custom 'application/x-sc-ccu-pair' y el Canvas lo
+          // captura. Así el gesto se siente natural — Pablo: "esto de
+          // clikear es molesto prefiero arrastrarlo se siente mas natural".
+          const ccuDraggable =
+            !!row.fromMatch && !!row.toMatch && !(fromUsed && toUsed);
           return (
             <div
               key={`c-${row.ccu.id}`}
-              className="bg-zinc-900/60 border border-zinc-800/60 rounded-sm p-1.5"
+              draggable={ccuDraggable}
+              onDragStart={(e) => {
+                if (!ccuDraggable || !row.fromMatch || !row.toMatch) return;
+                const payload = {
+                  from: buildCardFromShip(row.fromMatch, row.ccu.id),
+                  to: buildCardFromShip(row.toMatch, row.ccu.id),
+                };
+                e.dataTransfer.setData(
+                  "application/x-sc-ccu-pair",
+                  JSON.stringify(payload),
+                );
+                e.dataTransfer.effectAllowed = "copy";
+              }}
+              className={`bg-zinc-900/60 border border-zinc-800/60 rounded-sm p-1.5 transition-colors ${
+                ccuDraggable
+                  ? "cursor-grab active:cursor-grabbing hover:border-amber-500/40"
+                  : "cursor-default"
+              }`}
+              title={
+                ccuDraggable
+                  ? "Arrastrá este CCU al tablero"
+                  : undefined
+              }
             >
               {/* Header con badges */}
               <div className="flex items-center gap-1 mb-1.5">

@@ -459,6 +459,7 @@ export function ChainBoardWorkspace() {
             onRemove={removeCard}
             onReorder={reorderCards}
             onInsertAt={insertCardAt}
+            onAddCcuPair={addCcuPair}
           />
         </section>
 
