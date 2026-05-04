@@ -529,24 +529,36 @@ function ChainStepCard({ step, index, isLast }: { step: ChainStep; index: number
             </div>
           </div>
 
-          {/* Price */}
+          {/* Price — CCU.7 (2026-05-04, claridad pedida por Pablo):
+              Para pasos del HANGAR ya NO mostramos "$0" (genera la
+              ilusión de "te sale gratis" cuando realmente ya gastaste
+              esa plata antes). Mostramos "Aplicado" en cyan + el costo
+              histórico abajo. La suma del Costo Total sigue siendo solo
+              cash + créditos (el costBreakdown ya lo separaba bien),
+              esto es solo claridad de presentación. */}
           <div className="text-right flex-shrink-0">
-            <p className={`text-lg font-mono font-bold ${priceColor}`}>
-              {step.priceType === "hangar" ? (
-                <span title={`Ya pagado: $${step.pricePaid.toFixed(2)}`}>$0</span>
-              ) : (
-                <span>{paymentIcon}{step.effectivePrice.toFixed(2)}</span>
-              )}
-            </p>
-            {step.priceType === "hangar" && step.pricePaid > 0 && (
-              <p className="text-[10px] text-emerald-500/60 font-mono">
-                Ya pagado: ${step.pricePaid.toFixed(2)}
-              </p>
-            )}
-            {step.priceType !== "standard" && step.priceType !== "hangar" && step.standardPrice !== step.effectivePrice && (
-              <p className="text-[10px] text-zinc-500 line-through font-mono">
-                ${step.standardPrice.toFixed(2)}
-              </p>
+            {step.priceType === "hangar" ? (
+              <>
+                <p className="text-base font-mono font-semibold text-cyan-400">
+                  Aplicado
+                </p>
+                {step.pricePaid > 0 && (
+                  <p className="text-[10px] text-zinc-500 font-mono">
+                    pagaste ${step.pricePaid.toFixed(2)}
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <p className={`text-lg font-mono font-bold ${priceColor}`}>
+                  {paymentIcon}{step.effectivePrice.toFixed(2)}
+                </p>
+                {step.priceType !== "standard" && step.standardPrice !== step.effectivePrice && (
+                  <p className="text-[10px] text-zinc-500 line-through font-mono">
+                    ${step.standardPrice.toFixed(2)}
+                  </p>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -642,69 +654,150 @@ function SavingsSummary({ chain }: { chain: ChainResult }) {
         </span>
       </div>
 
-      {/* Cost breakdown: Efectivo / Créditos / En Hangar */}
-      {/* Móvil: apilado vertical (cada tarjeta ocupa todo el ancho).
-          sm+ (>=640px): las 3 tarjetas lado a lado como en desktop. */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <div className="bg-zinc-900/60 border border-amber-500/30 rounded-sm p-3">
-          <p className="text-[10px] text-amber-400 uppercase tracking-widest">Efectivo Necesario</p>
-          <p className="text-xl font-mono font-bold text-amber-400 mt-1">${bd.cashTotal.toFixed(2)}</p>
-          <p className="text-[10px] text-zinc-500 mt-1">
-            {bd.warbondCount > 0 && <span className="text-cyan-400">{bd.warbondCount} WB</span>}
-            {bd.warbondCount > 0 && bd.standardCount > 0 && " · "}
-            {bd.standardCount > 0 && <span>{bd.standardCount} STD</span>}
-            {bd.buybackCashCount > 0 && " · "}
-            {bd.buybackCashCount > 0 && <span className="text-orange-400">{bd.buybackCashCount} BB</span>}
-          </p>
+      {/* CCU.7 (2026-05-04): cost breakdown rediseñado para claridad.
+          Pablo: "lo que es creditos es creditos lo que es efectivo es
+          efectivo me parece que la info se presenta algo confusa".
+
+          Tres cards con DOS GRUPOS:
+          1) "PAGÁS HOY"     — efectivo + créditos (lo que SACÁS de la
+                               billetera/store credits AHORA al comprar
+                               la cadena)
+          2) "YA APLICÁS"    — N CCUs del hangar que NO pagás de nuevo.
+                               El costo histórico aparece como FYI pero
+                               NO se suma al "pagás hoy" porque ya lo
+                               desembolsaste hace tiempo (sunk cost).
+
+          Diseño: las 2 cards de "pagás hoy" se conectan visualmente con
+          un borde común amber; la card de "ya aplicás" queda separada
+          con borde cyan (color del badge "Aplicado" del paso). */}
+      <div className="space-y-2">
+        <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono px-1">
+          Resumen de pagos
         </div>
-        <div className="bg-zinc-900/60 border border-violet-500/30 rounded-sm p-3">
-          <p className="text-[10px] text-violet-400 uppercase tracking-widest">Créditos (Buyback)</p>
-          <p className="text-xl font-mono font-bold text-violet-400 mt-1">${bd.creditsTotal.toFixed(2)}</p>
-          {bd.buybackTokenCount > 0 && (
-            <p className="text-[10px] text-zinc-500 mt-1">{bd.buybackTokenCount} CCU con token</p>
-          )}
-        </div>
-        <div className="bg-zinc-900/60 border border-emerald-500/30 rounded-sm p-3">
-          <p className="text-[10px] text-emerald-400 uppercase tracking-widest">Ya en Hangar</p>
-          <p className="text-xl font-mono font-bold text-emerald-400 mt-1">${bd.hangarValue.toFixed(2)}</p>
-          {bd.hangarCount > 0 && (
-            <p className="text-[10px] text-zinc-500 mt-1">{bd.hangarCount} CCU listos para aplicar</p>
-          )}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* CARD 1 — Efectivo (saca de la billetera HOY) */}
+          <div className="bg-zinc-900/60 border border-amber-500/30 rounded-sm p-3">
+            <p className="text-[10px] text-amber-400 uppercase tracking-widest">
+              💵 Pagás HOY · efectivo
+            </p>
+            <p className="text-xl font-mono font-bold text-amber-400 mt-1">
+              ${bd.cashTotal.toFixed(2)}
+            </p>
+            <p className="text-[10px] text-zinc-500 mt-1">
+              {bd.cashTotal === 0 ? (
+                <span className="text-zinc-600">— sin pagos en efectivo</span>
+              ) : (
+                <>
+                  {bd.warbondCount > 0 && <span className="text-cyan-400">{bd.warbondCount} WB</span>}
+                  {bd.warbondCount > 0 && bd.standardCount > 0 && " · "}
+                  {bd.standardCount > 0 && <span>{bd.standardCount} STD</span>}
+                  {(bd.warbondCount > 0 || bd.standardCount > 0) && bd.buybackCashCount > 0 && " · "}
+                  {bd.buybackCashCount > 0 && <span className="text-orange-400">{bd.buybackCashCount} BB cash</span>}
+                </>
+              )}
+            </p>
+          </div>
+
+          {/* CARD 2 — Créditos store (gastás del wallet RSI HOY) */}
+          <div className="bg-zinc-900/60 border border-violet-500/30 rounded-sm p-3">
+            <p className="text-[10px] text-violet-400 uppercase tracking-widest">
+              🎫 Pagás HOY · créditos
+            </p>
+            <p className="text-xl font-mono font-bold text-violet-400 mt-1">
+              ${bd.creditsTotal.toFixed(2)}
+            </p>
+            <p className="text-[10px] text-zinc-500 mt-1">
+              {bd.creditsTotal === 0 ? (
+                <span className="text-zinc-600">— sin pagos con créditos</span>
+              ) : (
+                <>{bd.buybackTokenCount} CCU con token de buyback</>
+              )}
+            </p>
+          </div>
+
+          {/* CARD 3 — Ya en hangar (NO pagás hoy, ya pagaste antes) */}
+          <div className="bg-zinc-900/60 border border-cyan-500/30 rounded-sm p-3">
+            <p className="text-[10px] text-cyan-400 uppercase tracking-widest">
+              📌 Ya aplicás · hangar
+            </p>
+            <p className="text-xl font-mono font-bold text-cyan-400 mt-1">
+              {bd.hangarCount} <span className="text-sm text-cyan-400/60">CCU{bd.hangarCount === 1 ? "" : "s"}</span>
+            </p>
+            <p className="text-[10px] text-zinc-500 mt-1">
+              {bd.hangarCount === 0 ? (
+                <span className="text-zinc-600">— ningún CCU del hangar usado</span>
+              ) : (
+                <>pagaste antes ${bd.hangarValue.toFixed(2)} (no se cuenta hoy)</>
+              )}
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Summary row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-zinc-900/60 border border-zinc-800/50 rounded-sm p-3">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Costo Total Cadena</p>
-          <p className="text-xl font-mono font-bold text-amber-400 mt-1">${chain.totalCost.toFixed(2)}</p>
+      {/* CCU.7 (2026-05-04): summary final con labels claros que reflejan
+          QUÉ es cada número. Antes "Costo Total Cadena" era ambiguo (¿qué
+          cuenta? ¿efectivo + créditos? ¿también lo del hangar?). Ahora
+          decimos "Total HOY = efectivo + créditos" sin ambigüedad. */}
+      <div className="space-y-2">
+        <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-mono px-1">
+          Comparación con compra directa
         </div>
-        <div className="bg-zinc-900/60 border border-zinc-800/50 rounded-sm p-3">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-widest">CCU Directo</p>
-          <p className="text-xl font-mono font-bold text-zinc-400 mt-1">${chain.directUpgradeCost.toFixed(2)}</p>
-        </div>
-        <div className="bg-zinc-900/60 border border-emerald-500/20 rounded-sm p-3">
-          <p className="text-[10px] text-emerald-400 uppercase tracking-widest">Ahorro Total</p>
-          <p className={`text-xl font-mono font-bold mt-1 ${
-            chain.totalSavingsVsDirect > 0 ? "text-emerald-400" : "text-red-400"
-          }`}>
-            {/* FIX 2026-04-26: signos estaban invertidos. Ahorro positivo
-                ahora muestra "+$X" (verde), cadena más cara que directo
-                muestra "-$X" (rojo), cero muestra "$0". */}
-            {chain.totalSavingsVsDirect > 0
-              ? `+$${chain.totalSavingsVsDirect.toFixed(2)}`
-              : chain.totalSavingsVsDirect < 0
-                ? `-$${Math.abs(chain.totalSavingsVsDirect).toFixed(2)}`
-                : `$0.00`}
-          </p>
-        </div>
-        <div className="bg-zinc-900/60 border border-zinc-800/50 rounded-sm p-3">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-widest">Ahorro %</p>
-          <p className={`text-xl font-mono font-bold mt-1 ${
-            chain.totalSavingsVsDirect > 0 ? "text-emerald-400" : "text-red-400"
-          }`}>
-            {savingsPercent}%
-          </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-zinc-900/80 border-2 border-amber-500/40 rounded-sm p-3">
+            <p className="text-[10px] text-amber-400 uppercase tracking-widest">
+              Total que pagás HOY
+            </p>
+            <p className="text-xl font-mono font-bold text-amber-400 mt-1">
+              ${chain.totalCost.toFixed(2)}
+            </p>
+            <p className="text-[10px] text-zinc-500 mt-1">
+              ${bd.cashTotal.toFixed(2)} efectivo
+              {bd.creditsTotal > 0 && <> + ${bd.creditsTotal.toFixed(2)} créditos</>}
+            </p>
+          </div>
+          <div className="bg-zinc-900/60 border border-zinc-800/50 rounded-sm p-3">
+            <p className="text-[10px] text-zinc-500 uppercase tracking-widest">
+              Si compraras CCU directo
+            </p>
+            <p className="text-xl font-mono font-bold text-zinc-400 mt-1">
+              ${chain.directUpgradeCost.toFixed(2)}
+            </p>
+            <p className="text-[10px] text-zinc-600 mt-1">
+              precio del salto base→target
+            </p>
+          </div>
+          <div className="bg-zinc-900/60 border border-emerald-500/20 rounded-sm p-3">
+            <p className="text-[10px] text-emerald-400 uppercase tracking-widest">
+              Ahorro vs directo
+            </p>
+            <p className={`text-xl font-mono font-bold mt-1 ${
+              chain.totalSavingsVsDirect > 0 ? "text-emerald-400" : "text-red-400"
+            }`}>
+              {/* FIX 2026-04-26: signos invertidos. Ahorro positivo "+$X"
+                  (verde), cadena más cara que directo "-$X" (rojo), cero. */}
+              {chain.totalSavingsVsDirect > 0
+                ? `+$${chain.totalSavingsVsDirect.toFixed(2)}`
+                : chain.totalSavingsVsDirect < 0
+                  ? `-$${Math.abs(chain.totalSavingsVsDirect).toFixed(2)}`
+                  : `$0.00`}
+            </p>
+            <p className="text-[10px] text-zinc-600 mt-1">
+              {chain.totalSavingsVsDirect > 0 ? "ganás con la cadena" : chain.totalSavingsVsDirect < 0 ? "perdés con la cadena" : "igual costo"}
+            </p>
+          </div>
+          <div className="bg-zinc-900/60 border border-zinc-800/50 rounded-sm p-3">
+            <p className="text-[10px] text-zinc-500 uppercase tracking-widest">
+              Ahorro %
+            </p>
+            <p className={`text-xl font-mono font-bold mt-1 ${
+              chain.totalSavingsVsDirect > 0 ? "text-emerald-400" : "text-red-400"
+            }`}>
+              {savingsPercent}%
+            </p>
+            <p className="text-[10px] text-zinc-600 mt-1">
+              vs costo directo
+            </p>
+          </div>
         </div>
       </div>
     </div>
