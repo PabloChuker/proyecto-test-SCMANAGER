@@ -87,12 +87,19 @@ export function ChainBoardInventoryColumn({
   const [filterLoc, setFilterLoc] = useState<FilterLoc>("all");
   const [filterIns, setFilterIns] = useState<"all" | InsuranceType>("all");
   // CB.8c (2026-05-04): sort por precio. "none" = orden natural (ships primero,
-  // después CCUs, alfabético). "asc" / "desc" = por precio: ships usan msrpUsd
-  // del catálogo, CCUs usan pricePaid del user. Mezcla en misma escala.
-  const [sortOrder, setSortOrder] = useState<"none" | "asc" | "desc">("none");
-  const cycleSort = () => {
-    setSortOrder((prev) => (prev === "none" ? "asc" : prev === "asc" ? "desc" : "none"));
-  };
+  // después CCUs, alfabético).
+  // CB.8d (2026-05-04): 3 campos posibles para CCUs:
+  //   - "ccu":  por precio pagado del CCU (mas cerca de "barato a aplicar")
+  //   - "from": por precio de la nave origen (util para arrancar desde nave chica)
+  //   - "to":   por precio de la nave destino (util para ver "qué CCU tengo más
+  //              cerca de mi próximo target", caso de uso de Pablo)
+  // Para ships solo aplica "ccu" (= msrpUsd) — los otros tienen el mismo valor.
+  type SortField = "none" | "ccu" | "from" | "to";
+  type SortDir = "asc" | "desc";
+  const [sortField, setSortField] = useState<SortField>("none");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const toggleSortDir = () =>
+    setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
 
   // CCU.13 (2026-05-04): matchea nombre de hangar contra catálogo siendo
   // estricto con variantes (longest-match wins).
@@ -153,17 +160,25 @@ export function ChainBoardInventoryColumn({
       }
     }
 
-    // CB.8c: sort por precio cuando aplica. Ships → msrpUsd, CCUs → pricePaid.
-    if (sortOrder !== "none") {
-      const dir = sortOrder === "asc" ? 1 : -1;
+    // CB.8c/d: sort por precio cuando aplica. Distintos campos según tipo:
+    //   - sortField="ccu": ships→msrpUsd, CCUs→pricePaid (heterogéneo pero útil)
+    //   - sortField="from": ships→msrpUsd, CCUs→fromMatch.msrpUsd
+    //   - sortField="to":   ships→msrpUsd, CCUs→toMatch.msrpUsd
+    // Para ships, los 3 modos colapsan al msrpUsd del catálogo.
+    if (sortField !== "none") {
+      const dir = sortDir === "asc" ? 1 : -1;
       const priceOf = (r: InventoryRow): number => {
         if (r.kind === "ship") return r.match?.msrpUsd ?? -1;
-        return r.ccu.pricePaid ?? -1;
+        // CCU
+        if (sortField === "ccu") return r.ccu.pricePaid ?? -1;
+        if (sortField === "from") return r.fromMatch?.msrpUsd ?? -1;
+        if (sortField === "to") return r.toMatch?.msrpUsd ?? -1;
+        return -1;
       };
       result.sort((a, b) => (priceOf(a) - priceOf(b)) * dir);
     }
     return result;
-  }, [ships, ccus, filterType, filterLoc, filterIns, search, findCatalogMatch, sortOrder]);
+  }, [ships, ccus, filterType, filterLoc, filterIns, search, findCatalogMatch, sortField, sortDir]);
 
   const buildCardFromShip = (
     match: BoardShipRow,
@@ -189,25 +204,41 @@ export function ChainBoardInventoryColumn({
           <h2 className="text-[12px] font-semibold tracking-wide text-zinc-200">
             Mi Inventario
           </h2>
-          {/* CB.8c: sort toggle por precio */}
-          <button
-            onClick={cycleSort}
-            className={`ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded-sm border transition-colors ${
-              sortOrder === "none"
-                ? "bg-zinc-900/40 border-zinc-800/60 text-zinc-500 hover:text-zinc-300"
-                : "bg-amber-500/15 border-amber-500/30 text-amber-300"
-            }`}
-            title={
-              sortOrder === "none"
-                ? "Orden natural — click para ordenar por precio ascendente"
-                : sortOrder === "asc"
-                ? "Precio ↑ menor primero — click para ↓ mayor primero"
-                : "Precio ↓ mayor primero — click para volver al orden natural"
-            }
+          <span className="text-[10px] text-zinc-500 font-mono ml-auto">
+            {rows.length}
+          </span>
+        </div>
+
+        {/* CB.8d: sort field + direction (compacto) */}
+        <div className="flex items-center gap-1 mb-2">
+          <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-500 shrink-0">
+            ord
+          </span>
+          <select
+            value={sortField}
+            onChange={(e) => setSortField(e.target.value as SortField)}
+            className="flex-1 text-[10px] font-mono px-1.5 py-1 bg-zinc-950 border border-zinc-800/60 rounded-sm text-zinc-300 focus:outline-none focus:border-amber-500/50"
+            title="Campo de ordenamiento"
           >
-            {sortOrder === "none" ? "$ —" : sortOrder === "asc" ? "$ ↑" : "$ ↓"}
+            <option value="none">Sin orden</option>
+            <option value="ccu">Precio CCU</option>
+            <option value="from">Precio nave FROM</option>
+            <option value="to">Precio nave TO</option>
+          </select>
+          <button
+            onClick={toggleSortDir}
+            disabled={sortField === "none"}
+            className={`text-[11px] font-mono px-2 py-1 rounded-sm border transition-colors shrink-0 ${
+              sortField === "none"
+                ? "bg-zinc-900/30 border-zinc-800/40 text-zinc-700 cursor-not-allowed"
+                : sortDir === "asc"
+                ? "bg-amber-500/15 border-amber-500/30 text-amber-300"
+                : "bg-cyan-500/15 border-cyan-500/30 text-cyan-300"
+            }`}
+            title={sortDir === "asc" ? "Menor a mayor — click para invertir" : "Mayor a menor — click para invertir"}
+          >
+            {sortDir === "asc" ? "↑" : "↓"}
           </button>
-          <span className="text-[10px] text-zinc-500 font-mono">{rows.length}</span>
         </div>
 
         {/* Search */}
@@ -403,6 +434,11 @@ export function ChainBoardInventoryColumn({
                     <p className="text-[9px] text-zinc-300 truncate text-left leading-tight">
                       {row.ccu.fromShip}
                     </p>
+                    {row.fromMatch && (
+                      <p className="text-[8px] font-mono text-amber-400/70 text-left leading-tight">
+                        ${row.fromMatch.msrpUsd}
+                      </p>
+                    )}
                   </div>
                 </button>
 
@@ -444,6 +480,11 @@ export function ChainBoardInventoryColumn({
                     <p className="text-[9px] text-cyan-300/90 truncate text-left leading-tight">
                       {row.ccu.toShip}
                     </p>
+                    {row.toMatch && (
+                      <p className="text-[8px] font-mono text-cyan-400/80 text-left leading-tight">
+                        ${row.toMatch.msrpUsd}
+                      </p>
+                    )}
                   </div>
                 </button>
               </div>
