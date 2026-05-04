@@ -71,9 +71,11 @@ function StatRow({ label, value, unit }: { label: string; value: string; unit?: 
 // ── Store-connected export ────────────────────────────────────────────────────
 // Re-renders when shipInfo, hardpoints, or overrides change — NOT on flightMode.
 export const ShipCardContent = memo(function ShipCardContent() {
-  const { shipInfo, hardpoints, overrides } = useLoadoutStore(
-    useShallow(s => ({ shipInfo: s.shipInfo, hardpoints: s.hardpoints, overrides: s.overrides }))
+  // Loadout.4c: previewItem incluido para forzar re-render durante hover del picker.
+  const { shipInfo, hardpoints, overrides, previewItem } = useLoadoutStore(
+    useShallow(s => ({ shipInfo: s.shipInfo, hardpoints: s.hardpoints, overrides: s.overrides, previewItem: s.previewItem }))
   );
+  void previewItem;
   const getStats = useLoadoutStore(s => s.getStats);
 
   if (!shipInfo) return null;

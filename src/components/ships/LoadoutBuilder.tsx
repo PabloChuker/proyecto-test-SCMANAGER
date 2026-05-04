@@ -649,7 +649,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   // instancePower + componentStates included so Zustand triggers a re-render
   // when the user adjusts power pips or toggles components on/off.
   const { shipInfo, isLoading, error, hardpoints, overrides, flightMode,
-    instancePower: _ip, componentStates: _cs } = useLoadoutStore(
+    instancePower: _ip, componentStates: _cs, previewItem: _pi } = useLoadoutStore(
     useShallow(s => ({
       shipInfo: s.shipInfo,
       isLoading: s.isLoading,
@@ -659,10 +659,14 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
       flightMode: s.flightMode,
       instancePower: s.instancePower,
       componentStates: s.componentStates,
+      // Loadout.4c: previewItem incluido para que el LoadoutBuilder y todos
+      // los widgets que reciben `stats={getStats()}` re-renderizen cuando el
+      // user hovea por el ComponentPicker.
+      previewItem: s.previewItem,
     }))
   );
   // Suppress unused-var lint — these exist solely to trigger re-renders
-  void _ip; void _cs;
+  void _ip; void _cs; void _pi;
   // Actions are stable references in Zustand — individual selectors never trigger re-renders.
   const loadShip      = useLoadoutStore(s => s.loadShip);
   const getStats      = useLoadoutStore(s => s.getStats);

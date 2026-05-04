@@ -54,9 +54,14 @@ function DeflectionChip({ label, deflection, dmgMult, color }: {
 
 // ── Store-connected export ────────────────────────────────────────────────────
 export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
-  const { shipInfo, overrides, flightMode } = useLoadoutStore(
-    useShallow(s => ({ shipInfo: s.shipInfo, overrides: s.overrides, flightMode: s.flightMode }))
+  // Loadout.4c (2026-05-04): incluir previewItem en el selector para que el
+  // widget re-renderice cuando el user pasa el mouse por el ComponentPicker.
+  // Sin esto, getStats() retorna el mismo cache + componente memoizado no
+  // detecta cambios → stats no se actualizan en el hover preview.
+  const { shipInfo, overrides, flightMode, previewItem } = useLoadoutStore(
+    useShallow(s => ({ shipInfo: s.shipInfo, overrides: s.overrides, flightMode: s.flightMode, previewItem: s.previewItem }))
   );
+  void previewItem; // suscribir solamente, no se usa directamente
   const getStats = useLoadoutStore(s => s.getStats);
 
   // Fase W.13 (2026-05-02): Radar Lock Range. Solo renderizamos cuando los
