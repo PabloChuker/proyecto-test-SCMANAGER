@@ -92,6 +92,54 @@ export function ChainBoardWorkspace() {
     [],
   );
 
+  /**
+   * CB.8f (2026-05-04): agrega un CCU como entidad única — las dos naves
+   * (FROM y TO) entran al board en orden contiguo. Pablo: "el CCU es una
+   * entidad unica, es un tramite de nave a nave, deveria poder pasarlo al
+   * tablero" (no agregar las naves por separado y reordenar a mano).
+   *
+   * Casos:
+   *   1. Ninguna está en el board    → push FROM, push TO al final.
+   *   2. FROM ya está, TO no         → insert TO inmediatamente después.
+   *   3. TO ya está, FROM no         → insert FROM inmediatamente antes.
+   *   4. Ambas ya están              → no-op (no duplicamos ni reordenamos
+   *                                     porque eso podría romper otras
+   *                                     conexiones de la cadena).
+   */
+  const addCcuPair = useCallback(
+    (
+      fromShip: Omit<BoardCard, "cardId">,
+      toShip: Omit<BoardCard, "cardId">,
+    ) => {
+      setCards((prev) => {
+        const fromIdx = prev.findIndex((c) => c.shipId === fromShip.shipId);
+        const toIdx = prev.findIndex((c) => c.shipId === toShip.shipId);
+
+        // Caso 4: ambos ya en el board — silenciamos (UI debería deshabilitar
+        // el click pero por defensa devolvemos prev sin tocar).
+        if (fromIdx !== -1 && toIdx !== -1) return prev;
+
+        const next = prev.slice();
+        // Caso 2: FROM ya está → TO va inmediatamente después de FROM.
+        if (fromIdx !== -1 && toIdx === -1) {
+          next.splice(fromIdx + 1, 0, { ...toShip, cardId: cardId() });
+          return next;
+        }
+        // Caso 3: TO ya está → FROM va inmediatamente antes de TO.
+        if (fromIdx === -1 && toIdx !== -1) {
+          next.splice(toIdx, 0, { ...fromShip, cardId: cardId() });
+          return next;
+        }
+        // Caso 1: ninguno está → ambos al final, FROM antes que TO.
+        next.push({ ...fromShip, cardId: cardId() });
+        next.push({ ...toShip, cardId: cardId() });
+        return next;
+      });
+      setMobileTab("canvas");
+    },
+    [],
+  );
+
   /** Vacía la pizarra. */
   const clearBoard = useCallback(() => {
     setCards([]);
@@ -397,6 +445,7 @@ export function ChainBoardWorkspace() {
           <ChainBoardInventoryColumn
             usedShipIds={usedShipIds}
             onAddCard={addCard}
+            onAddCcuPair={addCcuPair}
             hasBaseShip={cards.length > 0}
           />
         </section>

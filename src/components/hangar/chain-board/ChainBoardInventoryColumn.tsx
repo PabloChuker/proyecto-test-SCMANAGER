@@ -17,6 +17,13 @@ import type { BoardCard, BoardShipRow } from "./types";
 interface ChainBoardInventoryColumnProps {
   usedShipIds: Set<string>;
   onAddCard: (ship: Omit<BoardCard, "cardId">) => void;
+  /** CB.8f (2026-05-04): agregar el CCU como ENTIDAD ÚNICA — las dos naves
+   *  (FROM y TO) entran al board contiguas. Pablo: "el CCU es una entidad
+   *  unica es un tramite de nave a nave deveria poder pasarlo al tablero". */
+  onAddCcuPair?: (
+    fromShip: Omit<BoardCard, "cardId">,
+    toShip: Omit<BoardCard, "cardId">,
+  ) => void;
   /** CB.8e: cuando >=1 cards en el board, auto-switch del filtro a "CCUs". */
   hasBaseShip?: boolean;
 }
@@ -49,6 +56,7 @@ const INSURANCE_COLOR: Record<InsuranceType, string> = {
 export function ChainBoardInventoryColumn({
   usedShipIds,
   onAddCard,
+  onAddCcuPair,
   hasBaseShip = false,
 }: ChainBoardInventoryColumnProps) {
   const ships = useHangarStore((s) => s.ships);
@@ -436,6 +444,46 @@ export function ChainBoardInventoryColumn({
                 <span className="text-[8px] font-mono uppercase text-zinc-500 ml-auto shrink-0">
                   {row.ccu.location === "buyback" ? "BB" : "Hgr"}
                 </span>
+                {/* CB.8f (2026-05-04): botón "agregar CCU completo" — mete
+                    AMBAS naves al board en un solo click (entidad única,
+                    no dos clicks separados). Se deshabilita si las dos
+                    naves YA están en la pizarra (entonces el CCU ya
+                    "vive" ahí) o si falta match para alguna. */}
+                {(() => {
+                  const fromU = row.fromMatch ? usedShipIds.has(row.fromMatch.id) : false;
+                  const toU   = row.toMatch   ? usedShipIds.has(row.toMatch.id)   : false;
+                  const bothMatched = !!row.fromMatch && !!row.toMatch;
+                  const bothUsed = fromU && toU;
+                  const disabled = !bothMatched || bothUsed;
+                  return (
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!onAddCcuPair || !row.fromMatch || !row.toMatch) return;
+                        onAddCcuPair(
+                          buildCardFromShip(row.fromMatch, row.ccu.id),
+                          buildCardFromShip(row.toMatch, row.ccu.id),
+                        );
+                      }}
+                      title={
+                        !bothMatched
+                          ? "Falta match para una de las naves del CCU"
+                          : bothUsed
+                          ? "Las dos naves del CCU ya están en la pizarra"
+                          : "Agregar el CCU completo (FROM → TO) a la pizarra"
+                      }
+                      className={`text-[9px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded-[2px] border shrink-0 transition-colors ${
+                        disabled
+                          ? "bg-zinc-900/40 text-zinc-700 border-zinc-800/40 cursor-not-allowed"
+                          : "bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25 hover:border-amber-400 cursor-pointer"
+                      }`}
+                    >
+                      + Pizarra
+                    </button>
+                  );
+                })()}
               </div>
 
               {/* CB.8c: 2 thumbnails (FROM ← → TO) clickables */}
@@ -481,10 +529,44 @@ export function ChainBoardInventoryColumn({
                   </div>
                 </button>
 
-                {/* Arrow connector */}
-                <div className="flex items-center justify-center w-3 shrink-0 text-zinc-600 text-[10px]">
-                  →
-                </div>
+                {/* CB.8f: flecha clickable — agrega el CCU como par. Mismo
+                    handler que el botón "+ Pizarra" del header pero más a
+                    mano si el user está mirando las thumbnails. */}
+                {(() => {
+                  const fromU = row.fromMatch ? usedShipIds.has(row.fromMatch.id) : false;
+                  const toU   = row.toMatch   ? usedShipIds.has(row.toMatch.id)   : false;
+                  const bothMatched = !!row.fromMatch && !!row.toMatch;
+                  const bothUsed = fromU && toU;
+                  const disabled = !bothMatched || bothUsed;
+                  return (
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (!onAddCcuPair || !row.fromMatch || !row.toMatch) return;
+                        onAddCcuPair(
+                          buildCardFromShip(row.fromMatch, row.ccu.id),
+                          buildCardFromShip(row.toMatch, row.ccu.id),
+                        );
+                      }}
+                      title={
+                        !bothMatched
+                          ? "Falta match para una de las naves del CCU"
+                          : bothUsed
+                          ? "Las dos naves del CCU ya están en la pizarra"
+                          : "Agregar el CCU completo (FROM → TO) a la pizarra"
+                      }
+                      className={`flex items-center justify-center w-4 shrink-0 text-[12px] rounded-sm transition-colors ${
+                        disabled
+                          ? "text-zinc-700 cursor-not-allowed"
+                          : "text-amber-400/70 hover:text-amber-300 hover:bg-amber-500/10 cursor-pointer"
+                      }`}
+                    >
+                      →
+                    </button>
+                  );
+                })()}
 
                 {/* TO */}
                 <button
