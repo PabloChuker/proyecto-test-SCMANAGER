@@ -1163,6 +1163,14 @@ const _loadingShips = new Map<string, Promise<void>>();
 interface LoadoutState {
   shipId: string | null; shipInfo: ShipInfo | null;
   hardpoints: ResolvedHardpoint[]; overrides: Map<string, EquippedItem | null>;
+  /**
+   * Loadout.4 (2026-05-04): preview override temporal (NO persistido).
+   * Cuando el user pasa el mouse sobre un item en el ComponentPicker, se
+   * setea acá. `getEffectiveItem(hpId)` lo prefiere sobre overrides/default,
+   * lo que hace que computeStats recalcule en vivo. Al hacer click definitivo
+   * (equipItem) o cerrar el picker, se limpia.
+   */
+  previewItem: { hardpointId: string; item: EquippedItem | null } | null;
   componentStates: Record<string, boolean>; flightMode: FlightMode;
   /** Per-instance power allocation: hardpointName -> allocated pips */
   instancePower: Record<string, number>;
@@ -1209,10 +1217,15 @@ interface LoadoutState {
   /** Legacy: set power by category (updates all instances in that category) */
   setAllocatedPower: (cat: PowerCategory, points: number) => void;
   autoAllocatePower: () => void;
+  /** Loadout.4: previsualizar item temporalmente (hover en picker). */
+  setPreviewItem: (hardpointId: string, item: EquippedItem | null) => void;
+  /** Loadout.4: limpiar preview (mouse leave o cerrar picker). */
+  clearPreviewItem: () => void;
 }
 
 export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   shipId: null, shipInfo: null, hardpoints: [], overrides: new Map(),
+  previewItem: null,                   // Loadout.4
   componentStates: {}, flightMode: "SCM" as FlightMode,
   instancePower: {}, shipPowerGen: 0, flightControllerPower: null, powerPools: null,
   usedGroupedScm: null,
@@ -1222,13 +1235,38 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   getStats: () => {
     const s = get();
     if (s.hardpoints.length === 0) return EMPTY_STATS;
-    const key = makeStatsKey(s.shipId, s.flightMode, s.overrides, s.componentStates, s.instancePower, s.shipPowerGen);
+    // Loadout.4: si hay preview activo, lo aplicamos sobre overrides para que
+    // computeStats lea el override "as-if-equipped". Después del cálculo se
+    // descarta — no persiste. El cache key incluye el shipId+ref del preview
+    // para invalidarlo cuando cambia el hovered item.
+    const previewKey = s.previewItem
+      ? `prev:${s.previewItem.hardpointId}:${s.previewItem.item?.id ?? "null"}`
+      : "no-prev";
+    const baseKey = makeStatsKey(s.shipId, s.flightMode, s.overrides, s.componentStates, s.instancePower, s.shipPowerGen);
+    const key = baseKey + "|" + previewKey;
     if (_statsCache && _statsCache.key === key) return _statsCache.result;
-    const result = computeStats(s.hardpoints, s.overrides, s.componentStates, s.flightMode, s.instancePower, s.shipInfo, s.shipPowerGen, s.flightControllerPower, s.powerPools, s.usedGroupedScm, s.shipEmShieldsRef, s.shipIrShieldsRef);
+    let effectiveOverrides = s.overrides;
+    if (s.previewItem) {
+      effectiveOverrides = new Map(s.overrides);
+      effectiveOverrides.set(s.previewItem.hardpointId, s.previewItem.item);
+    }
+    const result = computeStats(s.hardpoints, effectiveOverrides, s.componentStates, s.flightMode, s.instancePower, s.shipInfo, s.shipPowerGen, s.flightControllerPower, s.powerPools, s.usedGroupedScm, s.shipEmShieldsRef, s.shipIrShieldsRef);
     _statsCache = { key, result };
     return result;
   },
-  getEffectiveItem: (hpId) => { const { hardpoints, overrides } = get(); if (overrides.has(hpId)) return overrides.get(hpId) ?? null; const top = hardpoints.find(h => h.id === hpId); if (top) return top.defaultItem ?? null; for (const h of hardpoints) { const ch = h.children.find(c => c.id === hpId); if (ch) return ch.equippedItem ?? null; } return null; },
+  getEffectiveItem: (hpId) => {
+    const { hardpoints, overrides, previewItem } = get();
+    // Loadout.4: preview gana sobre overrides y default cuando matchea
+    if (previewItem && previewItem.hardpointId === hpId) return previewItem.item;
+    if (overrides.has(hpId)) return overrides.get(hpId) ?? null;
+    const top = hardpoints.find(h => h.id === hpId);
+    if (top) return top.defaultItem ?? null;
+    for (const h of hardpoints) {
+      const ch = h.children.find(c => c.id === hpId);
+      if (ch) return ch.equippedItem ?? null;
+    }
+    return null;
+  },
   hasOverride: (hpId) => get().overrides.has(hpId),
   isComponentOn: (hpName) => get().componentStates[hpName] !== false,
   hasChanges: () => get().overrides.size > 0,
@@ -1426,8 +1464,10 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   // Equipping/clearing/toggling preserves user pip allocations — no auto-rebalance.
   // Auto-alloc only runs on initial ship load, explicit resetAll, and flight-mode change.
   // (Previous behavior overwrote manual pip changes whenever the user toggled anything.)
-  equipItem: (hpId, item) => { set(s => { const n = new Map(s.overrides); n.set(hpId, item); return { overrides: n }; }); },
-  clearSlot: (hpId) => { set(s => { const n = new Map(s.overrides); n.set(hpId, null); return { overrides: n }; }); },
+  // Loadout.4: cuando se confirma un item (click), limpiamos el preview para
+  // que no quede aplicado encima del override real.
+  equipItem: (hpId, item) => { set(s => { const n = new Map(s.overrides); n.set(hpId, item); return { overrides: n, previewItem: null }; }); },
+  clearSlot: (hpId) => { set(s => { const n = new Map(s.overrides); n.set(hpId, null); return { overrides: n, previewItem: null }; }); },
   toggleComponent: (hpName) => {
     // OFF → zero this component's pips (so the pool visibly frees them).
     // ON  → restore a sensible default (min pips) from free pool, without touching other components.
@@ -1468,7 +1508,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
       instancePower: { ...s.instancePower, [hpName]: grant },
     });
   },
-  resetAll: () => { const fresh: Record<string, boolean> = {}; for (const hp of get().hardpoints) { fresh[hp.hardpointName] = true; for (const ch of hp.children) fresh[ch.hardpointName] = true; } set({ overrides: new Map(), componentStates: fresh, flightMode: "SCM" as FlightMode, instancePower: {}, allocatedPower: { ...ZERO_ALLOC } }); scheduleAutoAlloc(get); },
+  resetAll: () => { const fresh: Record<string, boolean> = {}; for (const hp of get().hardpoints) { fresh[hp.hardpointName] = true; for (const ch of hp.children) fresh[ch.hardpointName] = true; } set({ overrides: new Map(), previewItem: null, componentStates: fresh, flightMode: "SCM" as FlightMode, instancePower: {}, allocatedPower: { ...ZERO_ALLOC } }); scheduleAutoAlloc(get); },
   setFlightMode: (mode) => { set({ flightMode: mode }); scheduleAutoAlloc(get); },
 
   setInstancePower: (hardpointName, pips) => {
@@ -1543,6 +1583,14 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
     }
 
     set({ instancePower: newAlloc, allocatedPower: catAlloc });
+  },
+
+  // ── Loadout.4 (2026-05-04): preview hover live ─────────────────────────
+  setPreviewItem: (hardpointId, item) => {
+    set({ previewItem: { hardpointId, item } });
+  },
+  clearPreviewItem: () => {
+    set({ previewItem: null });
   },
 
   encodeBuild: () => {

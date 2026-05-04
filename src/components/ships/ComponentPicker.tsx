@@ -6,7 +6,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import type { EquippedItem, ResolvedHardpoint } from "@/store/useLoadoutStore";
+import { useLoadoutStore, type EquippedItem, type ResolvedHardpoint } from "@/store/useLoadoutStore";
 import { CAT_COLORS, fmtPrice, getKeyStat } from "./loadout-utils";
 import powerNetworkLookup from "@/data/power-network-lookup.json";
 import miningModulesJson from "@/data/mining/mining-modules.json";
@@ -165,6 +165,7 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
   const [subFilter, setSubFilter] = useState<SubFilter>("all");
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null); // Loadout.4 — click-outside
   const catColor = CAT_COLORS[hardpoint.resolvedCategory] || "#71717a";
   const isTurretSlot = hardpoint.resolvedCategory === "TURRET";
 
@@ -195,6 +196,37 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
 
   useEffect(() => { inputRef.current?.focus(); }, []);
   useEffect(() => { const h = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, [onClose]);
+
+  // Loadout.4: click-outside cierra el panel (no usamos backdrop velo, así
+  // que necesitamos detectar manualmente clicks fuera). Solo aplica en
+  // desktop — mobile sigue con el backdrop click handler. Pointerdown evita
+  // disparar antes de que un click dentro del panel registre.
+  useEffect(() => {
+    const onPointerDown = (e: PointerEvent) => {
+      if (window.innerWidth < 640) return; // mobile: backdrop maneja el cierre
+      if (!panelRef.current) return;
+      if (panelRef.current.contains(e.target as Node)) return;
+      // Si el click es sobre un context menu (right-click popup), ignorar.
+      const target = e.target as HTMLElement | null;
+      if (target?.closest?.("[data-context-menu]")) return;
+      onClose();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [onClose]);
+
+  // Loadout.4 (2026-05-04): hover preview live. Cuando el user pasa el mouse
+  // por un row, seteamos el item en el store como preview → computeStats lo
+  // toma en cuenta y todas las stats se recalculan en vivo (DPS, escudo HP,
+  // power balance, thermal, etc). Cuando sale del row o cierra el picker,
+  // limpiamos. La selección final (click) también limpia + aplica el override.
+  const setPreviewItem = useLoadoutStore(s => s.setPreviewItem);
+  const clearPreviewItem = useLoadoutStore(s => s.clearPreviewItem);
+  // Cleanup al desmontar — fundamental para que el preview no quede pegado
+  // si el user cierra con Escape o click afuera.
+  useEffect(() => {
+    return () => clearPreviewItem();
+  }, [clearPreviewItem]);
 
   useEffect(() => {
     abortRef.current?.abort();
@@ -340,20 +372,60 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
     return out;
   }, [sorted, subFilter, isTurretSlot, brandFilter, parentClassName]);
 
-  const handleItemSelect = useCallback((item: CatalogItem) => {
+  // Loadout.4: builder compartido entre click (select) y hover (preview).
+  // Devuelve un `EquippedItem` listo para meter en overrides o previewItem.
+  const buildEquipped = useCallback((item: CatalogItem): EquippedItem => {
     const stats = getItemStats(item);
-    // Attach powerNetwork from the JSON lookup so the power grid picks it up
     const pn = item.className ? pnLookup[item.className] ?? null : null;
-    onSelect({ id: item.id, reference: item.reference, name: item.name, localizedName: item.localizedName, className: item.className, type: item.type, size: item.size, grade: item.grade, manufacturer: item.manufacturer, componentStats: stats, powerNetwork: pn });
-  }, [getItemStats, onSelect]);
+    return {
+      id: item.id,
+      reference: item.reference,
+      name: item.name,
+      localizedName: item.localizedName,
+      className: item.className,
+      type: item.type,
+      size: item.size,
+      grade: item.grade,
+      manufacturer: item.manufacturer,
+      componentStats: stats,
+      powerNetwork: pn,
+    };
+  }, [getItemStats]);
+
+  const handleItemSelect = useCallback((item: CatalogItem) => {
+    onSelect(buildEquipped(item));
+  }, [buildEquipped, onSelect]);
+
+  // Loadout.4: hover handlers — preview live de stats sin compromiso.
+  const handleItemHover = useCallback((item: CatalogItem) => {
+    setPreviewItem(hardpoint.id, buildEquipped(item));
+  }, [setPreviewItem, hardpoint.id, buildEquipped]);
+  const handleListLeave = useCallback(() => {
+    clearPreviewItem();
+  }, [clearPreviewItem]);
 
   const statLabel = getStatColumnLabel(hardpoint.resolvedCategory);
   const displaySize = hardpoint.maxSize > 0 ? "S" + hardpoint.maxSize : "Any";
 
   return (
     <>
-      <div className="fixed inset-0 bg-black/80 z-50" onClick={onClose} />
-      <div className="fixed inset-4 sm:inset-auto sm:left-1/2 sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[720px] sm:max-h-[75vh] bg-zinc-950 border border-zinc-800/70 rounded-sm flex flex-col z-50 shadow-2xl shadow-black/60">
+      {/* Loadout.4 (2026-05-04): el modal con backdrop velo se reemplazó por
+          un panel flotante anclado bottom-right. Esto:
+          - NO tapa las stats arriba/izquierda (loadout-detail, ship-card,
+            armor-check) — el user ve los cambios live mientras hovea.
+          - NO usa overlay oscuro — solo un drop shadow para diferenciarlo.
+          - Click afuera del panel cierra (handler abajo); ESC también.
+          En mobile (< sm) volvemos al inset-4 full-screen porque el espacio
+          es chico y un panel chiquito sería peor. */}
+      <div
+        className="fixed inset-0 z-40 sm:hidden bg-black/40 pointer-events-auto"
+        onClick={onClose}
+      />
+      <div
+        ref={panelRef}
+        className="fixed inset-4 z-50 bg-zinc-950 border border-zinc-800/70 rounded-sm flex flex-col shadow-2xl shadow-black/60 sm:inset-auto sm:bottom-4 sm:right-4 sm:left-auto sm:top-auto sm:w-[480px] sm:max-h-[70vh]"
+      >
+        {/* Header: agregamos drag handle visual (decorativo) y mantenemos botón close */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800/50 flex-shrink-0">
           <div className="w-1 h-5 rounded-full opacity-60" style={{ backgroundColor: catColor }} />
           <div className="flex-1 min-w-0">
@@ -392,7 +464,10 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
           <ColHead label="Mfr" k="manufacturer" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-20 text-right hidden sm:block" />
         </div>
 
-        <div className="flex-1 overflow-y-auto min-h-0">
+        <div
+          className="flex-1 overflow-y-auto min-h-0"
+          onMouseLeave={handleListLeave}
+        >
           {loading && results.length === 0 ? (
             <div className="flex items-center justify-center py-12 text-zinc-600 text-sm"><div className="w-4 h-4 border-2 border-zinc-700 border-t-cyan-500 rounded-full animate-spin mr-2" />Loading...</div>
           ) : filtered.length === 0 ? (
@@ -407,6 +482,8 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
               <button
                 key={item.id}
                 onClick={() => handleItemSelect(item)}
+                onMouseEnter={() => !isCurrent && handleItemHover(item)}
+                onFocus={() => !isCurrent && handleItemHover(item)}
                 onContextMenu={(e) => {
                   e.preventDefault();
                   const itemType = CAT_TO_ITEM_TYPE[hardpoint.resolvedCategory] || hardpoint.resolvedCategory;
