@@ -266,7 +266,14 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
         //   - Bomb rack padre    → BOMB
         //   - Missile rack padre → MISSILE
         // Nunca pedir racks/heads cuando estamos dentro de uno.
-        if (parentClassName) {
+        //
+        // Loadout.4g (2026-05-04, BUGFIX): el override SOLO aplica si el child
+        // es ordenanza (misil/bomba/salvage modifier). Para children WEAPON
+        // de turrets/gimbal mounts (ej. Revenant Gatling dentro de VariPuck S4)
+        // dejamos el default `apiTypes = "WEAPON"` — sino el picker pedía
+        // types=MISSILE para un slot WEAPON y devolvía vacío ("No compatible
+        // components found" reportado por Pablo en 2026-05-04).
+        if (parentClassName && hardpoint.resolvedCategory !== "WEAPON") {
           if (isSalvageHeadClass(parentClassName)) apiTypes = "SALVAGE_MODIFIER";
           else if (isBombRackClass(parentClassName)) apiTypes = "BOMB";
           else apiTypes = "MISSILE";
