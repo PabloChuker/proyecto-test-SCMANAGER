@@ -1140,16 +1140,29 @@ export function CCUChainCalculator() {
   return (
     <div className="space-y-6">
       {/* ── Header ── */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h2 className="text-lg font-semibold text-zinc-100 tracking-wide">CCU Chain Calculator</h2>
           <p className="text-[11px] text-zinc-500 mt-0.5">Find the cheapest upgrade path using Warbond discounts and your owned CCUs</p>
         </div>
-        {ccus.length > 0 && (
-          <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded">
-            {ccus.length} CCUs in inventory
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {ccus.length > 0 && (
+            <span className="text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-1 rounded">
+              {ccus.length} CCUs in inventory
+            </span>
+          )}
+          {/* CB.1+ (2026-05-04): link a la nueva pizarra. */}
+          <a
+            href="/hangar/chain-board"
+            className="text-[10px] px-2.5 py-1 bg-amber-500/10 border border-amber-500/30 rounded-sm text-amber-300 hover:bg-amber-500/20 hover:border-amber-500/50 transition-colors flex items-center gap-1"
+            title="Modo Pizarra: armá tu cadena visualmente con drag & drop"
+          >
+            🎨 Modo Pizarra
+            <span className="text-[8px] uppercase tracking-wider px-1 py-0.5 rounded-[2px] bg-amber-500/20 ml-0.5">
+              new
+            </span>
+          </a>
+        </div>
       </div>
 
       {/* ── Ship Selection ── */}

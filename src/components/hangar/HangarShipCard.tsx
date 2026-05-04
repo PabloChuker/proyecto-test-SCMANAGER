@@ -258,8 +258,10 @@ function cleanShipName(name: string): string {
 /**
  * Build a local ship thumbnail URL from the ship name.
  * Maps "Gladius" → "/ships/gladius.jpg", "Anvil F7C Hornet Mk II" → "/ships/f7c-hornet-mk-ii.jpg"
+ *
+ * CB.2 (2026-05-04): exportada para reuso en ChainBoard.
  */
-function getShipThumbUrl(shipName: string): string {
+export function getShipThumbUrl(shipName: string): string {
   if (!shipName) return "";
   const cleaned = cleanShipName(shipName);
   const lower = cleaned.toLowerCase().trim();
