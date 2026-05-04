@@ -48,6 +48,20 @@ interface TableDef {
    * es literal en código (no viene del user).
    */
   extraWhere?: string;
+  /**
+   * Loadout.4f (2026-05-04): true si la tabla tiene columna `game_version`.
+   * Si la tabla la tiene, el DISTINCT ON dedupea quedándose con la versión
+   * más alta (LIVE 4.7.2 > LIVE 4.7.0). Si no, el ORDER BY del CTE referencia
+   * solo class_name — sino el COALESCE(t.game_version, ...) tiraría
+   * "column does not exist" y el picker quedaba vacío silenciosamente.
+   *
+   * Tablas confirmadas con game_version (de migrations): weapon_salvage,
+   * quantum_interdiction_generators, jump_drives. El resto del catálogo
+   * (weapon_guns, missiles, shields, power_plants, coolers, etc.) no la
+   * tiene en migrations — si en prod fueron ALTER'd, el dedupe sigue siendo
+   * funcional pero pickea una variante arbitraria (no la latest).
+   */
+  hasGameVersion?: boolean;
 }
 
 const TYPE_TABLE: Record<string, TableDef> = {
@@ -120,6 +134,7 @@ const TYPE_TABLE: Record<string, TableDef> = {
     idCol: "uuid", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
     extraWhere: "t.class_name NOT ILIKE '%_Template%' AND (t.name IS NULL OR t.name NOT ILIKE '%PLACEHOLDER%')",
+    hasGameVersion: true, // PK compuesta (uuid, game_version) en migración 058
   },
   // Mining lasers: migrado a tabla `weapon_mining` (migración 054). Es el
   // superset con modelo de power completo. La tabla antigua `mining_lasers`
@@ -150,12 +165,14 @@ const TYPE_TABLE: Record<string, TableDef> = {
     idCol: "id", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
     extraWhere: "t.sub_type = 'Head' AND t.class_name NOT ILIKE '%_Template%' AND (t.name IS NULL OR t.name NOT ILIKE '%PLACEHOLDER%')",
+    hasGameVersion: true, // PK compuesta (id, game_version) en migración 056
   },
   SALVAGE_MODIFIER: {
     table: "weapon_salvage", type: "SALVAGE_MODIFIER",
     idCol: "id", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
     extraWhere: "t.sub_type = 'Modifier' AND t.class_name NOT ILIKE '%_Template%' AND (t.name IS NULL OR t.name NOT ILIKE '%PLACEHOLDER%')",
+    hasGameVersion: true, // PK compuesta (id, game_version) en migración 056
   },
   // QIG / QED / QDMP — Fase N (migración 057). Los 3 tipos viven en la
   // misma tabla (quantum_interdiction_generators). El picker pide QIG
@@ -167,6 +184,7 @@ const TYPE_TABLE: Record<string, TableDef> = {
     idCol: "uuid", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
     extraWhere: "t.class_name NOT ILIKE '%_Template%' AND t.class_name NOT ILIKE '%_Prototype%' AND (t.name IS NULL OR t.name NOT ILIKE '%PLACEHOLDER%')",
+    hasGameVersion: true, // ALTER en migración 057 agrega game_version + PK compuesta
   },
 };
 
@@ -303,15 +321,29 @@ async function queryCatalog(params: CatalogParams) {
       // Loadout.4d (2026-05-04): DISTINCT ON (class_name) en un CTE para
       // evitar duplicados cuando una nave/componente vive en múltiples
       // game_version (LIVE 4.7.0 + PTU 4.7.2). Antes salía el mismo item dos
-      // veces en el ComponentPicker. Pickeamos la fila con `game_version`
-      // más alta. Si la tabla no tiene `game_version` el COALESCE manda al
-      // final NULLS y queda determinístico (la primera fila por class_name).
+      // veces en el ComponentPicker.
+      //
+      // Loadout.4f (2026-05-04, BUGFIX): la versión anterior referenciaba
+      // `COALESCE(t.game_version, '')` SIEMPRE — pero la mayoría de tablas
+      // del catálogo (weapon_guns, missiles, shields, power_plants, coolers,
+      // quantum_drives, weapon_mining, etc.) NO tienen columna game_version
+      // en sus migraciones. La query rompía con `column does not exist`,
+      // el catch del catálogo lo logueaba silenciosamente, y el picker
+      // quedaba vacío → "al hacer click en armas no aparece nada".
+      //
+      // Fix: solo usar COALESCE(game_version) cuando def.hasGameVersion=true.
+      // Para tablas sin game_version, el ORDER BY del CTE solo lleva
+      // class_name (DISTINCT ON pickea cualquier fila si hay duplicados —
+      // que no debería haber sin game_version, pero por defensa).
+      const dedupOrder = def.hasGameVersion
+        ? `t.class_name, COALESCE(t.game_version, '') DESC`
+        : `t.class_name`;
       const rows: any[] = await sql.unsafe(
         `WITH dedup AS (
            SELECT DISTINCT ON (t.class_name) t.*
            FROM ${def.table} t
            ${where}
-           ORDER BY t.class_name, COALESCE(t.game_version, '') DESC
+           ORDER BY ${dedupOrder}
          )
          SELECT t.*${manufacturerSelect}, COUNT(*) OVER()::int AS _total_count
          FROM dedup t

@@ -76,21 +76,33 @@ interface MinimalHardpoint {
  * Prefetch agresivo de las (categoria, size) únicas del ship. Disparado al
  * cargar el LoadoutBuilder. Fire-and-forget: errores se ignoran porque el
  * picker hará un fetch normal si falla. NO bloquea el render.
+ *
+ * Loadout.4f (2026-05-04): el body matchea EXACTAMENTE el body que arma el
+ * ComponentPicker (mismo shape `types` plural + mismo limit + mismo include).
+ * Si difieren, la cache key es distinta y el prefetch no calienta nada — era
+ * un perf bug silencioso. Ahora sí: el user clickea un slot y el catálogo
+ * está caliente.
  */
 export function prefetchForHardpoints(hardpoints: MinimalHardpoint[]): void {
   if (typeof window === "undefined") return;
   const combos = new Set<string>();
   for (const hp of hardpoints) {
-    const apiType = HP_TO_API_TYPE[hp.resolvedCategory];
-    if (!apiType) continue;
-    const size = hp.maxSize > 0 ? hp.maxSize : null;
-    const key = `${apiType}|${size}`;
+    const apiTypes = HP_TO_API_TYPE[hp.resolvedCategory];
+    if (!apiTypes) continue;
+    const maxSize = hp.maxSize > 0 ? hp.maxSize : null;
+    const key = `${apiTypes}|${maxSize}`;
     if (combos.has(key)) continue;
     combos.add(key);
-    const body: any = { type: apiType, limit: 200 };
-    if (size != null) {
-      body.maxSize = size;
-      body.minSize = size;
+    // Mismo shape que el ComponentPicker: types plural, limit 80, include
+    // stats+shops. Cualquier desincronización rompe el cache hit.
+    const body: Record<string, any> = {
+      types: apiTypes,
+      limit: 80,
+      include: "stats,shops",
+    };
+    if (maxSize != null) {
+      body.maxSize = maxSize;
+      body.minSize = maxSize;
     }
     // Fire-and-forget — los errores se silencian porque el picker hace fallback.
     fetchCatalog(body).catch(() => {});

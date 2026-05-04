@@ -12,8 +12,19 @@ import Image from "next/image";
 import { useLoadoutStore } from "@/store/useLoadoutStore";
 import { useShallow } from "zustand/react/shallow";
 import { fmtStat, fmtDps } from "@/components/ships/loadout-utils";
+import {
+  STAT_VAL_HERO,
+  STAT_VAL_SUB,
+  STAT_LABEL,
+  STAT_LABEL_SOFT,
+  STAT_SECTION,
+  STAT_COLOR,
+} from "@/lib/loadout/stat-tokens";
 // Loadout.3 (2026-05-04): ArmorCheckPanel se movió a su propio widget
 // (ArmorCheckWidget.tsx) para que sea reordenable/redimensionable aparte.
+// Loadout.6+7 (2026-05-04): tokens canónicos de tamaño + color (stat-tokens.ts).
+// TODA stat numérica en este widget pasa por STAT_VAL_HERO/SUB y STAT_COLOR.
+// No hardcodear text-2xl / text-orange-400 / etc — siempre tokenizar.
 
 // ── Pequeña píldora de resistencia (shield) ──────────────────────────────────
 function ResistancePill({ label, pct, color }: { label: string; pct: number | null | undefined; color: string }) {
@@ -38,14 +49,14 @@ function DeflectionChip({ label, deflection, dmgMult, color }: {
       <span className="text-[11px] font-mono text-zinc-400 tracking-[0.08em] uppercase text-center leading-tight">{label}</span>
       {deflection != null && (
         <div className="flex items-baseline gap-1">
-          <span className="text-base font-mono font-bold tabular-nums" style={{ color }}>{deflection}</span>
-          <span className="text-[10px] font-mono text-zinc-600 uppercase">defl</span>
+          <span className={STAT_VAL_SUB} style={{ color }}>{deflection}</span>
+          <span className={STAT_LABEL}>defl</span>
         </div>
       )}
       {dmgMult != null && (
         <div className="flex items-baseline gap-1">
-          <span className="text-xs font-mono font-medium tabular-nums text-zinc-300">×{dmgMult.toFixed(2)}</span>
-          <span className="text-[10px] font-mono text-zinc-600 uppercase">dmg</span>
+          <span className={STAT_VAL_SUB} style={{ color: "#d4d4d8" }}>×{dmgMult.toFixed(2)}</span>
+          <span className={STAT_LABEL}>dmg</span>
         </div>
       )}
     </div>
@@ -107,19 +118,21 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
 
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-2.5">
-      {/* ── WEAPONS — sustained primary, burst+alpha secondary ────────────── */}
+      {/* ── WEAPONS — sustained primary, burst+alpha secondary ──────────────
+          Loadout.6+7: Sustained DPS = HERO size. Burst+Alpha = SUB size.
+          Antes había text-2xl/xs/lg mezclados; ahora solo 2 niveles. */}
       <div className={navMode ? "opacity-30" : ""}>
-        <div className="text-[10px] font-mono text-zinc-600 tracking-[0.15em] uppercase mb-0.5">Sustained DPS</div>
+        <div className={`${STAT_SECTION} mb-0.5`}>Sustained DPS</div>
         <div className="flex items-baseline gap-3">
           <Image src="/icons/weapons.png" alt="" width={16} height={16} style={{ opacity: 0.5 }} />
-          <span className="text-2xl font-mono font-bold tabular-nums text-orange-400">{fmtDps(stats.sustainedDps)}</span>
-          <span className="text-[10px] font-mono text-zinc-500">dps</span>
+          <span className={STAT_VAL_HERO} style={{ color: STAT_COLOR.dpsSustained }}>{fmtDps(stats.sustainedDps)}</span>
+          <span className={STAT_LABEL}>dps</span>
         </div>
         <div className="flex items-baseline gap-2 mt-1 pl-6">
-          <span className="text-[10px] font-mono text-zinc-600 tracking-wider uppercase">Burst</span>
-          <span className="text-xs font-mono font-bold tabular-nums text-red-500">{fmtDps(stats.burstDps)}</span>
-          <span className="text-[10px] font-mono text-zinc-600 tracking-wider uppercase ml-2">Alpha</span>
-          <span className="text-xs font-mono font-bold tabular-nums text-red-400/80">{fmtStat(stats.weaponAlpha)}</span>
+          <span className={STAT_LABEL}>Burst</span>
+          <span className={STAT_VAL_SUB} style={{ color: STAT_COLOR.dpsBurst }}>{fmtDps(stats.burstDps)}</span>
+          <span className={`${STAT_LABEL} ml-2`}>Alpha</span>
+          <span className={STAT_VAL_SUB} style={{ color: STAT_COLOR.alpha }}>{fmtStat(stats.weaponAlpha)}</span>
         </div>
       </div>
 
@@ -128,9 +141,9 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
         <div className={navMode ? "opacity-30" : ""}>
           <div className="flex items-baseline gap-3">
             <Image src="/icons/missile.png" alt="" width={16} height={16} style={{ opacity: 0.5 }} />
-            <span className="text-lg font-mono font-bold tabular-nums text-orange-500">{fmtStat(stats.missileAlpha)}</span>
-            <span className="text-[10px] font-mono text-zinc-500">dmg</span>
-            <span className="text-[11px] font-mono text-zinc-600 ml-2">×{stats.summary.missiles}</span>
+            <span className={STAT_VAL_HERO} style={{ color: STAT_COLOR.missile }}>{fmtStat(stats.missileAlpha)}</span>
+            <span className={STAT_LABEL}>dmg</span>
+            <span className={`${STAT_LABEL_SOFT} ml-2`}>×{stats.summary.missiles}</span>
           </div>
         </div>
       )}
@@ -138,31 +151,31 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
       {/* ── SHIELDS ────────────────────────────────────────────────────────── */}
       <div className="border-t border-zinc-800/40 pt-2 space-y-1.5">
         <div className="flex items-baseline gap-3">
-          <span className="text-[11px]" style={{ color: "#eab308", opacity: 0.5 }}>⏱</span>
-          <span className="text-lg font-mono font-bold tabular-nums text-amber-500">
+          <span className="text-[11px]" style={{ color: STAT_COLOR.power, opacity: 0.5 }}>⏱</span>
+          <span className={STAT_VAL_HERO} style={{ color: STAT_COLOR.shieldRegen }}>
             {stats.shieldRegen > 0 ? (stats.shieldHp / Math.max(stats.shieldRegen, 0.01)).toFixed(1) : "—"}
           </span>
-          <span className="text-[10px] font-mono text-zinc-500">s full regen time</span>
+          <span className={STAT_LABEL}>s full regen time</span>
         </div>
         <div className="flex items-baseline gap-3">
           <Image src="/icons/shilds.png" alt="" width={16} height={16} style={{ opacity: 0.5 }} />
-          <span className="text-xl font-mono font-bold tabular-nums text-blue-500">
+          <span className={STAT_VAL_HERO} style={{ color: STAT_COLOR.shield }}>
             {stats.shieldHp > 0 ? fmtStat(stats.shieldHp) : (si.shieldHpTotal ? fmtStat(si.shieldHpTotal) : "0")}
           </span>
-          <span className="text-[10px] font-mono text-zinc-500">hp</span>
+          <span className={STAT_LABEL}>hp</span>
           {stats.shieldRegen > 0 && (
             <>
-              <span className="text-sm font-mono tabular-nums text-blue-400/70">{fmtStat(stats.shieldRegen)}</span>
-              <span className="text-[10px] font-mono text-zinc-500">hp/s</span>
+              <span className={STAT_VAL_SUB} style={{ color: STAT_COLOR.shieldRegen, opacity: 0.7 }}>{fmtStat(stats.shieldRegen)}</span>
+              <span className={STAT_LABEL}>hp/s</span>
             </>
           )}
         </div>
         {/* Shield resistance pills — usan *Max (el pico del rango ship-level) */}
         {(si.physicalResistanceMax != null || si.energyResistanceMax != null || si.distortionResistanceMax != null) && (
           <div className="flex flex-wrap gap-1 pl-6">
-            <ResistancePill label="Physical"   pct={si.physicalResistanceMax}   color="#fbbf24" />
-            <ResistancePill label="Energy"     pct={si.energyResistanceMax}     color="#22d3ee" />
-            <ResistancePill label="Distortion" pct={si.distortionResistanceMax} color="#a78bfa" />
+            <ResistancePill label="Physical"   pct={si.physicalResistanceMax}   color={STAT_COLOR.physical} />
+            <ResistancePill label="Energy"     pct={si.energyResistanceMax}     color={STAT_COLOR.energy} />
+            <ResistancePill label="Distortion" pct={si.distortionResistanceMax} color={STAT_COLOR.distortion} />
           </div>
         )}
       </div>
@@ -172,12 +185,12 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
         <div className="border-t border-zinc-800/40 pt-2">
           <div className="flex items-baseline gap-3">
             <Image src="/icons/Ships.png" alt="" width={16} height={16} style={{ opacity: 0.5 }} />
-            <span className="text-lg font-mono font-bold tabular-nums text-zinc-400">{fmtStat(si.hullHp)}</span>
-            <span className="text-[10px] font-mono text-zinc-500">hull hp</span>
+            <span className={STAT_VAL_HERO} style={{ color: STAT_COLOR.hull }}>{fmtStat(si.hullHp)}</span>
+            <span className={STAT_LABEL}>hull hp</span>
             {res.armorHp != null && res.armorHp > 0 && (
               <>
-                <span className="text-sm font-mono tabular-nums text-zinc-500 ml-2">{fmtStat(res.armorHp)}</span>
-                <span className="text-[10px] font-mono text-zinc-600">armor</span>
+                <span className={`${STAT_VAL_SUB} ml-2`} style={{ color: STAT_COLOR.armor }}>{fmtStat(res.armorHp)}</span>
+                <span className={STAT_LABEL}>armor</span>
               </>
             )}
           </div>
@@ -192,26 +205,23 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
           la nave entra en overload térmico (color rojo). */}
       {(stats.coolingRate > 0 || stats.thermalOutput > 0) && (
         <div className="border-t border-zinc-800/40 pt-2">
-          <div className="text-[11px] font-mono text-zinc-500 tracking-[0.15em] uppercase mb-1">
-            Thermal balance
-          </div>
+          <div className={`${STAT_SECTION} mb-1`}>Thermal balance</div>
           <div className="flex items-baseline gap-3">
             <Image src="/icons/coolers.png" alt="" width={16} height={16} style={{ opacity: 0.5 }} />
             <span
-              className="text-lg font-mono font-bold tabular-nums"
+              className={STAT_VAL_HERO}
               style={{
-                color:
-                  stats.thermalBalance >= 0 ? "#06b6d4" : "#ef4444",
+                color: stats.thermalBalance >= 0 ? STAT_COLOR.thermal : STAT_COLOR.thermalBad,
               }}
             >
               {stats.thermalBalance >= 0 ? "+" : ""}{fmtStat(stats.thermalBalance)}
             </span>
-            <span className="text-[10px] font-mono text-zinc-500">balance</span>
-            <span className="text-[10px] font-mono text-zinc-600 ml-2">
+            <span className={STAT_LABEL}>balance</span>
+            <span className={`${STAT_LABEL_SOFT} ml-2`}>
               supply {fmtStat(stats.coolingRate)} · demand {fmtStat(stats.thermalOutput)}
             </span>
             {stats.thermalBalance < 0 && (
-              <span className="text-[11px] font-mono text-red-500 ml-1">⚠ overload</span>
+              <span className={`${STAT_LABEL} ml-1`} style={{ color: STAT_COLOR.thermalBad }}>⚠ overload</span>
             )}
           </div>
         </div>
@@ -220,11 +230,11 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
       {/* ── ARMOR DEFLECTION + DAMAGE MULTIPLIERS ──────────────────────────── */}
       {hasArmorBlock && (
         <div className="border-t border-zinc-800/40 pt-2">
-          <div className="text-[11px] font-mono text-zinc-500 tracking-[0.15em] uppercase mb-2">Armor Deflection</div>
+          <div className={`${STAT_SECTION} mb-2`}>Armor Deflection</div>
           <div className="flex gap-2">
-            <DeflectionChip label="Physical"   deflection={si.deflectionPhysical}   dmgMult={res.dmgMultPhysical}   color="#fbbf24" />
-            <DeflectionChip label="Energy"     deflection={si.deflectionEnergy}     dmgMult={res.dmgMultEnergy}     color="#22d3ee" />
-            <DeflectionChip label="Distortion" deflection={si.deflectionDistortion} dmgMult={res.dmgMultDistortion} color="#a78bfa" />
+            <DeflectionChip label="Physical"   deflection={si.deflectionPhysical}   dmgMult={res.dmgMultPhysical}   color={STAT_COLOR.physical} />
+            <DeflectionChip label="Energy"     deflection={si.deflectionEnergy}     dmgMult={res.dmgMultEnergy}     color={STAT_COLOR.energy} />
+            <DeflectionChip label="Distortion" deflection={si.deflectionDistortion} dmgMult={res.dmgMultDistortion} color={STAT_COLOR.distortion} />
           </div>
         </div>
       )}
@@ -240,20 +250,18 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
           empezará a mostrarse automáticamente sin más cambios. */}
       {radarRangeMin != null && radarRangeMax != null && radarRangeMax > 0 && (
         <div className="border-t border-zinc-800/40 pt-2">
-          <div className="text-[11px] font-mono text-zinc-500 tracking-[0.15em] uppercase mb-1">
-            Radar Lock Range
-          </div>
+          <div className={`${STAT_SECTION} mb-1`}>Radar Lock Range</div>
           <div className="flex items-baseline gap-3">
             <Image src="/icons/interdict_pulse.png" alt="" width={16} height={16} style={{ opacity: 0.5 }} />
-            <span className="text-xl font-mono font-bold tabular-nums text-cyan-400">
+            <span className={STAT_VAL_HERO} style={{ color: STAT_COLOR.radar }}>
               {fmtStat(
                 Math.round(
                   radarRangeMin + (radarRangeMax - radarRangeMin) * radarPipFraction,
                 ) / 1000,
               )}
             </span>
-            <span className="text-[10px] font-mono text-zinc-500">km</span>
-            <span className="text-[10px] font-mono text-zinc-600 ml-2">
+            <span className={STAT_LABEL}>km</span>
+            <span className={`${STAT_LABEL_SOFT} ml-2`}>
               ({fmtStat(radarRangeMin / 1000)}–{fmtStat(radarRangeMax / 1000)} km · {Math.round(radarPipFraction * 100)}% pips)
             </span>
           </div>
