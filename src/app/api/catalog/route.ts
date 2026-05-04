@@ -476,12 +476,25 @@ function mapRow(row: any, def: TableDef): any {
     // (ej "Aegis Dynamics") en lugar del UUID crudo. Fallback al UUID si
     // por alguna razon el JOIN no resolvio (defensive).
     manufacturer: def.mfrCol ? (row.manufacturer_name ?? row[def.mfrCol] ?? null) : null,
-    // Loadout.4k (2026-05-04): exponer sub_type (Military / Civilian /
-    // Industrial / Racing / Stealth) para que el picker lo muestre como
-    // badge. Tablas que no tienen sub_type devuelven null y el badge no
-    // se renderiza. Para weapons, fallback a fire_mode (Auto/Burst/Single)
-    // que es la categoría más identificable de un arma.
-    subType: row.sub_type ?? row.fire_mode ?? null,
+    // Loadout.4k+4l (2026-05-04): exponer la categoría del componente
+    // (Military / Civilian / Industrial / Racing / Stealth / Competition)
+    // como badge en el picker.
+    //
+    // Convención de scunpacked: cada tabla tiene UNA de estas columnas:
+    //   · `class`     — shields, coolers, power_plants, quantum_drives.
+    //                   Valores canónicos: Military / Civilian / Industrial /
+    //                   Stealth / Competition. (Reportado por Pablo: "trae la
+    //                   marca no si es militar o ese subtipo" — mi v4k solo
+    //                   miraba sub_type y por eso shields no mostraba nada).
+    //   · `sub_type`  — weapon_guns (Gun/Rocket/NoseMounted), radars
+    //                   (Civilian/Military/Industrial/Stealth), weapon_salvage
+    //                   (Head/Modifier), turrets (GunTurret/MannedTurret/etc).
+    //   · `fire_mode` — weapon_guns secundario (Auto/Burst/Single/Charge).
+    //
+    // Orden de preferencia: class > sub_type > fire_mode. La 1ra que matchee
+    // gana. Para weapon_guns que tiene sub_type=Gun + fire_mode=Auto, el
+    // sub_type gana (más informativo que el modo de disparo).
+    subType: row["class"] ?? row.sub_type ?? row.fire_mode ?? null,
     // Per-type stat objects (ComponentPicker reads these)
     weaponStats: type === "WEAPON" ? stats : null,
     shieldStats: type === "SHIELD" ? stats : null,
