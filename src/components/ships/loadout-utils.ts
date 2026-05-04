@@ -139,6 +139,15 @@ export function getKeyStat(category: string, stats: Record<string, any> | null |
       if (jam !== null) return { v: fmtStat(jam) + "m", l: "JAM" };
       return null;
     }
+    case "RADAR": {
+      // Loadout.4j: sensitivity como métrica principal (cuanto mas alto,
+      // mejor detecta blancos). Algunos radares también suman sensitivity
+      // para vehículos terrestres pero como métrica de slot mostramos solo
+      // la base.
+      const sens = tryNum(stats, "sensitivity");
+      if (sens !== null) return { v: fmtStat(sens), l: "SENS" };
+      return null;
+    }
     case "MINING_MODULE": {
       // Los módulos suelen traer laserPower (%) como efecto principal; si no,
       // showeamos lo que haya.

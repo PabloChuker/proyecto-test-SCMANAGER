@@ -40,6 +40,9 @@ const CAT_TO_API_TYPE: Record<string, string> = {
   // el slot viene fixed=true (no se abre el picker), pero si en el futuro
   // otras naves lo traen editable, el mapping ya está.
   QIG: "QIG",
+  // RADAR — agregado en Loadout.4j (2026-05-04). Antes el picker quedaba
+  // vacío porque RADAR no estaba en el mapping → API recibía types=OTHER.
+  RADAR: "RADAR",
 };
 
 // Mining modules no viven en la BD: vienen del JSON curado en
@@ -96,7 +99,7 @@ interface CatalogItem {
   weaponStats?: any; shieldStats?: any; powerStats?: any; coolingStats?: any;
   quantumStats?: any; miningStats?: any; missileStats?: any;
   turretStats?: any; missileRackStats?: any; bombStats?: any;
-  salvageStats?: any; qigStats?: any; thrusterStats?: any;
+  salvageStats?: any; qigStats?: any; radarStats?: any; thrusterStats?: any;
   shopInventory?: Array<{ priceBuy: number | null; priceSell: number | null; shop: { name: string; location: { name: string; parentName: string | null } } }>;
 }
 
@@ -305,7 +308,7 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
   }, [search, hardpoint.resolvedCategory, hardpoint.maxSize, hardpoint.minSize, parentClassName, parentMaxMissileSize, parentMinMissileSize]);
 
   const getItemStats = useCallback((item: CatalogItem): Record<string, any> | null => {
-    return item.weaponStats || item.shieldStats || item.powerStats || item.coolingStats || item.quantumStats || item.miningStats || item.missileStats || item.turretStats || item.missileRackStats || item.bombStats || item.salvageStats || item.qigStats || item.thrusterStats || null;
+    return item.weaponStats || item.shieldStats || item.powerStats || item.coolingStats || item.quantumStats || item.miningStats || item.missileStats || item.turretStats || item.missileRackStats || item.bombStats || item.salvageStats || item.qigStats || item.radarStats || item.thrusterStats || null;
   }, []);
 
   const getBestPrice = useCallback((item: CatalogItem): number | null => {
@@ -630,6 +633,8 @@ function getStatColumnLabel(cat: string): string {
     // QIG: métrica principal es el alcance de jamming (los 3 QIGs siempre
     // tienen jamming_range; sólo el Reynie corta saltos con interdict_range).
     case "QIG": return "Jam";
+    // RADAR: ordenamos por sensitivity (mas sensible = detecta blancos antes).
+    case "RADAR": return "Sens";
     default: return "Pwr";
   }
 }
@@ -658,6 +663,9 @@ function getSortStatVal(stats: Record<string, any> | null, cat: string): number 
     case "QIG":
       // Orden por jamming range descendente (más alcance primero).
       return stats.jammingRange ?? 0;
+    case "RADAR":
+      // Orden por sensitivity descendente (más sensible = mejor radar).
+      return stats.sensitivity ?? 0;
     default: return stats.powerDraw ?? 0;
   }
 }

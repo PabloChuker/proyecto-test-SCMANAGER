@@ -186,6 +186,17 @@ const TYPE_TABLE: Record<string, TableDef> = {
     extraWhere: "t.class_name NOT ILIKE '%_Template%' AND t.class_name NOT ILIKE '%_Prototype%' AND (t.name IS NULL OR t.name NOT ILIKE '%PLACEHOLDER%')",
     hasGameVersion: true, // ALTER en migración 057 agrega game_version + PK compuesta
   },
+  // RADAR (Loadout.4j, 2026-05-04) — Pablo reportó "en radares me aparece la
+  // lista vacia". El picker pedía types=OTHER porque RADAR no estaba en el
+  // mapping → API ignoraba. Tabla `radars` (PK uuid) extendida en 037b con
+  // power/cooling/emisiones + game_version. Excluimos placeholders/templates.
+  RADAR: {
+    table: "radars", type: "RADAR",
+    idCol: "uuid", nameCol: "name", classCol: "class_name",
+    sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
+    extraWhere: "t.class_name NOT ILIKE '%_Template%' AND (t.name IS NULL OR t.name NOT ILIKE '%PLACEHOLDER%')",
+    hasGameVersion: true, // PK natural pero ALTER 037b agrega game_version
+  },
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -478,6 +489,7 @@ function mapRow(row: any, def: TableDef): any {
     bombStats: type === "BOMB" ? stats : null,
     salvageStats: type === "SALVAGE_HEAD" || type === "SALVAGE_MODIFIER" ? stats : null,
     qigStats: type === "QIG" ? stats : null,
+    radarStats: type === "RADAR" ? stats : null,
     thrusterStats: null,
     shopInventory: [],
   };
@@ -727,6 +739,29 @@ function buildStats(row: any, type: string): Record<string, any> | null {
       s.distortionShutdownTime = numOrNull(row.distortion_shutdown_time);
       s.health = numOrNull(row.health);
       s.mass = numOrNull(row.mass);
+      break;
+    }
+
+    case "RADAR": {
+      // radars columns (migración 025 + 037b extiende con power/cooling/emisiones).
+      // Stat principal del picker = sensitivity (mas sensible = detecta antes).
+      // sub_type distingue Civilian/Military/Industrial.
+      s.sensitivity = numOrNull(row.sensitivity);
+      s.groundVehicleSensitivityAddition = numOrNull(row.ground_vehicle_sensitivity_addition);
+      s.subType = row.sub_type ?? null;
+      s.pips = numOrNull(row.pips);
+      s.powerDraw = numOrNull(row.power_consumption_max) ?? numOrNull(row.power_consumption_min);
+      s.powerDrawMin = numOrNull(row.power_consumption_min);
+      s.powerDrawMax = numOrNull(row.power_consumption_max);
+      s.coolantMin = numOrNull(row.coolant_consumption_min);
+      s.coolantMax = numOrNull(row.coolant_consumption_max);
+      s.emSignature = numOrNull(row.em_max);
+      s.irSignature = numOrNull(row.ir_max);
+      // rangeMinM / rangeMaxM siguen NULL en BD para todos los radares hasta
+      // Fase X (importer pendiente). Igual los exponemos por si después se
+      // pueblan — el picker no los usa hoy.
+      s.rangeMinM = numOrNull(row.range_min_m);
+      s.rangeMaxM = numOrNull(row.range_max_m);
       break;
     }
 
