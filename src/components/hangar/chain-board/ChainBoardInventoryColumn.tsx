@@ -9,7 +9,7 @@
 // y warbond del item del usuario.
 // =============================================================================
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useHangarStore, type HangarShip, type HangarCCU, type InsuranceType } from "@/store/useHangarStore";
 import { getShipThumbUrl } from "../HangarShipCard";
 import type { BoardCard, BoardShipRow } from "./types";
@@ -17,6 +17,8 @@ import type { BoardCard, BoardShipRow } from "./types";
 interface ChainBoardInventoryColumnProps {
   usedShipIds: Set<string>;
   onAddCard: (ship: Omit<BoardCard, "cardId">) => void;
+  /** CB.8e: cuando >=1 cards en el board, auto-switch del filtro a "CCUs". */
+  hasBaseShip?: boolean;
 }
 
 type FilterType = "all" | "ship" | "ccu";
@@ -47,6 +49,7 @@ const INSURANCE_COLOR: Record<InsuranceType, string> = {
 export function ChainBoardInventoryColumn({
   usedShipIds,
   onAddCard,
+  hasBaseShip = false,
 }: ChainBoardInventoryColumnProps) {
   const ships = useHangarStore((s) => s.ships);
   const ccus = useHangarStore((s) => s.ccus);
@@ -100,6 +103,18 @@ export function ChainBoardInventoryColumn({
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const toggleSortDir = () =>
     setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+
+  // CB.8e (2026-05-04): auto-switch del filtro a "CCUs" cuando el board pasa
+  // de 0 a 1 card. La idea: una vez elegida la base, solo se pueden agregar
+  // CCUs (no naves intermedias), entonces ahorramos un click. Solo dispara
+  // en la transición 0→1, después respetamos lo que el user ponga.
+  const prevHasBase = useRef(false);
+  useEffect(() => {
+    if (hasBaseShip && !prevHasBase.current) {
+      setFilterType("ccu");
+    }
+    prevHasBase.current = hasBaseShip;
+  }, [hasBaseShip]);
 
   // CCU.13 (2026-05-04): matchea nombre de hangar contra catálogo siendo
   // estricto con variantes (longest-match wins).
@@ -165,17 +180,30 @@ export function ChainBoardInventoryColumn({
     //   - sortField="from": ships→msrpUsd, CCUs→fromMatch.msrpUsd
     //   - sortField="to":   ships→msrpUsd, CCUs→toMatch.msrpUsd
     // Para ships, los 3 modos colapsan al msrpUsd del catálogo.
+    //
+    // CB.8e: precios null o 0 (CCUs sin precio registrado, edge cases) van
+    // SIEMPRE al final independiente de la dirección — no rompen la lectura.
     if (sortField !== "none") {
       const dir = sortDir === "asc" ? 1 : -1;
-      const priceOf = (r: InventoryRow): number => {
-        if (r.kind === "ship") return r.match?.msrpUsd ?? -1;
-        // CCU
-        if (sortField === "ccu") return r.ccu.pricePaid ?? -1;
-        if (sortField === "from") return r.fromMatch?.msrpUsd ?? -1;
-        if (sortField === "to") return r.toMatch?.msrpUsd ?? -1;
-        return -1;
+      const priceOf = (r: InventoryRow): number | null => {
+        if (r.kind === "ship") {
+          const p = r.match?.msrpUsd ?? null;
+          return p && p > 0 ? p : null;
+        }
+        let p: number | null | undefined;
+        if (sortField === "ccu") p = r.ccu.pricePaid;
+        else if (sortField === "from") p = r.fromMatch?.msrpUsd;
+        else if (sortField === "to") p = r.toMatch?.msrpUsd;
+        return p != null && p > 0 ? p : null;
       };
-      result.sort((a, b) => (priceOf(a) - priceOf(b)) * dir);
+      result.sort((a, b) => {
+        const pa = priceOf(a);
+        const pb = priceOf(b);
+        if (pa === null && pb === null) return 0;
+        if (pa === null) return 1;   // null al final
+        if (pb === null) return -1;  // null al final
+        return (pa - pb) * dir;
+      });
     }
     return result;
   }, [ships, ccus, filterType, filterLoc, filterIns, search, findCatalogMatch, sortField, sortDir]);
@@ -383,9 +411,20 @@ export function ChainBoardInventoryColumn({
                 >
                   {row.ccu.isWarbond ? "WB" : "STD"}
                 </span>
-                <span className="text-[10px] text-zinc-400 font-mono shrink-0">
-                  ${row.ccu.pricePaid.toFixed(0)}
-                </span>
+                {/* CB.8e: si pricePaid es 0/null, mostrar "—" + tooltip — son CCUs
+                    importados sin precio o reclaimed donde no se grabó el monto. */}
+                {row.ccu.pricePaid > 0 ? (
+                  <span className="text-[10px] text-zinc-400 font-mono shrink-0">
+                    ${row.ccu.pricePaid.toFixed(0)}
+                  </span>
+                ) : (
+                  <span
+                    className="text-[10px] text-zinc-600 font-mono shrink-0 cursor-help"
+                    title="Precio no registrado. Editá la CCU desde la lista del Hangar para ingresarlo."
+                  >
+                    —
+                  </span>
+                )}
                 {row.ccu.grantsInsurance && (
                   <span
                     className="text-[8px] font-mono uppercase tracking-wider px-1 py-0.5 rounded-[2px] border bg-emerald-500/15 text-emerald-300 border-emerald-500/30 shrink-0"

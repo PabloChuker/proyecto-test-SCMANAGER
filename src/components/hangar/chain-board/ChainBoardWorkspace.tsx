@@ -397,6 +397,7 @@ export function ChainBoardWorkspace() {
           <ChainBoardInventoryColumn
             usedShipIds={usedShipIds}
             onAddCard={addCard}
+            hasBaseShip={cards.length > 0}
           />
         </section>
 
