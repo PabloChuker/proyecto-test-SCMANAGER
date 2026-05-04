@@ -687,14 +687,25 @@ export default function ProfilePage() {
           ))}
         </aside>
 
-        {/* Stage: center always fixed, panel absolutely positioned on the right */}
-        <div className="flex-1 relative flex items-center justify-center overflow-y-hidden">
+        {/* Stage: center + panel are siblings inside a centered wrapper so the
+            whole layout stays within the viewport at any width. */}
+        <div className="flex-1 relative flex items-center justify-center overflow-hidden px-4">
 
-          {/* ── CENTER — always centered ── */}
+         <div
+           style={{
+             display:        "flex",
+             alignItems:     "stretch",
+             height:         "82vh",
+             maxWidth:       "100%",
+             transition:     "all 0.4s cubic-bezier(0.4,0,0.2,1)",
+           }}
+         >
+
+          {/* ── CENTER — fixed width inside the wrapper ── */}
           <div
             style={{
               width:          "min(880px, 100%)",
-              height:         "82vh",
+              height:         "100%",
               flexShrink:     0,
               background:     "rgba(12,14,10,0.72)",
               backdropFilter: "blur(16px)",
@@ -977,20 +988,13 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* ── RIGHT PANEL — anchored to center's right edge ── */}
+          {/* ── RIGHT PANEL — inline sibling of center, slides via width ── */}
           {!isMobile && (
-            <div style={{
-              position:   "absolute",
-              left:       "calc(50% + 440px)",
-              top:        "50%",
-              transform:  "translateY(-50%)",
-              height:     "82vh",
-              display:    "flex",
-              alignItems: "stretch",
-            }}>
+            <>
               {(["config", "referral", "subs", "org"] as SectionId[]).map(id => (
                 <div key={id} style={{
                   ...panelStyle(activeSection === id),
+                  height:         "100%",
                   borderRadius:   "0 16px 16px 0",
                   background:     "rgba(12,14,10,0.72)",
                   backdropFilter: "blur(16px)",
@@ -1006,9 +1010,10 @@ export default function ProfilePage() {
                   {activeSection === "org"      && id === "org"      && <OrgInfoPanel orgName={orgName} orgId={profile?.org_id ?? null} logoUrl={orgLogoUrl} memberCount={orgMemberCount} onlineCount={orgOnlineCount} onLogoUpdated={setOrgLogoUrl} onClose={() => setActiveSection(null)} />}
                 </div>
               ))}
-            </div>
+            </>
           )}
 
+         </div>
         </div>
       </div>
     </main>
