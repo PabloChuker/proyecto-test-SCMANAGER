@@ -300,12 +300,22 @@ async function queryCatalog(params: CatalogParams) {
         ? ", m.name AS manufacturer_name"
         : "";
 
-      // Single query: data + total count via window function (no separate COUNT round-trip)
+      // Loadout.4d (2026-05-04): DISTINCT ON (class_name) en un CTE para
+      // evitar duplicados cuando una nave/componente vive en múltiples
+      // game_version (LIVE 4.7.0 + PTU 4.7.2). Antes salía el mismo item dos
+      // veces en el ComponentPicker. Pickeamos la fila con `game_version`
+      // más alta. Si la tabla no tiene `game_version` el COALESCE manda al
+      // final NULLS y queda determinístico (la primera fila por class_name).
       const rows: any[] = await sql.unsafe(
-        `SELECT t.*${manufacturerSelect}, COUNT(*) OVER()::int AS _total_count
-         FROM ${def.table} t
+        `WITH dedup AS (
+           SELECT DISTINCT ON (t.class_name) t.*
+           FROM ${def.table} t
+           ${where}
+           ORDER BY t.class_name, COALESCE(t.game_version, '') DESC
+         )
+         SELECT t.*${manufacturerSelect}, COUNT(*) OVER()::int AS _total_count
+         FROM dedup t
          ${joinClause}
-         ${where}
          ORDER BY ${orderCol}t.${def.nameCol} ASC
          LIMIT $${idx}`,
         [...params, limit],

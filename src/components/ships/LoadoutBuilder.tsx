@@ -750,6 +750,22 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   // Este componente sólo necesita exponer: visibleIds, widgetBlocks, widgetWidth.
 
   useEffect(() => { if (mountedRef.current) return; mountedRef.current = true; const urlShip = searchParams.get("ship"); loadShip(urlShip || shipId, searchParams.get("build") || null); }, [shipId]);
+
+  // Loadout.4d (2026-05-04): prefetch del catálogo apenas cargan los
+  // hardpoints. Por cada combo (categoría, size) único del ship dispara un
+  // fetch fire-and-forget al endpoint /api/catalog. Cuando el user clickea
+  // cualquier slot el resultado ya está en caché → apertura instantánea.
+  useEffect(() => {
+    if (hardpoints.length === 0) return;
+    // Defer al próximo tick para no bloquear el primer paint.
+    const t = setTimeout(() => {
+      // Lazy import — solo se carga si el LoadoutBuilder se monta.
+      import("@/lib/loadout/catalog-cache").then(mod =>
+        mod.prefetchForHardpoints(hardpoints),
+      );
+    }, 100);
+    return () => clearTimeout(t);
+  }, [hardpoints]);
   useEffect(() => {
     const c = overrides.size;
     if (!mountedRef.current) return;

@@ -7,6 +7,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useLoadoutStore, type EquippedItem, type ResolvedHardpoint } from "@/store/useLoadoutStore";
+import { fetchCatalog } from "@/lib/loadout/catalog-cache";
 import { CAT_COLORS, fmtPrice, getKeyStat } from "./loadout-utils";
 import powerNetworkLookup from "@/data/power-network-lookup.json";
 import miningModulesJson from "@/data/mining/mining-modules.json";
@@ -285,9 +286,10 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
         if (effMaxSize > 0) body.maxSize = effMaxSize;
         if (effMinSize > 0) body.minSize = effMinSize;
         if (search.trim()) body.search = search.trim();
-        const res = await fetch("/api/catalog", { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: controller.signal });
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const json = await res.json();
+        // Loadout.4d (2026-05-04): cache module-level. Si el LoadoutBuilder
+        // ya pre-fetcheó esta combo, retorna instantáneo. Si no, hace fetch
+        // y popula caché para la siguiente apertura.
+        const json = await fetchCatalog(body, controller.signal);
         setResults(json.data || []);
         setTotal(json.meta?.total || 0);
       } catch (err) { if (err instanceof DOMException && err.name === "AbortError") return; } finally { setLoading(false); }
@@ -415,13 +417,16 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
   const statLabel = getStatColumnLabel(hardpoint.resolvedCategory);
   const displaySize = hardpoint.maxSize > 0 ? "S" + hardpoint.maxSize : "Any";
 
-  // Loadout.4b: posición computada del panel basada en `anchorRect`.
-  // Regla:
-  //   - Slot en la mitad izquierda del viewport → panel a la DERECHA del slot
-  //   - Slot en la mitad derecha → panel a la IZQUIERDA del slot
-  //   - Si no entra del lado calculado, flip al otro lado
-  //   - Vertical: alineado al top del slot, clampeado al viewport
-  // Si no hay anchorRect (mobile, fallback), null → CSS default kicks in.
+  // Loadout.4d (2026-05-04): posición "natural" estilo dropdown.
+  // Regla actualizada (Pablo: "que se despliegue desde donde toco"):
+  //   1. Intentar a la DERECHA del slot (default — estilo dropdown nativo)
+  //   2. Si no entra, intentar a la IZQUIERDA del slot
+  //   3. Si tampoco entra, clamp al viewport del lado más cercano
+  //   4. Vertical: alineado al TOP del slot. Si se sale por abajo, subir lo
+  //      suficiente para que entre.
+  // Esto sigue el comportamiento que el user espera de un dropdown clásico:
+  // se "abre" pegado al elemento que clickeó, en la dirección natural de
+  // lectura (LTR → derecha-abajo).
   const panelStyle = useMemo<React.CSSProperties | undefined>(() => {
     if (!anchorRect) return undefined;
     if (typeof window === "undefined") return undefined;
@@ -432,24 +437,20 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
     const vh = window.innerHeight;
     if (vw < 640) return undefined; // mobile: que use el inset-4 default
 
-    const slotCenterX = anchorRect.left + anchorRect.width / 2;
-    const onLeftHalf = slotCenterX < vw / 2;
+    // Intentar derecha primero (estilo dropdown nativo)
+    const tryRight = anchorRect.right + MARGIN;
+    const tryLeft = anchorRect.left - PANEL_W - MARGIN;
     let left: number;
-    if (onLeftHalf) {
-      left = anchorRect.right + MARGIN;
-      if (left + PANEL_W > vw - MARGIN) {
-        // No entra a la derecha → poner a la izquierda
-        left = Math.max(MARGIN, anchorRect.left - PANEL_W - MARGIN);
-      }
+    if (tryRight + PANEL_W <= vw - MARGIN) {
+      left = tryRight;
+    } else if (tryLeft >= MARGIN) {
+      left = tryLeft;
     } else {
-      left = anchorRect.left - PANEL_W - MARGIN;
-      if (left < MARGIN) {
-        // No entra a la izquierda → poner a la derecha
-        left = Math.min(vw - PANEL_W - MARGIN, anchorRect.right + MARGIN);
-      }
+      // Ningún lado entra — clamp a la derecha del viewport
+      left = Math.max(MARGIN, vw - PANEL_W - MARGIN);
     }
-    // Vertical: alinear con el top del slot. Si la altura máxima del panel
-    // se sale por abajo, subirlo lo suficiente.
+
+    // Vertical: alinear con el top del slot, clampeado al viewport
     const maxH = vh * PANEL_MAX_H_RATIO;
     let top = anchorRect.top;
     if (top + maxH > vh - MARGIN) {
