@@ -31,6 +31,8 @@ interface OwnedCCURequest {
   toShip: string;
   pricePaid: number;
   location: "hangar" | "buyback";
+  isWarbond?: boolean;
+  grantsInsurance?: string;
 }
 
 interface ValidationResult {
@@ -40,6 +42,16 @@ interface ValidationResult {
   minPrice: number | null;
   bestPriceKind: "warbond" | "standard" | "owned-hangar" | "owned-buyback" | null;
   reason: string;
+  // CB.8 (2026-05-04): para el CCU builder de la columna derecha necesitamos
+  // ambos precios separados (no solo el "best"). Si el edge no existe, ambos null.
+  standardPrice: number | null;
+  warbondPrice: number | null;
+  warbondAvailable: boolean;
+  // Owned info: si el user tiene este CCU en su hangar/buyback
+  ownedPricePaid: number | null;
+  ownedLocation: "hangar" | "buyback" | null;
+  ownedIsWarbond: boolean | null;
+  ownedGrantsInsurance: string | null;
 }
 
 export async function POST(request: NextRequest) {
@@ -129,12 +141,26 @@ export async function POST(request: NextRequest) {
           minPrice: null,
           bestPriceKind: null,
           reason: "Una de las naves no existe en la BD",
+          standardPrice: null,
+          warbondPrice: null,
+          warbondAvailable: false,
+          ownedPricePaid: null,
+          ownedLocation: null,
+          ownedIsWarbond: null,
+          ownedGrantsInsurance: null,
         };
       }
 
       // Owned CCU match (gana sobre cualquier edge nuevo)
       const ownedKey = `${fromInfo.name.toLowerCase()}|${toInfo.name.toLowerCase()}`;
       const owned = ownedByPair.get(ownedKey);
+      // El edge en BD aún si está owned, lo cargamos para info del builder
+      const key = `${fromId}->${toId}`;
+      const edge = edgeMap.get(key);
+      const standardPrice = edge?.standard ?? null;
+      const warbondPrice = edge?.warbond ?? null;
+      const warbondAvailable = !!edge?.warbondAvailable;
+
       if (owned) {
         return {
           fromShipId: fromId,
@@ -143,6 +169,13 @@ export async function POST(request: NextRequest) {
           minPrice: owned.pricePaid,
           bestPriceKind: owned.location === "hangar" ? "owned-hangar" : "owned-buyback",
           reason: `CCU owned en ${owned.location} ($${owned.pricePaid.toFixed(0)})`,
+          standardPrice,
+          warbondPrice,
+          warbondAvailable,
+          ownedPricePaid: owned.pricePaid,
+          ownedLocation: owned.location,
+          ownedIsWarbond: owned.isWarbond ?? null,
+          ownedGrantsInsurance: owned.grantsInsurance ?? null,
         };
       }
 
@@ -155,12 +188,17 @@ export async function POST(request: NextRequest) {
           minPrice: null,
           bestPriceKind: null,
           reason: `Downgrade: ${toInfo.name} ($${toInfo.msrp}) ≤ ${fromInfo.name} ($${fromInfo.msrp}). RSI no permite CCU hacia menor valor.`,
+          standardPrice,
+          warbondPrice,
+          warbondAvailable,
+          ownedPricePaid: null,
+          ownedLocation: null,
+          ownedIsWarbond: null,
+          ownedGrantsInsurance: null,
         };
       }
 
       // Edge en BD
-      const key = `${fromId}->${toId}`;
-      const edge = edgeMap.get(key);
       if (!edge || !edge.isAvailable) {
         return {
           fromShipId: fromId,
@@ -171,6 +209,13 @@ export async function POST(request: NextRequest) {
           reason: edge
             ? `CCU ${fromInfo.name} → ${toInfo.name} no está disponible hoy (probablemente solo en eventos)`
             : `Sin CCU directo de ${fromInfo.name} → ${toInfo.name}. Probá con un paso intermedio.`,
+          standardPrice,
+          warbondPrice,
+          warbondAvailable,
+          ownedPricePaid: null,
+          ownedLocation: null,
+          ownedIsWarbond: null,
+          ownedGrantsInsurance: null,
         };
       }
 
@@ -189,6 +234,13 @@ export async function POST(request: NextRequest) {
         reason: useWarbond
           ? `Warbond $${edge.warbond} (std $${edge.standard})`
           : `Standard $${edge.standard}`,
+        standardPrice,
+        warbondPrice,
+        warbondAvailable,
+        ownedPricePaid: null,
+        ownedLocation: null,
+        ownedIsWarbond: null,
+        ownedGrantsInsurance: null,
       };
     });
 

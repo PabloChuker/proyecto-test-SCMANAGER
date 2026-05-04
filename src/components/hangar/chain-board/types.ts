@@ -49,4 +49,16 @@ export interface EdgeValidation {
   bestPriceKind: "warbond" | "standard" | "owned-hangar" | "owned-buyback" | null;
   /** Mensaje human-readable para mostrar en tooltip. */
   reason: string;
+  // CB.8 (2026-05-04): campos adicionales para el CCU builder estilo RSI.
+  /** Precio standard del CCU (sin descuento warbond) — null si edge no existe. */
+  standardPrice?: number | null;
+  /** Precio warbond del CCU (cash only) — null si no hay warbond para este edge. */
+  warbondPrice?: number | null;
+  /** True si el edge tiene warbond actualmente disponible (no solo histórico). */
+  warbondAvailable?: boolean;
+  /** Si el user ya tiene este CCU, su precio pagado original. */
+  ownedPricePaid?: number | null;
+  ownedLocation?: "hangar" | "buyback" | null;
+  ownedIsWarbond?: boolean | null;
+  ownedGrantsInsurance?: string | null;
 }

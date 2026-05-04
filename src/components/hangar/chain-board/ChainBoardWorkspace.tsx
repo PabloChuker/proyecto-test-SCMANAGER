@@ -412,13 +412,14 @@ export function ChainBoardWorkspace() {
           />
         </section>
 
-        {/* Right — En venta RSI */}
+        {/* Right — Constructor de CCU (estilo RSI) */}
         <section
           className={`min-h-[400px] ${mobileTab !== "store" ? "hidden md:block" : ""}`}
         >
           <ChainBoardStoreColumn
             usedShipIds={usedShipIds}
             onAddCard={addCard}
+            lastBoardCard={cards.length > 0 ? cards[cards.length - 1] : null}
           />
         </section>
       </div>
