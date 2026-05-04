@@ -435,29 +435,43 @@ function getEffectivePrice(edge: CCUEdge, opts: CalculateOptions): number {
         // With token → paid in credits. Apply priority factor.
         // FIX 2026-04-26 (#45): bumped balanced 0.95 → 0.90 (10% off) para
         // que el algoritmo realmente prefiera usar el token cuando lo tiene.
-        // Antes el incentivo de 5% era muy débil — en cadenas largas se
-        // perdía contra cash standard por márgenes chicos.
         const creditFactor =
           opts.paymentPriority === "prefer-credits" ? 0.80 :
           opts.paymentPriority === "prefer-cash" ? 1.15 :
           0.90; // balanced
         return edge.standardPrice * creditFactor;
       }
-      // Without token → paid in cash. Apply cash factor.
-      // FIX 2026-04-26 (#45): bumped balanced 1.0 → 1.02 (2% penalty) — usar
-      // un slot de buyback sin token gasta un recurso limitado del usuario
-      // y conviene que el algoritmo prefiera comprar standard nuevo cuando
-      // los precios son parejos. Sigue siendo más barato que con prefer-credits.
+      // Without token → paid in cash. CCU.7-coherence (2026-05-04, Pablo):
+      // si el user pide "prefer-credits" SIN token, buyback-cash es la
+      // peor opción posible (gasta cash + gasta el slot limitado del
+      // buyback sin obtener el beneficio de "pagar con créditos" que
+      // pidió). Penalizamos FUERTE para que el algoritmo prefiera
+      // standard/warbond de la tienda, que también es cash pero al menos
+      // preserva el slot del buyback para cuando consigas un token.
+      //
+      //   prefer-credits + no token  → 1.50 (FUERTE penalty: usar
+      //                                       buyback es contradictorio
+      //                                       con lo que pidió el user)
+      //   prefer-credits + has token → 1.15 (con token disponible, mejor
+      //                                       reservar el slot por si
+      //                                       conviene en otro paso)
+      //   prefer-cash                → 1.0  (cash es lo que pidió, OK)
+      //   balanced                   → 1.02 (leve penalty: el slot es
+      //                                       recurso limitado)
       const cashFactor =
-        opts.paymentPriority === "prefer-credits" ? 1.10 :
-        opts.paymentPriority === "prefer-cash" ? 1.0 :
-        1.02; // balanced
+        opts.paymentPriority === "prefer-credits"
+          ? (opts.hasBuybackToken ? 1.15 : 1.50)
+          : opts.paymentPriority === "prefer-cash" ? 1.0 :
+          1.02; // balanced
       return edge.standardPrice * cashFactor;
     }
     return 0; // fallback for legacy
   }
 
-  // Cash purchases (warbond / standard): apply cash penalty when preferring credits
+  // Cash purchases (warbond / standard): apply cash penalty when preferring credits.
+  // CCU.7-coherence: el factor sigue moderado (1.10) — la tienda es la
+  // alternativa correcta cuando el user pide créditos pero no puede usarlos.
+  // No queremos penalizar tanto la tienda que el solver no encuentre path.
   const cashFactor =
     opts.paymentPriority === "prefer-credits" ? 1.10 : 1.0;
 

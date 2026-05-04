@@ -1456,7 +1456,11 @@ export function CCUChainCalculator() {
                 ? "bg-violet-500/20 text-violet-400 border border-violet-500/30"
                 : "text-zinc-500 hover:text-zinc-400"
             }`}
-            title="Maximizar uso de créditos (buyback), minimizar efectivo"
+            title={
+              hasBuybackToken
+                ? "Maximizar uso de tokens de buyback (créditos store). Si un paso no tiene buyback con token, va a la tienda standard/warbond — no usa buyback en efectivo."
+                : "Activá 'Tengo token de buyback' arriba para que esto tenga efecto. Sin token, los créditos store no se pueden usar — se cae a tienda standard."
+            }
           >
             SC$ Créditos
           </button>
