@@ -279,9 +279,20 @@ export const TTKCalculatorContent = memo(function TTKCalculatorContent() {
         <div className="space-y-2">
           <div className="grid grid-cols-3 gap-1">
             <TimeStat label="Shield" sec={ttk.ttkShieldSec} color="#3b82f6" />
-            <TimeStat label="Hull" sec={ttk.ttkHullSec} color="#a3a3a3" />
+            <TimeStat
+              label="Hull"
+              sec={ttk.ttkHullSec}
+              color={ttk.hullDiesDuringShield ? "#ef4444" : "#a3a3a3"}
+              note={ttk.hullDiesDuringShield ? "via bleed" : undefined}
+            />
             <TimeStat label="Total" sec={ttk.ttkTotalSec} color="#f59e0b" highlight />
           </div>
+          {ttk.hullDiesDuringShield && (
+            <div className="text-[10px] font-mono text-red-400/90 px-1">
+              ⚠ El casco muere por bleed-through ANTES de que caiga el escudo
+              ({fmtNum(ttk.bleedDpsTotal)} DPS de bleed × {Math.round(ttk.ttkHullSec ?? 0)}s ≥ {fmtNum(ttk.hullHp)} hull HP).
+            </div>
+          )}
           <div className="grid grid-cols-3 gap-1 text-[10px] font-mono text-zinc-400 px-1">
             <span>Shield DPS: <span className="text-blue-400 font-bold">{fmtNum(ttk.shieldDpsTotal)}</span></span>
             <span>Bleed DPS: <span className="text-zinc-200 font-bold">{fmtNum(ttk.bleedDpsTotal)}</span></span>
@@ -331,11 +342,13 @@ function TimeStat({
   sec,
   color,
   highlight,
+  note,
 }: {
   label: string;
   sec: number | null;
   color: string;
   highlight?: boolean;
+  note?: string;
 }) {
   return (
     <div
@@ -351,6 +364,11 @@ function TimeStat({
       <span className="text-xl font-mono font-bold tabular-nums leading-tight" style={{ color }}>
         {fmtSec(sec)}
       </span>
+      {note && (
+        <span className="text-[9px] font-mono italic mt-0.5" style={{ color }}>
+          {note}
+        </span>
+      )}
     </div>
   );
 }

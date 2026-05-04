@@ -207,10 +207,21 @@ export function computeDamageFlow(
 
 /**
  * Time-To-Kill aproximado: cuántos segundos tarda un loadout (DPS efectivo)
- * en bajar el escudo + el casco de un objetivo.
+ * en MATAR al objetivo (hull HP llega a 0).
  *
- * No considera regen del shield mientras el atacante dispara — solo regen
- * cuando el shield baja a 0. Suficiente para comparar loadouts.
+ * W.16f (2026-05-04) — Fix del cálculo: el hull puede morir por DOS caminos:
+ *   1. Bleed-through DURANTE el shield phase: si bleedDps × tShield ≥ hullHp,
+ *      el hull muere a t_bleed = hullHp / bleedDps ANTES de que caiga el
+ *      shield. Caso típico: nave con shield enorme pero hull pequeño y absorption
+ *      < 1 (ej: Perseus shield 264k / hull 60k con SureStop S3 abs_max=0.45).
+ *   2. Daño directo DESPUÉS de que caiga el shield: tShield + (hull restante)
+ *      / hullDirectDps.
+ *
+ *   TTK real = min(camino1, camino2). Bug previo (W.16): siempre asumía
+ *   camino 2 → cuando hull moría durante shield phase devolvía Hull=0s,
+ *   confuso para el user e incorrecto en el TOTAL.
+ *
+ * No considera regen del shield mientras el atacante dispara.
  */
 export function estimateTimeToKill(opts: {
   shieldHp: number;
@@ -218,22 +229,44 @@ export function estimateTimeToKill(opts: {
   shieldDpsIncoming: number;
   hullBleedthroughDpsIncoming: number;
   hullDirectDpsIncoming: number;
-}): { timeToShieldDown: number; timeToHullKill: number; timeTotalSec: number } | null {
+}): {
+  timeToShieldDown: number;
+  timeToHullKill: number;
+  timeTotalSec: number;
+  hullDiesDuringShield: boolean;
+} | null {
   const { shieldHp, hullHp, shieldDpsIncoming, hullBleedthroughDpsIncoming, hullDirectDpsIncoming } = opts;
-  if (shieldDpsIncoming <= 0 && shieldHp > 0) {
-    // No podemos romper el shield; loadout no daña.
-    return null;
-  }
+  const canBreakShield = shieldDpsIncoming > 0 || shieldHp <= 0;
+  const canBleed = hullBleedthroughDpsIncoming > 0;
+  const canDirect = hullDirectDpsIncoming > 0;
+  // Si no podemos romper el shield Y no hay bleed, el loadout no daña al hull.
+  if (!canBreakShield && !canBleed) return null;
+
   const tShield = shieldHp > 0 ? shieldHp / Math.max(shieldDpsIncoming, 1e-6) : 0;
-  // Mientras dura el shield, el hull recibe bleedthrough.
-  const hullLossDuringShield = tShield * hullBleedthroughDpsIncoming;
-  const hullRemaining = Math.max(0, hullHp - hullLossDuringShield);
-  const tHull = hullDirectDpsIncoming > 0
-    ? hullRemaining / hullDirectDpsIncoming
-    : Infinity;
+
+  // Camino 1: hull muere por bleed durante shield phase.
+  const tBleedKill = canBleed ? hullHp / hullBleedthroughDpsIncoming : Infinity;
+  const hullDiesDuringShield = canBleed && tBleedKill <= tShield;
+
+  // Camino 2: hull sobrevive el shield phase, muere por daño directo después.
+  const hullAfterShield = Math.max(0, hullHp - tShield * hullBleedthroughDpsIncoming);
+  let tAfterShield: number;
+  if (hullAfterShield <= 0) {
+    // Bleed ya mató el hull al momento de caer el shield (caso borde).
+    tAfterShield = tShield;
+  } else if (canDirect) {
+    tAfterShield = tShield + hullAfterShield / hullDirectDpsIncoming;
+  } else {
+    tAfterShield = Infinity;
+  }
+
+  const tHullKill = Math.min(tBleedKill, tAfterShield);
+  if (!Number.isFinite(tHullKill)) return null;
+
   return {
     timeToShieldDown: tShield,
-    timeToHullKill: tHull,
-    timeTotalSec: tShield + (Number.isFinite(tHull) ? tHull : 0),
+    timeToHullKill: tHullKill,
+    timeTotalSec: tHullKill,
+    hullDiesDuringShield,
   };
 }

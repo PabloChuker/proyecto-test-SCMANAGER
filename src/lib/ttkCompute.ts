@@ -97,6 +97,8 @@ export interface TtkResult {
   ttkShieldSec: number | null; // null = no rompe shield
   ttkHullSec: number | null;
   ttkTotalSec: number | null;
+  /** W.16f: true si el hull muere por bleed antes de que caiga el shield. */
+  hullDiesDuringShield: boolean;
   perWeapon: Array<{
     hardpointName: string;
     weaponName: string;
@@ -228,6 +230,7 @@ export function computeTtk(
         ? ttk.timeTotalSec
         : null
       : null,
+    hullDiesDuringShield: ttk?.hullDiesDuringShield ?? false,
     perWeapon,
   };
 }
