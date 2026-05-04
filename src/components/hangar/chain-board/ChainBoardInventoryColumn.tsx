@@ -86,6 +86,13 @@ export function ChainBoardInventoryColumn({
   const [filterType, setFilterType] = useState<FilterType>("all");
   const [filterLoc, setFilterLoc] = useState<FilterLoc>("all");
   const [filterIns, setFilterIns] = useState<"all" | InsuranceType>("all");
+  // CB.8c (2026-05-04): sort por precio. "none" = orden natural (ships primero,
+  // después CCUs, alfabético). "asc" / "desc" = por precio: ships usan msrpUsd
+  // del catálogo, CCUs usan pricePaid del user. Mezcla en misma escala.
+  const [sortOrder, setSortOrder] = useState<"none" | "asc" | "desc">("none");
+  const cycleSort = () => {
+    setSortOrder((prev) => (prev === "none" ? "asc" : prev === "asc" ? "desc" : "none"));
+  };
 
   // CCU.13 (2026-05-04): matchea nombre de hangar contra catálogo siendo
   // estricto con variantes (longest-match wins).
@@ -145,8 +152,18 @@ export function ChainBoardInventoryColumn({
         });
       }
     }
+
+    // CB.8c: sort por precio cuando aplica. Ships → msrpUsd, CCUs → pricePaid.
+    if (sortOrder !== "none") {
+      const dir = sortOrder === "asc" ? 1 : -1;
+      const priceOf = (r: InventoryRow): number => {
+        if (r.kind === "ship") return r.match?.msrpUsd ?? -1;
+        return r.ccu.pricePaid ?? -1;
+      };
+      result.sort((a, b) => (priceOf(a) - priceOf(b)) * dir);
+    }
     return result;
-  }, [ships, ccus, filterType, filterLoc, filterIns, search, findCatalogMatch]);
+  }, [ships, ccus, filterType, filterLoc, filterIns, search, findCatalogMatch, sortOrder]);
 
   const buildCardFromShip = (
     match: BoardShipRow,
@@ -172,9 +189,25 @@ export function ChainBoardInventoryColumn({
           <h2 className="text-[12px] font-semibold tracking-wide text-zinc-200">
             Mi Inventario
           </h2>
-          <span className="text-[10px] text-zinc-500 font-mono ml-auto">
-            {rows.length}
-          </span>
+          {/* CB.8c: sort toggle por precio */}
+          <button
+            onClick={cycleSort}
+            className={`ml-auto text-[10px] font-mono px-1.5 py-0.5 rounded-sm border transition-colors ${
+              sortOrder === "none"
+                ? "bg-zinc-900/40 border-zinc-800/60 text-zinc-500 hover:text-zinc-300"
+                : "bg-amber-500/15 border-amber-500/30 text-amber-300"
+            }`}
+            title={
+              sortOrder === "none"
+                ? "Orden natural — click para ordenar por precio ascendente"
+                : sortOrder === "asc"
+                ? "Precio ↑ menor primero — click para ↓ mayor primero"
+                : "Precio ↓ mayor primero — click para volver al orden natural"
+            }
+          >
+            {sortOrder === "none" ? "$ —" : sortOrder === "asc" ? "$ ↑" : "$ ↓"}
+          </button>
+          <span className="text-[10px] text-zinc-500 font-mono">{rows.length}</span>
         </div>
 
         {/* Search */}
@@ -298,15 +331,18 @@ export function ChainBoardInventoryColumn({
               </button>
             );
           }
-          // CCU row
+          // CCU row con 2 thumbnails (FROM ← → TO)
           const fromUsed = row.fromMatch ? usedShipIds.has(row.fromMatch.id) : false;
           const toUsed = row.toMatch ? usedShipIds.has(row.toMatch.id) : false;
+          const fromThumb = getShipThumbUrl(row.ccu.fromShip);
+          const toThumb = getShipThumbUrl(row.ccu.toShip);
           return (
             <div
               key={`c-${row.ccu.id}`}
               className="bg-zinc-900/60 border border-zinc-800/60 rounded-sm p-1.5"
             >
-              <div className="flex items-center gap-1 mb-1">
+              {/* Header con badges */}
+              <div className="flex items-center gap-1 mb-1.5">
                 <span
                   className={`text-[8px] font-mono uppercase tracking-wider px-1 py-0.5 rounded-[2px] border shrink-0 ${
                     row.ccu.isWarbond
@@ -319,55 +355,96 @@ export function ChainBoardInventoryColumn({
                 <span className="text-[10px] text-zinc-400 font-mono shrink-0">
                   ${row.ccu.pricePaid.toFixed(0)}
                 </span>
+                {row.ccu.grantsInsurance && (
+                  <span
+                    className="text-[8px] font-mono uppercase tracking-wider px-1 py-0.5 rounded-[2px] border bg-emerald-500/15 text-emerald-300 border-emerald-500/30 shrink-0"
+                    title={`Otorga ${row.ccu.grantsInsurance.replace("_", " ")} al destino`}
+                  >
+                    ⭐ {row.ccu.grantsInsurance === "LTI" ? "LTI" : row.ccu.grantsInsurance.replace("_months", "m")}
+                  </span>
+                )}
                 <span className="text-[8px] font-mono uppercase text-zinc-500 ml-auto shrink-0">
                   {row.ccu.location === "buyback" ? "BB" : "Hgr"}
                 </span>
               </div>
-              <div className="flex items-center gap-1">
+
+              {/* CB.8c: 2 thumbnails (FROM ← → TO) clickables */}
+              <div className="flex items-stretch gap-1">
+                {/* FROM */}
                 <button
                   disabled={!row.fromMatch || fromUsed}
                   onClick={() =>
                     row.fromMatch && onAddCard(buildCardFromShip(row.fromMatch, row.ccu.id))
                   }
-                  className={`flex-1 text-left text-[10px] px-1.5 py-1 rounded-sm transition-colors truncate ${
+                  className={`flex-1 min-w-0 flex flex-col rounded-sm border overflow-hidden transition-colors ${
                     fromUsed
-                      ? "text-zinc-600 cursor-not-allowed"
+                      ? "border-zinc-800/40 opacity-50 cursor-not-allowed"
                       : !row.fromMatch
-                      ? "text-rose-400/60 cursor-not-allowed"
-                      : "text-zinc-300 hover:bg-zinc-800/60 hover:text-amber-300"
+                      ? "border-rose-500/30 cursor-not-allowed"
+                      : "border-zinc-800/60 hover:border-amber-500/50 hover:bg-zinc-800/30"
                   }`}
                   title={
                     fromUsed
                       ? "Ya está en la pizarra"
                       : !row.fromMatch
                       ? `Sin match: ${row.ccu.fromShip}`
-                      : `Agregar ${row.ccu.fromShip} a la pizarra`
+                      : `Agregar ${row.ccu.fromShip} a la pizarra como FROM`
                   }
                 >
-                  + {row.ccu.fromShip}
+                  <img
+                    src={fromThumb}
+                    alt=""
+                    className="w-full h-12 object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.opacity = "0.2";
+                    }}
+                  />
+                  <div className="px-1 py-0.5 bg-zinc-950/60">
+                    <p className="text-[9px] text-zinc-300 truncate text-left leading-tight">
+                      {row.ccu.fromShip}
+                    </p>
+                  </div>
                 </button>
-                <span className="text-zinc-600 text-[10px] shrink-0">→</span>
+
+                {/* Arrow connector */}
+                <div className="flex items-center justify-center w-3 shrink-0 text-zinc-600 text-[10px]">
+                  →
+                </div>
+
+                {/* TO */}
                 <button
                   disabled={!row.toMatch || toUsed}
                   onClick={() =>
                     row.toMatch && onAddCard(buildCardFromShip(row.toMatch, row.ccu.id))
                   }
-                  className={`flex-1 text-left text-[10px] px-1.5 py-1 rounded-sm transition-colors truncate ${
+                  className={`flex-1 min-w-0 flex flex-col rounded-sm border overflow-hidden transition-colors ${
                     toUsed
-                      ? "text-zinc-600 cursor-not-allowed"
+                      ? "border-zinc-800/40 opacity-50 cursor-not-allowed"
                       : !row.toMatch
-                      ? "text-rose-400/60 cursor-not-allowed"
-                      : "text-cyan-300 hover:bg-zinc-800/60 hover:text-cyan-200"
+                      ? "border-rose-500/30 cursor-not-allowed"
+                      : "border-zinc-800/60 hover:border-cyan-500/50 hover:bg-zinc-800/30"
                   }`}
                   title={
                     toUsed
                       ? "Ya está en la pizarra"
                       : !row.toMatch
                       ? `Sin match: ${row.ccu.toShip}`
-                      : `Agregar ${row.ccu.toShip} a la pizarra`
+                      : `Agregar ${row.ccu.toShip} a la pizarra como TO`
                   }
                 >
-                  + {row.ccu.toShip}
+                  <img
+                    src={toThumb}
+                    alt=""
+                    className="w-full h-12 object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.opacity = "0.2";
+                    }}
+                  />
+                  <div className="px-1 py-0.5 bg-zinc-950/60">
+                    <p className="text-[9px] text-cyan-300/90 truncate text-left leading-tight">
+                      {row.ccu.toShip}
+                    </p>
+                  </div>
                 </button>
               </div>
             </div>
