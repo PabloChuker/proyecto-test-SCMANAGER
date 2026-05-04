@@ -96,6 +96,11 @@ interface CatalogItem {
   id: string; reference: string; name: string; localizedName: string | null;
   className: string | null; type: string; size: number | null;
   grade: string | null; manufacturer: string | null;
+  /** Loadout.4k: clasificación del componente (Military/Civilian/Industrial/
+   *  Racing/Stealth para systems; Auto/Burst/Single para weapons fire_mode).
+   *  Pablo (2026-05-04): "agregar si es Militar civil industrial racing en
+   *  los desplegables". */
+  subType?: string | null;
   weaponStats?: any; shieldStats?: any; powerStats?: any; coolingStats?: any;
   quantumStats?: any; miningStats?: any; missileStats?: any;
   turretStats?: any; missileRackStats?: any; bombStats?: any;
@@ -589,7 +594,22 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
                 className={rowCls}
               >
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1"><span className="text-[11px] text-zinc-200 truncate">{item.localizedName || item.name}</span>{isCurrent && <span className="text-[7px] text-cyan-500 tracking-wider shrink-0">●</span>}</div>
+                  <div className="flex items-center gap-1">
+                    <span className="text-[11px] text-zinc-200 truncate">{item.localizedName || item.name}</span>
+                    {/* Loadout.4k (2026-05-04): badge sub_type — Military / Civilian /
+                        Industrial / Racing / Stealth (o fire_mode para weapons:
+                        Auto / Burst / Single). Color por categoría según subTypeStyle. */}
+                    {item.subType && (
+                      <span
+                        className="text-[8px] font-mono font-bold tracking-wider px-1 rounded-sm shrink-0 border"
+                        style={subTypeStyle(item.subType)}
+                        title={item.subType}
+                      >
+                        {abbrevSubType(item.subType)}
+                      </span>
+                    )}
+                    {isCurrent && <span className="text-[7px] text-cyan-500 tracking-wider shrink-0">●</span>}
+                  </div>
                   {/* Loadout.4e: tooltip con manufacturer + shop en lugar de filas extra para
                       mantener la card compacta. El shop se ve solo en hover via title. */}
                   {item.manufacturer && (
@@ -673,4 +693,54 @@ function getSortStatVal(stats: Record<string, any> | null, cat: string): number 
 function gradeClass(g: string | number): string {
   const s = String(g).toUpperCase();
   switch (s) { case "A": case "1": return "text-[10px] font-mono font-bold text-amber-400"; case "B": case "2": return "text-[10px] font-mono font-bold text-cyan-400"; case "C": case "3": return "text-[10px] font-mono font-bold text-zinc-400"; default: return "text-[10px] font-mono font-bold text-zinc-600"; }
+}
+
+// Loadout.4k (2026-05-04): helpers para el badge de sub_type / fire_mode.
+// Abreviamos a 3-4 chars para mantener la card compacta. Colores por familia
+// — Military rojizo (combate), Civilian zinc neutro (default), Industrial
+// emerald (industria), Racing violet (sport), Stealth slate (sigilo). Para
+// fire_mode usamos amber/orange/zinc según cadencia.
+function abbrevSubType(s: string): string {
+  const k = s.toLowerCase();
+  if (k.includes("military")) return "MIL";
+  if (k.includes("civilian")) return "CIV";
+  if (k.includes("industrial")) return "IND";
+  if (k.includes("racing")) return "RAC";
+  if (k.includes("stealth")) return "STH";
+  if (k.includes("competition")) return "COMP";
+  // fire_mode (weapons)
+  if (k === "auto" || k.includes("auto")) return "AUTO";
+  if (k === "burst" || k.includes("burst")) return "BRST";
+  if (k === "single" || k.includes("single")) return "SNGL";
+  if (k === "charge" || k.includes("charge")) return "CHRG";
+  // turret sub_types
+  if (k.includes("manned")) return "MAN";
+  if (k.includes("ball")) return "BALL";
+  if (k.includes("pdc")) return "PDC";
+  if (k.includes("gun")) return "GUN";
+  if (k.includes("missile")) return "MISL";
+  if (k.includes("nose")) return "NOSE";
+  if (k.includes("canard")) return "CAN";
+  if (k.includes("top")) return "TOP";
+  if (k.includes("bottom")) return "BOT";
+  if (k.includes("utility")) return "UTIL";
+  // missile tracking_signal_type / salvage / qig fallback: 4 primeras chars
+  return s.slice(0, 4).toUpperCase();
+}
+
+function subTypeStyle(s: string): React.CSSProperties {
+  const k = s.toLowerCase();
+  if (k.includes("military")) return { color: "#fca5a5", borderColor: "#7f1d1d", backgroundColor: "rgba(127,29,29,0.2)" };
+  if (k.includes("civilian")) return { color: "#a1a1aa", borderColor: "#3f3f46", backgroundColor: "rgba(63,63,70,0.3)" };
+  if (k.includes("industrial")) return { color: "#6ee7b7", borderColor: "#065f46", backgroundColor: "rgba(6,95,70,0.2)" };
+  if (k.includes("racing")) return { color: "#c4b5fd", borderColor: "#4c1d95", backgroundColor: "rgba(76,29,149,0.2)" };
+  if (k.includes("stealth")) return { color: "#94a3b8", borderColor: "#1e293b", backgroundColor: "rgba(30,41,59,0.4)" };
+  if (k.includes("competition")) return { color: "#fcd34d", borderColor: "#78350f", backgroundColor: "rgba(120,53,15,0.2)" };
+  // fire_mode
+  if (k === "auto" || k.includes("auto")) return { color: "#fbbf24", borderColor: "#92400e", backgroundColor: "rgba(146,64,14,0.2)" };
+  if (k === "burst" || k.includes("burst")) return { color: "#fb923c", borderColor: "#9a3412", backgroundColor: "rgba(154,52,18,0.2)" };
+  if (k === "single" || k.includes("single")) return { color: "#a1a1aa", borderColor: "#3f3f46", backgroundColor: "rgba(63,63,70,0.3)" };
+  if (k === "charge" || k.includes("charge")) return { color: "#67e8f9", borderColor: "#155e75", backgroundColor: "rgba(21,94,117,0.2)" };
+  // default zinc
+  return { color: "#a1a1aa", borderColor: "#3f3f46", backgroundColor: "rgba(63,63,70,0.3)" };
 }

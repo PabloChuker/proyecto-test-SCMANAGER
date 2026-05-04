@@ -476,6 +476,12 @@ function mapRow(row: any, def: TableDef): any {
     // (ej "Aegis Dynamics") en lugar del UUID crudo. Fallback al UUID si
     // por alguna razon el JOIN no resolvio (defensive).
     manufacturer: def.mfrCol ? (row.manufacturer_name ?? row[def.mfrCol] ?? null) : null,
+    // Loadout.4k (2026-05-04): exponer sub_type (Military / Civilian /
+    // Industrial / Racing / Stealth) para que el picker lo muestre como
+    // badge. Tablas que no tienen sub_type devuelven null y el badge no
+    // se renderiza. Para weapons, fallback a fire_mode (Auto/Burst/Single)
+    // que es la categoría más identificable de un arma.
+    subType: row.sub_type ?? row.fire_mode ?? null,
     // Per-type stat objects (ComponentPicker reads these)
     weaponStats: type === "WEAPON" ? stats : null,
     shieldStats: type === "SHIELD" ? stats : null,
