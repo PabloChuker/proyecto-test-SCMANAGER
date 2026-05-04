@@ -671,6 +671,10 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const loadShip      = useLoadoutStore(s => s.loadShip);
   const getStats      = useLoadoutStore(s => s.getStats);
   const getEffectiveItem = useLoadoutStore(s => s.getEffectiveItem);
+  // Loadout.4i (2026-05-04): item REAL (sin preview) para currentItemId del
+  // picker. Usando getEffectiveItem el hover-preview hacía que el row hovered
+  // se marcara como "isCurrent" → button disabled → click bloqueado.
+  const getRealItem   = useLoadoutStore(s => s.getRealItem);
   const equipItem     = useLoadoutStore(s => s.equipItem);
   const clearSlot     = useLoadoutStore(s => s.clearSlot);
   const resetAll      = useLoadoutStore(s => s.resetAll);
@@ -1122,7 +1126,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
         </div>
       )}
 
-      {pickerHp && <ComponentPicker hardpoint={pickerHp} parentItem={pickerParentItem} currentItemId={getEffectiveItem(pickerHp.id)?.id ?? null} onSelect={handleSelect} onClear={handleClear} onClose={() => { setPickerHp(null); setPickerAnchorRect(null); }} anchorRect={pickerAnchorRect} />}
+      {pickerHp && <ComponentPicker hardpoint={pickerHp} parentItem={pickerParentItem} currentItemId={getRealItem(pickerHp.id)?.id ?? null} onSelect={handleSelect} onClear={handleClear} onClose={() => { setPickerHp(null); setPickerAnchorRect(null); }} anchorRect={pickerAnchorRect} />}
 
       {/* ── Save Loadout Modal ── */}
       {saveModal && (

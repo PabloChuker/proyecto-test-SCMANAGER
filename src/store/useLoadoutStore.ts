@@ -1193,6 +1193,14 @@ interface LoadoutState {
   getStats: () => ComputedStats;
   getEffectiveItem: (hpId: string) => EquippedItem | null;
   /**
+   * Loadout.4i (2026-05-04, BUGFIX): como `getEffectiveItem` pero IGNORA
+   * el preview. Usado por el ComponentPicker para calcular `currentItemId`
+   * sin que el hover-preview marque el row hovered como "isCurrent" — sino
+   * el button queda disabled y el click nunca dispara `equipItem`. Síntoma
+   * de Pablo: "al darle click no me pone el componente, vuelve al original".
+   */
+  getRealItem: (hpId: string) => EquippedItem | null;
+  /**
    * True si hay un override registrado para este hpId — incluye overrides
    * con valor null (clearSlot). Útil para distinguir "el usuario vacía
    * explícitamente" de "no hay info en el store" cuando el slot es
@@ -1258,6 +1266,20 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
     const { hardpoints, overrides, previewItem } = get();
     // Loadout.4: preview gana sobre overrides y default cuando matchea
     if (previewItem && previewItem.hardpointId === hpId) return previewItem.item;
+    if (overrides.has(hpId)) return overrides.get(hpId) ?? null;
+    const top = hardpoints.find(h => h.id === hpId);
+    if (top) return top.defaultItem ?? null;
+    for (const h of hardpoints) {
+      const ch = h.children.find(c => c.id === hpId);
+      if (ch) return ch.equippedItem ?? null;
+    }
+    return null;
+  },
+  /** Loadout.4i: idéntica a getEffectiveItem pero IGNORA preview.
+   *  Usar SOLO en el picker para calcular currentItemId (sino el hover
+   *  marca el row como isCurrent y el button se desactiva). */
+  getRealItem: (hpId) => {
+    const { hardpoints, overrides } = get();
     if (overrides.has(hpId)) return overrides.get(hpId) ?? null;
     const top = hardpoints.find(h => h.id === hpId);
     if (top) return top.defaultItem ?? null;
