@@ -12,7 +12,8 @@ import Image from "next/image";
 import { useLoadoutStore } from "@/store/useLoadoutStore";
 import { useShallow } from "zustand/react/shallow";
 import { fmtStat, fmtDps } from "@/components/ships/loadout-utils";
-import { ArmorCheckPanel } from "@/components/domain/loadout/ArmorCheckPanel";
+// Loadout.3 (2026-05-04): ArmorCheckPanel se movió a su propio widget
+// (ArmorCheckWidget.tsx) para que sea reordenable/redimensionable aparte.
 
 // ── Pequeña píldora de resistencia (shield) ──────────────────────────────────
 function ResistancePill({ label, pct, color }: { label: string; pct: number | null | undefined; color: string }) {
@@ -223,16 +224,9 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
         </div>
       )}
 
-      {/* ── ARMOR CHECK (Fase W.12, VerseTools §6.1) ───────────────────────── */}
-      {hasArmorBlock && (si.deflectionPhysical || si.deflectionEnergy) && (
-        <div className="border-t border-zinc-800/40 pt-2">
-          <ArmorCheckPanel
-            deflectionPhysical={si.deflectionPhysical ?? null}
-            deflectionEnergy={si.deflectionEnergy ?? null}
-            gameVersion={si.gameVersion ?? null}
-          />
-        </div>
-      )}
+      {/* ── ARMOR CHECK (Fase W.12, VerseTools §6.1) ─────────────────────────
+          Loadout.3 (2026-05-04): movido a su propio widget ArmorCheckWidget
+          para que se pueda reordenar/redimensionar independientemente. */}
 
       {/* ── RADAR LOCK RANGE (Fase W.13, VerseTools §10) ────────────────────
           Solo renderizamos cuando rangeMin y rangeMax tienen valores REALES

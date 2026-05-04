@@ -50,6 +50,7 @@ import {
 import { ShipCardContent }        from "./widgets/ShipCardWidget";
 import { LoadoutDetailContent }   from "./widgets/LoadoutDetailWidget";
 import { TTKCalculatorContent }   from "./widgets/TTKCalculatorWidget";
+import { ArmorCheckContent }      from "./widgets/ArmorCheckWidget";
 // Three.js (ShipFlightDynamicsSingle + shipGlbCandidates) moved to FlightDynamics3dWidget.tsx
 import { useDpsGridLayout } from "@/lib/loadout-grid/useLoadoutGridLayout";
 import { DpsGridCanvas } from "@/components/domain/loadout/LoadoutGridCanvas";
@@ -96,7 +97,8 @@ type WidgetId =
   | "power-grid"
   | "ship-selector" | "ship-card" | "loadout-detail"
   | "flight-dynamics" | "flight-dynamics-3d"
-  | "ttk-calculator";
+  | "ttk-calculator"
+  | "armor-check"; // Loadout.3 (2026-05-04): split from loadout-detail
 
 // ── Industrial ship detection (Pablo, 2026-04-17) ────────────────────────────
 // Solo estas naves muestran los widgets MINING / SALVAGE para no sobrecargar
@@ -162,6 +164,7 @@ const WIDGET_WIDTH: Record<WidgetId, CardWidth> = {
   "flight-dynamics": 2,         // unified 3-en-1 card (Fase G.1) → 2-col
   "flight-dynamics-3d": 2,      // 3D viewer → 2-col
   "ttk-calculator": 1,          // W.16 — Time To Kill calc compacto (1 col)
+  "armor-check": 1,             // Loadout.3 — armor check separado (1 col)
 };
 
 const WIDGET_LABELS: Record<WidgetId, string> = {
@@ -175,6 +178,7 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   "flight-dynamics": "FLIGHT DYNAMICS",
   "flight-dynamics-3d": "FLIGHT DYNAMICS 3D",
   "ttk-calculator": "TTK CALCULATOR",
+  "armor-check": "ARMOR CHECK",
 };
 
 const ALL_WIDGET_IDS: WidgetId[] = [
@@ -186,6 +190,7 @@ const ALL_WIDGET_IDS: WidgetId[] = [
   "ship-selector", "ship-card", "loadout-detail",
   "flight-dynamics", "flight-dynamics-3d",
   "ttk-calculator",
+  "armor-check",
 ];
 
 // ── Mobile fallback (Fase R.4, 2026-05-02) ───────────────────────────────────
@@ -196,6 +201,7 @@ const MOBILE_WIDGET_ORDER: WidgetId[] = [
   "ship-card",
   "loadout-detail",
   "ttk-calculator",
+  "armor-check",                // Loadout.3 — junto con TTK en la zona analytics
   "weapons",
   "missiles",
   "shields",
@@ -330,6 +336,10 @@ function getWidgetBlocks(
     // Altura razonable para fighters con ~6 weapons; en capitales puede
     // necesitar scroll, pero el bloque de 6 cubre el caso default.
     case "ttk-calculator":     return 6;
+    // armor-check (Loadout.3): ~6 weapons evaluadas en cada columna
+    // (PHYSICAL/ENERGY) + header. Bloque de 5 cubre el caso típico fighter
+    // (3-4 weapons por columna). Con ~6+ weapons hace scroll interno.
+    case "armor-check":        return 5;
   }
 }
 
@@ -352,8 +362,9 @@ const COLUMN_PLAN_1COL: WidgetId[][] = [
   ["ship-card", "weapons", "mining", "salvage", "qig", "missiles"],
   // Col 1 — DEFENSE + POWER + NAV/SENSORS
   ["shields", "powerplants", "coolers", "quantum", "radar"],
-  // Col 2 — ANALYTICS: power grid + combat summary + ttk + utility hardpoints
-  ["power-grid", "loadout-detail", "ttk-calculator", "utility"],
+  // Col 2 — ANALYTICS: power grid + combat summary + ttk + armor check + utility
+  // (Loadout.3 2026-05-04: armor-check movido a col propia debajo del TTK)
+  ["power-grid", "loadout-detail", "ttk-calculator", "armor-check", "utility"],
 ];
 
 // Sidebar 2-col (cols 3-4). Widgets hero apilados vertical.
@@ -624,6 +635,8 @@ function renderWidget(
       return W(<LoadoutDetailContent />);
     case "ttk-calculator":
       return W(<TTKCalculatorContent />);
+    case "armor-check":
+      return W(<ArmorCheckContent />);
     default: return null;
   }
 }
