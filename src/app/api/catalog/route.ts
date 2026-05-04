@@ -332,15 +332,20 @@ async function queryCatalog(params: CatalogParams) {
       // quedaba vacío → "al hacer click en armas no aparece nada".
       //
       // Fix: solo usar COALESCE(game_version) cuando def.hasGameVersion=true.
-      // Para tablas sin game_version, el ORDER BY del CTE solo lleva
-      // class_name (DISTINCT ON pickea cualquier fila si hay duplicados —
-      // que no debería haber sin game_version, pero por defensa).
+      //
+      // Loadout.4h (2026-05-04, BUGFIX adicional): el CTE además hardcodeaba
+      // `t.class_name` pero la tabla `missiles` no tiene class_name (usa
+      // `name` como classCol según TYPE_TABLE). El query rompía con
+      // 'column missiles.class_name does not exist' y los misiles del rack
+      // children quedaban vacíos. Ahora el dedupe usa def.classCol — la
+      // columna correcta de cada tabla.
+      const classRef = `t.${def.classCol}`;
       const dedupOrder = def.hasGameVersion
-        ? `t.class_name, COALESCE(t.game_version, '') DESC`
-        : `t.class_name`;
+        ? `${classRef}, COALESCE(t.game_version, '') DESC`
+        : classRef;
       const rows: any[] = await sql.unsafe(
         `WITH dedup AS (
-           SELECT DISTINCT ON (t.class_name) t.*
+           SELECT DISTINCT ON (${classRef}) t.*
            FROM ${def.table} t
            ${where}
            ORDER BY ${dedupOrder}
