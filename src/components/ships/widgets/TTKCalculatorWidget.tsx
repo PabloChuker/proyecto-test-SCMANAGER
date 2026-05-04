@@ -131,8 +131,12 @@ export const TTKCalculatorContent = memo(function TTKCalculatorContent() {
   const [shieldPipFraction, setShieldPipFraction] = useState(1);
 
   // Cargar lista de ships (una vez). El endpoint /api/ships acepta search.
+  // W.16e (2026-05-04): bump limit 300→500 (máximo del endpoint) — la BD
+  // ya tiene 344 ships deduped después de los lotes Z y Garnok PTU shells.
+  // Con 300 cortaba en RSI Constellation Taurus dejando afuera Polaris,
+  // Scorpius, Galaxy, Mantis, Perseus, Zeus Mk II, Tumbril vehicles, Vanduul.
   useEffect(() => {
-    fetch("/api/ships?limit=300")
+    fetch("/api/ships?limit=500")
       .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
         if (!j) return;
