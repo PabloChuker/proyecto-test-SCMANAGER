@@ -252,53 +252,127 @@ export function ChainBoardCanvas({ cards, onRemove, onReorder, onInsertAt, onAdd
       ) : (
         <div className="flex-1 overflow-y-auto p-3">
           <ul className="space-y-0">
-            {cards.map((card, i) => {
-              const validation = i < cards.length - 1 ? validations[i] : null;
-              const isLast = i === cards.length - 1;
-              return (
-                <li key={card.cardId}>
-                  <CanvasCard
-                    card={card}
-                    index={i}
-                    isFirst={i === 0}
-                    isLast={isLast}
-                    onRemove={onRemove}
-                    isDragging={dragIdx === i}
-                    isDragOver={dragOverIdx === i}
-                    onDragStart={() => setDragIdx(i)}
-                    onDragEnd={() => {
-                      setDragIdx(null);
-                      setDragOverIdx(null);
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      setDragOverIdx(i);
-                    }}
-                    onDrop={() => {
-                      if (dragIdx !== null && dragIdx !== i) {
-                        onReorder(dragIdx, i);
-                      }
-                      setDragIdx(null);
-                      setDragOverIdx(null);
-                    }}
-                  />
-                  {!isLast && validation && (
-                    <ArrowAndInsert
-                      validation={validation}
-                      fromShip={card}
-                      toShip={cards[i + 1]}
-                      ownedCCUs={ccus}
-                      onInsertAt={(ship) => onInsertAt(i + 1, ship)}
-                    />
-                  )}
-                  {!isLast && !validation && validating && (
-                    <div className="my-1.5 ml-4 text-[10px] text-zinc-600 italic">
-                      validando…
-                    </div>
-                  )}
-                </li>
-              );
-            })}
+            {(() => {
+              // CB.8h (2026-05-04): grouping pass — dos cards consecutivas
+              // que comparten `sourceItemId` representan UN CCU (la mecánica
+              // del juego SC: un CCU vincula dos naves específicas). Las
+              // renderizamos como UN SOLO bloque con un divider interno
+              // tipo "Razor → Expanse · STD $5", en lugar de dos cards
+              // separadas. Pablo (2026-05-04): "el CCU es una entidad
+              // unica es un tramite de nave a nave".
+              //
+              // Las cards "single" son las que NO tienen sourceItemId, o lo
+              // tienen pero la próxima/anterior no comparte. El último item
+              // del bloque CCU + el primero del próximo item siguen
+              // conectados por la flecha + insert estándar.
+              type RenderItem =
+                | { kind: "single"; card: BoardCard; cardIdx: number }
+                | {
+                    kind: "ccu-pair";
+                    from: BoardCard;
+                    to: BoardCard;
+                    fromIdx: number;
+                    toIdx: number;
+                    sourceItemId: string;
+                  };
+              const items: RenderItem[] = [];
+              let i = 0;
+              while (i < cards.length) {
+                const cur = cards[i];
+                const nxt = cards[i + 1];
+                if (
+                  cur.sourceItemId &&
+                  nxt &&
+                  nxt.sourceItemId === cur.sourceItemId
+                ) {
+                  items.push({
+                    kind: "ccu-pair",
+                    from: cur,
+                    to: nxt,
+                    fromIdx: i,
+                    toIdx: i + 1,
+                    sourceItemId: cur.sourceItemId,
+                  });
+                  i += 2;
+                } else {
+                  items.push({ kind: "single", card: cur, cardIdx: i });
+                  i += 1;
+                }
+              }
+
+              return items.map((item, itemIdx) => {
+                const isLastItem = itemIdx === items.length - 1;
+                // ÚLTIMO cardIdx del item actual — necesario para encontrar
+                // el validation correcto entre items (entre últ. de current
+                // y primero del próximo, que son consecutivos en cards[]).
+                const lastCardIdx =
+                  item.kind === "ccu-pair" ? item.toIdx : item.cardIdx;
+                const validation =
+                  !isLastItem && lastCardIdx < cards.length - 1
+                    ? validations[lastCardIdx]
+                    : null;
+                const ownedCcu =
+                  item.kind === "ccu-pair"
+                    ? ccus.find((c) => c.id === item.sourceItemId) ?? null
+                    : null;
+
+                return (
+                  <li key={item.kind === "single" ? item.card.cardId : `pair-${item.from.cardId}-${item.to.cardId}`}>
+                    {item.kind === "single" ? (
+                      <CanvasCard
+                        card={item.card}
+                        index={item.cardIdx}
+                        isFirst={item.cardIdx === 0}
+                        isLast={item.cardIdx === cards.length - 1}
+                        onRemove={onRemove}
+                        isDragging={dragIdx === item.cardIdx}
+                        isDragOver={dragOverIdx === item.cardIdx}
+                        onDragStart={() => setDragIdx(item.cardIdx)}
+                        onDragEnd={() => {
+                          setDragIdx(null);
+                          setDragOverIdx(null);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setDragOverIdx(item.cardIdx);
+                        }}
+                        onDrop={() => {
+                          if (dragIdx !== null && dragIdx !== item.cardIdx) {
+                            onReorder(dragIdx, item.cardIdx);
+                          }
+                          setDragIdx(null);
+                          setDragOverIdx(null);
+                        }}
+                      />
+                    ) : (
+                      <CcuPairBlock
+                        from={item.from}
+                        to={item.to}
+                        fromIdx={item.fromIdx}
+                        toIdx={item.toIdx}
+                        totalCards={cards.length}
+                        ownedCcu={ownedCcu}
+                        onRemove={onRemove}
+                      />
+                    )}
+                    {!isLastItem && validation && (
+                      <ArrowAndInsert
+                        validation={validation}
+                        fromShip={cards[lastCardIdx]}
+                        toShip={cards[lastCardIdx + 1]}
+                        ownedCCUs={ccus}
+                        onInsertAt={(ship) => onInsertAt(lastCardIdx + 1, ship)}
+                      />
+                    )}
+                    {!isLastItem && !validation && validating && (
+                      <div className="my-1.5 ml-4 text-[10px] text-zinc-600 italic">
+                        validando…
+                      </div>
+                    )}
+                  </li>
+                );
+              });
+            })()}
           </ul>
         </div>
       )}
@@ -397,6 +471,185 @@ function CanvasCard({
         onClick={() => onRemove(card.cardId)}
         className="text-[10px] text-zinc-500 hover:text-rose-400 px-1.5 py-0.5 rounded shrink-0 transition-colors"
         title="Quitar de la pizarra"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
+// ─── Bloque CCU (par from→to agrupado, CB.8h) ─────────────────────────────
+//
+// Renderiza dos cards consecutivas como UN frame común con un divider
+// interno que muestra la metadata del CCU (precio + STD/WB + insurance
+// granted). Visualmente es claro que es UN trámite que vincula dos naves
+// específicas, no dos cards azarosamente conectadas.
+//
+// Drag-to-reorder está deshabilitado dentro del bloque (no tiene sentido
+// reordenar las dos naves de un mismo CCU). Si el user quiere romper el
+// par, debe quitar una de las dos con el ✕.
+
+function CcuPairBlock({
+  from,
+  to,
+  fromIdx,
+  toIdx,
+  totalCards,
+  ownedCcu,
+  onRemove,
+}: {
+  from: BoardCard;
+  to: BoardCard;
+  fromIdx: number;
+  toIdx: number;
+  totalCards: number;
+  ownedCcu: HangarCCU | null;
+  onRemove: (cardId: string) => void;
+}) {
+  const fromIsFirst = fromIdx === 0;
+  const toIsLast = toIdx === totalCards - 1;
+  const fromRole = fromIsFirst ? "BASE" : `STEP ${fromIdx}`;
+  const toRole = toIsLast ? "TARGET" : `STEP ${toIdx}`;
+  const fromRoleColor = fromIsFirst
+    ? "bg-amber-500/15 text-amber-300 border-amber-500/30"
+    : "bg-zinc-800/60 text-zinc-400 border-zinc-700/50";
+  const toRoleColor = toIsLast
+    ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+    : "bg-zinc-800/60 text-zinc-400 border-zinc-700/50";
+
+  const ccuPrice = ownedCcu?.pricePaid ?? 0;
+  const isWarbond = ownedCcu?.isWarbond ?? false;
+  const grantsInsurance = ownedCcu?.grantsInsurance;
+
+  return (
+    <div className="bg-zinc-900/60 border border-amber-500/30 rounded-sm overflow-hidden">
+      {/* Header del CCU — banda con metadata del trámite */}
+      <div className="flex items-center gap-2 px-2.5 py-1 bg-gradient-to-r from-amber-500/10 to-amber-500/5 border-b border-amber-500/20">
+        <span className="text-[10px]" title="CCU: trámite de mejora de nave">🔄</span>
+        <span className="text-[9px] font-mono uppercase tracking-widest text-amber-300/90">
+          CCU
+        </span>
+        <span
+          className={`text-[8px] font-mono uppercase tracking-wider px-1 py-0.5 rounded-[2px] border shrink-0 ${
+            isWarbond
+              ? "bg-cyan-500/15 text-cyan-300 border-cyan-500/30"
+              : "bg-zinc-800/50 text-zinc-400 border-zinc-700/50"
+          }`}
+        >
+          {isWarbond ? "WB" : "STD"}
+        </span>
+        {ccuPrice > 0 ? (
+          <span className="text-[11px] font-mono text-amber-300">
+            ${ccuPrice.toFixed(0)}
+          </span>
+        ) : (
+          <span
+            className="text-[10px] font-mono text-zinc-600 cursor-help"
+            title="Precio no registrado en el hangar"
+          >
+            —
+          </span>
+        )}
+        {grantsInsurance && (
+          <span
+            className="text-[8px] font-mono uppercase tracking-wider px-1 py-0.5 rounded-[2px] border bg-emerald-500/15 text-emerald-300 border-emerald-500/30"
+            title={`Otorga ${grantsInsurance.replace("_", " ")} al destino`}
+          >
+            ⭐ {grantsInsurance === "LTI" ? "LTI" : grantsInsurance.replace("_months", "m")}
+          </span>
+        )}
+        <span className="text-[9px] font-mono text-zinc-500 ml-auto truncate">
+          {from.shipName} → {to.shipName}
+        </span>
+      </div>
+
+      {/* FROM */}
+      <CcuPairRow
+        card={from}
+        index={fromIdx}
+        roleLabel={fromRole}
+        roleColor={fromRoleColor}
+        onRemove={onRemove}
+      />
+
+      {/* Conector interno entre FROM y TO — flecha visual sin la
+          tarjeta de validación porque YA sabemos que el edge es válido
+          (es el mismo CCU que lo trajo). */}
+      <div className="flex items-center gap-2 pl-12 py-0.5 text-amber-400/60">
+        <span className="text-[14px] leading-none">↓</span>
+        <span className="text-[9px] font-mono uppercase tracking-wider text-amber-400/50">
+          mismo CCU
+        </span>
+      </div>
+
+      {/* TO */}
+      <CcuPairRow
+        card={to}
+        index={toIdx}
+        roleLabel={toRole}
+        roleColor={toRoleColor}
+        onRemove={onRemove}
+      />
+    </div>
+  );
+}
+
+/** Sub-row del CcuPairBlock — más compacto que CanvasCard porque ya está
+ *  dentro de un frame del CCU (no necesita el grip-handle ni borde propio). */
+function CcuPairRow({
+  card,
+  roleLabel,
+  roleColor,
+  onRemove,
+}: {
+  card: BoardCard;
+  index: number;
+  roleLabel: string;
+  roleColor: string;
+  onRemove: (cardId: string) => void;
+}) {
+  const originIcon = card.origin === "fleet" ? "📦" : card.origin === "store" ? "🛒" : "✏️";
+  return (
+    <div className="flex items-center gap-3 px-2.5 py-2">
+      {card.imageUrl ? (
+        <img
+          src={card.imageUrl}
+          alt={card.shipName}
+          className="w-12 h-12 object-cover rounded-sm border border-zinc-800/60 shrink-0"
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.opacity = "0.2";
+          }}
+        />
+      ) : (
+        <div className="w-12 h-12 bg-zinc-800/50 border border-zinc-700/50 rounded-sm flex items-center justify-center text-zinc-600 shrink-0">
+          🚀
+        </div>
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 mb-0.5">
+          <span
+            className={`text-[8px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded-[2px] border ${roleColor}`}
+          >
+            {roleLabel}
+          </span>
+          <span className="text-[10px] text-zinc-500" title={`Origen: ${card.origin}`}>
+            {originIcon}
+          </span>
+        </div>
+        <p className="text-[12px] text-zinc-100 truncate">{card.shipName}</p>
+        <p className="text-[10px] text-zinc-500 font-mono">
+          ${card.msrpUsd.toLocaleString()}
+          {card.warbondUsd != null && card.warbondUsd !== card.msrpUsd && (
+            <span className="text-cyan-400 ml-1.5">
+              WB ${card.warbondUsd.toLocaleString()}
+            </span>
+          )}
+        </p>
+      </div>
+      <button
+        onClick={() => onRemove(card.cardId)}
+        className="text-[10px] text-zinc-500 hover:text-rose-400 px-1.5 py-0.5 rounded shrink-0 transition-colors"
+        title="Quitar de la pizarra (rompe el par CCU)"
       >
         ✕
       </button>
