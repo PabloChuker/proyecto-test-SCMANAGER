@@ -147,6 +147,33 @@ const DEFAULT_OPTIONS: CalculateOptions = {
   forceIncludeShipIds: [],
 };
 
+// ─── Availability helpers ───────────────────────────────────────────────────
+//
+// CCU.7-coherence (2026-05-04): single source of truth para "esta nave se
+// vende HOY en RSI store?". Lo usa el solver en modo onlyAvailable=true
+// para descartar pasos que requieran naves Time-limited / Concept /
+// Discontinued / Reward.
+//
+// Pablo: "no hay pasos imposibles en la cadena ni de esperar ni de
+// especular". El criterio canónico es pledgeAvailability del Wiki:
+//   · "Always available"          → comprable HOY ✓
+//   · "Time-limited sales"        → solo en IAE/Invictus ✗
+//   · "Quantity-limited sales"    → stock raro, no contamos como comprable ✗
+//   · "Limited edition*"          → ediciones limitadas ✗
+//   · "Out of production"         → discontinued ✗
+//   · "Reward - Not available..." → no a la venta ✗
+//   · "Concept sale"              → concept (sin lanzamiento) ✗
+//   · null / undefined            → fallback: asumimos comprable (data missing
+//                                    es mejor que false negative; el user
+//                                    valida en RSI antes de comprar)
+export function isShipAvailableNow(ship: ShipNode): boolean {
+  const a = (ship.pledgeAvailability ?? "").trim().toLowerCase();
+  if (!a) return true; // sin data, NO bloqueamos (fan-friendly)
+  // Whitelist explícita: "always available" pasa, todo el resto no.
+  // Match permisivo por si CIG / wiki agrega "Always available - sale" etc.
+  return a.includes("always available");
+}
+
 // ─── Priority Queue (Min-Heap) ──────────────────────────────────────────────
 
 interface HeapEntry {
@@ -247,20 +274,41 @@ export function findCheapestChain(
   for (const edge of edges) {
     if (excludeSet.has(edge.fromShipId) || excludeSet.has(edge.toShipId)) continue;
 
-    // FIX 2026-04-26: cuando el usuario pide "Armarla Ya" (onlyAvailable=true),
-    // descartamos CCUs limited/event-only que NO sean del inventario propio del
-    // user — esas son las que no están a la venta hoy. Las CCUs standard del
-    // catálogo siempre se consideran disponibles (CIG las vende continuamente).
-    // Antes este bloque tenía el comentario pero faltaba el `continue;` y por
-    // eso el flag "Armarla Ya" no filtraba nada.
-    if (opts.onlyAvailable && !edge.isOwned && edge.isLimited) continue;
-
     const toShip = ships.get(edge.toShipId);
+    const fromShip = ships.get(edge.fromShipId);
+
     // FIX 2026-04-26: respetar edges owned aunque la nave destino tenga
     // isCcuEligible=false. Si el user ya compró la CCU hacia esa nave,
     // sigue siendo válida (CIG no le quita el CCU al usuario aunque la
     // nave salga del catálogo de CCUs continuos).
     if (toShip && !toShip.isCcuEligible && edge.toShipId !== targetShipId && !edge.isOwned) continue;
+
+    // ─── CCU.7-coherence (2026-05-04): filtros estrictos para "Armarla Ya" ──
+    //
+    // Pablo (2026-05-04): "hacerla ya es hacerla ya... no hay pasos imposibles
+    // en la cadena ni de esperar ni de especular". Cuando el user pide
+    // "Armarla Ya" (onlyAvailable=true), filtramos CUALQUIER paso que NO
+    // sea comprable en RSI HOY:
+    //
+    //   1. edge.isLimited=true                  → CCU de evento, no se vende hoy
+    //   2. toShip.pledgeAvailability != "Always" → la nave destino solo se
+    //      vende en eventos / discontinued / concept. Antes el solver solo
+    //      miraba isLimited del CCU pero NO la availability de la nave —
+    //      por eso pasaban "14 pasos solo de eventos" (Pablo, 2026-05-04).
+    //   3. fromShip.pledgeAvailability != "Always" → si la nave intermedia
+    //      no se vende hoy, no podemos llegar a ella desde otra (a menos
+    //      que ya la tengamos como CCU owned, gestionado abajo).
+    //
+    // Excepciones:
+    //   - edge.isOwned → siempre permitido (es del hangar/buyback del user)
+    //   - fromShipId === startShipId → es la nave que ya tenés, no importa
+    //   - toShipId === targetShipId Y user lo eligió como objetivo → permitido
+    //     (puede ser concept que el user QUIERE). El UI te avisa con badge.
+    if (opts.onlyAvailable && !edge.isOwned) {
+      if (edge.isLimited) continue;
+      if (toShip && edge.toShipId !== targetShipId && !isShipAvailableNow(toShip)) continue;
+      if (fromShip && edge.fromShipId !== startShipId && !isShipAvailableNow(fromShip)) continue;
+    }
 
     if (!adjacency.has(edge.fromShipId)) {
       adjacency.set(edge.fromShipId, []);

@@ -1483,6 +1483,70 @@ export function CCUChainCalculator() {
         </button>
       </div>
 
+      {/* ── CCU.7-coherence (2026-05-04): warnings de toggles incoherentes ──
+          Pablo: "hay que tener logica con todas las peticiones, no estan
+          por que si". Cuando combinaciones de toggles producen un
+          resultado distinto de lo que el user pidió (ej. pidió créditos
+          pero no tiene tokens), avisamos ANTES del cálculo en lugar de
+          dejarlo confundido viendo cash en una cadena "de créditos". */}
+      {(() => {
+        const warnings: string[] = [];
+
+        // Pidió créditos pero no tiene cómo pagarlos.
+        if (paymentPriority === "prefer-credits") {
+          const hasBuybackOwned = ccus.some(c => c.location === "buyback");
+          if (!hasBuybackToken && !hasBuybackOwned) {
+            warnings.push(
+              `Marcaste "SC$ Créditos" pero no tenés tokens de buyback ni CCUs en buyback. ` +
+              `La cadena va a usar EFECTIVO igual — los créditos solo aplican en pasos del buyback.`,
+            );
+          } else if (!hasBuybackToken && hasBuybackOwned) {
+            warnings.push(
+              `Marcaste "SC$ Créditos" pero el toggle "Tengo token de buyback" está apagado. ` +
+              `Sin token, los CCUs del buyback se reclaman con efectivo, no con créditos. ` +
+              `Activá el token si lo tenés.`,
+            );
+          }
+        }
+
+        // Modo "Armarla Ya" + warbond preferido: avisar que solo aplica si
+        // el warbond está disponible HOY (algunos warbonds son de evento).
+        if (onlyAvailableNow && preferWarbond) {
+          // No es un error pero es bueno saber.
+          // (No agregamos warning porque el solver ya filtra warbond
+          // available solo. Pero si querés, descomentar.)
+        }
+
+        // Modo "Armarla Ya" sin CCUs propias y sin tokens: la cadena va a
+        // ser puro cash standard, sin descuentos. Avisamos.
+        if (
+          onlyAvailableNow &&
+          !useOwnedCCUs &&
+          paymentPriority !== "prefer-credits" &&
+          ccus.length > 0
+        ) {
+          warnings.push(
+            `Tenés ${ccus.length} CCUs en hangar/buyback pero "Usar mis CCUs" está apagado. ` +
+            `La cadena va a ignorarlos y comprar todo nuevo. Activá el toggle para aprovecharlos.`,
+          );
+        }
+
+        if (warnings.length === 0) return null;
+        return (
+          <div className="space-y-1.5">
+            {warnings.map((w, i) => (
+              <div
+                key={i}
+                className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-sm px-3 py-2 flex items-start gap-2"
+              >
+                <span className="text-amber-400 shrink-0">⚠</span>
+                <span className="flex-1 leading-snug">{w}</span>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
       {/* ── Restricciones globales (CCU.4) ──
           Panel inline colapsable. Default: colapsado si las listas están vacías,
           expandido si el user ya tiene restricciones (para que las vea siempre). */}
