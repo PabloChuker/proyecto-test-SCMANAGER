@@ -116,13 +116,48 @@ export async function POST(request: NextRequest) {
 
     if (onlyAvailable) {
       // ═══════════════════════════════════════════════════════════════════
-      // MODE: "Armarla Ya" — only load existing available CCU prices
-      // ═══════════════════════════════════════════════════════════════════
-      const ccuRows: any[] = await sql.unsafe(`
-        SELECT from_ship_id, to_ship_id, standard_price, warbond_price,
-               is_available, is_warbond_available, is_limited
-        FROM ccu_prices WHERE is_available = true
-      `, []);
+      // MODE: "Armarla Ya" — only load CCU prices for ships available HOY
+      //
+      // CCU.7-coherence (2026-05-04, BUGFIX Pablo):
+      //   El SQL anterior solo filtraba `cp.is_available = true` lo cual
+      //   significa "el wiki lista este CCU price". Pero NO chequeaba si
+      //   las naves intermedias (from / to) están a la venta HOY en RSI.
+      //   Resultado: el solver veía edges hacia naves "Time-limited sales"
+      //   (solo en IAE/Invictus) y las usaba como pasos intermedios →
+      //   cadenas con "9 pasos solo en eventos" en modo "Armarla Ya".
+      //
+      // Fix: JOIN con ship_prices_canonical y filtrar pledge_availability.
+      //   - Si la nave es el startShip o targetShip del user: SIEMPRE
+      //     permitida (vos ya la tenés, o vos elegiste el target — incluso
+      //     si es concept, el user lo decide).
+      //   - Si pledge_availability es NULL en el wiki: asumimos disponible
+      //     (gap de data, mejor falso positivo que falso negativo).
+      //   - Si pledge_availability incluye "always available": permitida.
+      //   - Cualquier otro valor (Time-limited / Concept / Out of
+      //     production / Reward): BLOQUEADA en modo Armarla Ya.
+      //
+      // Esto es defensa en profundidad: el solver también tiene
+      // isShipAvailableNow() como backup, pero filtrar en SQL es más
+      // determinista y reduce el grafo a explorar.
+      const ccuRows: any[] = await sql.unsafe(
+        `SELECT cp.from_ship_id, cp.to_ship_id, cp.standard_price, cp.warbond_price,
+                cp.is_available, cp.is_warbond_available, cp.is_limited
+         FROM ccu_prices cp
+         LEFT JOIN ship_prices_canonical from_av ON from_av.ship_id = cp.from_ship_id
+         LEFT JOIN ship_prices_canonical to_av   ON to_av.ship_id   = cp.to_ship_id
+         WHERE cp.is_available = true
+           AND (
+             cp.from_ship_id::text = $1
+             OR from_av.pledge_availability IS NULL
+             OR LOWER(from_av.pledge_availability) LIKE '%always available%'
+           )
+           AND (
+             cp.to_ship_id::text = $2
+             OR to_av.pledge_availability IS NULL
+             OR LOWER(to_av.pledge_availability) LIKE '%always available%'
+           )`,
+        [String(fromShipId), String(toShipId)],
+      );
 
       edges = ccuRows.map((row) => ({
         fromShipId: String(row.from_ship_id),
