@@ -427,12 +427,18 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
   // Esto sigue el comportamiento que el user espera de un dropdown clásico:
   // se "abre" pegado al elemento que clickeó, en la dirección natural de
   // lectura (LTR → derecha-abajo).
+  // Loadout.4e (2026-05-04): panel más compacto y pegado al slot.
+  // Cambios vs versión anterior:
+  //   - Ancho: 480 → 360 px (más minimalista)
+  //   - Margen al slot: 12 → 4 px (pegado, estilo dropdown nativo)
+  //   - Max altura: 70vh → 60vh
   const panelStyle = useMemo<React.CSSProperties | undefined>(() => {
     if (!anchorRect) return undefined;
     if (typeof window === "undefined") return undefined;
-    const PANEL_W = 480;
-    const PANEL_MAX_H_RATIO = 0.7;
-    const MARGIN = 12;
+    const PANEL_W = 360;
+    const PANEL_MAX_H_RATIO = 0.6;
+    const MARGIN = 4;        // gap al slot (pegado)
+    const VIEWPORT_PAD = 8;  // padding mínimo al viewport
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     if (vw < 640) return undefined; // mobile: que use el inset-4 default
@@ -441,26 +447,27 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
     const tryRight = anchorRect.right + MARGIN;
     const tryLeft = anchorRect.left - PANEL_W - MARGIN;
     let left: number;
-    if (tryRight + PANEL_W <= vw - MARGIN) {
+    if (tryRight + PANEL_W <= vw - VIEWPORT_PAD) {
       left = tryRight;
-    } else if (tryLeft >= MARGIN) {
+    } else if (tryLeft >= VIEWPORT_PAD) {
       left = tryLeft;
     } else {
-      // Ningún lado entra — clamp a la derecha del viewport
-      left = Math.max(MARGIN, vw - PANEL_W - MARGIN);
+      left = Math.max(VIEWPORT_PAD, vw - PANEL_W - VIEWPORT_PAD);
     }
 
     // Vertical: alinear con el top del slot, clampeado al viewport
     const maxH = vh * PANEL_MAX_H_RATIO;
     let top = anchorRect.top;
-    if (top + maxH > vh - MARGIN) {
-      top = Math.max(MARGIN, vh - MARGIN - maxH);
+    if (top + maxH > vh - VIEWPORT_PAD) {
+      top = Math.max(VIEWPORT_PAD, vh - VIEWPORT_PAD - maxH);
     }
     return {
       left: `${Math.round(left)}px`,
       top: `${Math.round(top)}px`,
       right: "auto",
       bottom: "auto",
+      width: `${PANEL_W}px`,
+      maxHeight: `${maxH}px`,
     };
   }, [anchorRect]);
 
@@ -480,49 +487,56 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
       />
       <div
         ref={panelRef}
-        // En desktop (sm+) el style inline de Loadout.4b se hace cargo de
-        // left/top via `panelStyle`. Si no hay anchor (rare), el CSS default
-        // posiciona en bottom-right. Mobile usa inset-4 full-screen.
-        className="fixed inset-4 z-50 bg-zinc-950 border border-zinc-800/70 rounded-sm flex flex-col shadow-2xl shadow-black/60 sm:inset-auto sm:bottom-4 sm:right-4 sm:left-auto sm:top-auto sm:w-[480px] sm:max-h-[70vh]"
+        // Loadout.4e: panel compacto. En desktop (sm+) el style inline maneja
+        // left/top/width via `panelStyle`. Mobile usa inset-4 full-screen.
+        className="fixed inset-4 z-50 bg-zinc-950 border border-zinc-800/70 rounded-sm flex flex-col shadow-2xl shadow-black/60 sm:inset-auto sm:bottom-4 sm:right-4 sm:left-auto sm:top-auto sm:w-[360px] sm:max-h-[60vh]"
         style={panelStyle}
       >
-        {/* Header: agregamos drag handle visual (decorativo) y mantenemos botón close */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800/50 flex-shrink-0">
-          <div className="w-1 h-5 rounded-full opacity-60" style={{ backgroundColor: catColor }} />
-          <div className="flex-1 min-w-0">
-            <div className="text-[10px] tracking-widest uppercase text-zinc-500">Select Component</div>
-            <div className="text-sm text-zinc-300 truncate">{hardpoint.resolvedCategory} · {displaySize} {hardpoint.isFixed ? "Fixed" : "Gimbal"}</div>
+        {/* Header compacto — categoría + size + close en 1 línea */}
+        <div className="flex items-center gap-2 px-2.5 py-1.5 border-b border-zinc-800/50 flex-shrink-0">
+          <div className="w-0.5 h-4 rounded-full opacity-60" style={{ backgroundColor: catColor }} />
+          <div className="flex-1 min-w-0 flex items-center gap-1.5">
+            <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-300 truncate">
+              {hardpoint.resolvedCategory}
+            </span>
+            <span className="text-[9px] font-mono text-zinc-600">
+              {displaySize}{hardpoint.isFixed ? " · Fix" : ""}
+            </span>
+            <span className="text-[9px] font-mono text-zinc-700 ml-auto">{filtered.length}</span>
           </div>
-          <button onClick={onClose} className="p-1 text-zinc-600 hover:text-zinc-400 transition-colors"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 18L18 6M6 6l12 12" /></svg></button>
+          <button onClick={onClose} className="text-zinc-600 hover:text-zinc-400 transition-colors text-[11px] leading-none px-1" title="Cerrar">
+            ✕
+          </button>
         </div>
 
-        <div className="px-4 py-2 border-b border-zinc-800/30 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <input ref={inputRef} type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name or manufacturer..." className="flex-1 px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-cyan-500/30 transition-colors" />
-            <button onClick={onClear} className="text-[10px] text-zinc-600 hover:text-red-400 transition-colors tracking-wide uppercase px-2 py-2 border border-zinc-800/40 rounded-sm hover:border-red-400/30">Clear slot</button>
-          </div>
-          <div className="flex items-center justify-between mt-1">
-            <span className="text-[10px] text-zinc-700 font-mono">{filtered.length} compatible</span>
-            {isTurretSlot && (
-              <div className="flex gap-0.5 bg-zinc-800/60 rounded p-0.5">
-                {(["all", "weapons", "gimbals"] as SubFilter[]).map(f => (
-                  <button key={f} onClick={() => setSubFilter(f)}
-                    className={`px-2 py-0.5 text-[8px] font-mono rounded transition-colors uppercase ${subFilter === f ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>
-                    {f}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+        {/* Search compacto + clear */}
+        <div className="px-2 py-1.5 border-b border-zinc-800/30 flex-shrink-0 flex items-center gap-1.5">
+          <input ref={inputRef} type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar…" className="flex-1 px-2 py-1 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-[11px] text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-cyan-500/30 transition-colors" />
+          <button onClick={onClear} className="text-[9px] text-zinc-600 hover:text-red-400 transition-colors tracking-wide uppercase px-1.5 py-1 border border-zinc-800/40 rounded-sm hover:border-red-400/30 shrink-0" title="Limpiar slot">
+            Clear
+          </button>
         </div>
 
-        <div className="flex items-center gap-1 px-4 py-1.5 border-b border-zinc-800/40 bg-zinc-900/30 text-[9px] tracking-widest uppercase text-zinc-600 flex-shrink-0">
+        {/* Sub-filter para turrets — solo aparece si aplica */}
+        {isTurretSlot && (
+          <div className="flex items-center justify-end px-2 py-1 border-b border-zinc-800/30 flex-shrink-0">
+            <div className="flex gap-0.5 bg-zinc-800/60 rounded p-0.5">
+              {(["all", "weapons", "gimbals"] as SubFilter[]).map(f => (
+                <button key={f} onClick={() => setSubFilter(f)}
+                  className={`px-1.5 py-0.5 text-[8px] font-mono rounded transition-colors uppercase ${subFilter === f ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>
+                  {f}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-1 px-2 py-1 border-b border-zinc-800/40 bg-zinc-900/30 text-[8px] tracking-wider uppercase text-zinc-600 flex-shrink-0">
           <ColHead label="Name" k="name" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="flex-1" />
-          <ColHead label="S" k="size" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-7 text-center" />
-          <ColHead label="Gr" k="grade" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-7 text-center" />
-          <ColHead label={statLabel} k="stat" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-14 text-right" />
-          <ColHead label="Price" k="price" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-16 text-right" />
-          <ColHead label="Mfr" k="manufacturer" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-20 text-right hidden sm:block" />
+          <ColHead label="S" k="size" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-5 text-center" />
+          <ColHead label="Gr" k="grade" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-5 text-center" />
+          <ColHead label={statLabel} k="stat" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-12 text-right" />
+          <ColHead label="$" k="price" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-12 text-right" />
         </div>
 
         <div
@@ -538,7 +552,8 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
             const sv = getKeyStat(hardpoint.resolvedCategory, getItemStats(item));
             const price = getBestPrice(item);
             const shop = getBestShop(item);
-            const rowCls = isCurrent ? "w-full flex items-center gap-1 px-4 py-2 text-left bg-cyan-500/5 cursor-default border-b border-zinc-800/20" : "w-full flex items-center gap-1 px-4 py-2 text-left hover:bg-zinc-800/30 cursor-pointer border-b border-zinc-800/20 transition-colors";
+            // Loadout.4e: rows más densas (px-2 py-1.5 en vez de px-4 py-2)
+            const rowCls = isCurrent ? "w-full flex items-center gap-1 px-2 py-1.5 text-left bg-cyan-500/5 cursor-default border-b border-zinc-800/20" : "w-full flex items-center gap-1 px-2 py-1.5 text-left hover:bg-zinc-800/30 cursor-pointer border-b border-zinc-800/20 transition-colors";
             return (
               <button
                 key={item.id}
@@ -564,14 +579,17 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
                 className={rowCls}
               >
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5"><span className="text-[13px] text-zinc-200 truncate">{item.localizedName || item.name}</span>{isCurrent && <span className="text-[8px] text-cyan-500 tracking-wider">EQUIPPED</span>}</div>
-                  {shop && <div className="text-[9px] text-zinc-600 truncate">{shop}</div>}
+                  <div className="flex items-center gap-1"><span className="text-[11px] text-zinc-200 truncate">{item.localizedName || item.name}</span>{isCurrent && <span className="text-[7px] text-cyan-500 tracking-wider shrink-0">●</span>}</div>
+                  {/* Loadout.4e: tooltip con manufacturer + shop en lugar de filas extra para
+                      mantener la card compacta. El shop se ve solo en hover via title. */}
+                  {item.manufacturer && (
+                    <div className="text-[8px] text-zinc-600 truncate">{item.manufacturer}{shop ? ` · ${shop}` : ""}</div>
+                  )}
                 </div>
-                <div className="w-7 text-center text-[12px] font-mono text-zinc-500">S{item.size ?? "?"}</div>
-                <div className="w-7 text-center">{item.grade ? <span className={gradeClass(item.grade)}>{item.grade}</span> : <span className="text-zinc-800">-</span>}</div>
-                <div className="w-14 text-right font-mono text-[12px]" style={{ color: catColor }}>{sv ? sv.v : <span className="text-zinc-800">-</span>}</div>
-                <div className="w-16 text-right">{price !== null ? <span className="text-[11px] font-mono text-amber-400/80">{fmtPrice(price)}</span> : <span className="text-[10px] text-zinc-800">-</span>}</div>
-                <div className="w-20 text-right text-[11px] text-zinc-600 truncate hidden sm:block">{item.manufacturer || "-"}</div>
+                <div className="w-5 text-center text-[10px] font-mono text-zinc-500">{item.size != null ? `S${item.size}` : "?"}</div>
+                <div className="w-5 text-center text-[10px]">{item.grade ? <span className={gradeClass(item.grade)}>{item.grade}</span> : <span className="text-zinc-800">-</span>}</div>
+                <div className="w-12 text-right font-mono text-[10px]" style={{ color: catColor }}>{sv ? sv.v : <span className="text-zinc-800">-</span>}</div>
+                <div className="w-12 text-right">{price !== null ? <span className="text-[9px] font-mono text-amber-400/80">{fmtPrice(price)}</span> : <span className="text-[9px] text-zinc-800">-</span>}</div>
               </button>
             );
           })}
