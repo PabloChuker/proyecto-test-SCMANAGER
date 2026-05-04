@@ -57,13 +57,31 @@ export async function GET(request: NextRequest) {
     );
     const rr = res[0] ?? {};
 
-    // Hull HP del fuel/general ship. Reusamos la lógica de /api/ships/[id]:
-    // hull_hp suele estar en ship_fuel; armor_hp en ship_resistances.
-    const fuel: any[] = await sql.unsafe(
-      `SELECT shield_hp_total, hull_hp FROM ship_fuel WHERE ship_id = $1 LIMIT 1`,
+    // W.16d (2026-05-04) — FIX: las columnas `shield_hp_total` y `hull_hp` NO
+    // existen en `ship_fuel` (eran un copy-paste mental de otra parte del código).
+    // El endpoint estaba devolviendo 500 silencioso para todas las naves → widget
+    // sin datos. Corrigiendo a las fuentes reales:
+    //   • Shield HP total → ship_power_reference.total_shield_hp (suma de los
+    //     shields activos del default loadout, ya pre-computado por el ingest).
+    //   • Hull HP → ship_resistances.armor_hp.
+    // Fallback: si total_shield_hp es null, sumamos pool_hp de todos los shields
+    // del default loadout (al menos para naves recién importadas).
+    const power: any[] = await sql.unsafe(
+      `SELECT total_shield_hp FROM ship_power_reference WHERE ship_id = $1 LIMIT 1`,
       [String(sh.id)],
     );
-    const fu = fuel[0] ?? {};
+    let shieldHpTotal = num(power[0]?.total_shield_hp);
+    if (shieldHpTotal == null) {
+      const sumShields: any[] = await sql.unsafe(
+        `SELECT COALESCE(SUM(sh2.pool_hp), 0) AS sum_pool_hp
+           FROM ship_hardpoints hp
+           JOIN shields sh2 ON sh2.class_name = hp.default_item_class
+          WHERE hp.ship_id = $1`,
+        [String(sh.id)],
+      );
+      shieldHpTotal = num(sumShields[0]?.sum_pool_hp) ?? 0;
+    }
+    const fu = { shield_hp_total: shieldHpTotal, hull_hp: null as number | null };
 
     // Primer SHIELD del default loadout para resists/abs.
     const shieldRow: any[] = await sql.unsafe(
