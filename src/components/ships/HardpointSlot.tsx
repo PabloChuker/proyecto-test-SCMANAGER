@@ -108,7 +108,46 @@ function fmtAmmo(n: number): string {
   return String(n);
 }
 
-export const HardpointSlot = memo(function HardpointSlot({ hp, item, isOverridden, isOn, onClick, onTogglePower, childSlots, isComponentOn, toggleComponent, onClickChild, getEffectiveItem, hasOverride, weaponAllocatedPips, weaponMaxPips }: HardpointSlotProps) {
+// ─── Loadout.8 (2026-05-04): filtro de slots fantasma ─────────────────────
+//
+// scunpacked emite a veces hardpoints con names genéricos (categorías
+// agrupadoras: "weapons", "heat", "missiles", "shields") y/o defaultItems
+// con name placeholder en mayúsculas ("WEAPONS", "HEAT") que aparecían como
+// "S1 WEAPONS A", "S1 HEAT A", "S4 — empty —" en el LoadoutBuilder. Pablo
+// reportó que estos no tienen razón de ser. Filtramos en 2 puntos:
+//   1) HardpointSlot trata items ghost como null (rendea "— empty —")
+//   2) isUsefulSlot bloquea hardpoints con names genéricos del listado
+const GHOST_HARDPOINT_NAMES = new Set([
+  "weapons", "missiles", "shields", "coolers", "radars", "scanners",
+  "heat", "heat_pool", "weapons_pool", "weapon_pool",
+  "fuel", "fuel_intakes", "thrusters", "powerplants", "power_plants",
+  "countermeasures", "cargo", "qt_drives", "quantum_drives",
+]);
+
+const GHOST_ITEM_NAMES = new Set([
+  "WEAPONS", "MISSILES", "SHIELDS", "COOLERS", "RADARS", "SCANNERS",
+  "HEAT", "FUEL", "THRUSTERS", "POWERPLANTS", "POWER_PLANTS",
+  "COUNTERMEASURES", "CARGO", "QT_DRIVES", "QUANTUM_DRIVES",
+]);
+
+/** True si el item parece un placeholder genérico de scunpacked y no un
+ *  componente real (Revenant Gatling, Endurance, etc). */
+export function isGhostItem(item: EquippedItem | null): boolean {
+  if (!item) return false;
+  const name = (item.name ?? "").trim();
+  if (!name) return true;
+  if (GHOST_ITEM_NAMES.has(name)) return true;
+  // Item con name=className y sin manufacturer suele ser un placeholder.
+  if (name === item.className && !item.manufacturer) return true;
+  return false;
+}
+
+export const HardpointSlot = memo(function HardpointSlot({ hp, item: rawItem, isOverridden, isOn, onClick, onTogglePower, childSlots, isComponentOn, toggleComponent, onClickChild, getEffectiveItem, hasOverride, weaponAllocatedPips, weaponMaxPips }: HardpointSlotProps) {
+  // Loadout.8 (2026-05-04): si el item es un placeholder fantasma de scunpacked
+  // (name="WEAPONS", "HEAT", className == name sin manufacturer, etc), lo
+  // tratamos como null para que el slot renderee "— empty —" y el user pueda
+  // equipar uno real desde el picker.
+  const item = isGhostItem(rawItem) ? null : rawItem;
   const catColor = CAT_COLORS[hp.resolvedCategory] || "#52525b";
   const stat = item && isOn ? getKeyStat(hp.resolvedCategory, item.componentStats) : null;
   const displaySize = hp.maxSize > 0 ? hp.maxSize : (item?.size ?? 0);
@@ -212,8 +251,19 @@ const SKIP_CATEGORIES = new Set(["OTHER", "ARMOR", "FUEL_TANK", "FUEL_INTAKE", "
 
 export function isUsefulSlot(hp: ResolvedHardpoint, item: EquippedItem | null): boolean {
   const n = hp.hardpointName.toLowerCase();
-  if (!item && (n.includes("weapon_rack") || n.includes("weapon_regen_pool"))) return false;
-  if (item) return true;
+
+  // Loadout.8 (2026-05-04): hardpoint name genérico = slot fantasma
+  // (categoría agrupadora que scunpacked emite, no slot real equipable).
+  if (GHOST_HARDPOINT_NAMES.has(n)) return false;
+
+  // Slots auxiliares que nunca queremos mostrar
+  if (n.includes("weapon_rack") || n.includes("weapon_regen_pool")) return false;
+  if (n.includes("weapon_storage")) return false;
+
+  // Item placeholder ("WEAPONS"/"HEAT"/etc) = no contar como item válido
+  const realItem = isGhostItem(item) ? null : item;
+
+  if (realItem) return true;
   if (hp.maxSize > 0) return true;
   if (SKIP_CATEGORIES.has(hp.resolvedCategory)) return false;
   return true;
