@@ -79,10 +79,10 @@ export function ArmorCheckPanel({
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase">
+        <span className="text-[11px] font-mono text-zinc-500 tracking-[0.2em] uppercase">
           Armor Check
         </span>
-        <span className="text-[8px] font-mono text-zinc-600 tracking-wider">
+        <span className="text-[10px] font-mono text-zinc-600 tracking-wider">
           {loading ? "loading…" : data ? `${data.totalWeapons} armas evaluadas` : ""}
         </span>
       </div>
@@ -132,7 +132,7 @@ function ColumnList({
     return (
       <div>
         <div
-          className="text-[9px] font-mono font-bold tracking-wider uppercase mb-1"
+          className="text-[11px] font-mono font-bold tracking-wider uppercase mb-1"
           style={{ color }}
         >
           {label}
@@ -147,12 +147,12 @@ function ColumnList({
     <div>
       <div className="flex items-baseline justify-between mb-1.5">
         <span
-          className="text-[9px] font-mono font-bold tracking-wider uppercase"
+          className="text-[11px] font-mono font-bold tracking-wider uppercase"
           style={{ color }}
         >
           {label}
         </span>
-        <span className="text-[9px] font-mono text-zinc-500 tabular-nums">
+        <span className="text-[11px] font-mono text-zinc-500 tabular-nums">
           umbral {fmt(threshold)}
         </span>
       </div>

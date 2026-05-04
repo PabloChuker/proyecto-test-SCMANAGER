@@ -22,7 +22,7 @@ function ResistancePill({ label, pct, color }: { label: string; pct: number | nu
   const v = Math.round(pct * 100);
   return (
     <div className="flex items-center gap-1 px-1.5 py-0.5 border border-zinc-800/60 rounded-[2px] bg-zinc-950/40">
-      <span className="text-[8px] font-mono text-zinc-500 tracking-wider uppercase">{label}</span>
+      <span className="text-[10px] font-mono text-zinc-500 tracking-wider uppercase">{label}</span>
       <span className="text-[10px] font-mono font-bold tabular-nums" style={{ color }}>{v}%</span>
     </div>
   );
@@ -35,17 +35,17 @@ function DeflectionChip({ label, deflection, dmgMult, color }: {
   if (deflection == null && dmgMult == null) return null;
   return (
     <div className="flex flex-col items-center gap-1 flex-1 min-w-0 px-1.5 py-2 bg-zinc-950/40 border border-zinc-800/60 rounded-[2px]">
-      <span className="text-[9px] font-mono text-zinc-400 tracking-[0.08em] uppercase text-center leading-tight">{label}</span>
+      <span className="text-[11px] font-mono text-zinc-400 tracking-[0.08em] uppercase text-center leading-tight">{label}</span>
       {deflection != null && (
         <div className="flex items-baseline gap-1">
           <span className="text-base font-mono font-bold tabular-nums" style={{ color }}>{deflection}</span>
-          <span className="text-[8px] font-mono text-zinc-600 uppercase">defl</span>
+          <span className="text-[10px] font-mono text-zinc-600 uppercase">defl</span>
         </div>
       )}
       {dmgMult != null && (
         <div className="flex items-baseline gap-1">
           <span className="text-xs font-mono font-medium tabular-nums text-zinc-300">×{dmgMult.toFixed(2)}</span>
-          <span className="text-[8px] font-mono text-zinc-600 uppercase">dmg</span>
+          <span className="text-[10px] font-mono text-zinc-600 uppercase">dmg</span>
         </div>
       )}
     </div>
@@ -109,16 +109,16 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
     <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 space-y-2.5">
       {/* ── WEAPONS — sustained primary, burst+alpha secondary ────────────── */}
       <div className={navMode ? "opacity-30" : ""}>
-        <div className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase mb-0.5">Sustained DPS</div>
+        <div className="text-[10px] font-mono text-zinc-600 tracking-[0.15em] uppercase mb-0.5">Sustained DPS</div>
         <div className="flex items-baseline gap-3">
           <Image src="/icons/weapons.png" alt="" width={16} height={16} style={{ opacity: 0.5 }} />
           <span className="text-2xl font-mono font-bold tabular-nums text-orange-400">{fmtDps(stats.sustainedDps)}</span>
           <span className="text-[10px] font-mono text-zinc-500">dps</span>
         </div>
         <div className="flex items-baseline gap-2 mt-1 pl-6">
-          <span className="text-[8px] font-mono text-zinc-600 tracking-wider uppercase">Burst</span>
+          <span className="text-[10px] font-mono text-zinc-600 tracking-wider uppercase">Burst</span>
           <span className="text-xs font-mono font-bold tabular-nums text-red-500">{fmtDps(stats.burstDps)}</span>
-          <span className="text-[8px] font-mono text-zinc-600 tracking-wider uppercase ml-2">Alpha</span>
+          <span className="text-[10px] font-mono text-zinc-600 tracking-wider uppercase ml-2">Alpha</span>
           <span className="text-xs font-mono font-bold tabular-nums text-red-400/80">{fmtStat(stats.weaponAlpha)}</span>
         </div>
       </div>
@@ -130,7 +130,7 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
             <Image src="/icons/missile.png" alt="" width={16} height={16} style={{ opacity: 0.5 }} />
             <span className="text-lg font-mono font-bold tabular-nums text-orange-500">{fmtStat(stats.missileAlpha)}</span>
             <span className="text-[10px] font-mono text-zinc-500">dmg</span>
-            <span className="text-[9px] font-mono text-zinc-600 ml-2">×{stats.summary.missiles}</span>
+            <span className="text-[11px] font-mono text-zinc-600 ml-2">×{stats.summary.missiles}</span>
           </div>
         </div>
       )}
@@ -192,7 +192,7 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
           la nave entra en overload térmico (color rojo). */}
       {(stats.coolingRate > 0 || stats.thermalOutput > 0) && (
         <div className="border-t border-zinc-800/40 pt-2">
-          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.15em] uppercase mb-1">
+          <div className="text-[11px] font-mono text-zinc-500 tracking-[0.15em] uppercase mb-1">
             Thermal balance
           </div>
           <div className="flex items-baseline gap-3">
@@ -207,11 +207,11 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
               {stats.thermalBalance >= 0 ? "+" : ""}{fmtStat(stats.thermalBalance)}
             </span>
             <span className="text-[10px] font-mono text-zinc-500">balance</span>
-            <span className="text-[8px] font-mono text-zinc-600 ml-2">
+            <span className="text-[10px] font-mono text-zinc-600 ml-2">
               supply {fmtStat(stats.coolingRate)} · demand {fmtStat(stats.thermalOutput)}
             </span>
             {stats.thermalBalance < 0 && (
-              <span className="text-[9px] font-mono text-red-500 ml-1">⚠ overload</span>
+              <span className="text-[11px] font-mono text-red-500 ml-1">⚠ overload</span>
             )}
           </div>
         </div>
@@ -220,7 +220,7 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
       {/* ── ARMOR DEFLECTION + DAMAGE MULTIPLIERS ──────────────────────────── */}
       {hasArmorBlock && (
         <div className="border-t border-zinc-800/40 pt-2">
-          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.15em] uppercase mb-2">Armor Deflection</div>
+          <div className="text-[11px] font-mono text-zinc-500 tracking-[0.15em] uppercase mb-2">Armor Deflection</div>
           <div className="flex gap-2">
             <DeflectionChip label="Physical"   deflection={si.deflectionPhysical}   dmgMult={res.dmgMultPhysical}   color="#fbbf24" />
             <DeflectionChip label="Energy"     deflection={si.deflectionEnergy}     dmgMult={res.dmgMultEnergy}     color="#22d3ee" />
@@ -240,7 +240,7 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
           empezará a mostrarse automáticamente sin más cambios. */}
       {radarRangeMin != null && radarRangeMax != null && radarRangeMax > 0 && (
         <div className="border-t border-zinc-800/40 pt-2">
-          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.15em] uppercase mb-1">
+          <div className="text-[11px] font-mono text-zinc-500 tracking-[0.15em] uppercase mb-1">
             Radar Lock Range
           </div>
           <div className="flex items-baseline gap-3">
@@ -253,7 +253,7 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
               )}
             </span>
             <span className="text-[10px] font-mono text-zinc-500">km</span>
-            <span className="text-[8px] font-mono text-zinc-600 ml-2">
+            <span className="text-[10px] font-mono text-zinc-600 ml-2">
               ({fmtStat(radarRangeMin / 1000)}–{fmtStat(radarRangeMax / 1000)} km · {Math.round(radarPipFraction * 100)}% pips)
             </span>
           </div>

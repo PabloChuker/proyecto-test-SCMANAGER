@@ -60,9 +60,9 @@ function ShipCardImage({ name, manufacturer }: { name: string; manufacturer: str
 function StatRow({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-1 py-[1px] border-b border-zinc-800/20 last:border-b-0">
-      <span className="text-[7px] font-mono text-amber-600/80 tracking-wider uppercase whitespace-nowrap shrink-0">{label}</span>
-      <span className="text-[9px] font-mono text-zinc-300 tabular-nums truncate text-right">
-        {value}{unit && <span className="text-[7px] text-zinc-600 ml-0.5">{unit}</span>}
+      <span className="text-[10px] font-mono text-amber-600/80 tracking-wider uppercase whitespace-nowrap shrink-0">{label}</span>
+      <span className="text-[11px] font-mono text-zinc-300 tabular-nums truncate text-right">
+        {value}{unit && <span className="text-[10px] text-zinc-600 ml-0.5">{unit}</span>}
       </span>
     </div>
   );
@@ -100,7 +100,7 @@ export const ShipCardContent = memo(function ShipCardContent() {
       <div className="flex-1 min-w-0 p-2 flex flex-col gap-1.5 overflow-y-auto">
         <div className="shrink-0">
           <div className="text-[11px] font-medium text-zinc-200 tracking-wide leading-tight truncate">{shipInfo.localizedName || shipInfo.name}</div>
-          <div className="text-[8px] font-mono text-zinc-600 tracking-[0.12em] truncate">{shipInfo.manufacturer || "Unknown"}</div>
+          <div className="text-[10px] font-mono text-zinc-600 tracking-[0.12em] truncate">{shipInfo.manufacturer || "Unknown"}</div>
         </div>
         <div className="space-y-0 flex-1 min-h-0">
           {si.role   && <StatRow label="ROLE"  value={si.role} />}

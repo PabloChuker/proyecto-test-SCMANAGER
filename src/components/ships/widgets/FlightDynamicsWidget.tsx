@@ -464,7 +464,7 @@ function ToggleButton({ active, onClick, children }: { active: boolean; onClick:
     <button
       onMouseDown={(e) => e.stopPropagation()}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
-      className={`rgl-no-drag px-2 py-0.5 text-[9px] font-mono rounded transition-colors cursor-pointer ${
+      className={`rgl-no-drag px-2 py-0.5 text-[11px] font-mono rounded transition-colors cursor-pointer ${
         active ? "bg-zinc-700 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"
       }`}
     >
@@ -475,7 +475,7 @@ function ToggleButton({ active, onClick, children }: { active: boolean; onClick:
 
 function SubPanelHeader({ title }: { title: string }) {
   return (
-    <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase text-center pb-1">
+    <div className="text-[11px] font-mono text-zinc-500 tracking-[0.2em] uppercase text-center pb-1">
       {title}
     </div>
   );

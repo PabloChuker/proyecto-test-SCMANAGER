@@ -84,7 +84,7 @@ export function StatsPanel() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {/* Acceleration Profile */}
         <div className="bg-zinc-900/80 border border-zinc-800/60 p-4">
-          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-2 text-center">
+          <div className="text-[11px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-2 text-center">
             Acceleration Profile
           </div>
           <div className="flex justify-center">
@@ -100,7 +100,7 @@ export function StatsPanel() {
 
         {/* Angular Rates (Maneuverability Triangle) */}
         <div className="bg-zinc-900/80 border border-zinc-800/60 p-4">
-          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-2 text-center">
+          <div className="text-[11px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-2 text-center">
             Maneuverability
           </div>
           <div className="flex justify-center">
@@ -152,7 +152,7 @@ export function StatsPanel() {
           renderiza nada. Mostramos en km para legibilidad. */}
       {radarRangeMin != null && radarRangeMax != null && radarRangeMax > 0 && (
         <div className="bg-zinc-900/80 border border-zinc-800/60 px-3 py-2 flex items-center justify-between">
-          <span className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase">
+          <span className="text-[11px] font-mono text-zinc-500 tracking-[0.2em] uppercase">
             Radar Lock Range
           </span>
           <span className="text-sm font-mono font-bold tabular-nums text-cyan-400">
@@ -161,8 +161,8 @@ export function StatsPanel() {
                 radarRangeMin + (radarRangeMax - radarRangeMin) * radarPipFraction,
               ) / 1000,
             )}
-            <span className="text-[9px] text-zinc-500 ml-1">km</span>
-            <span className="text-[8px] text-zinc-600 ml-2">
+            <span className="text-[11px] text-zinc-500 ml-1">km</span>
+            <span className="text-[10px] text-zinc-600 ml-2">
               ({fmt(radarRangeMin / 1000)}–{fmt(radarRangeMax / 1000)} km · {Math.round(radarPipFraction * 100)}% pips)
             </span>
           </span>
@@ -172,7 +172,7 @@ export function StatsPanel() {
       {/* ── Hull Resistances (Erkul-style damage multipliers) ── */}
       {shipInfo.resistances && (
         <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
-          <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-2 flex items-center justify-between">
+          <div className="text-[11px] font-mono text-zinc-500 tracking-[0.2em] uppercase mb-2 flex items-center justify-between">
             <span>Hull &amp; Resistances</span>
             {shipInfo.resistances.armorHp != null && (
               <span className="text-zinc-300 font-bold">
@@ -254,10 +254,10 @@ function CompactStat({ label, value, color, locked }: { label: string; value: st
     <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5 relative overflow-hidden">
       {locked && (
         <div className="absolute inset-0 bg-zinc-950/50 z-10 flex items-center justify-center">
-          <span className="text-[7px] font-mono text-zinc-600 tracking-wider uppercase">NAV</span>
+          <span className="text-[10px] font-mono text-zinc-600 tracking-wider uppercase">NAV</span>
         </div>
       )}
-      <div className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</div>
+      <div className="text-[10px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</div>
       <div className="text-lg font-mono font-bold tabular-nums mt-0.5" style={{ color }}>{value}</div>
     </div>
   );
@@ -271,7 +271,7 @@ function SignatureStat({ label, value, max, color }: { label: string; value: num
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5">
       <div className="flex items-baseline justify-between mb-1">
-        <span className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label} SIG</span>
+        <span className="text-[10px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label} SIG</span>
         <span className="text-[11px] font-mono font-bold tabular-nums" style={{ color }}>{fmt(value)}</span>
       </div>
       <div className="flex gap-px">
@@ -293,10 +293,10 @@ function SignatureStat({ label, value, max, color }: { label: string; value: num
 function FlightStat({ label, value, unit }: { label: string; value: number | null; unit: string }) {
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60 p-2.5">
-      <div className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</div>
+      <div className="text-[10px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</div>
       <div className="text-lg font-mono font-bold tabular-nums text-zinc-300 mt-0.5">
         {value != null && value > 0 ? Math.round(value) : "—"}
-        <span className="text-[9px] text-zinc-600 font-normal"> {unit}</span>
+        <span className="text-[11px] text-zinc-600 font-normal"> {unit}</span>
       </div>
     </div>
   );
@@ -308,7 +308,7 @@ function ResistanceStat({ label, mult, color }: { label: string; mult: number | 
   if (mult == null) {
     return (
       <div className="bg-zinc-950/60 border border-zinc-800/40 p-2">
-        <div className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</div>
+        <div className="text-[10px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</div>
         <div className="text-sm font-mono text-zinc-600 mt-0.5">—</div>
       </div>
     );
@@ -320,10 +320,10 @@ function ResistanceStat({ label, mult, color }: { label: string; mult: number | 
   const sign = isWeak ? "+" : "";
   return (
     <div className="bg-zinc-950/60 border border-zinc-800/40 p-2">
-      <div className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</div>
+      <div className="text-[10px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</div>
       <div className="text-sm font-mono font-bold tabular-nums mt-0.5" style={{ color: displayColor }}>
         {reductionPct === 0 ? "0%" : `${sign}${Math.abs(reductionPct)}%`}
-        <span className="text-[8px] text-zinc-600 font-normal ml-1">
+        <span className="text-[10px] text-zinc-600 font-normal ml-1">
           (×{mult.toFixed(2)})
         </span>
       </div>
@@ -334,7 +334,7 @@ function ResistanceStat({ label, mult, color }: { label: string; mult: number | 
 function MiniStat({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div className="bg-zinc-950/60 border border-zinc-800/40 p-2">
-      <div className="text-[7px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</div>
+      <div className="text-[10px] font-mono text-zinc-600 tracking-[0.15em] uppercase">{label}</div>
       <div className="text-xs font-mono font-bold tabular-nums mt-0.5" style={{ color }}>{value}</div>
     </div>
   );

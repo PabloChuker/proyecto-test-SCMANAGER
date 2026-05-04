@@ -141,7 +141,7 @@ export function PowerStatusGrid({ stats }: PowerStatusGridProps) {
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke={powerColor} strokeWidth={2}>
                 <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <span className="text-[9px] font-mono text-zinc-500 tracking-wider">PWR</span>
+              <span className="text-[11px] font-mono text-zinc-500 tracking-wider">PWR</span>
               {/* Explicit consumption % — what Erkul shows as a headline number */}
               <span
                 className="text-[10px] font-mono font-bold tabular-nums ml-1"
@@ -159,7 +159,7 @@ export function PowerStatusGrid({ stats }: PowerStatusGridProps) {
                 {stats.powerBalance >= 0 ? "+" : ""}{fmt(stats.powerBalance)}
               </span>
               {isOverloaded && (
-                <span className="text-[9px] text-red-500 ml-1">⚠</span>
+                <span className="text-[11px] text-red-500 ml-1">⚠</span>
               )}
             </div>
           </div>
@@ -176,11 +176,11 @@ export function PowerStatusGrid({ stats }: PowerStatusGridProps) {
             <span className="text-sm font-mono font-bold tabular-nums text-blue-400">
               {fmt(stats.shieldRegen)}
             </span>
-            <span className="text-[8px] font-mono text-zinc-600">
+            <span className="text-[10px] font-mono text-zinc-600">
               /{fmt(stats.shieldHp / 1000)}k
             </span>
           </div>
-          <span className="text-[7px] font-mono text-zinc-600 tracking-wider">REGEN</span>
+          <span className="text-[10px] font-mono text-zinc-600 tracking-wider">REGEN</span>
         </div>
       </div>
 
@@ -192,7 +192,7 @@ export function PowerStatusGrid({ stats }: PowerStatusGridProps) {
               <circle cx="12" cy="12" r="10" />
               <path d="M12 6v6l4 2" />
             </svg>
-            <span className="text-[9px] font-mono text-zinc-500 tracking-wider">THERMAL</span>
+            <span className="text-[11px] font-mono text-zinc-500 tracking-wider">THERMAL</span>
           </div>
           <span className="text-[10px] font-mono tabular-nums" style={{ color: stats.thermalBalance >= 0 ? "#06b6d4" : "#ef4444" }}>
             {thermalPct}%
@@ -202,7 +202,7 @@ export function PowerStatusGrid({ stats }: PowerStatusGridProps) {
       </div>
 
       {/* ── Component percentage row ── */}
-      <div className="flex items-center justify-between text-[8px] font-mono text-zinc-600 border-t border-zinc-800/40 pt-2">
+      <div className="flex items-center justify-between text-[10px] font-mono text-zinc-600 border-t border-zinc-800/40 pt-2">
         {weapons.length > 0 && <span>{Math.round((weapons.filter(w => isComponentOn(w.hardpointName)).length / weapons.length) * 100)}%</span>}
         {missiles.length > 0 && <span>{Math.round((missiles.filter(m => isComponentOn(m.hardpointName)).length / missiles.length) * 100)}%</span>}
         {shields.length > 0 && <span>{Math.round((shields.filter(s => isComponentOn(s.hardpointName)).length / shields.length) * 100)}%</span>}
@@ -229,7 +229,7 @@ function ComponentRow({
 }) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-[8px] font-mono text-zinc-600 w-6 tracking-wider">{label}</span>
+      <span className="text-[10px] font-mono text-zinc-600 w-6 tracking-wider">{label}</span>
       <div className="flex gap-0.5 flex-wrap">
         {blocks.map((hp) => {
           const item = getEffectiveItem(hp.id);

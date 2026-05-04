@@ -113,7 +113,7 @@ function HardpointRow({ hardpoint }: { hardpoint: HardpointWithEquipped }) {
           <div className="font-mono text-sm" style={{ color: catColor }}>
             {keyStat.value}
           </div>
-          <div className="text-[9px] tracking-[0.12em] uppercase text-zinc-600">
+          <div className="text-[11px] tracking-[0.12em] uppercase text-zinc-600">
             {keyStat.label}
           </div>
         </div>
@@ -134,7 +134,7 @@ function GradeBadge({ grade }: { grade: string }) {
   const cls = gradeColors[grade.toUpperCase()] || "text-zinc-500 border-zinc-700/30";
 
   return (
-    <span className={`text-[9px] font-mono font-bold tracking-wider px-1.5 py-px rounded-sm border ${cls}`}>
+    <span className={`text-[11px] font-mono font-bold tracking-wider px-1.5 py-px rounded-sm border ${cls}`}>
       {grade.toUpperCase()}
     </span>
   );

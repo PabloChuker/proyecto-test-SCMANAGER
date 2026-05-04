@@ -234,12 +234,12 @@ function GForceProfileTabs({ shipData }: { shipData: any }) {
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
       <div className="flex items-center justify-between mb-1">
-        <div className="text-[9px] font-mono text-zinc-500 tracking-[0.2em] uppercase">G-Force Profile</div>
+        <div className="text-[11px] font-mono text-zinc-500 tracking-[0.2em] uppercase">G-Force Profile</div>
         <div className="flex gap-0.5 bg-zinc-800/60 rounded p-0.5">
           <button onClick={() => setView("3d")}
-            className={`px-2 py-0.5 text-[8px] font-mono rounded transition-colors ${view === "3d" ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>3D</button>
+            className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${view === "3d" ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>3D</button>
           <button onClick={() => setView("radar")}
-            className={`px-2 py-0.5 text-[8px] font-mono rounded transition-colors ${view === "radar" ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>Radar</button>
+            className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${view === "radar" ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>Radar</button>
         </div>
       </div>
       <div className="flex justify-center">

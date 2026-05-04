@@ -329,7 +329,7 @@ export const TTKCalculatorContent = memo(function TTKCalculatorContent() {
         </div>
       )}
 
-      <div className="text-[9px] font-mono text-zinc-500 italic pt-1">
+      <div className="text-[11px] font-mono text-zinc-500 italic pt-1">
         Modelo VerseTools §4 + §6 (resists, absorptions, deflect, dmgMult).
         Ignora regen del shield mientras el atacante dispara.
       </div>
@@ -365,7 +365,7 @@ function TimeStat({
         {fmtSec(sec)}
       </span>
       {note && (
-        <span className="text-[9px] font-mono italic mt-0.5" style={{ color }}>
+        <span className="text-[11px] font-mono italic mt-0.5" style={{ color }}>
           {note}
         </span>
       )}

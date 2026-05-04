@@ -221,9 +221,9 @@ function StrafeProfileTabs({ shipData }: { shipData: any }) {
       <div className="flex justify-end mb-1">
         <div className="flex gap-0.5 bg-zinc-800/60 rounded p-0.5">
           <button onClick={() => setView("3d")}
-            className={`px-2 py-0.5 text-[8px] font-mono rounded transition-colors ${view === "3d" ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>3D</button>
+            className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${view === "3d" ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>3D</button>
           <button onClick={() => setView("radar")}
-            className={`px-2 py-0.5 text-[8px] font-mono rounded transition-colors ${view === "radar" ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>Radar</button>
+            className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${view === "radar" ? "bg-zinc-700 text-zinc-200" : "text-zinc-500 hover:text-zinc-400"}`}>Radar</button>
         </div>
       </div>
       <div className="flex justify-center">

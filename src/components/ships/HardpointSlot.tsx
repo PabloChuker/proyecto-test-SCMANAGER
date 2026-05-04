@@ -176,10 +176,10 @@ const Row = memo(function Row({ catColor, size, item, stat, isOn, isOverridden, 
         {item ? (
           <>
             <span className={"text-[11px] truncate flex-1 min-w-0 " + (isOverridden ? "text-yellow-200/90" : "text-zinc-300")}>{item.localizedName || item.name}</span>
-            {item.grade && <span className="text-[8px] font-mono text-zinc-500 px-0.5 border border-zinc-800/60 rounded-[2px] flex-shrink-0">{item.grade}</span>}
-            {!isOn && <span className="text-[7px] text-amber-600/80 tracking-widest uppercase flex-shrink-0">OFF</span>}
-            {isOverridden && <span className="text-[7px] text-yellow-500/70 tracking-wider flex-shrink-0">MOD</span>}
-            {hasChildren && <span className="text-[7px] text-cyan-500/60 tracking-wider flex-shrink-0">+{(item as any)?.children?.length ?? ""}SUB</span>}
+            {item.grade && <span className="text-[10px] font-mono text-zinc-500 px-0.5 border border-zinc-800/60 rounded-[2px] flex-shrink-0">{item.grade}</span>}
+            {!isOn && <span className="text-[10px] text-amber-600/80 tracking-widest uppercase flex-shrink-0">OFF</span>}
+            {isOverridden && <span className="text-[10px] text-yellow-500/70 tracking-wider flex-shrink-0">MOD</span>}
+            {hasChildren && <span className="text-[10px] text-cyan-500/60 tracking-wider flex-shrink-0">+{(item as any)?.children?.length ?? ""}SUB</span>}
           </>
         ) : (
           <span className="text-[10px] text-zinc-700 italic flex-1">— empty —</span>
@@ -187,19 +187,19 @@ const Row = memo(function Row({ catColor, size, item, stat, isOn, isOverridden, 
         {stat && (
           <div className="flex items-baseline gap-0.5 flex-shrink-0">
             <span className="text-[10px] font-mono font-medium" style={{ color: catColor }}>{stat.v}</span>
-            <span className="text-[7px] text-zinc-600 uppercase">{stat.l}</span>
+            <span className="text-[10px] text-zinc-600 uppercase">{stat.l}</span>
           </div>
         )}
         {item?.componentStats?.penetrationDistance != null && item.componentStats.penetrationDistance > 0 && isOn && (
           <div className="flex items-baseline gap-0.5 flex-shrink-0 ml-0.5">
-            <span className="text-[9px] font-mono font-medium text-emerald-400">{item.componentStats.penetrationDistance.toFixed(1)}</span>
-            <span className="text-[7px] text-zinc-600 uppercase">PEN</span>
+            <span className="text-[11px] font-mono font-medium text-emerald-400">{item.componentStats.penetrationDistance.toFixed(1)}</span>
+            <span className="text-[10px] text-zinc-600 uppercase">PEN</span>
           </div>
         )}
         {ammo && isOn && (
           <div className="flex items-baseline gap-0.5 flex-shrink-0 ml-0.5">
-            <span className="text-[9px] font-mono font-medium text-amber-400">{fmtAmmo(ammo.rounds)}</span>
-            <span className="text-[7px] text-zinc-600 uppercase">{ammo.label}</span>
+            <span className="text-[11px] font-mono font-medium text-amber-400">{fmtAmmo(ammo.rounds)}</span>
+            <span className="text-[10px] text-zinc-600 uppercase">{ammo.label}</span>
           </div>
         )}
         {!indent && <svg className="w-2.5 h-2.5 text-zinc-700 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>}

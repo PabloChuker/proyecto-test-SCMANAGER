@@ -48,7 +48,7 @@ export function FlightDynamics3dHeaderActions({
       type="button"
       onClick={() => hasBoost && setBoost(!boost)}
       disabled={!hasBoost}
-      className="text-[9px] font-mono font-bold tracking-[0.12em] uppercase border rounded-sm transition-colors px-2 py-0.5"
+      className="text-[11px] font-mono font-bold tracking-[0.12em] uppercase border rounded-sm transition-colors px-2 py-0.5"
       style={
         !hasBoost
           ? { backgroundColor: "transparent", color: "#3f3f46", borderColor: "#1f1f23", cursor: "not-allowed" }
