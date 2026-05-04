@@ -116,6 +116,14 @@ interface ComponentPickerProps {
   onSelect: (item: EquippedItem) => void;
   onClear: () => void;
   onClose: () => void;
+  /**
+   * Loadout.4b (2026-05-04): rect del slot que disparó el picker. Si está
+   * presente, el panel se posiciona inteligentemente al lado opuesto del
+   * slot (slot izquierda → panel derecha, slot derecha → panel izquierda)
+   * y verticalmente alineado al top del slot. Si no está, fallback a
+   * bottom-right como antes.
+   */
+  anchorRect?: DOMRect | null;
 }
 
 /** ¿Este className corresponde a un rack de bombas? (vs rack de misiles) */
@@ -148,7 +156,7 @@ type SortDir = "asc" | "desc";
 
 type SubFilter = "all" | "weapons" | "gimbals";
 
-export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect, onClear, onClose }: ComponentPickerProps) {
+export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect, onClear, onClose, anchorRect }: ComponentPickerProps) {
   // Sizes y className derivados del rack padre equipado. Si parentItem ausente,
   // usamos los sizes del hardpoint mismo (que viene del ship loadout original,
   // puede estar desfasado del rack actual — de ahí el fix).
@@ -407,6 +415,54 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
   const statLabel = getStatColumnLabel(hardpoint.resolvedCategory);
   const displaySize = hardpoint.maxSize > 0 ? "S" + hardpoint.maxSize : "Any";
 
+  // Loadout.4b: posición computada del panel basada en `anchorRect`.
+  // Regla:
+  //   - Slot en la mitad izquierda del viewport → panel a la DERECHA del slot
+  //   - Slot en la mitad derecha → panel a la IZQUIERDA del slot
+  //   - Si no entra del lado calculado, flip al otro lado
+  //   - Vertical: alineado al top del slot, clampeado al viewport
+  // Si no hay anchorRect (mobile, fallback), null → CSS default kicks in.
+  const panelStyle = useMemo<React.CSSProperties | undefined>(() => {
+    if (!anchorRect) return undefined;
+    if (typeof window === "undefined") return undefined;
+    const PANEL_W = 480;
+    const PANEL_MAX_H_RATIO = 0.7;
+    const MARGIN = 12;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    if (vw < 640) return undefined; // mobile: que use el inset-4 default
+
+    const slotCenterX = anchorRect.left + anchorRect.width / 2;
+    const onLeftHalf = slotCenterX < vw / 2;
+    let left: number;
+    if (onLeftHalf) {
+      left = anchorRect.right + MARGIN;
+      if (left + PANEL_W > vw - MARGIN) {
+        // No entra a la derecha → poner a la izquierda
+        left = Math.max(MARGIN, anchorRect.left - PANEL_W - MARGIN);
+      }
+    } else {
+      left = anchorRect.left - PANEL_W - MARGIN;
+      if (left < MARGIN) {
+        // No entra a la izquierda → poner a la derecha
+        left = Math.min(vw - PANEL_W - MARGIN, anchorRect.right + MARGIN);
+      }
+    }
+    // Vertical: alinear con el top del slot. Si la altura máxima del panel
+    // se sale por abajo, subirlo lo suficiente.
+    const maxH = vh * PANEL_MAX_H_RATIO;
+    let top = anchorRect.top;
+    if (top + maxH > vh - MARGIN) {
+      top = Math.max(MARGIN, vh - MARGIN - maxH);
+    }
+    return {
+      left: `${Math.round(left)}px`,
+      top: `${Math.round(top)}px`,
+      right: "auto",
+      bottom: "auto",
+    };
+  }, [anchorRect]);
+
   return (
     <>
       {/* Loadout.4 (2026-05-04): el modal con backdrop velo se reemplazó por
@@ -423,7 +479,11 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
       />
       <div
         ref={panelRef}
+        // En desktop (sm+) el style inline de Loadout.4b se hace cargo de
+        // left/top via `panelStyle`. Si no hay anchor (rare), el CSS default
+        // posiciona en bottom-right. Mobile usa inset-4 full-screen.
         className="fixed inset-4 z-50 bg-zinc-950 border border-zinc-800/70 rounded-sm flex flex-col shadow-2xl shadow-black/60 sm:inset-auto sm:bottom-4 sm:right-4 sm:left-auto sm:top-auto sm:w-[480px] sm:max-h-[70vh]"
+        style={panelStyle}
       >
         {/* Header: agregamos drag handle visual (decorativo) y mantenemos botón close */}
         <div className="flex items-center gap-3 px-4 py-3 border-b border-zinc-800/50 flex-shrink-0">

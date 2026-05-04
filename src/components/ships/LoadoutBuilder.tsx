@@ -676,6 +676,27 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const setFlightMode = useLoadoutStore(s => s.setFlightMode);
 
   const [pickerHp, setPickerHp] = useState<ResolvedHardpoint | null>(null);
+  // Loadout.4b (2026-05-04): rect del slot que disparó el picker. Lo
+  // capturamos via mousedown global (capture phase) para no tener que
+  // propagar event prop por toda la cadena HardpointGroup → HardpointSlot →
+  // Row → button. El ComponentPicker lo usa para calcular su posición
+  // (a la derecha si el slot está en la mitad izquierda, etc).
+  const [pickerAnchorRect, setPickerAnchorRect] = useState<DOMRect | null>(null);
+  const lastClickedRectRef = useRef<DOMRect | null>(null);
+  useEffect(() => {
+    const onCapturedDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      // Buscamos el button MÁS CERCANO. Funciona para los Row del
+      // HardpointSlot y para los slots vacíos de los HpGroup.
+      const button = target.closest("button");
+      if (button) {
+        lastClickedRectRef.current = button.getBoundingClientRect();
+      }
+    };
+    document.addEventListener("mousedown", onCapturedDown, true); // capture phase
+    return () => document.removeEventListener("mousedown", onCapturedDown, true);
+  }, []);
   // Cuando el picker abre para un slot hijo (ej. misil/bomba dentro de un
   // rack), guardamos el item padre completo. El picker lo usa para:
   // - className → decidir bomb vs missile rack
@@ -697,6 +718,10 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     if (hp.resolvedCategory === "MISSILE_RACK" && hp.isFixed) return;
     setPickerParentItem(parent);
     setPickerHp(hp);
+    // Loadout.4b: snapshot del rect capturado en el último mousedown — viene
+    // del botón clickeado en el HardpointSlot. Si por algún motivo no hay
+    // ref (programmatic open?), pasamos null y el picker cae al fallback.
+    setPickerAnchorRect(lastClickedRectRef.current);
   }, []);
   // Share
   const [copied, setCopied] = useState(false);
@@ -1077,7 +1102,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
         </div>
       )}
 
-      {pickerHp && <ComponentPicker hardpoint={pickerHp} parentItem={pickerParentItem} currentItemId={getEffectiveItem(pickerHp.id)?.id ?? null} onSelect={handleSelect} onClear={handleClear} onClose={() => setPickerHp(null)} />}
+      {pickerHp && <ComponentPicker hardpoint={pickerHp} parentItem={pickerParentItem} currentItemId={getEffectiveItem(pickerHp.id)?.id ?? null} onSelect={handleSelect} onClear={handleClear} onClose={() => { setPickerHp(null); setPickerAnchorRect(null); }} anchorRect={pickerAnchorRect} />}
 
       {/* ── Save Loadout Modal ── */}
       {saveModal && (
