@@ -18,19 +18,30 @@ export async function GET(request: NextRequest) {
     const minPrice = parseFloat(searchParams.get("minPrice") || "0");
     const maxPrice = parseFloat(searchParams.get("maxPrice") || "99999");
 
+    // CB.8b (2026-05-04): hay 20+ ships con precio en `ship_prices_canonical`
+    // (wiki) pero `ship_price.msrp_usd` NULL — caso típico Greycat UTV ($40 LTI),
+    // Cyclone variants, Tumbril Ranger CV, etc. Antes el endpoint los filtraba
+    // por el WHERE de ship_price → quedaban afuera del catálogo y rompían el
+    // matching del Inventario en /hangar/chain-board.
+    //
+    // Fix: COALESCE entre las 2 fuentes. ship_price gana cuando existe (es la
+    // tabla canónica del módulo CCU), sino caemos al wiki cache.
     let query = `
-      SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer, sp.msrp_usd, sp.warbond_usd,
+      SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer,
+             COALESCE(sp.msrp_usd, spc.pledge_usd) AS msrp_usd,
+             COALESCE(sp.warbond_usd, spc.warbond_usd) AS warbond_usd,
              COALESCE(sp.is_ccu_eligible, true) AS is_ccu_eligible,
              COALESCE(sp.is_limited, false) AS is_limited,
              COALESCE(s.flight_status, 'flight_ready') AS flight_status,
              s.size, s.role
       FROM ships s
       LEFT JOIN ship_price sp ON sp.id = s.id
+      LEFT JOIN ship_prices_canonical spc ON spc.ship_id = s.id
       LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
-      WHERE sp.msrp_usd IS NOT NULL
-        AND sp.msrp_usd > 0
-        AND sp.msrp_usd >= $1
-        AND sp.msrp_usd <= $2
+      WHERE COALESCE(sp.msrp_usd, spc.pledge_usd) IS NOT NULL
+        AND COALESCE(sp.msrp_usd, spc.pledge_usd) > 0
+        AND COALESCE(sp.msrp_usd, spc.pledge_usd) >= $1
+        AND COALESCE(sp.msrp_usd, spc.pledge_usd) <= $2
     `;
     const params: any[] = [minPrice, maxPrice];
     let paramIdx = 3;
@@ -41,7 +52,7 @@ export async function GET(request: NextRequest) {
       paramIdx++;
     }
 
-    query += ` ORDER BY sp.msrp_usd ASC, s.name ASC`;
+    query += ` ORDER BY COALESCE(sp.msrp_usd, spc.pledge_usd) ASC, s.name ASC`;
 
     const rows: any[] = await sql.unsafe(query, params);
 
