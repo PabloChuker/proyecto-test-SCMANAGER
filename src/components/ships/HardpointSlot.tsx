@@ -256,6 +256,10 @@ export function isUsefulSlot(hp: ResolvedHardpoint, item: EquippedItem | null): 
   // (categoría agrupadora que scunpacked emite, no slot real equipable).
   if (GHOST_HARDPOINT_NAMES.has(n)) return false;
 
+  // Categorías que nunca queremos mostrar en el LoadoutBuilder (fuel, armor,
+  // thrusters main/maneuver son automáticos, no equipables).
+  if (SKIP_CATEGORIES.has(hp.resolvedCategory)) return false;
+
   // Slots auxiliares que nunca queremos mostrar
   if (n.includes("weapon_rack") || n.includes("weapon_regen_pool")) return false;
   if (n.includes("weapon_storage")) return false;
@@ -263,8 +267,12 @@ export function isUsefulSlot(hp: ResolvedHardpoint, item: EquippedItem | null): 
   // Item placeholder ("WEAPONS"/"HEAT"/etc) = no contar como item válido
   const realItem = isGhostItem(item) ? null : item;
 
-  if (realItem) return true;
-  if (hp.maxSize > 0) return true;
-  if (SKIP_CATEGORIES.has(hp.resolvedCategory)) return false;
-  return true;
+  // Loadout.8b (2026-05-04): regla más estricta — solo mostrar slots con
+  // item real (default de fábrica o override del user). Slots vacíos sin
+  // defaultItem son artefactos del extractor scunpacked: la nave los
+  // declara como hardpoints pero no son equipables en el juego real.
+  // Pablo (2026-05-04): "ni los empty deberian aparecer esos hardpoints
+  // estan de mas". Si una nave legítima requiere un slot vacío (raro),
+  // habrá que agregarlo a una whitelist.
+  return !!realItem;
 }
