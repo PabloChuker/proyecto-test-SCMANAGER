@@ -14,7 +14,7 @@
 // =============================================================================
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { useHangarStore, type HangarCCU, type HangarShip, type CCUChainStep } from "@/store/useHangarStore";
+import { useHangarStore, type HangarCCU, type HangarShip, type CCUChainStep, type InsuranceType } from "@/store/useHangarStore";
 import type { ChainResult, ChainStep, PriceType, CostBreakdown, PaymentPriority } from "@/lib/ccu-engine";
 // CCU.4 (2026-05-03): policy global persistida en localStorage para restringir
 // el solver. Incluir = waypoints obligatorios; Excluir = ships globalmente prohibidos.
@@ -203,6 +203,245 @@ function AvailabilityBadge({ raw, compact = false }: { raw: string | null | unde
       <span>{icon}</span>
       {!compact && <span>{label}</span>}
     </span>
+  );
+}
+
+// ─── Insurance projection helpers (CCU.9 + CCU.10 + CCU.14, 2026-05-04) ────
+// RSI rule (TEST Squadron FAQ + ORONST CCU Bible 2026):
+//
+//   "The insurance of the base ship is the ONLY insurance that carries forward.
+//    If you build a $600 Carrack from a $40 Aurora, your Carrack will only have
+//    6 months of insurance."
+//
+// Y al meltear:
+//
+//   "By melting a CCUed ship... you get the token ship back in your buybacks
+//    and the equivalent of what was spent on the upgraded ship... in store
+//    credits. The token retains its original insurance."
+//
+// O sea: SOLO el seguro del base ship llega al final, los CCUs intermedios
+// (incluso si son Warbond LTI) NO suman seguro permanente — son aditivos sólo
+// mientras existe la nave armada. Si meltás, perdés todo lo intermedio.
+// Excepción rara: Warbond CCUs con LTI/10-year explícitos pueden sobrescribir
+// (Nomad LTI Warbond, IAE 10-year). No hay flag canónico en BD para detectarlos
+// fielmente, así que mostramos disclaimer pero no asumimos.
+
+const INSURANCE_RANK: Record<InsuranceType, number> = {
+  LTI: 100,
+  "120_months": 80,
+  "72_months": 60,
+  "48_months": 50,
+  "24_months": 40,
+  "6_months": 20,
+  "3_months": 10,
+  unknown: 0,
+};
+
+function insuranceLabel(t: InsuranceType): string {
+  switch (t) {
+    case "LTI": return "LTI (Lifetime)";
+    case "120_months": return "10 años";
+    case "72_months": return "6 años";
+    case "48_months": return "4 años";
+    case "24_months": return "2 años";
+    case "6_months": return "6 meses";
+    case "3_months": return "3 meses";
+    default: return "Desconocido";
+  }
+}
+
+function insuranceColor(t: InsuranceType): { text: string; bg: string; border: string } {
+  if (t === "LTI") {
+    return { text: "text-emerald-300", bg: "bg-emerald-500/10", border: "border-emerald-500/40" };
+  }
+  if (t === "120_months") {
+    return { text: "text-cyan-300", bg: "bg-cyan-500/10", border: "border-cyan-500/40" };
+  }
+  if (t === "72_months" || t === "48_months" || t === "24_months") {
+    return { text: "text-amber-300", bg: "bg-amber-500/10", border: "border-amber-500/40" };
+  }
+  if (t === "6_months" || t === "3_months") {
+    return { text: "text-red-300", bg: "bg-red-500/10", border: "border-red-500/40" };
+  }
+  return { text: "text-zinc-300", bg: "bg-zinc-800/40", border: "border-zinc-700/50" };
+}
+
+// Localiza la HangarShip que corresponde al base ship seleccionado.
+// El `fromShip.name` puede venir con sufijo " (Hangar · LTI)" cuando se eligió
+// desde Mi Flota — lo strippeamos para matchear contra hs.shipName.
+function findBaseHangarShip(
+  fromShip: ShipOption | null,
+  fromSource: "store" | "fleet",
+  hangarShips: HangarShip[],
+): HangarShip | null {
+  if (!fromShip || fromSource !== "fleet") return null;
+  const cleanName = fromShip.name.replace(/\s*\([^)]+\)\s*$/, "").trim().toLowerCase();
+  return (
+    hangarShips.find((hs) => hs.shipName.toLowerCase() === cleanName) ??
+    hangarShips.find((hs) => cleanName.endsWith(hs.shipName.toLowerCase())) ??
+    null
+  );
+}
+
+// ─── Insurance Projection Panel (CCU.9 + CCU.10 + CCU.14) ──────────────────
+
+function InsuranceProjectionPanel({
+  fromShip,
+  fromSource,
+  hangarShips,
+  chain,
+  ownedCCUs,
+}: {
+  fromShip: ShipOption | null;
+  fromSource: "store" | "fleet";
+  hangarShips: HangarShip[];
+  chain: ChainResult;
+  ownedCCUs: HangarCCU[];
+}) {
+  const baseShip = findBaseHangarShip(fromShip, fromSource, hangarShips);
+  const baseInsurance: InsuranceType | "store-purchase" =
+    fromSource === "store" ? "store-purchase" : (baseShip?.insuranceType ?? "unknown");
+
+  // CCU.12 (2026-05-04): buscar si algún step del chain usa una CCU OWNED
+  // del usuario marcada con `grantsInsurance` (Warbond LTI especial). Si hay
+  // varias, gana la de mayor rank (LTI > 120m > etc.). Esa override reemplaza
+  // el seguro del base.
+  const overrideInsurance: InsuranceType | null = useMemo(() => {
+    let best: InsuranceType | null = null;
+    let bestRank = -1;
+    for (const step of chain.steps) {
+      // Solo CCUs owned tienen grantsInsurance — los CCUs comprados nuevos no
+      // sabemos si son especiales hasta que se importan al hangar. Match por
+      // par from/to ship name (heurística simple — coincide con cómo se
+      // hidrata `ownedCCUs` en el solver).
+      const owned = ownedCCUs.find(
+        (c) =>
+          c.fromShip.toLowerCase() === step.fromShip.name.toLowerCase() &&
+          c.toShip.toLowerCase() === step.toShip.name.toLowerCase() &&
+          c.grantsInsurance,
+      );
+      if (owned?.grantsInsurance) {
+        const rank = INSURANCE_RANK[owned.grantsInsurance];
+        if (rank > bestRank) {
+          best = owned.grantsInsurance;
+          bestRank = rank;
+        }
+      }
+    }
+    return best;
+  }, [chain.steps, ownedCCUs]);
+
+  // Insurance final efectivo: el override gana sobre el base si es mejor.
+  const baseRank = baseInsurance === "store-purchase" ? -1 : INSURANCE_RANK[baseInsurance];
+  const overrideRank = overrideInsurance ? INSURANCE_RANK[overrideInsurance] : -1;
+  const effectiveInsurance: InsuranceType | "store-purchase" =
+    overrideInsurance && overrideRank > baseRank ? overrideInsurance : baseInsurance;
+  const overrideApplied = overrideInsurance !== null && overrideRank > baseRank;
+
+  const isLti = effectiveInsurance === "LTI";
+  const isShortInsurance =
+    effectiveInsurance === "6_months" || effectiveInsurance === "3_months";
+  const isStorePurchase = effectiveInsurance === "store-purchase";
+  const isUnknown = effectiveInsurance === "unknown";
+
+  // Para mostrar un sample LTI token sugerido (CCU.14)
+  const suggestLtiToken = !isLti && (isShortInsurance || isStorePurchase || isUnknown);
+
+  return (
+    <div className="space-y-3">
+      {/* CCU.9: banner principal de seguro proyectado */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* Cuadro de seguro proyectado */}
+        {effectiveInsurance !== "store-purchase" ? (
+          <div className={`rounded-sm border ${insuranceColor(effectiveInsurance).border} ${insuranceColor(effectiveInsurance).bg} px-3 py-2.5`}>
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-base">🛡️</span>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">
+                Seguro al final de la cadena
+              </span>
+              {overrideApplied && (
+                <span className="text-[8px] font-mono uppercase tracking-wider px-1 py-0.5 rounded-[2px] border bg-emerald-500/15 text-emerald-300 border-emerald-500/40">
+                  ⭐ override CCU
+                </span>
+              )}
+            </div>
+            <p className={`text-base font-bold ${insuranceColor(effectiveInsurance).text}`}>
+              {insuranceLabel(effectiveInsurance)}
+            </p>
+            {overrideApplied ? (
+              <p className="text-[10px] text-zinc-500 mt-1 leading-snug">
+                Override por <span className="text-emerald-300">CCU especial</span> en la cadena
+                ({insuranceLabel(overrideInsurance!)}). Sobrescribe el seguro del base{" "}
+                {baseShip && <span className="text-zinc-300">{baseShip.shipName}</span>}{" "}
+                ({insuranceLabel(baseInsurance as InsuranceType)}).
+              </p>
+            ) : baseShip ? (
+              <p className="text-[10px] text-zinc-500 mt-1 leading-snug">
+                Heredado del base <span className="text-zinc-300">{baseShip.shipName}</span>.
+                Los CCUs intermedios <strong>no suman</strong> seguro permanente.
+              </p>
+            ) : (
+              <p className="text-[10px] text-zinc-500 mt-1 leading-snug">
+                No tenemos info del base — podés marcar el seguro en Mi Flota.
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-sm border border-zinc-700/60 bg-zinc-900/40 px-3 py-2.5">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-base">🛡️</span>
+              <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">
+                Seguro al final de la cadena
+              </span>
+            </div>
+            <p className="text-base font-bold text-zinc-300">
+              Depende del base que compres
+            </p>
+            <p className="text-[10px] text-zinc-500 mt-1 leading-snug">
+              Estás partiendo de la tienda. El seguro de la nave final será el del{" "}
+              <strong>base ship</strong> que adquieras (típicamente 6 meses, salvo Warbond LTI).
+            </p>
+          </div>
+        )}
+
+        {/* CCU.10: warning de melt */}
+        <div className="rounded-sm border border-orange-500/30 bg-orange-500/5 px-3 py-2.5">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-base">⚠</span>
+            <span className="text-[10px] font-mono uppercase tracking-widest text-orange-300">
+              Si meltás esta nave después
+            </span>
+          </div>
+          <p className="text-[11px] text-zinc-300 leading-snug">
+            Recuperás <strong>solo el token base</strong>{baseShip ? ` (${baseShip.shipName})` : ""} al
+            buyback con su seguro original.{" "}
+            {chain.steps.length > 0 && (
+              <>
+                Los <strong>{chain.steps.length} CCUs</strong> intermedios se devuelven como{" "}
+                <span className="text-violet-300">store credit al precio actual</span> (no al precio
+                pagado), y la nave armada se pierde.
+              </>
+            )}
+          </p>
+        </div>
+      </div>
+
+      {/* CCU.14: tip de LTI token strategy */}
+      {suggestLtiToken && (
+        <div className="rounded-sm border border-cyan-500/30 bg-cyan-500/5 px-3 py-2 flex items-start gap-2">
+          <span className="text-base mt-0.5">💡</span>
+          <div className="text-[11px] text-zinc-300 leading-snug flex-1">
+            <strong className="text-cyan-300">Tip:</strong> Para que esta cadena termine con{" "}
+            <span className="text-emerald-300">LTI permanente</span>, considerá empezar desde un{" "}
+            <strong>base con LTI</strong> — los más usados son{" "}
+            <span className="text-zinc-100">C8X Pisces Warbond</span>,{" "}
+            <span className="text-zinc-100">Aurora MR Warbond LTI</span> o{" "}
+            <span className="text-zinc-100">Mustang Alpha Warbond LTI</span> (típicamente $35–$50,
+            disponibles en IAE / Invictus / Foundation Festival).
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -741,12 +980,26 @@ export function CCUChainCalculator() {
   // evalúan ANTES del dedupe por nombre, así si tenés dos RAFT (una LTI en
   // hangar, otra 72m en buyback) el filtro las distingue antes de quedarse
   // con la primera.
+  //
+  // CCU.13 (2026-05-04): variant rule audit — RSI requiere class_name EXACTO
+  // entre el FROM del CCU y la nave del usuario. "Dragonfly Black" ≠
+  // "Dragonfly Yellowjacket" aunque compartan tronco. Acá el matching elige
+  // el ship con nombre MÁS LARGO (= más específico) cuando hay múltiples
+  // candidatos, para evitar matchear "Dragonfly" genérico con "Dragonfly Black"
+  // cuando en realidad existe otra "Dragonfly Yellowjacket" también.
+  // El solver downstream (ccu_prices.from_ship_id) ya es estricto por UUID,
+  // pero el bridge fleet→ship debe respetar la variante.
   const fleetShipOptions = useMemo(() => {
     const ownedNames = new Set<string>();
     const results: ShipOption[] = [];
 
     for (const hs of hangarShips) {
       if (hs.itemCategory !== "standalone_ship" && hs.itemCategory !== "game_package") continue;
+
+      // CCU.15 (2026-05-04): pledges locked por RSI no se pueden usar como
+      // base para CCU ("Pledges that have been locked cannot be upgraded or
+      // altered further"). Las excluimos del selector silenciosamente.
+      if (hs.isLocked) continue;
 
       // Filtros de columna izquierda
       if (fleetLocationFilter !== "all" && hs.location !== fleetLocationFilter) continue;
@@ -756,13 +1009,20 @@ export function CCUChainCalculator() {
       if (ownedNames.has(name)) continue;
       ownedNames.add(name);
 
-      // Find matching ship in the ships DB list
-      const match = ships.find(s => {
+      // CCU.13: collect all matching candidates, then pick the most specific
+      // (longest-name) match. Si hay empate, preferimos el que tiene EXACT
+      // match. Esto evita el caso "user tiene 'Dragonfly Yellowjacket' →
+      // matchear erróneamente la primera 'Drake Dragonfly Black' que aparece".
+      const candidates = ships.filter(s => {
         const sName = s.name.toLowerCase();
         return sName === name ||
           sName.endsWith(" " + name) || // "Aegis Gladius" ends with "Gladius"
           name.endsWith(" " + sName.split(" ").slice(1).join(" ").toLowerCase());
       });
+      // Preferir exact match → luego longest-name match (más específico)
+      const match =
+        candidates.find(s => s.name.toLowerCase() === name) ??
+        candidates.sort((a, b) => b.name.length - a.name.length)[0];
       if (match) {
         // Tag visible: location + insurance (resumida)
         const insTag = hs.insuranceType === "LTI" ? "LTI"
@@ -1158,6 +1418,17 @@ export function CCUChainCalculator() {
         <div className="space-y-6">
           {/* Summary cards */}
           <SavingsSummary chain={chain} />
+
+          {/* CCU.9 + CCU.10 + CCU.12 + CCU.14 (2026-05-04): proyección de
+              seguro al final de la cadena, warning de melt, override por
+              Warbond LTI especial, y tip de LTI token. */}
+          <InsuranceProjectionPanel
+            fromShip={fromShip}
+            fromSource={fromSource}
+            hangarShips={hangarShips}
+            chain={chain}
+            ownedCCUs={ccus}
+          />
 
           {/* Chain visualization */}
           <div className="bg-zinc-900/30 border border-zinc-800/40 rounded-sm p-4">

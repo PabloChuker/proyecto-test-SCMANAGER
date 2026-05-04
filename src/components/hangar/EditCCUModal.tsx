@@ -1,18 +1,33 @@
 "use client";
 
 import { useState } from "react";
-import { useHangarStore, type HangarCCU } from "@/store/useHangarStore";
+import { useHangarStore, type HangarCCU, type InsuranceType } from "@/store/useHangarStore";
 
 interface EditCCUModalProps {
   ccu: HangarCCU;
   onClose: () => void;
 }
 
+// CCU.12 (2026-05-04): opciones para el dropdown "Otorga seguro especial".
+// "none" = comportamiento default (no override). El resto son los warbond
+// CCUs raros que sí dan insurance permanente al destino.
+const GRANTS_INSURANCE_OPTIONS: { value: "none" | InsuranceType; label: string }[] = [
+  { value: "none", label: "No (CCU normal)" },
+  { value: "LTI", label: "LTI (Lifetime)" },
+  { value: "120_months", label: "10 años" },
+  { value: "72_months", label: "6 años" },
+  { value: "48_months", label: "4 años" },
+  { value: "24_months", label: "2 años" },
+];
+
 export function EditCCUModal({ ccu, onClose }: EditCCUModalProps) {
   const [pricePaid, setPricePaid] = useState(ccu.pricePaid.toString());
   const [isWarbond, setIsWarbond] = useState(ccu.isWarbond);
   const [location, setLocation] = useState<"hangar" | "buyback">(ccu.location);
   const [notes, setNotes] = useState(ccu.notes);
+  const [grantsInsurance, setGrantsInsurance] = useState<"none" | InsuranceType>(
+    ccu.grantsInsurance ?? "none",
+  );
   const [error, setError] = useState("");
 
   const updateCCU = useHangarStore((state) => state.updateCCU);
@@ -29,6 +44,7 @@ export function EditCCUModal({ ccu, onClose }: EditCCUModalProps) {
       isWarbond,
       location,
       notes,
+      grantsInsurance: grantsInsurance === "none" ? undefined : grantsInsurance,
     });
     onClose();
   };
@@ -112,6 +128,31 @@ export function EditCCUModal({ ccu, onClose }: EditCCUModalProps) {
               />
               <span className="text-sm text-zinc-300">Warbond</span>
             </label>
+          </div>
+
+          {/* CCU.12 (2026-05-04): Special Warbond LTI / 10-year detection.
+              Marca CCUs raros (Nomad LTI Warbond, IAE 10-year, Pirate LTI)
+              que otorgan insurance permanente al destino aunque el base no
+              lo tenga. Default "none" = CCU normal (insurance del base manda). */}
+          <div>
+            <label className="block text-[11px] text-zinc-500 tracking-[0.12em] uppercase mb-2">
+              ¿Otorga seguro especial al destino?
+            </label>
+            <select
+              value={grantsInsurance}
+              onChange={(e) => setGrantsInsurance(e.target.value as "none" | InsuranceType)}
+              className="w-full px-3 py-2 bg-zinc-900/60 border border-zinc-800/50 rounded-sm text-zinc-100 text-sm focus:outline-none focus:border-amber-500/50 transition-all duration-300"
+            >
+              {GRANTS_INSURANCE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <p className="text-[10px] text-zinc-500 mt-1.5 leading-snug">
+              Solo Warbond CCUs raros (ej: Nomad LTI Warbond, IAE 10-year, Pirate LTI) dan
+              insurance permanente al destino aunque el base no lo tenga. El resto deja "No".
+            </p>
           </div>
 
           {/* Notes */}

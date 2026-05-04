@@ -428,6 +428,47 @@ function CCURow({ ccu, msrpIndex }: { ccu: HangarCCU; msrpIndex: MsrpIndex }) {
   // Ahorro: cuánto te ahorraste vs comprar el salto al precio puro de la
   // tienda. Positivo = bien (CCU más barato que el salto), negativo = mal.
   const saved = jumpValue !== null ? jumpValue - ccu.pricePaid : null;
+
+  // CCU.11 (2026-05-04): detección de CCUs inválidos por price drift.
+  // RSI requiere que la nave destino valga MÁS que la origen al momento de
+  // aplicar el CCU. Si los precios cambiaron y ahora el FROM ≥ TO, el CCU es
+  // "bloqueado" — no se puede aplicar. Caso típico: comprabas un CCU
+  // Aurora→Avenger cuando Aurora=$25 y Avenger=$40; CIG sube Aurora a $40 y
+  // ahora no podés usarlo. Doc TEST Squadron:
+  //   "It can happen that in a CCU, the new 'value' of the FROM ship is now
+  //    superior to the 'value' of the TO ship at the time it was bought,
+  //    making repurchasing that old CCU impossible"
+  type CcuValidity =
+    | { kind: "ok" }
+    | { kind: "blocked"; reason: string }       // FROM ≥ TO ahora — RSI no deja aplicar
+    | { kind: "underwater"; reason: string }    // FROM < TO pero (TO−FROM) < pricePaid — perdés plata
+    | { kind: "unknown" };                       // sin datos para evaluar
+  let validity: CcuValidity;
+  if (fromMsrp === null || toMsrp === null) {
+    validity = { kind: "unknown" };
+  } else if (fromMsrp >= toMsrp) {
+    validity = {
+      kind: "blocked",
+      reason:
+        `RSI no permite aplicar este CCU: la nave origen (${ccu.fromShip}) ahora vale ` +
+        `$${fromMsrp.toFixed(0)} y la destino (${ccu.toShip}) $${toMsrp.toFixed(0)}. ` +
+        `El salto requiere destino > origen.`,
+    };
+  } else if (
+    ccu.pricePaid > 0 &&
+    toMsrp - fromMsrp < ccu.pricePaid &&
+    ccu.pricePaid - (toMsrp - fromMsrp) >= 5  // tolerancia 5 USD para evitar ruido
+  ) {
+    validity = {
+      kind: "underwater",
+      reason:
+        `Pagaste $${ccu.pricePaid.toFixed(0)} por este CCU pero el salto actual ` +
+        `$${(toMsrp - fromMsrp).toFixed(0)} es menor. Aplicarlo te haría perder ` +
+        `$${(ccu.pricePaid - (toMsrp - fromMsrp)).toFixed(0)} vs comprarlo hoy directo.`,
+    };
+  } else {
+    validity = { kind: "ok" };
+  }
   const savedPct =
     jumpValue !== null && jumpValue > 0
       ? (saved! / jumpValue) * 100
@@ -460,6 +501,35 @@ function CCURow({ ccu, msrpIndex }: { ccu: HangarCCU; msrpIndex: MsrpIndex }) {
             className="text-[8px] font-mono uppercase tracking-wider px-1 py-0.5 rounded-[2px] border bg-amber-500/10 text-amber-300 border-amber-500/40 shrink-0"
           >
             CONCEPT
+          </span>
+        )}
+        {/* CCU.12 (2026-05-04): badge SPECIAL INSURANCE si este CCU otorga
+            seguro permanente al destino (Warbond LTI raro). El user lo marca
+            manualmente en EditCCUModal — es un caso edge sin data canónica. */}
+        {ccu.grantsInsurance && (
+          <span
+            title={`Este CCU otorga ${ccu.grantsInsurance === "LTI" ? "LTI permanente" : ccu.grantsInsurance.replace("_", " ")} al destino, sobreescribiendo el seguro del base ship.`}
+            className="text-[8px] font-mono uppercase tracking-wider px-1 py-0.5 rounded-[2px] border bg-emerald-500/15 text-emerald-300 border-emerald-500/40 shrink-0"
+          >
+            ⭐ {ccu.grantsInsurance === "LTI" ? "LTI" : ccu.grantsInsurance.replace("_months", "m")}
+          </span>
+        )}
+        {/* CCU.11 (2026-05-04): badge BLOQUEADO si el CCU no puede aplicarse
+            por price drift, o UNDERWATER si aplicarlo hace perder plata. */}
+        {validity.kind === "blocked" && (
+          <span
+            title={validity.reason}
+            className="text-[8px] font-mono uppercase tracking-wider px-1 py-0.5 rounded-[2px] border bg-red-500/15 text-red-300 border-red-500/40 shrink-0"
+          >
+            🚫 BLOQUEADO
+          </span>
+        )}
+        {validity.kind === "underwater" && (
+          <span
+            title={validity.reason}
+            className="text-[8px] font-mono uppercase tracking-wider px-1 py-0.5 rounded-[2px] border bg-orange-500/15 text-orange-300 border-orange-500/40 shrink-0"
+          >
+            ⚠ UNDERWATER
           </span>
         )}
         {/* FEAT 2026-04-26: badge RESERVADA si la CCU está apartada para una

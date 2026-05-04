@@ -27,6 +27,7 @@ export function EditShipModal({ ship, onClose }: EditShipModalProps) {
   const [itemCategory, setItemCategory] = useState<ItemCategory>(ship.itemCategory || "standalone_ship");
   const [isGiftable, setIsGiftable] = useState(ship.isGiftable);
   const [isMeltable, setIsMeltable] = useState(ship.isMeltable);
+  const [isLocked, setIsLocked] = useState(ship.isLocked ?? false);
   const [notes, setNotes] = useState(ship.notes);
   const [error, setError] = useState("");
 
@@ -48,6 +49,7 @@ export function EditShipModal({ ship, onClose }: EditShipModalProps) {
       itemCategory,
       isGiftable,
       isMeltable,
+      isLocked,
       notes,
     });
     onClose();
@@ -150,7 +152,7 @@ export function EditShipModal({ ship, onClose }: EditShipModalProps) {
             </div>
           </div>
 
-          <div className="flex gap-4">
+          <div className="flex gap-4 flex-wrap">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -169,6 +171,21 @@ export function EditShipModal({ ship, onClose }: EditShipModalProps) {
               />
               <span className="text-sm text-zinc-300">Meltable</span>
             </label>
+            {/* CCU.15 (2026-05-04): pledges locked por RSI no se pueden CCU. */}
+            {isShip && (
+              <label
+                className="flex items-center gap-2 cursor-pointer"
+                title="Marcalo si esta nave fue ganada en contest, recibida como referral reward locked, o lockeada por RSI Support. Las pledges locked no se pueden CCU ni melt."
+              >
+                <input
+                  type="checkbox"
+                  checked={isLocked}
+                  onChange={(e) => setIsLocked(e.target.checked)}
+                  className="w-4 h-4 rounded border border-zinc-700 bg-zinc-800/50 accent-red-500"
+                />
+                <span className="text-sm text-zinc-300">🔒 Locked (no CCU)</span>
+              </label>
+            )}
           </div>
 
           <div>

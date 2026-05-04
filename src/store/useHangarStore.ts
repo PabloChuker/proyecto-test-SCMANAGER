@@ -70,6 +70,16 @@ export interface HangarShip {
   // removed. Loaners cannot be sold/melted.
   isLoaner?: boolean;        // true → this entry is a loaner, not a real pledge
   loanerOf?: string;         // id of the parent HangarShip that granted this loaner
+
+  // CCU.15 (2026-05-04): Pledges bloqueados por RSI no se pueden CCU'ear ni
+  // melt'ear. Casos típicos (TEST Squadron FAQ):
+  //   - Pledges ganados en community contests
+  //   - Referral rewards en ciertos casos raros
+  //   - Pledges locked por RSI Support agents
+  //   - Promotional codes ya usados (Intel Sabre Raven, AMD Mustang Omega)
+  // El user lo marca a mano en EditShipModal. Si está true, esta nave queda
+  // EXCLUIDA del selector "Mi Flota" del CCU Chain Calculator.
+  isLocked?: boolean;
 }
 
 export interface HangarCCU {
@@ -87,6 +97,13 @@ export interface HangarCCU {
   // "apartada" para una cadena en progreso. NO se oculta del catálogo del
   // chain calculator — sólo es informativo para el usuario.
   reservedForChainId?: string;
+  // CCU.12 (2026-05-04): marcador opcional para Warbond CCUs especiales que
+  // OTORGAN insurance permanente al destino aunque el base no lo tenga.
+  // Casos históricos: Nomad LTI Warbond, IAE2950 10-year ships, Pirate LTI.
+  // El user lo marca a mano (no hay data canónica en BD para detectarlo).
+  // Si está seteado, el chain calculator considera este insurance como
+  // override del base cuando el step se usa.
+  grantsInsurance?: InsuranceType;
 }
 
 export interface CCUChainStep {
