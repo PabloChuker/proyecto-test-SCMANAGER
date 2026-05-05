@@ -37,6 +37,16 @@ export interface BoardEdge {
   target: string;
   kind: UpgradeKind;
   price: number;
+  /** True si la edge proviene de un CCU REAL del hangar del user — el
+   *  trámite ya está comprado, así que kind/from/to son inmutables y no
+   *  se cicla con click. Solo se puede borrar el bloque entero. */
+  locked?: boolean;
+  /** True si el precio fue editado manualmente — no se sobrescribe al
+   *  ciclar kind. */
+  priceManual?: boolean;
+  /** True si la conexión no tiene CCU directo válido (RSI no permite el
+   *  salto de A → B sin pasar por intermedios). Se renderiza en rojo. */
+  invalid?: boolean;
 }
 
 /** Snapshot persistible (localStorage / export JSON). */
@@ -57,4 +67,6 @@ export interface HangarCcuPayload {
   to: CatalogShip;
   kind: UpgradeKind;
   price: number;
+  /** True si proviene del hangar del user — la edge resultante queda locked. */
+  owned: boolean;
 }
