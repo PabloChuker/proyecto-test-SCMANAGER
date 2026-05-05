@@ -1,171 +1,143 @@
 "use client";
 
 // =============================================================================
-// SC LABS — ShipNode (CB.10, Fase 1)
+// SC LABS — ShipNode (Chain Board v2, 2026-05-05)
 //
-// Custom node de @xyflow/react que renderiza una nave del ChainBoard como una
-// card visual con:
-//   · Foto (top, ~120px alto)
-//   · Etiquetas "Upgrade from" / "Upgrade to" en bordes top/bottom (= los
-//     puertos donde se conectan las edges entrantes/salientes)
-//   · Nombre · Manufacturer · categoría
-//   · Precio MSRP
-//   · Botón DELETE (✕) en hover
+// Custom node de @xyflow/react para el canvas. Replica el diseño del mockup
+// "Ship Upgrade Planner" — foto + nombre + manufacturer + role + precio +
+// EDIT PATH / DELETE — con tema oscuro.
 //
-// Diseño inspirado en el mockup que pasó Pablo (Ship Upgrade Planner):
-//   - Border azul/zinc según role (base/intermediate/target)
-//   - Handles en top y bottom para crear edges drag-and-drop
-//   - Drag-to-move libre por el canvas
+// Handles:
+//   · target en el lado IZQUIERDO  (label "Upgrade from")
+//   · source en el lado DERECHO    (label "Upgrade to")
+// El user dragea de un handle a otro para crear un CCU edge entre dos naves.
 // =============================================================================
 
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import type { BoardCard } from "./types";
+import type { CatalogShip } from "./types";
 
-// El payload custom que ReactFlow guarda en `node.data`. Tiene que ser un
-// Record<string, unknown> compatible — extendemos BoardCard.
-export type ShipNodeData = BoardCard & {
-  /** Callback para borrar la card. Se inyecta desde el board, no persiste. */
-  onRemove?: (cardId: string) => void;
-};
+// xyflow requiere que el `data` de un Node extienda Record<string, unknown>.
+// Modelamos los campos tipados como intersección — TS los infiere bien y la
+// constraint del lib se respeta.
+export type ShipNodeData = {
+  ship: CatalogShip;
+  /** True si este nodo está seleccionado (highlight cyan). */
+  selected?: boolean;
+  /** True si tiene una edge entrante — habilita el botón EDIT PATH. */
+  hasIncoming?: boolean;
+  /** Callbacks inyectados por el board. */
+  onEditPath?: (nodeId: string) => void;
+  onDelete?: (nodeId: string) => void;
+  onSelect?: (nodeId: string) => void;
+} & Record<string, unknown>;
 
-function ShipNodeImpl({ data, selected }: NodeProps) {
-  const card = data as ShipNodeData;
-  const role = card.role ?? "intermediate";
+function ShipNodeImpl({ id, data }: NodeProps) {
+  const d = data as unknown as ShipNodeData;
+  const ship = d.ship;
+  const isSelected = d.selected;
 
-  // Color del outline según rol — coherente con el mockup:
-  //   base  = amber (de donde arrancás)
-  //   target = emerald (a donde querés llegar)
-  //   intermediate = zinc/blue
-  const roleStyle = (() => {
-    if (role === "base") return {
-      border: "border-amber-500/60",
-      bg: "bg-amber-500/10",
-      label: "BASE",
-      labelColor: "text-amber-300 bg-amber-500/15 border-amber-500/40",
-    };
-    if (role === "target") return {
-      border: "border-emerald-500/60",
-      bg: "bg-emerald-500/10",
-      label: "TARGET",
-      labelColor: "text-emerald-300 bg-emerald-500/15 border-emerald-500/40",
-    };
-    return {
-      border: "border-zinc-700/60",
-      bg: "bg-zinc-900/80",
-      label: null as string | null,
-      labelColor: "",
-    };
-  })();
-
-  const selectedRing = selected
-    ? "ring-2 ring-cyan-500/60 ring-offset-2 ring-offset-zinc-950"
-    : "";
-
-  const originIcon = card.origin === "fleet" ? "📦" : card.origin === "store" ? "🛒" : "✏️";
+  const ringClass = isSelected
+    ? "ring-2 ring-cyan-400/80 shadow-[0_0_24px_rgba(34,211,238,0.25)]"
+    : "ring-1 ring-cyan-500/30";
 
   return (
     <div
-      className={`group relative w-[200px] rounded-md border-2 ${roleStyle.border} ${roleStyle.bg} ${selectedRing} backdrop-blur-sm shadow-lg transition-all hover:shadow-xl`}
+      className={`relative w-[170px] rounded-md ${ringClass} bg-zinc-900/95 backdrop-blur-sm transition-all`}
+      onClick={(e) => {
+        e.stopPropagation();
+        d.onSelect?.(id);
+      }}
     >
-      {/* Handle TOP — puerto entrante "Upgrade from" del próximo nodo arriba */}
+      {/* ── Handles + labels "Upgrade from" / "Upgrade to" ─────────────── */}
       <Handle
         type="target"
-        position={Position.Top}
+        position={Position.Left}
         id="in"
-        className="!w-3 !h-3 !bg-zinc-600 !border-zinc-400 hover:!bg-cyan-500 transition-colors"
+        className="!w-3 !h-3 !bg-zinc-700 !border-2 !border-cyan-400 hover:!bg-cyan-500 transition-colors !-left-[6px]"
+      />
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="out"
+        className="!w-3 !h-3 !bg-zinc-700 !border-2 !border-cyan-400 hover:!bg-cyan-500 transition-colors !-right-[6px]"
       />
 
-      {/* Label "Upgrade from" arriba */}
-      <div className="absolute -top-5 left-0 right-0 text-center text-[9px] font-mono uppercase tracking-widest text-zinc-500">
-        upgrade from
+      {/* Top labels alineadas con los handles */}
+      <div className="flex items-center justify-between px-2 pt-1.5 pb-0.5 text-[8px] font-mono uppercase tracking-widest">
+        <span className="text-zinc-500">Upgrade from</span>
+        <span className="text-zinc-500">Upgrade to</span>
       </div>
 
-      {/* Foto */}
-      <div className="relative h-[100px] overflow-hidden rounded-t bg-zinc-800/50">
-        {card.imageUrl ? (
+      {/* ── Foto ───────────────────────────────────────────────────────── */}
+      <div className="relative h-[70px] mx-1.5 overflow-hidden rounded-sm bg-zinc-800/60">
+        {ship.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={card.imageUrl}
-            alt={card.shipName}
-            className="absolute inset-0 w-full h-full object-cover"
+            src={ship.imageUrl}
+            alt={ship.name}
+            className="w-full h-full object-cover"
             draggable={false}
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).style.opacity = "0.2";
             }}
           />
         ) : (
-          <div className="absolute inset-0 flex items-center justify-center text-3xl text-zinc-700">
+          <div className="w-full h-full flex items-center justify-center text-2xl text-zinc-700">
             🚀
           </div>
         )}
-        {/* Overlay con role badge */}
-        {roleStyle.label && (
-          <div className={`absolute top-1.5 left-1.5 text-[8px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded-[2px] border ${roleStyle.labelColor}`}>
-            {roleStyle.label}
-          </div>
-        )}
-        {/* Origen badge top-right */}
-        <div
-          className="absolute top-1.5 right-1.5 text-[10px] bg-zinc-950/80 rounded-sm px-1 py-0.5"
-          title={`Origen: ${card.origin}`}
-        >
-          {originIcon}
-        </div>
       </div>
 
-      {/* Cuerpo */}
-      <div className="p-2 space-y-0.5">
-        <p className="text-[12px] font-medium text-zinc-100 truncate">
-          {card.shipName}
+      {/* ── Cuerpo ─────────────────────────────────────────────────────── */}
+      <div className="px-2 pt-1.5 pb-2 space-y-0.5">
+        <p className="text-[12px] font-semibold text-zinc-100 truncate leading-tight">
+          {ship.name}
         </p>
-        {card.manufacturer && (
-          <p className="text-[9px] text-zinc-500 font-mono truncate">
-            {card.manufacturer}
-          </p>
-        )}
-        <div className="flex items-baseline gap-1.5 pt-1">
-          <span className="text-[14px] font-mono font-bold text-amber-400">
-            ${card.msrpUsd.toFixed(2)}
-          </span>
-          {card.warbondUsd != null && card.warbondUsd !== card.msrpUsd && (
-            <span className="text-[10px] font-mono text-cyan-400">
-              WB ${card.warbondUsd.toFixed(0)}
-            </span>
-          )}
+        <p className="text-[9px] text-zinc-500 italic truncate leading-tight">
+          {ship.manufacturer ?? "—"}
+          {ship.role ? ` · ${ship.role}` : ""}
+        </p>
+        <p className="text-[14px] font-mono font-bold text-cyan-300 pt-0.5">
+          ${ship.msrpUsd.toFixed(2)}
+        </p>
+
+        {/* Botones EDIT PATH / DELETE — la convención `nodrag` evita que
+            xyflow registre el click como inicio de drag del nodo. */}
+        <div className="flex gap-1 pt-1">
+          <button
+            type="button"
+            disabled={!d.hasIncoming}
+            onClick={(e) => {
+              e.stopPropagation();
+              d.onEditPath?.(id);
+            }}
+            className={`nodrag flex-1 text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded-sm border transition-colors ${
+              d.hasIncoming
+                ? "border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/15 cursor-pointer"
+                : "border-zinc-800 text-zinc-700 cursor-not-allowed"
+            }`}
+            title={
+              d.hasIncoming
+                ? "Cambiar tipo de upgrade entrante (Normal → WB → Hanger → ...)"
+                : "Esta nave no tiene un upgrade entrante"
+            }
+          >
+            Edit Path
+          </button>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              d.onDelete?.(id);
+            }}
+            className="nodrag flex-1 text-[9px] font-mono uppercase tracking-wider px-1.5 py-1 rounded-sm border border-rose-500/40 text-rose-300 hover:bg-rose-500/15 cursor-pointer transition-colors"
+            title="Quitar del canvas"
+          >
+            Delete
+          </button>
         </div>
       </div>
-
-      {/* Botón DELETE (visible en hover) */}
-      {card.onRemove && (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            card.onRemove?.(card.cardId);
-          }}
-          className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 bg-rose-500/80 hover:bg-rose-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center transition-all z-10"
-          title="Quitar del canvas"
-          // CB.10: el evento de drag de @xyflow tiene que NO disparar cuando
-          // clickeás el botón. ReactFlow respeta nodrag class por convención.
-          aria-label="Eliminar nave"
-        >
-          ✕
-        </button>
-      )}
-
-      {/* Label "Upgrade to" abajo */}
-      <div className="absolute -bottom-5 left-0 right-0 text-center text-[9px] font-mono uppercase tracking-widest text-zinc-500">
-        upgrade to
-      </div>
-
-      {/* Handle BOTTOM — puerto saliente al próximo nodo */}
-      <Handle
-        type="source"
-        position={Position.Bottom}
-        id="out"
-        className="!w-3 !h-3 !bg-zinc-600 !border-zinc-400 hover:!bg-cyan-500 transition-colors"
-      />
     </div>
   );
 }

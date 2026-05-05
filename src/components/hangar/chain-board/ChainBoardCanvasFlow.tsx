@@ -1,22 +1,19 @@
 "use client";
 
 // =============================================================================
-// SC LABS — ChainBoardCanvasFlow (CB.10, Fase 1)
+// SC LABS — Canvas (Chain Board v2, 2026-05-05)
 //
-// REEMPLAZO del ChainBoardCanvas.tsx anterior. Canvas free-form basado en
-// @xyflow/react donde el user arma cadenas CCU como un grafo visual:
-//   · Cada nave = nodo (ShipNode con foto/precio/role)
-//   · Cada CCU upgrade = edge entre dos nodos
-//   · Posiciones libres (drag), se persisten
-//   · Multi-cadena en el mismo canvas
-//   · Drop desde InventoryColumn / StoreColumn agrega un nodo nuevo
+// Canvas free-form basado en @xyflow/react. Replica el "Ship Upgrade Planner"
+// del mockup: naves arrastradas desde columnas → drop en posición libre →
+// conectar con drag de handle a handle. Edges con badge colored (Normal /
+// WB / Hanger).
 //
-// Esta es Fase 1 (CB.10): canvas + drop + drag. Las edges con metadata
-// (Normal/WB/Hanger + price) llegan en Fase 2. Right panel en Fase 3.
-// Persistencia en Fase 4. Auto-suggest del solver en Fase 5.
+// Drops aceptados:
+//   · application/x-sclabs-ship       → 1 ship en la posición del cursor
+//   · application/x-sclabs-hangar-ccu → 2 ships contiguas + edge entre ellas
 // =============================================================================
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -24,9 +21,11 @@ import {
   BackgroundVariant,
   Controls,
   MiniMap,
+  BaseEdge,
+  EdgeLabelRenderer,
+  getBezierPath,
   applyNodeChanges,
   applyEdgeChanges,
-  addEdge,
   type Node,
   type Edge,
   type NodeChange,
@@ -34,165 +33,197 @@ import {
   type Connection,
   type ReactFlowInstance,
   type NodeTypes,
+  type EdgeTypes,
+  type EdgeProps,
 } from "@xyflow/react";
-// Importar los estilos base — sin esto, los handles/edges no se ven.
-// Los CSS de xyflow se sobreescriben con Tailwind donde haga falta.
 import "@xyflow/react/dist/style.css";
-import type { BoardCard } from "./types";
+import {
+  HANGAR_CCU_MIME,
+  SHIP_MIME,
+  type BoardEdge,
+  type BoardNode,
+  type CatalogShip,
+  type HangarCcuPayload,
+  type UpgradeKind,
+} from "./types";
 import { ShipNode, type ShipNodeData } from "./ShipNode";
 
-// ── Tipos de node types — declarado fuera del componente para que ReactFlow
-// no recree el objeto en cada render (warning recurrente del lib).
-const NODE_TYPES: NodeTypes = {
-  ship: ShipNode,
+// ── UpgradeEdge (inline) ─────────────────────────────────────────────────────
+// Custom edge con badge colored al estilo del mockup.
+
+type UpgradeEdgeData = {
+  kind: UpgradeKind;
+  price: number;
+  onCycleKind?: (edgeId: string) => void;
+} & Record<string, unknown>;
+
+const STYLE_BY_KIND: Record<UpgradeKind, { bg: string; text: string; label: string; stroke: string }> = {
+  normal: { bg: "bg-blue-500", text: "text-white", label: "Normal", stroke: "#3b82f6" },
+  warbond: { bg: "bg-rose-600", text: "text-white", label: "WB", stroke: "#e11d48" },
+  hanger: { bg: "bg-cyan-500", text: "text-zinc-900", label: "Hanger", stroke: "#06b6d4" },
 };
 
-// CB.10 Fase 2 (placeholder): el MIME del drop desde InventoryColumn /
-// StoreColumn. La columna setea `application/x-sc-ship-card` con el
-// JSON del ship; el canvas lo recibe en onDrop y crea un node nuevo.
-const SHIP_CARD_MIME = "application/x-sc-ship-card";
-// CB.10 Fase 2 (2026-05-05): cuando se dragea un CCU completo desde
-// InventoryColumn (el container del par FROM/TO), el payload viaja con
-// este MIME y trae { from, to }. El canvas dropea ambas naves contiguas
-// (FROM en la posición del cursor, TO 260px a la derecha) — replica
-// visualmente el "el CCU es una entidad única" de Pablo.
-const CCU_PAIR_MIME = "application/x-sc-ccu-pair";
+function UpgradeEdgeImpl({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  data,
+  selected,
+}: EdgeProps) {
+  const d = (data ?? { kind: "normal" as UpgradeKind, price: 0 }) as unknown as UpgradeEdgeData;
+  const style = STYLE_BY_KIND[d.kind] ?? STYLE_BY_KIND.normal;
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition,
+  });
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={edgePath}
+        style={{
+          stroke: style.stroke,
+          strokeWidth: selected ? 2.5 : 1.75,
+          strokeDasharray: "4 4",
+          opacity: selected ? 1 : 0.85,
+        }}
+      />
+      <EdgeLabelRenderer>
+        <div
+          className="nodrag nopan absolute pointer-events-auto"
+          style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
+        >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              d.onCycleKind?.(id);
+            }}
+            className={`${style.bg} ${style.text} text-[10px] font-semibold px-2 py-0.5 rounded-sm shadow-md hover:scale-105 transition-transform whitespace-nowrap`}
+            title="Click para cambiar tipo de upgrade (Normal → WB → Hanger)"
+          >
+            {style.label} +${d.price.toFixed(2)}
+          </button>
+        </div>
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+const UpgradeEdge = memo(UpgradeEdgeImpl);
+
+// ── Constantes para xyflow (declaradas fuera del componente) ────────────────
+const NODE_TYPES: NodeTypes = { ship: ShipNode };
+const EDGE_TYPES: EdgeTypes = { upgrade: UpgradeEdge };
+
+// ── Props del Canvas ─────────────────────────────────────────────────────────
 
 interface ChainBoardCanvasFlowProps {
-  cards: BoardCard[];
-  /** Llamado cuando una card cambia de posición (drag). Permite persistir. */
-  onMove?: (cardId: string, position: { x: number; y: number }) => void;
-  /** Borrar una card del canvas. */
-  onRemove: (cardId: string) => void;
-  /** Crear edge entre dos cards (drag de handle a handle). Fase 2 lo usará
-   *  para validar contra ccu_prices y colorear. */
-  onConnect?: (sourceCardId: string, targetCardId: string) => void;
-  /** Drop de una nave desde el inventory/store. Recibe la posición en el
-   *  viewport (ya convertida con flowInstance.screenToFlowPosition). */
-  onAddCardAt?: (
-    ship: Omit<BoardCard, "cardId" | "position">,
-    position: { x: number; y: number },
-  ) => void;
-  /** Drop de un CCU completo (par FROM→TO). Recibe ambas naves + posición
-   *  base; el workspace decide cómo distribuirlas (fase 2: contiguas con
-   *  offset horizontal). */
-  onAddCcuPairAt?: (
-    fromShip: Omit<BoardCard, "cardId" | "position">,
-    toShip: Omit<BoardCard, "cardId" | "position">,
-    position: { x: number; y: number },
-  ) => void;
-  /** Roles calculados por el board (base/intermediate/target) — opcional.
-   *  Si no se pasa, todos quedan como "intermediate". */
-  roleByCardId?: Map<string, "base" | "intermediate" | "target">;
+  nodes: BoardNode[];
+  edges: BoardEdge[];
+  selectedNodeId: string | null;
+  /** Callbacks que el workspace inyecta para mutar el estado. */
+  onMoveNode: (nodeId: string, position: { x: number; y: number }) => void;
+  onSelectNode: (nodeId: string | null) => void;
+  onDeleteNode: (nodeId: string) => void;
+  onEditPath: (nodeId: string) => void;
+  onConnect: (sourceId: string, targetId: string) => void;
+  onCycleEdgeKind: (edgeId: string) => void;
+  onAddShipAt: (ship: CatalogShip, position: { x: number; y: number }) => void;
+  onAddHangarCcuAt: (payload: HangarCcuPayload, position: { x: number; y: number }) => void;
 }
 
-function ChainBoardCanvasFlowInner({
-  cards,
-  onMove,
-  onRemove,
+function CanvasInner({
+  nodes,
+  edges,
+  selectedNodeId,
+  onMoveNode,
+  onSelectNode,
+  onDeleteNode,
+  onEditPath,
   onConnect,
-  onAddCardAt,
-  onAddCcuPairAt,
-  roleByCardId,
+  onCycleEdgeKind,
+  onAddShipAt,
+  onAddHangarCcuAt,
 }: ChainBoardCanvasFlowProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
 
-  // ── Convertir cards[] → Node[] para ReactFlow ─────────────────────────────
-  //
-  // Si la card tiene `position` la usamos. Sino la auto-layouteamos en una
-  // grilla simple (col=cardIdx*240, row=0). Fase 5 mejora esto con dagre.
-  const nodes: Node<ShipNodeData>[] = useMemo(() => {
-    return cards.map((card, i) => {
-      const role = roleByCardId?.get(card.cardId) ?? "intermediate";
-      const data: ShipNodeData = { ...card, role, onRemove };
-      const position = card.position ?? { x: 100 + i * 240, y: 100 };
-      return {
-        id: card.cardId,
-        type: "ship",
-        position,
-        data,
-        // Permitimos drag libre (default).
-        draggable: true,
-      };
-    });
-  }, [cards, roleByCardId, onRemove]);
+  // ── Mapear BoardNode[] → Node<ShipNodeData>[] ─────────────────────────────
+  // Inyectamos los callbacks al data del nodo para que ShipNode los pueda
+  // llamar (ya que xyflow no expone un mecanismo de contexto directo).
+  const incomingByTarget = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of edges) set.add(e.target);
+    return set;
+  }, [edges]);
 
-  // ── Edges — Fase 1 las hace lineales por orden ────────────────────────────
-  // Conectamos cards[i] → cards[i+1] como una cadena simple. Fase 2 hace
-  // edges custom con metadata Normal/WB/Hanger + validation.
-  const initialEdges: Edge[] = useMemo(() => {
-    const out: Edge[] = [];
-    for (let i = 0; i < cards.length - 1; i++) {
-      out.push({
-        id: `e-${cards[i].cardId}-${cards[i + 1].cardId}`,
-        source: cards[i].cardId,
-        target: cards[i + 1].cardId,
-        sourceHandle: "out",
-        targetHandle: "in",
-        animated: false,
-        style: { stroke: "#52525b", strokeWidth: 2 },
-      });
-    }
-    return out;
-  }, [cards]);
+  const rfNodes: Node<ShipNodeData>[] = useMemo(() => {
+    return nodes.map((n) => ({
+      id: n.id,
+      type: "ship",
+      position: n.position,
+      data: {
+        ship: n.ship,
+        selected: n.id === selectedNodeId,
+        hasIncoming: incomingByTarget.has(n.id),
+        onSelect: onSelectNode,
+        onDelete: onDeleteNode,
+        onEditPath,
+      },
+      draggable: true,
+    }));
+  }, [nodes, selectedNodeId, incomingByTarget, onSelectNode, onDeleteNode, onEditPath]);
 
-  // Estado interno de ReactFlow: copia de nodes/edges editable mientras el
-  // user dragea. Sincroniza con cards[] en `onNodesChange`.
-  const [rfNodes, setRfNodes] = useState<Node<ShipNodeData>[]>(nodes);
-  const [rfEdges, setRfEdges] = useState<Edge[]>(initialEdges);
+  const rfEdges: Edge[] = useMemo(() => {
+    return edges.map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+      sourceHandle: "out",
+      targetHandle: "in",
+      type: "upgrade",
+      data: { kind: e.kind, price: e.price, onCycleKind: onCycleEdgeKind } satisfies UpgradeEdgeData,
+    }));
+  }, [edges, onCycleEdgeKind]);
 
-  // Re-sincronizar cuando el board externo cambia (cards agregadas/borradas).
-  useEffect(() => {
-    setRfNodes(nodes);
-  }, [nodes]);
-  useEffect(() => {
-    setRfEdges(initialEdges);
-  }, [initialEdges]);
-
-  // ── Handlers ──────────────────────────────────────────────────────────────
+  // ── Estado interno para drags fluidos ─────────────────────────────────────
+  // ReactFlow necesita estado local que se reseta cuando vienen props nuevas.
+  const [localNodes, setLocalNodes] = useState(rfNodes);
+  const [localEdges, setLocalEdges] = useState(rfEdges);
+  useEffect(() => setLocalNodes(rfNodes), [rfNodes]);
+  useEffect(() => setLocalEdges(rfEdges), [rfEdges]);
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
-      setRfNodes((nds) => {
-        const next = applyNodeChanges(changes, nds) as Node<ShipNodeData>[];
-        // Si hay cambios de posición, propagar al board externo (persistir).
-        for (const ch of changes) {
-          if (ch.type === "position" && ch.position && !ch.dragging) {
-            onMove?.(ch.id, ch.position);
-          }
+      setLocalNodes((nds) => applyNodeChanges(changes, nds) as Node<ShipNodeData>[]);
+      for (const ch of changes) {
+        if (ch.type === "position" && ch.position && !ch.dragging) {
+          onMoveNode(ch.id, ch.position);
         }
-        return next;
-      });
+      }
     },
-    [onMove],
+    [onMoveNode],
   );
 
   const handleEdgesChange = useCallback((changes: EdgeChange[]) => {
-    setRfEdges((eds) => applyEdgeChanges(changes, eds));
+    setLocalEdges((eds) => applyEdgeChanges(changes, eds));
   }, []);
 
   const handleConnect = useCallback(
     (params: Connection) => {
-      // Drag de handle a handle: crea una edge nueva. Validamos en Fase 2.
-      if (!params.source || !params.target) return;
-      setRfEdges((eds) => addEdge({ ...params, style: { stroke: "#52525b", strokeWidth: 2 } }, eds));
-      onConnect?.(params.source, params.target);
+      if (!params.source || !params.target || params.source === params.target) return;
+      onConnect(params.source, params.target);
     },
     [onConnect],
   );
 
   // ── Drop handlers ─────────────────────────────────────────────────────────
-  //
-  // Cuando InventoryColumn / StoreColumn hacen drag de una ship card, setea
-  // dataTransfer con MIME `application/x-sc-ship-card` y body JSON. Acá lo
-  // capturamos y agregamos un nodo en la posición del cursor.
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (
-      e.dataTransfer.types.includes(SHIP_CARD_MIME) ||
-      e.dataTransfer.types.includes(CCU_PAIR_MIME)
-    ) {
+    if (e.dataTransfer.types.includes(SHIP_MIME) || e.dataTransfer.types.includes(HANGAR_CCU_MIME)) {
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
     }
@@ -201,90 +232,87 @@ function ChainBoardCanvasFlowInner({
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       const types = e.dataTransfer.types;
-      const isShip = types.includes(SHIP_CARD_MIME);
-      const isPair = types.includes(CCU_PAIR_MIME);
-      if (!isShip && !isPair) return;
+      const isShip = types.includes(SHIP_MIME);
+      const isCcu = types.includes(HANGAR_CCU_MIME);
+      if (!isShip && !isCcu) return;
       e.preventDefault();
-      if (!flowInstance || !wrapperRef.current) return;
-      const position = flowInstance.screenToFlowPosition({
-        x: e.clientX,
-        y: e.clientY,
-      });
+      if (!flowInstance) return;
+      const position = flowInstance.screenToFlowPosition({ x: e.clientX, y: e.clientY });
       try {
-        if (isPair) {
-          // CCU completo: FROM en el cursor, TO 260px a la derecha (un
-          // ancho de card aprox), para que aparezcan contiguas como
-          // "una entidad" — replica el comportamiento del botón "+ Pizarra".
-          const raw = e.dataTransfer.getData(CCU_PAIR_MIME);
+        if (isCcu) {
+          const raw = e.dataTransfer.getData(HANGAR_CCU_MIME);
           if (!raw) return;
-          const payload = JSON.parse(raw) as {
-            from: Omit<BoardCard, "cardId" | "position">;
-            to: Omit<BoardCard, "cardId" | "position">;
-          };
-          onAddCcuPairAt?.(payload.from, payload.to, position);
+          const payload = JSON.parse(raw) as HangarCcuPayload;
+          onAddHangarCcuAt(payload, position);
           return;
         }
-        // Ship único.
-        const raw = e.dataTransfer.getData(SHIP_CARD_MIME);
+        const raw = e.dataTransfer.getData(SHIP_MIME);
         if (!raw) return;
-        const ship = JSON.parse(raw) as Omit<BoardCard, "cardId" | "position">;
-        onAddCardAt?.(ship, position);
+        const ship = JSON.parse(raw) as CatalogShip;
+        onAddShipAt(ship, position);
       } catch {
-        // Silenciar payload corrupto — no rompemos la UI.
+        // payload corrupto — silencio
       }
     },
-    [flowInstance, onAddCardAt, onAddCcuPairAt],
+    [flowInstance, onAddShipAt, onAddHangarCcuAt],
   );
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // Click en el fondo del canvas → deseleccionar.
+  const handlePaneClick = useCallback(() => {
+    onSelectNode(null);
+  }, [onSelectNode]);
 
   return (
     <div
       ref={wrapperRef}
-      className="w-full h-full min-h-[500px] bg-zinc-950/40 rounded-sm border border-zinc-800/60 overflow-hidden"
+      className="w-full h-full min-h-[600px] bg-zinc-950 rounded-md border border-zinc-800/60 overflow-hidden relative"
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
+      {nodes.length === 0 && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+          <div className="text-center text-zinc-600 text-sm font-mono px-6">
+            <p className="mb-1 text-zinc-500">Pizarra vacía</p>
+            <p className="text-[11px] leading-relaxed">
+              Arrastrá una nave desde <span className="text-amber-400">Available Ships</span> o un CCU desde{" "}
+              <span className="text-cyan-400">My Hangar</span>.
+              <br />
+              Conectá naves arrastrando entre los puntos laterales.
+            </p>
+          </div>
+        </div>
+      )}
       <ReactFlow
-        nodes={rfNodes}
-        edges={rfEdges}
+        nodes={localNodes}
+        edges={localEdges}
+        nodeTypes={NODE_TYPES}
+        edgeTypes={EDGE_TYPES}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
+        onPaneClick={handlePaneClick}
         onInit={setFlowInstance}
-        nodeTypes={NODE_TYPES}
-        // Snap a grilla de 8px para alineación visual.
         snapToGrid
         snapGrid={[8, 8]}
-        // Padding del fit-view inicial para que las cards no queden pegadas
-        // al borde.
-        fitView
-        fitViewOptions={{ padding: 0.2, maxZoom: 1.2 }}
-        // Estilo: fondo muy oscuro con grid sutil.
+        fitView={false}
         proOptions={{ hideAttribution: true }}
-        // Default values para edges nuevas (drag de handle a handle).
-        defaultEdgeOptions={{ animated: false, style: { stroke: "#52525b", strokeWidth: 2 } }}
+        defaultEdgeOptions={{ type: "upgrade" }}
         className="!bg-transparent"
       >
         <Background
           variant={BackgroundVariant.Dots}
-          gap={16}
-          size={1}
-          color="#3f3f46"
+          gap={20}
+          size={1.2}
+          color="#27272a"
         />
         <Controls
-          className="!bg-zinc-900/80 !border-zinc-800/60 !rounded-sm [&_button]:!bg-zinc-800/60 [&_button]:!border-zinc-700/60 [&_button]:!text-zinc-300 [&_button:hover]:!bg-zinc-700/60"
+          className="!bg-zinc-900/90 !border-zinc-800/60 !rounded-sm [&_button]:!bg-zinc-800/60 [&_button]:!border-zinc-700/60 [&_button]:!text-zinc-300 [&_button:hover]:!bg-zinc-700/60"
           position="bottom-right"
           showInteractive={false}
         />
         <MiniMap
-          className="!bg-zinc-900/80 !border !border-zinc-800/60"
-          nodeColor={(n) => {
-            const role = (n.data as ShipNodeData).role;
-            if (role === "base") return "#f59e0b";
-            if (role === "target") return "#10b981";
-            return "#52525b";
-          }}
+          className="!bg-zinc-900/90 !border !border-zinc-800/60"
+          nodeColor={(n) => (n.id === selectedNodeId ? "#22d3ee" : "#3f3f46")}
           maskColor="rgba(9, 9, 11, 0.85)"
           position="bottom-left"
           pannable
@@ -295,15 +323,10 @@ function ChainBoardCanvasFlowInner({
   );
 }
 
-/** Wrapper público — wrappea con `ReactFlowProvider` para que múltiples
- *  componentes (ej. botones externos que llaman a flowInstance) puedan
- *  acceder al contexto. */
 export function ChainBoardCanvasFlow(props: ChainBoardCanvasFlowProps) {
   return (
     <ReactFlowProvider>
-      <ChainBoardCanvasFlowInner {...props} />
+      <CanvasInner {...props} />
     </ReactFlowProvider>
   );
 }
-
-export { SHIP_CARD_MIME };

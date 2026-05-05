@@ -1,77 +1,60 @@
 // =============================================================================
-// SC LABS — Chain Board types compartidos
+// SC LABS — Chain Board v2 (rewrite 2026-05-05)
+//
+// Tipos minimalistas para el canvas free-form de planificación de CCU.
+// Inspirado en el mockup "Ship Upgrade Planner" — pero dark theme y conectado
+// al hangar real del usuario.
 // =============================================================================
 
-/** Una nave en el catálogo (de la BD o del wiki). */
-export interface BoardShipRow {
+/** Una nave del catálogo (vino de /api/ccu/ships). */
+export interface CatalogShip {
   id: string;
   reference: string;
   name: string;
   manufacturer: string | null;
+  /** Rol display-only: "combat" | "exploration" | "industrial" | "multi" | "ground" | etc.
+   *  Si la BD no lo trae, queda null y la card no muestra ese tag. */
+  role: string | null;
   msrpUsd: number;
   warbondUsd: number | null;
-  flightStatus: string | null;
-  pledgeAvailability: string | null; // 'Always available' | 'Time-limited sales' | ...
-}
-
-/** Una card en la pizarra: ship con metadata mínima para render + validación. */
-export interface BoardCard {
-  /** UUID de la card en la pizarra (para reordenar/drag). NO es el ship.id. */
-  cardId: string;
-  shipId: string;
-  shipName: string;
-  shipReference: string;
-  manufacturer: string | null;
-  msrpUsd: number;
-  warbondUsd: number | null;
-  /** Imagen URL: típicamente /ships/<slug>.webp o /jpg, computado en lookup. */
   imageUrl: string | null;
-  /** Origen del ship: "fleet" si vino de Mi Inventario, "store" si vino de RSI. */
-  origin: "fleet" | "store" | "manual";
-  /** Si origin=fleet, referencia al HangarShip o HangarCCU ID original. */
-  sourceItemId?: string;
-  /**
-   * CB.10 (2026-05-05): posición {x, y} en el canvas free-form. Las cards
-   * mantienen su posición entre sesiones (persisted con el resto del board).
-   * Nodos sin posición se auto-layout al montarse.
-   */
-  position?: { x: number; y: number };
-  /**
-   * CB.10: rol del nodo en la cadena. Útil para colorear distinto el
-   * outline (BASE = naranja, TARGET = emerald, intermediate = zinc).
-   * Calculado por el board, no persisted (deriva de la posición en la
-   * cadena lógica).
-   */
-  role?: "base" | "intermediate" | "target";
 }
 
-/** Validación entre cards[i] y cards[i+1]. */
-export type EdgeStatus =
-  | "valid"        // existe CCU comprable hoy (warbond o std)
-  | "valid-owned"  // el user tiene este CCU en hangar/buyback
-  | "invalid"      // no hay edge — variant mismatch, no eligible, downgrade
-  | "unknown";     // no validado todavía
+/** Tipo de upgrade entre dos naves del board. */
+export type UpgradeKind = "normal" | "warbond" | "hanger";
 
-export interface EdgeValidation {
-  fromShipId: string;
-  toShipId: string;
-  status: EdgeStatus;
-  /** Precio mínimo disponible para este salto (si valid o valid-owned). */
-  minPrice: number | null;
-  /** Tipo de mejor precio: warbond/standard/owned-hangar/owned-buyback. */
-  bestPriceKind: "warbond" | "standard" | "owned-hangar" | "owned-buyback" | null;
-  /** Mensaje human-readable para mostrar en tooltip. */
-  reason: string;
-  // CB.8 (2026-05-04): campos adicionales para el CCU builder estilo RSI.
-  /** Precio standard del CCU (sin descuento warbond) — null si edge no existe. */
-  standardPrice?: number | null;
-  /** Precio warbond del CCU (cash only) — null si no hay warbond para este edge. */
-  warbondPrice?: number | null;
-  /** True si el edge tiene warbond actualmente disponible (no solo histórico). */
-  warbondAvailable?: boolean;
-  /** Si el user ya tiene este CCU, su precio pagado original. */
-  ownedPricePaid?: number | null;
-  ownedLocation?: "hangar" | "buyback" | null;
-  ownedIsWarbond?: boolean | null;
-  ownedGrantsInsurance?: string | null;
+/** Un nodo en la pizarra: una nave colocada en una posición. */
+export interface BoardNode {
+  id: string;
+  ship: CatalogShip;
+  position: { x: number; y: number };
+}
+
+/** Una conexión entre dos nodos del board (un CCU). */
+export interface BoardEdge {
+  id: string;
+  source: string;     // BoardNode.id
+  target: string;
+  kind: UpgradeKind;
+  price: number;
+}
+
+/** Snapshot persistible (localStorage / export JSON). */
+export interface BoardSnapshot {
+  version: 2;
+  nodes: BoardNode[];
+  edges: BoardEdge[];
+  savedAt: string;
+}
+
+// ── MIME types usados por el drag-and-drop entre columnas ↔ canvas ──────────
+export const SHIP_MIME = "application/x-sclabs-ship";
+export const HANGAR_CCU_MIME = "application/x-sclabs-hangar-ccu";
+
+/** Payload del drag de un CCU del hangar (ambos extremos). */
+export interface HangarCcuPayload {
+  from: CatalogShip;
+  to: CatalogShip;
+  kind: UpgradeKind;
+  price: number;
 }

@@ -1,463 +1,352 @@
 "use client";
 
 // =============================================================================
-// SC LABS — ChainBoardWorkspace (CB.1)
+// SC LABS — ChainBoardWorkspace v2 (rewrite 2026-05-05)
 //
-// Orquestador de la pizarra de CCU. Layout 3-columnas:
-//   - Izquierda: Mi Inventario (ships + CCUs del hangar/buyback) — CB.2
-//   - Centro:    Pizarra con cards encadenadas + flechas — CB.4
-//   - Derecha:   Naves en venta en RSI (cacheado de wiki, scraper en CB.6) — CB.3
+// Orquestador del Chain Board, layout 4-columnas + bottom toolbar al estilo
+// del mockup "Ship Upgrade Planner":
 //
-// El estado del board (`cards: BoardCard[]`) vive acá y se pasa a los hijos.
-// El click en una card del costado izquierdo o derecho llama a `addCard()`.
-// La pizarra puede pedir reorder/insert/remove via callbacks.
+//   ┌─────────┬─────────┬───────────────────────────┬─────────┐
+//   │Available│My Hangar│       Canvas (xyflow)     │Right    │
+//   │ Ships   │  CCUs   │  (drag/drop, free-form)   │Panel    │
+//   └─────────┴─────────┴───────────────────────────┴─────────┘
+//                  [CLEAR] [SAVE] [EXPORT] [IMPORT]
 //
-// Mobile: las 3 columnas colapsan a 3 tabs (Inventario / Pizarra / RSI).
+// Estado: { nodes: BoardNode[], edges: BoardEdge[], selectedNodeId }
+// Persistencia: localStorage key 'sclabs-chain-board-v2'
 // =============================================================================
 
-import { useState, useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useHangarStore, type HangarCCU } from "@/store/useHangarStore";
-import { getShipThumbUrl } from "../HangarShipCard";
-import type { BoardCard } from "./types";
+import { ChainBoardCanvasFlow } from "./ChainBoardCanvasFlow";
 import { ChainBoardInventoryColumn } from "./ChainBoardInventoryColumn";
 import { ChainBoardStoreColumn } from "./ChainBoardStoreColumn";
-// CB.10 Fase 1 (2026-05-05): reemplazo del ChainBoardCanvas linear por el
-// canvas free-form basado en @xyflow/react. El componente viejo queda en
-// el repo por ahora para referencia, pero ya no se importa.
-import { ChainBoardCanvasFlow } from "./ChainBoardCanvasFlow";
+import {
+  type BoardEdge,
+  type BoardNode,
+  type BoardSnapshot,
+  type CatalogShip,
+  type HangarCcuPayload,
+  type UpgradeKind,
+} from "./types";
 
-type MobileTab = "inventory" | "canvas" | "store";
+const LS_KEY = "sclabs-chain-board-v2";
+const KIND_CYCLE: UpgradeKind[] = ["normal", "warbond", "hanger"];
 
-const cardId = () => `card_${Math.random().toString(36).slice(2, 10)}`;
+const newId = (prefix: string) =>
+  `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
+
+function defaultPriceFor(kind: UpgradeKind, fromMsrp: number, toMsrp: number): number {
+  const diff = Math.max(0, toMsrp - fromMsrp);
+  if (kind === "warbond") return Math.round(diff * 0.92 * 100) / 100;
+  if (kind === "hanger") return 0; // Hanger = ya pagado
+  return Math.round(diff * 100) / 100; // standard ≈ msrpDiff
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function ChainBoardWorkspace() {
-  // ─── State ────────────────────────────────────────────────────────────────
-  const [cards, setCards] = useState<BoardCard[]>([]);
-  const [mobileTab, setMobileTab] = useState<MobileTab>("canvas");
-  const [autoSuggesting, setAutoSuggesting] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [chainName, setChainName] = useState("");
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [nodes, setNodes] = useState<BoardNode[]>([]);
+  const [edges, setEdges] = useState<BoardEdge[]>([]);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
+  const [statusMsg, setStatusMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
-  const ccus = useHangarStore((s) => s.ccus);
-  const addChain = useHangarStore((s) => s.addChain);
-
-  // ─── Mutations ────────────────────────────────────────────────────────────
-
-  /**
-   * Añade una nave a la pizarra. Por default va al final (target).
-   * Si el board está vacío, se considera "base ship".
-   */
-  const addCard = useCallback(
-    (ship: Omit<BoardCard, "cardId">) => {
-      setCards((prev) => {
-        // No agregar si ya está en la pizarra (por shipId)
-        if (prev.some((c) => c.shipId === ship.shipId)) return prev;
-        return [...prev, { ...ship, cardId: cardId() }];
-      });
-      // En mobile saltar a la canvas para ver el resultado
-      setMobileTab("canvas");
-    },
-    [],
-  );
-
-  /** Elimina una card por cardId. */
-  const removeCard = useCallback((cId: string) => {
-    setCards((prev) => prev.filter((c) => c.cardId !== cId));
+  // ── Hidratar desde localStorage ──────────────────────────────────────────
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if (raw) {
+        const snap = JSON.parse(raw) as BoardSnapshot;
+        if (snap?.version === 2 && Array.isArray(snap.nodes) && Array.isArray(snap.edges)) {
+          setNodes(snap.nodes);
+          setEdges(snap.edges);
+        }
+      }
+    } catch {
+      // Ignorar payload corrupto.
+    }
+    setHydrated(true);
   }, []);
 
-  /**
-   * CB.10 Fase 1 (2026-05-05): agrega una card con posición {x, y} explícita
-   * en el canvas (drop desde InventoryColumn / StoreColumn). Si la nave ya
-   * está, NO duplicamos pero SÍ actualizamos su posición — facilita
-   * reorganizar visualmente.
-   */
-  const addCardAt = useCallback(
-    (
-      ship: Omit<BoardCard, "cardId" | "position">,
-      position: { x: number; y: number },
-    ) => {
-      setCards((prev) => {
-        const existing = prev.findIndex((c) => c.shipId === ship.shipId);
-        if (existing !== -1) {
-          // Ya está — actualizar posición.
-          const next = prev.slice();
-          next[existing] = { ...next[existing], position };
-          return next;
-        }
-        return [...prev, { ...ship, cardId: cardId(), position }];
-      });
-      setMobileTab("canvas");
-    },
-    [],
-  );
+  // ── Persistir a localStorage (debounced 400ms) ───────────────────────────
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!hydrated) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      const snap: BoardSnapshot = {
+        version: 2,
+        nodes,
+        edges,
+        savedAt: new Date().toISOString(),
+      };
+      try {
+        localStorage.setItem(LS_KEY, JSON.stringify(snap));
+      } catch {
+        // Storage lleno o privado — silencio.
+      }
+    }, 400);
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+    };
+  }, [nodes, edges, hydrated]);
 
-  /**
-   * CB.10 Fase 1: cuando el user dragea un nodo en el canvas, persistimos
-   * la nueva posición. Fase 4 lo manda a localStorage / BD.
-   */
-  const updateCardPosition = useCallback(
-    (cId: string, position: { x: number; y: number }) => {
-      setCards((prev) =>
-        prev.map((c) => (c.cardId === cId ? { ...c, position } : c)),
-      );
-    },
-    [],
-  );
+  // ── Mutadores ────────────────────────────────────────────────────────────
 
-  /**
-   * CB.10 Fase 2 (2026-05-05): drop de un CCU completo (par FROM→TO) en
-   * el canvas. FROM en el cursor, TO a la derecha. Si alguna ya está,
-   * actualizamos su posición en lugar de duplicar.
-   */
-  const addCcuPairAt = useCallback(
-    (
-      fromShip: Omit<BoardCard, "cardId" | "position">,
-      toShip: Omit<BoardCard, "cardId" | "position">,
-      position: { x: number; y: number },
-    ) => {
-      const fromPos = position;
-      const toPos = { x: position.x + 260, y: position.y };
-      setCards((prev) => {
+  const addShipAt = useCallback((ship: CatalogShip, position: { x: number; y: number }) => {
+    setNodes((prev) => {
+      // Si ya está en el canvas, solo movemos su posición (no duplicamos).
+      const existing = prev.findIndex((n) => n.ship.id === ship.id);
+      if (existing !== -1) {
         const next = prev.slice();
-        // FROM
-        const fromIdx = next.findIndex((c) => c.shipId === fromShip.shipId);
-        if (fromIdx !== -1) {
-          next[fromIdx] = { ...next[fromIdx], position: fromPos };
-        } else {
-          next.push({ ...fromShip, cardId: cardId(), position: fromPos });
-        }
-        // TO
-        const toIdx = next.findIndex((c) => c.shipId === toShip.shipId);
-        if (toIdx !== -1) {
-          next[toIdx] = { ...next[toIdx], position: toPos };
-        } else {
-          next.push({ ...toShip, cardId: cardId(), position: toPos });
-        }
+        next[existing] = { ...next[existing], position };
         return next;
-      });
-      setMobileTab("canvas");
-    },
-    [],
-  );
-
-  /**
-   * CB.10 Fase 2 (placeholder, no-op por ahora): cuando el user crea una
-   * edge dragueando un handle al otro, validaremos contra ccu_prices. Por
-   * ahora solo logueamos.
-   */
-  const onConnectCards = useCallback((sourceId: string, targetId: string) => {
-    void sourceId;
-    void targetId;
-    // Fase 2 hace la validación + colorear edge.
-  }, []);
-
-  /** Reordena las cards (drag & drop). */
-  const reorderCards = useCallback((fromIdx: number, toIdx: number) => {
-    setCards((prev) => {
-      if (fromIdx === toIdx) return prev;
-      if (fromIdx < 0 || fromIdx >= prev.length) return prev;
-      if (toIdx < 0 || toIdx >= prev.length) return prev;
-      const next = prev.slice();
-      const [moved] = next.splice(fromIdx, 1);
-      next.splice(toIdx, 0, moved);
-      return next;
+      }
+      const node: BoardNode = { id: newId("n"), ship, position };
+      return [...prev, node];
     });
   }, []);
 
-  /** Inserta una card en una posición específica (entre dos cards). */
-  const insertCardAt = useCallback(
-    (idx: number, ship: Omit<BoardCard, "cardId">) => {
-      setCards((prev) => {
-        if (prev.some((c) => c.shipId === ship.shipId)) return prev;
+  const addHangarCcuAt = useCallback(
+    (payload: HangarCcuPayload, position: { x: number; y: number }) => {
+      setNodes((prev) => {
         const next = prev.slice();
-        next.splice(idx, 0, { ...ship, cardId: cardId() });
+        const fromIdx = next.findIndex((n) => n.ship.id === payload.from.id);
+        const toIdx = next.findIndex((n) => n.ship.id === payload.to.id);
+        let fromNode: BoardNode;
+        let toNode: BoardNode;
+        const fromPos = position;
+        const toPos = { x: position.x + 220, y: position.y };
+        if (fromIdx !== -1) {
+          next[fromIdx] = { ...next[fromIdx], position: fromPos };
+          fromNode = next[fromIdx];
+        } else {
+          fromNode = { id: newId("n"), ship: payload.from, position: fromPos };
+          next.push(fromNode);
+        }
+        if (toIdx !== -1) {
+          next[toIdx] = { ...next[toIdx], position: toPos };
+          toNode = next[toIdx];
+        } else {
+          toNode = { id: newId("n"), ship: payload.to, position: toPos };
+          next.push(toNode);
+        }
+        // Crear edge si todavía no existe.
+        setEdges((prevEdges) => {
+          const exists = prevEdges.some(
+            (e) => e.source === fromNode.id && e.target === toNode.id,
+          );
+          if (exists) return prevEdges;
+          const edge: BoardEdge = {
+            id: newId("e"),
+            source: fromNode.id,
+            target: toNode.id,
+            kind: payload.kind,
+            price: payload.price,
+          };
+          return [...prevEdges, edge];
+        });
         return next;
       });
-      setMobileTab("canvas");
     },
     [],
   );
 
-  /**
-   * CB.8f (2026-05-04): agrega un CCU como entidad única — las dos naves
-   * (FROM y TO) entran al board en orden contiguo. Pablo: "el CCU es una
-   * entidad unica, es un tramite de nave a nave, deveria poder pasarlo al
-   * tablero" (no agregar las naves por separado y reordenar a mano).
-   *
-   * Casos:
-   *   1. Ninguna está en el board    → push FROM, push TO al final.
-   *   2. FROM ya está, TO no         → insert TO inmediatamente después.
-   *   3. TO ya está, FROM no         → insert FROM inmediatamente antes.
-   *   4. Ambas ya están              → no-op (no duplicamos ni reordenamos
-   *                                     porque eso podría romper otras
-   *                                     conexiones de la cadena).
-   */
-  const addCcuPair = useCallback(
-    (
-      fromShip: Omit<BoardCard, "cardId">,
-      toShip: Omit<BoardCard, "cardId">,
-    ) => {
-      setCards((prev) => {
-        const fromIdx = prev.findIndex((c) => c.shipId === fromShip.shipId);
-        const toIdx = prev.findIndex((c) => c.shipId === toShip.shipId);
-
-        // Caso 4: ambos ya en el board — silenciamos (UI debería deshabilitar
-        // el click pero por defensa devolvemos prev sin tocar).
-        if (fromIdx !== -1 && toIdx !== -1) return prev;
-
-        const next = prev.slice();
-        // Caso 2: FROM ya está → TO va inmediatamente después de FROM.
-        if (fromIdx !== -1 && toIdx === -1) {
-          next.splice(fromIdx + 1, 0, { ...toShip, cardId: cardId() });
-          return next;
-        }
-        // Caso 3: TO ya está → FROM va inmediatamente antes de TO.
-        if (fromIdx === -1 && toIdx !== -1) {
-          next.splice(toIdx, 0, { ...fromShip, cardId: cardId() });
-          return next;
-        }
-        // Caso 1: ninguno está → ambos al final, FROM antes que TO.
-        next.push({ ...fromShip, cardId: cardId() });
-        next.push({ ...toShip, cardId: cardId() });
-        return next;
-      });
-      setMobileTab("canvas");
-    },
-    [],
-  );
-
-  /** Vacía la pizarra. */
-  const clearBoard = useCallback(() => {
-    setCards([]);
-    setStatusMessage(null);
+  const moveNode = useCallback((nodeId: string, position: { x: number; y: number }) => {
+    setNodes((prev) => prev.map((n) => (n.id === nodeId ? { ...n, position } : n)));
   }, []);
 
-  // ─── Auto-suggest (CB.5) ─────────────────────────────────────────────────
-  // Toma el primer y último card de la pizarra como base/target y corre el
-  // solver clásico. Reemplaza los intermedios con la cadena óptima.
-  const runAutoSuggest = useCallback(async () => {
-    if (cards.length < 2) {
-      setStatusMessage({
-        kind: "err",
-        text: "Necesitás al menos una nave base y una target en la pizarra.",
-      });
-      return;
-    }
-    const base = cards[0];
-    const target = cards[cards.length - 1];
-    setAutoSuggesting(true);
-    setStatusMessage(null);
-    try {
-      const ownedCCUs = ccus.map((c: HangarCCU) => ({
-        fromShip: c.fromShip,
-        toShip: c.toShip,
-        pricePaid: c.pricePaid,
-        location: c.location,
-      }));
-      const r = await fetch("/api/ccu/calculate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fromShipId: base.shipId,
-          toShipId: target.shipId,
-          ownedCCUs,
-          preferWarbond: true,
-          hasBuybackToken: false,
-          paymentPriority: "balanced",
-          onlyAvailable: true,
-          maxSteps: 15,
-        }),
-      });
-      const data = await r.json();
-      if (!r.ok || !data.chain) {
-        throw new Error(data.error || "El solver no encontró cadena válida.");
-      }
+  const deleteNode = useCallback((nodeId: string) => {
+    setNodes((prev) => prev.filter((n) => n.id !== nodeId));
+    setEdges((prev) => prev.filter((e) => e.source !== nodeId && e.target !== nodeId));
+    setSelectedNodeId((prev) => (prev === nodeId ? null : prev));
+  }, []);
 
-      // Reconstruimos el board: base + intermedios del solver + target.
-      // El solver devuelve steps con fromShip/toShip; los intermedios son
-      // los toShip de cada step EXCEPTO el último (que es el target).
-      const solverSteps = data.chain.steps as Array<{
-        toShip: { id: string; name: string; manufacturer: string | null; msrpUsd: number; warbondUsd: number | null; reference: string };
-      }>;
-      const newCards: BoardCard[] = [base];
-      for (let i = 0; i < solverSteps.length - 1; i++) {
-        const s = solverSteps[i].toShip;
-        newCards.push({
-          cardId: cardId(),
-          shipId: s.id,
-          shipName: s.name,
-          shipReference: s.reference,
-          manufacturer: s.manufacturer,
-          msrpUsd: s.msrpUsd,
-          warbondUsd: s.warbondUsd,
-          imageUrl: getShipThumbUrl(s.name),
-          origin: "manual",
-        });
-      }
-      newCards.push(target);
-      setCards(newCards);
-      setStatusMessage({
-        kind: "ok",
-        text: `Sugerencia lista: ${solverSteps.length} pasos · costo $${data.chain.totalCost.toFixed(0)}`,
+  const connectNodes = useCallback((sourceId: string, targetId: string) => {
+    setNodes((prevNodes) => {
+      const source = prevNodes.find((n) => n.id === sourceId);
+      const target = prevNodes.find((n) => n.id === targetId);
+      if (!source || !target) return prevNodes;
+      setEdges((prevEdges) => {
+        const exists = prevEdges.some((e) => e.source === sourceId && e.target === targetId);
+        if (exists) return prevEdges;
+        const kind: UpgradeKind = "normal";
+        const price = defaultPriceFor(kind, source.ship.msrpUsd, target.ship.msrpUsd);
+        return [...prevEdges, { id: newId("e"), source: sourceId, target: targetId, kind, price }];
       });
-    } catch (e: any) {
-      setStatusMessage({
-        kind: "err",
-        text: e.message || "No se pudo correr el solver.",
-      });
-    } finally {
-      setAutoSuggesting(false);
-    }
-  }, [cards, ccus]);
+      return prevNodes;
+    });
+  }, []);
 
-  // ─── Save chain (CB.5) ───────────────────────────────────────────────────
-  const saveChain = useCallback(() => {
-    if (cards.length < 2) {
-      setStatusMessage({
-        kind: "err",
-        text: "La cadena necesita al menos base y target.",
-      });
-      return;
-    }
-    if (!chainName.trim()) {
-      setStatusMessage({ kind: "err", text: "Poné un nombre a la cadena." });
-      return;
-    }
-    setSaving(true);
-    try {
-      const base = cards[0];
-      const target = cards[cards.length - 1];
-      const steps = [];
-      for (let i = 0; i < cards.length - 1; i++) {
-        const from = cards[i];
-        const to = cards[i + 1];
-        // Si tenemos un owned CCU que cubre este par, lo marcamos.
-        const owned = ccus.find(
-          (c) =>
-            c.fromShip.toLowerCase() === from.shipName.toLowerCase() &&
-            c.toShip.toLowerCase() === to.shipName.toLowerCase(),
-        );
-        steps.push({
-          fromShip: from.shipName,
-          fromShipReference: from.shipReference,
-          toShip: to.shipName,
-          toShipReference: to.shipReference,
-          ccuPrice: owned?.pricePaid ?? Math.max(0, to.msrpUsd - from.msrpUsd),
-          isOwned: !!owned,
-          isCompleted: false,
-          isWarbond: owned?.isWarbond ?? false,
-        });
-      }
-      addChain({
-        name: chainName.trim(),
-        startShip: base.shipName,
-        startShipReference: base.shipReference,
-        targetShip: target.shipName,
-        targetShipReference: target.shipReference,
-        steps,
-        status: "planning",
-      });
-      setStatusMessage({
-        kind: "ok",
-        text: `Cadena "${chainName.trim()}" guardada en Mi Hangar.`,
-      });
-      setChainName("");
-      setShowSaveDialog(false);
-    } catch (e: any) {
-      setStatusMessage({
-        kind: "err",
-        text: e.message || "No se pudo guardar.",
-      });
-    } finally {
-      setSaving(false);
-    }
-  }, [cards, chainName, ccus, addChain]);
+  const cycleEdgeKind = useCallback((edgeId: string) => {
+    setEdges((prev) =>
+      prev.map((e) => {
+        if (e.id !== edgeId) return e;
+        const idx = KIND_CYCLE.indexOf(e.kind);
+        const nextKind = KIND_CYCLE[(idx + 1) % KIND_CYCLE.length];
+        const fromNode = nodes.find((n) => n.id === e.source);
+        const toNode = nodes.find((n) => n.id === e.target);
+        const nextPrice =
+          fromNode && toNode
+            ? defaultPriceFor(nextKind, fromNode.ship.msrpUsd, toNode.ship.msrpUsd)
+            : e.price;
+        return { ...e, kind: nextKind, price: nextPrice };
+      }),
+    );
+  }, [nodes]);
 
-  // ─── Derived ──────────────────────────────────────────────────────────────
-  const isEmpty = cards.length === 0;
-
-  // Set de shipIds ya en el board — los hijos lo usan para deshabilitar cards
-  // que ya fueron agregadas.
-  const usedShipIds = useMemo(
-    () => new Set(cards.map((c) => c.shipId)),
-    [cards],
+  const editPathOnNode = useCallback(
+    (nodeId: string) => {
+      // EDIT PATH = ciclar el kind del edge entrante a este nodo.
+      const incoming = edges.find((e) => e.target === nodeId);
+      if (incoming) cycleEdgeKind(incoming.id);
+    },
+    [edges, cycleEdgeKind],
   );
 
-  // ─── Render ───────────────────────────────────────────────────────────────
+  // ── Toolbar actions ──────────────────────────────────────────────────────
+
+  const clearBoard = useCallback(() => {
+    if (nodes.length === 0 && edges.length === 0) return;
+    if (!confirm("¿Vaciar la pizarra? Se perderán los nodos y conexiones actuales.")) return;
+    setNodes([]);
+    setEdges([]);
+    setSelectedNodeId(null);
+    try {
+      localStorage.removeItem(LS_KEY);
+    } catch {}
+    setStatusMsg({ kind: "ok", text: "Pizarra vacía." });
+  }, [nodes.length, edges.length]);
+
+  const saveBoard = useCallback(() => {
+    const snap: BoardSnapshot = {
+      version: 2,
+      nodes,
+      edges,
+      savedAt: new Date().toISOString(),
+    };
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(snap));
+      setStatusMsg({ kind: "ok", text: "Pizarra guardada en este navegador." });
+    } catch (e: any) {
+      setStatusMsg({ kind: "err", text: e?.message ?? "No se pudo guardar." });
+    }
+  }, [nodes, edges]);
+
+  const exportBoard = useCallback(() => {
+    const snap: BoardSnapshot = {
+      version: 2,
+      nodes,
+      edges,
+      savedAt: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(snap, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sclabs-chain-board-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [nodes, edges]);
+
+  const importBoard = useCallback(() => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json";
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const snap = JSON.parse(text) as BoardSnapshot;
+        if (snap?.version !== 2 || !Array.isArray(snap.nodes) || !Array.isArray(snap.edges)) {
+          throw new Error("JSON inválido o de versión incompatible.");
+        }
+        setNodes(snap.nodes);
+        setEdges(snap.edges);
+        setSelectedNodeId(null);
+        setStatusMsg({ kind: "ok", text: `Pizarra importada (${snap.nodes.length} naves).` });
+      } catch (e: any) {
+        setStatusMsg({ kind: "err", text: e?.message ?? "No se pudo importar." });
+      }
+    };
+    input.click();
+  }, []);
+
+  // ── Derivados ────────────────────────────────────────────────────────────
+
+  const usedShipIds = useMemo(() => new Set(nodes.map((n) => n.ship.id)), [nodes]);
+  const selectedNode = useMemo(
+    () => (selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) ?? null : null),
+    [nodes, selectedNodeId],
+  );
+
+  // Cadena de pasos hacia atrás desde el nodo seleccionado (alternative routes).
+  const upstreamChain = useMemo<{ from: BoardNode; edge: BoardEdge; to: BoardNode }[]>(() => {
+    if (!selectedNode) return [];
+    const incomingByTarget = new Map<string, BoardEdge>();
+    for (const e of edges) incomingByTarget.set(e.target, e);
+    const steps: { from: BoardNode; edge: BoardEdge; to: BoardNode }[] = [];
+    const visited = new Set<string>();
+    let current: BoardNode | null = selectedNode;
+    while (current && !visited.has(current.id)) {
+      visited.add(current.id);
+      const inE = incomingByTarget.get(current.id);
+      if (!inE) break;
+      const fromNode = nodes.find((n) => n.id === inE.source);
+      if (!fromNode) break;
+      steps.unshift({ from: fromNode, edge: inE, to: current });
+      current = fromNode;
+    }
+    return steps;
+  }, [selectedNode, edges, nodes]);
+
+  const totalCost = useMemo(
+    () => upstreamChain.reduce((acc, s) => acc + s.edge.price, 0),
+    [upstreamChain],
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────────
+
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            <span className="text-2xl">🎨</span>
-            <h1 className="text-lg sm:text-xl font-semibold text-zinc-100 tracking-wide">
-              CCU Chain Board
-            </h1>
+          <h1 className="text-lg sm:text-xl font-semibold text-zinc-100 tracking-wide flex items-center gap-2">
+            <span className="text-2xl">🛠️</span>
+            Ship Upgrade Planner
             <span className="text-[10px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded-sm bg-amber-500/15 text-amber-300 border border-amber-500/30">
-              Beta
+              v2
             </span>
-          </div>
+          </h1>
           <p className="text-[11px] text-zinc-500">
-            Armá tu cadena visualmente — arrastrá ships del inventario o de RSI store al centro.
+            Create your CCU path — drag ships to the canvas and connect them.
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {cards.length >= 2 && (
-            <button
-              onClick={runAutoSuggest}
-              disabled={autoSuggesting}
-              className="text-[11px] px-3 py-1.5 bg-amber-500/15 border border-amber-500/40 rounded-sm text-amber-300 hover:bg-amber-500/25 hover:border-amber-500/60 transition-colors disabled:opacity-50 disabled:cursor-wait flex items-center gap-1.5"
-              title="Corre el solver y rellena los pasos intermedios entre la nave base y la target"
-            >
-              {autoSuggesting ? (
-                <span className="w-3 h-3 border-2 border-amber-500/30 border-t-amber-300 rounded-full animate-spin" />
-              ) : (
-                <span>⚡</span>
-              )}
-              Sugerencia auto
-            </button>
-          )}
-          {cards.length >= 2 && (
-            <button
-              onClick={() => setShowSaveDialog(true)}
-              className="text-[11px] px-3 py-1.5 bg-emerald-500/15 border border-emerald-500/40 rounded-sm text-emerald-300 hover:bg-emerald-500/25 hover:border-emerald-500/60 transition-colors flex items-center gap-1.5"
-            >
-              💾 Guardar
-            </button>
-          )}
-          {!isEmpty && (
-            <button
-              onClick={clearBoard}
-              className="text-[10px] px-2.5 py-1.5 bg-zinc-900/60 border border-zinc-700/60 rounded-sm text-zinc-400 hover:text-rose-300 hover:border-rose-500/40 transition-colors"
-            >
-              Vaciar
-            </button>
-          )}
-          <Link
-            href="/hangar?tab=ccu-chains"
-            className="text-[10px] px-2.5 py-1.5 bg-zinc-900/60 border border-zinc-700/60 rounded-sm text-zinc-400 hover:text-cyan-300 hover:border-cyan-500/40 transition-colors"
-          >
-            ← Calculator clásico
-          </Link>
-        </div>
+        <Link
+          href="/hangar?tab=ccu-chains"
+          className="text-[10px] px-2.5 py-1.5 bg-zinc-900/60 border border-zinc-700/60 rounded-sm text-zinc-400 hover:text-cyan-300 hover:border-cyan-500/40 transition-colors"
+        >
+          ← Calculator clásico
+        </Link>
       </div>
 
       {/* Status message */}
-      {statusMessage && (
+      {statusMsg && (
         <div
           className={`px-3 py-2 rounded-sm border text-[11px] ${
-            statusMessage.kind === "ok"
+            statusMsg.kind === "ok"
               ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
               : "bg-rose-500/10 border-rose-500/30 text-rose-300"
           }`}
         >
-          {statusMessage.text}
+          {statusMsg.text}
           <button
-            onClick={() => setStatusMessage(null)}
+            onClick={() => setStatusMsg(null)}
             className="float-right text-zinc-500 hover:text-zinc-300"
           >
             ✕
@@ -465,105 +354,251 @@ export function ChainBoardWorkspace() {
         </div>
       )}
 
-      {/* Save dialog */}
-      {showSaveDialog && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-sm w-full max-w-md p-5 space-y-3">
-            <h3 className="text-sm font-semibold text-zinc-100">Guardar cadena</h3>
-            <p className="text-[11px] text-zinc-400">
-              Va a aparecer en <span className="text-cyan-300">Cadenas Guardadas</span> con
-              status "Planning". Podés trackear el progreso desde ahí.
-            </p>
-            <input
-              type="text"
-              value={chainName}
-              onChange={(e) => setChainName(e.target.value)}
-              placeholder="Nombre de la cadena (ej. 'Hacia Polaris LTI')"
-              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800/60 rounded-sm text-[12px] font-mono text-zinc-100 focus:outline-none focus:border-emerald-500/50"
-              autoFocus
-            />
-            <div className="flex items-center justify-end gap-2 pt-2">
-              <button
-                onClick={() => setShowSaveDialog(false)}
-                className="text-[11px] px-3 py-1.5 text-zinc-400 hover:text-zinc-200"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={saveChain}
-                disabled={saving || !chainName.trim()}
-                className="text-[11px] px-3 py-1.5 bg-emerald-500/20 border border-emerald-500/40 rounded-sm text-emerald-300 hover:bg-emerald-500/30 disabled:opacity-50"
-              >
-                {saving ? "Guardando…" : "Guardar"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 4-col grid */}
+      <div className="flex-1 min-h-[600px] grid grid-cols-1 md:grid-cols-[200px_220px_1fr_280px] gap-3">
+        <section className="min-h-[400px] hidden md:block">
+          <ChainBoardInventoryColumn usedShipIds={usedShipIds} />
+        </section>
 
-      {/* Mobile tab switcher (oculto en md+) */}
-      <div className="md:hidden flex items-center gap-1 p-1 bg-zinc-900/60 border border-zinc-800/60 rounded-sm">
-        {(
-          [
-            { id: "inventory", label: "Mi Inventario", icon: "📦" },
-            { id: "canvas", label: "Pizarra", icon: "🎨" },
-            { id: "store", label: "RSI Store", icon: "🛒" },
-          ] as const
-        ).map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setMobileTab(t.id)}
-            className={`flex-1 text-[11px] py-1.5 rounded-sm transition-colors ${
-              mobileTab === t.id
-                ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
-                : "text-zinc-400 hover:text-zinc-200"
-            }`}
-          >
-            <span className="mr-1">{t.icon}</span>
-            {t.label}
-          </button>
-        ))}
+        <section className="min-h-[400px] hidden md:block">
+          <ChainBoardStoreColumn />
+        </section>
+
+        <section className="min-h-[600px]">
+          <ChainBoardCanvasFlow
+            nodes={nodes}
+            edges={edges}
+            selectedNodeId={selectedNodeId}
+            onMoveNode={moveNode}
+            onSelectNode={setSelectedNodeId}
+            onDeleteNode={deleteNode}
+            onEditPath={editPathOnNode}
+            onConnect={connectNodes}
+            onCycleEdgeKind={cycleEdgeKind}
+            onAddShipAt={addShipAt}
+            onAddHangarCcuAt={addHangarCcuAt}
+          />
+        </section>
+
+        <section className="min-h-[400px] hidden md:block">
+          <RightPanel
+            selectedNode={selectedNode}
+            upstreamChain={upstreamChain}
+            totalCost={totalCost}
+            onSelectNode={setSelectedNodeId}
+            onClose={() => setSelectedNodeId(null)}
+          />
+        </section>
       </div>
 
-      {/* 3-column grid (desktop) / single panel (mobile) */}
-      <div className="grid grid-cols-1 md:grid-cols-[280px_1fr_280px] lg:grid-cols-[320px_1fr_320px] gap-3">
-        {/* Left — Mi Inventario */}
-        <section
-          className={`min-h-[400px] ${mobileTab !== "inventory" ? "hidden md:block" : ""}`}
-        >
-          <ChainBoardInventoryColumn
-            usedShipIds={usedShipIds}
-            onAddCard={addCard}
-            onAddCcuPair={addCcuPair}
-            hasBaseShip={cards.length > 0}
-          />
-        </section>
-
-        {/* Center — Pizarra (CB.10 Fase 1: canvas free-form con xyflow) */}
-        <section
-          className={`min-h-[600px] ${mobileTab !== "canvas" ? "hidden md:block" : ""}`}
-        >
-          <ChainBoardCanvasFlow
-            cards={cards}
-            onRemove={removeCard}
-            onMove={updateCardPosition}
-            onAddCardAt={addCardAt}
-            onAddCcuPairAt={addCcuPairAt}
-            onConnect={onConnectCards}
-          />
-        </section>
-
-        {/* Right — Constructor de CCU (estilo RSI) */}
-        <section
-          className={`min-h-[400px] ${mobileTab !== "store" ? "hidden md:block" : ""}`}
-        >
-          <ChainBoardStoreColumn
-            usedShipIds={usedShipIds}
-            onAddCard={addCard}
-            lastBoardCard={cards.length > 0 ? cards[cards.length - 1] : null}
-          />
-        </section>
+      {/* Bottom toolbar */}
+      <div className="flex items-center justify-center gap-2 py-2 border-t border-zinc-800/40">
+        <ToolbarButton onClick={clearBoard} icon="🗑" label="Clear" tone="rose" />
+        <ToolbarButton onClick={saveBoard} icon="💾" label="Save" tone="emerald" />
+        <ToolbarButton onClick={exportBoard} icon="↓" label="Export" tone="cyan" />
+        <ToolbarButton onClick={importBoard} icon="↑" label="Import" tone="amber" />
       </div>
     </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RightPanel (inline)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface RightPanelProps {
+  selectedNode: BoardNode | null;
+  upstreamChain: { from: BoardNode; edge: BoardEdge; to: BoardNode }[];
+  totalCost: number;
+  onSelectNode: (id: string) => void;
+  onClose: () => void;
+}
+
+const KIND_LABEL: Record<UpgradeKind, { label: string; cls: string }> = {
+  normal: { label: "Normal", cls: "bg-blue-500/15 text-blue-300 border-blue-500/40" },
+  warbond: { label: "WB", cls: "bg-rose-500/15 text-rose-300 border-rose-500/40" },
+  hanger: { label: "Hanger", cls: "bg-cyan-500/15 text-cyan-300 border-cyan-500/40" },
+};
+
+function RightPanel({ selectedNode, upstreamChain, totalCost, onSelectNode, onClose }: RightPanelProps) {
+  if (!selectedNode) {
+    return (
+      <div className="h-full flex flex-col bg-zinc-900/40 border border-zinc-800/60 rounded-md p-4 items-center justify-center text-center">
+        <p className="text-[12px] text-zinc-500 mb-1">Sin nave seleccionada</p>
+        <p className="text-[10px] text-zinc-600 leading-relaxed">
+          Click en una nave del canvas
+          <br />
+          para ver detalles y rutas.
+        </p>
+      </div>
+    );
+  }
+
+  const { ship } = selectedNode;
+  const hasWarbond =
+    ship.warbondUsd != null && ship.warbondUsd > 0 && ship.warbondUsd !== ship.msrpUsd;
+
+  return (
+    <div className="h-full flex flex-col bg-zinc-900/40 border border-zinc-800/60 rounded-md overflow-hidden">
+      {/* Header */}
+      <div className="px-3 pt-3 pb-2 border-b border-zinc-800/50 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h3 className="text-[13px] font-semibold text-zinc-100 truncate">{ship.name}</h3>
+          <p className="text-[10px] text-zinc-500 italic truncate">
+            {ship.manufacturer ?? "—"}
+            {ship.role ? ` · ${ship.role}` : ""}
+          </p>
+        </div>
+        <button
+          onClick={onClose}
+          className="text-zinc-500 hover:text-rose-300 text-[14px] px-1 shrink-0"
+          title="Cerrar panel"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {/* Foto */}
+        {ship.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={ship.imageUrl}
+            alt={ship.name}
+            className="w-full aspect-video object-cover border-b border-zinc-800/60"
+            draggable={false}
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.opacity = "0.2";
+            }}
+          />
+        ) : (
+          <div className="w-full aspect-video bg-zinc-800/40 border-b border-zinc-800/60 flex items-center justify-center text-zinc-700 text-3xl">
+            🚀
+          </div>
+        )}
+
+        {/* Ship Value */}
+        <div className="px-3 py-3 border-b border-zinc-800/40">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">
+              Ship Value
+            </span>
+            <span className="text-[18px] font-mono font-bold text-cyan-300">
+              ${ship.msrpUsd.toFixed(2)}
+            </span>
+          </div>
+          {hasWarbond && (
+            <div className="flex items-center justify-between mt-0.5">
+              <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-600">
+                Warbond
+              </span>
+              <span className="text-[12px] font-mono text-cyan-400">
+                ${ship.warbondUsd!.toFixed(2)}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Alternative Upgrade Routes */}
+        <div className="px-3 py-3">
+          <h4 className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 mb-2">
+            Upgrade Path ({upstreamChain.length} {upstreamChain.length === 1 ? "step" : "steps"})
+          </h4>
+          {upstreamChain.length === 0 && (
+            <p className="text-[10px] text-zinc-600 italic">
+              Esta nave no tiene un upgrade entrante en el canvas.
+            </p>
+          )}
+          <div className="space-y-2">
+            {upstreamChain.map((s) => {
+              const kindStyle = KIND_LABEL[s.edge.kind];
+              return (
+                <div
+                  key={s.edge.id}
+                  className="bg-zinc-950/60 border border-zinc-800/60 rounded-sm overflow-hidden"
+                >
+                  <button
+                    onClick={() => onSelectNode(s.from.id)}
+                    className="w-full flex items-center gap-1.5 p-1.5 hover:bg-zinc-800/40 transition-colors"
+                  >
+                    {s.from.ship.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={s.from.ship.imageUrl}
+                        alt=""
+                        className="w-10 h-7 object-cover rounded-sm shrink-0"
+                        draggable={false}
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.opacity = "0.2";
+                        }}
+                      />
+                    ) : (
+                      <div className="w-10 h-7 rounded-sm bg-zinc-800/60 shrink-0" />
+                    )}
+                    <span className="text-[10px] text-zinc-300 truncate flex-1 text-left">
+                      From {s.from.ship.name}
+                    </span>
+                  </button>
+                  <div className="flex items-center justify-between px-2 py-1 border-t border-zinc-800/40 bg-zinc-900/40">
+                    <span
+                      className={`text-[9px] font-mono uppercase tracking-wider px-1 rounded-[2px] border ${kindStyle.cls}`}
+                    >
+                      {kindStyle.label}
+                    </span>
+                    <span className="text-[10px] font-mono text-zinc-300">
+                      ${s.edge.price.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {upstreamChain.length > 0 && (
+            <div className="mt-3 pt-2 border-t border-zinc-800/40 flex items-center justify-between">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">
+                Total Path Cost
+              </span>
+              <span className="text-[14px] font-mono font-bold text-amber-300">
+                ${totalCost.toFixed(2)}
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ToolbarButton (inline)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TONE: Record<string, string> = {
+  rose: "border-rose-500/40 text-rose-300 hover:bg-rose-500/15",
+  emerald: "border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/15",
+  cyan: "border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/15",
+  amber: "border-amber-500/40 text-amber-300 hover:bg-amber-500/15",
+};
+
+function ToolbarButton({
+  onClick,
+  icon,
+  label,
+  tone,
+}: {
+  onClick: () => void;
+  icon: string;
+  label: string;
+  tone: keyof typeof TONE;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`text-[11px] font-mono uppercase tracking-wider px-3 py-1.5 rounded-sm border bg-zinc-950/40 transition-colors flex items-center gap-1.5 ${TONE[tone]}`}
+    >
+      <span>{icon}</span>
+      {label}
+    </button>
   );
 }
