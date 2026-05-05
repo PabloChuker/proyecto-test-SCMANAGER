@@ -516,7 +516,7 @@ export function ChainBoardWorkspace() {
     URL.revokeObjectURL(url);
   }, [nodes, edges]);
 
-  const shareBoard = useCallback(async () => {
+  const copyChainToClipboard = useCallback(async () => {
     if (nodes.length === 0) {
       setStatusMsg({ kind: "err", text: "Pizarra vacía — no hay nada para compartir." });
       return;
@@ -527,10 +527,9 @@ export function ChainBoardWorkspace() {
       await navigator.clipboard.writeText(json);
       setStatusMsg({
         kind: "ok",
-        text: "Cadena copiada al portapapeles. Pegala en 'Import JSON' de otro browser para importarla.",
+        text: "JSON copiado. Pegalo en 'Import' de otra computadora para cargarla.",
       });
     } catch {
-      // Fallback: ofrecer descarga
       const blob = new Blob([json], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -541,6 +540,43 @@ export function ChainBoardWorkspace() {
       setStatusMsg({ kind: "ok", text: "Cadena descargada (clipboard no disponible)." });
     }
   }, [nodes, edges]);
+
+  const [publishBusy, setPublishBusy] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false);
+  const publishToCommunity = useCallback(
+    async (name: string, tagsRaw: string) => {
+      if (nodes.length < 2) {
+        setStatusMsg({ kind: "err", text: "La cadena necesita al menos 2 naves." });
+        return;
+      }
+      setPublishBusy(true);
+      try {
+        const tags = tagsRaw
+          .split(",")
+          .map((t) => t.trim())
+          .filter(Boolean)
+          .slice(0, 5);
+        const snap: BoardSnapshot = { version: 2, nodes, edges, savedAt: new Date().toISOString() };
+        const r = await fetch("/api/chain-board/share", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, snapshot: snap, tags }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error ?? "Error al publicar.");
+        setStatusMsg({
+          kind: "ok",
+          text: `Cadena "${name}" publicada en la comunidad.`,
+        });
+        setPublishOpen(false);
+      } catch (e: any) {
+        setStatusMsg({ kind: "err", text: e?.message ?? "Error al publicar." });
+      } finally {
+        setPublishBusy(false);
+      }
+    },
+    [nodes, edges],
+  );
 
   const importBoard = useCallback(() => {
     const input = document.createElement("input");
@@ -789,7 +825,8 @@ export function ChainBoardWorkspace() {
           onLoad={loadNamed}
           onDelete={deleteNamed}
         />
-        <ToolbarButton onClick={shareBoard} icon="🔗" label="Compartir" tone="violet" />
+        <ToolbarButton onClick={copyChainToClipboard} icon="🔗" label="Copiar JSON" tone="violet" />
+        <ToolbarButton onClick={() => setPublishOpen(true)} icon="🚀" label="Publicar" tone="fuchsia" />
         <Link
           href="/hangar/chain-board/community"
           className="text-[11px] font-mono uppercase tracking-wider px-3 py-1.5 rounded-sm border bg-zinc-950/40 transition-colors flex items-center gap-1.5 border-fuchsia-500/40 text-fuchsia-300 hover:bg-fuchsia-500/15"
@@ -799,6 +836,93 @@ export function ChainBoardWorkspace() {
         </Link>
         <ToolbarButton onClick={exportBoard} icon="↓" label="Export" tone="cyan" />
         <ToolbarButton onClick={importBoard} icon="↑" label="Import" tone="amber" />
+      </div>
+
+      {/* Modal de publicar a comunidad */}
+      {publishOpen && (
+        <PublishModal
+          busy={publishBusy}
+          onClose={() => setPublishOpen(false)}
+          onPublish={publishToCommunity}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── PublishModal ────────────────────────────────────────────────────────────
+
+function PublishModal({
+  busy, onClose, onPublish,
+}: {
+  busy: boolean;
+  onClose: () => void;
+  onPublish: (name: string, tagsRaw: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [tags, setTags] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-zinc-900 border border-fuchsia-500/40 rounded-md max-w-md w-full p-5 space-y-3">
+        <h3 className="text-[14px] font-semibold text-zinc-100 flex items-center gap-2">
+          <span>🚀</span>
+          Publicar cadena a la comunidad
+        </h3>
+        <p className="text-[11px] text-zinc-500 leading-snug">
+          Tu cadena va a quedar visible para todos los usuarios de SC Labs. Requiere estar logueado.
+          Otros podrán votar, comentar e importarla.
+        </p>
+        <div>
+          <label className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-1 block">
+            Nombre
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Ej: Aurora ES → Polaris LTI (max ahorro)"
+            maxLength={120}
+            disabled={busy}
+            className="w-full px-2 py-1.5 bg-zinc-950 border border-zinc-800/60 rounded-sm text-[12px] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-fuchsia-500/50"
+            autoFocus
+          />
+        </div>
+        <div>
+          <label className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 mb-1 block">
+            Tags (separados por coma, max 5)
+          </label>
+          <input
+            type="text"
+            value={tags}
+            onChange={(e) => setTags(e.target.value)}
+            placeholder="Ej: LTI, Capital, Warbond"
+            disabled={busy}
+            className="w-full px-2 py-1.5 bg-zinc-950 border border-zinc-800/60 rounded-sm text-[12px] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-fuchsia-500/50"
+          />
+        </div>
+        <div className="flex gap-2 pt-2">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="flex-1 px-3 py-1.5 rounded-sm border border-zinc-700 text-zinc-400 text-[11px] hover:bg-zinc-800 transition-colors disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={() => onPublish(name, tags)}
+            disabled={busy || !name.trim()}
+            className="flex-1 px-3 py-1.5 rounded-sm border border-fuchsia-500/40 bg-fuchsia-500/15 text-fuchsia-300 text-[11px] font-medium hover:bg-fuchsia-500/25 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+          >
+            {busy ? (
+              <>
+                <span className="w-3 h-3 border-2 border-fuchsia-700 border-t-fuchsia-300 rounded-full animate-spin" />
+                Publicando...
+              </>
+            ) : (
+              "🚀 Publicar"
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
