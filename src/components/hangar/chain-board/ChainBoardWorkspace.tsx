@@ -1101,7 +1101,9 @@ function ShipPicker({
         (s) => s.name.toLowerCase().includes(q) || (s.manufacturer ?? "").toLowerCase().includes(q),
       );
     }
-    return arr.slice(0, 30);
+    // Sort por precio asc para que sea más fácil escanear visualmente.
+    arr = arr.slice().sort((a, b) => a.msrpUsd - b.msrpUsd);
+    return arr;
   }, [catalog, search, filterFn]);
 
   return (
@@ -1133,7 +1135,7 @@ function ShipPicker({
             className="w-full px-2 py-1.5 bg-zinc-950 border border-zinc-800/60 rounded-sm text-[11px] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-amber-500/50"
           />
           {open && filtered.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-zinc-950 border border-zinc-800 rounded-sm shadow-xl z-30 p-0.5 space-y-0.5">
+            <div className="absolute top-full left-0 right-0 mt-1 max-h-[420px] overflow-y-auto bg-zinc-950 border border-zinc-800 rounded-sm shadow-xl z-30 p-0.5 space-y-0.5">
               {filtered.map((s) => (
                 <button
                   key={s.id}

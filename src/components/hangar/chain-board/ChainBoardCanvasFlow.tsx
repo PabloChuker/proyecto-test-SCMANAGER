@@ -317,6 +317,16 @@ function CanvasInner({
     onSelectNode(null);
   }, [onSelectNode]);
 
+  // Centrar viewport sobre todos los nodos. Si está vacío, vuelve al origen.
+  const handleFitView = useCallback(() => {
+    if (!flowInstance) return;
+    if (nodes.length === 0) {
+      flowInstance.setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 300 });
+      return;
+    }
+    flowInstance.fitView({ padding: 0.2, duration: 400, maxZoom: 1.2 });
+  }, [flowInstance, nodes.length]);
+
   return (
     <div
       ref={wrapperRef}
@@ -337,6 +347,22 @@ function CanvasInner({
           </div>
         </div>
       )}
+
+      {/* Botón flotante "Centrar canvas" — top-right del canvas */}
+      <button
+        type="button"
+        onClick={handleFitView}
+        disabled={nodes.length === 0}
+        className={`absolute top-3 right-3 z-20 flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm border text-[10px] font-mono uppercase tracking-wider transition-colors shadow-md ${
+          nodes.length === 0
+            ? "bg-zinc-900/40 border-zinc-800/40 text-zinc-700 cursor-not-allowed"
+            : "bg-zinc-900/90 border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/15"
+        }`}
+        title="Centrar la cadena en el viewport"
+      >
+        <span className="text-[12px]">⊕</span>
+        Centrar
+      </button>
       <ReactFlow
         nodes={localNodes}
         edges={localEdges}

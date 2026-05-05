@@ -36,6 +36,7 @@ interface RawCatalogRow {
 type Tab = "ships" | "ccus";
 type SortDir = "asc" | "desc";
 type InsFilter = "all" | InsuranceType;
+type LocFilter = "all" | "hangar" | "buyback";
 
 const INS_TAG: Record<InsuranceType, string> = {
   LTI: "LTI",
@@ -122,6 +123,7 @@ export function ChainBoardStoreColumn({ usedShipIds }: MyHangarProps) {
   const [maxPrice, setMaxPrice] = useState("");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [insFilter, setInsFilter] = useState<InsFilter>("all");
+  const [locFilter, setLocFilter] = useState<LocFilter>("all");
 
   const min = minPrice ? parseFloat(minPrice) : -Infinity;
   const max = maxPrice ? parseFloat(maxPrice) : Infinity;
@@ -136,6 +138,7 @@ export function ChainBoardStoreColumn({ usedShipIds }: MyHangarProps) {
       if (hs.itemCategory !== "standalone_ship" && hs.itemCategory !== "game_package") continue;
       if (hs.isLoaner || hs.isLocked) continue;
       if (insFilter !== "all" && hs.insuranceType !== insFilter) continue;
+      if (locFilter !== "all" && hs.location !== locFilter) continue;
       const match = findShip(hs.shipName);
       if (!match) continue;
       if (q && !match.name.toLowerCase().includes(q) && !(match.manufacturer ?? "").toLowerCase().includes(q)) continue;
@@ -144,7 +147,7 @@ export function ChainBoardStoreColumn({ usedShipIds }: MyHangarProps) {
     }
     rows.sort((a, b) => (a.ship.msrpUsd - b.ship.msrpUsd) * dir);
     return rows;
-  }, [ships, findShip, search, min, max, dir, insFilter]);
+  }, [ships, findShip, search, min, max, dir, insFilter, locFilter]);
 
   // ─── Mis CCUs ─────────────────────────────────────────────────────────
   type CcuRow = {
@@ -172,11 +175,12 @@ export function ChainBoardStoreColumn({ usedShipIds }: MyHangarProps) {
     let filtered = rows.filter((r) => {
       if (q && !r.fromName.toLowerCase().includes(q) && !r.toName.toLowerCase().includes(q)) return false;
       if (r.pricePaid < min || r.pricePaid > max) return false;
+      if (locFilter !== "all" && r.location !== locFilter) return false;
       return true;
     });
     filtered.sort((a, b) => (a.pricePaid - b.pricePaid) * dir);
     return filtered;
-  }, [ccus, findShip, search, min, max, dir]);
+  }, [ccus, findShip, search, min, max, dir, locFilter]);
 
   return (
     <div className="h-full flex flex-col bg-zinc-900/40 border border-zinc-800/60 rounded-md overflow-hidden">
@@ -242,25 +246,37 @@ export function ChainBoardStoreColumn({ usedShipIds }: MyHangarProps) {
             {sortDir === "asc" ? "↑" : "↓"}
           </button>
         </div>
-        {/* Filtro seguro (solo en tab Naves) */}
-        {tab === "ships" && (
+        {/* Fila de filtros: Lugar (siempre) + Seguro (solo Naves) */}
+        <div className="flex gap-1">
           <select
-            value={insFilter}
-            onChange={(e) => setInsFilter(e.target.value as InsFilter)}
-            className="w-full px-1.5 py-1 bg-zinc-950 border border-zinc-800/60 rounded-sm text-[10px] text-zinc-300 focus:outline-none focus:border-emerald-500/50"
-            title="Filtro de seguro"
+            value={locFilter}
+            onChange={(e) => setLocFilter(e.target.value as LocFilter)}
+            className="flex-1 px-1.5 py-1 bg-zinc-950 border border-zinc-800/60 rounded-sm text-[10px] text-zinc-300 focus:outline-none focus:border-amber-500/50"
+            title="Filtro por ubicación"
           >
-            <option value="all">Seguro: Todos</option>
-            <option value="LTI">LTI</option>
-            <option value="120_months">120 months</option>
-            <option value="72_months">72 months</option>
-            <option value="48_months">48 months</option>
-            <option value="24_months">24 months</option>
-            <option value="6_months">6 months</option>
-            <option value="3_months">3 months</option>
-            <option value="unknown">Unknown</option>
+            <option value="all">Lugar: Todos</option>
+            <option value="hangar">Hangar (HGR)</option>
+            <option value="buyback">Buyback (BB)</option>
           </select>
-        )}
+          {tab === "ships" && (
+            <select
+              value={insFilter}
+              onChange={(e) => setInsFilter(e.target.value as InsFilter)}
+              className="flex-1 px-1.5 py-1 bg-zinc-950 border border-zinc-800/60 rounded-sm text-[10px] text-zinc-300 focus:outline-none focus:border-emerald-500/50"
+              title="Filtro de seguro"
+            >
+              <option value="all">Seguro: Todos</option>
+              <option value="LTI">LTI</option>
+              <option value="120_months">120m</option>
+              <option value="72_months">72m</option>
+              <option value="48_months">48m</option>
+              <option value="24_months">24m</option>
+              <option value="6_months">6m</option>
+              <option value="3_months">3m</option>
+              <option value="unknown">?</option>
+            </select>
+          )}
+        </div>
       </div>
 
       {/* Lista */}
