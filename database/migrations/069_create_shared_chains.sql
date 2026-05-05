@@ -162,8 +162,11 @@ FOR EACH ROW EXECUTE FUNCTION public.tg_chain_comments_recount();
 
 
 -- ── 5) Vista pública con datos del autor (sin PII) ──────────────────────────
--- Útil para listings: trae el username + avatar del owner sin tocar profiles
--- directamente (que tiene RLS owner-only). Usamos profiles_public.
+-- Útil para listings: trae el username + avatar del owner. Hacemos JOIN
+-- directo contra profiles seleccionando SOLO las columnas seguras
+-- (username, display_name, avatar_url). La view se crea con
+-- security_invoker = false para que pueda leer profiles sin importar la RLS
+-- del invocador (la vista corre con permisos del owner = postgres).
 CREATE OR REPLACE VIEW public.shared_chains_public
 WITH (security_invoker = false) AS
 SELECT
@@ -185,11 +188,11 @@ SELECT
   c.created_at,
   c.updated_at
 FROM public.shared_chains c
-LEFT JOIN public.profiles_public p ON p.id = c.owner_id;
+LEFT JOIN public.profiles p ON p.id = c.owner_id;
 
 GRANT SELECT ON public.shared_chains_public TO authenticated, anon;
 
 COMMENT ON VIEW public.shared_chains_public IS
   'Listing público de cadenas compartidas con datos del autor (username, '
-  'avatar). NO incluye snapshot_json — usa shared_chains directamente para '
-  'cargar el detalle completo (también lectura pública).';
+  'display_name, avatar_url). NO incluye snapshot_json — usar shared_chains '
+  'directamente para cargar el detalle completo (también lectura pública).';

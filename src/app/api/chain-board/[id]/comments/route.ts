@@ -23,12 +23,13 @@ export async function GET(
       .limit(200);
     if (error) throw error;
 
-    // Enriquecer con username/avatar via profiles_public
+    // Enriquecer con username/avatar — profiles directamente con whitelist de
+    // columnas seguras (profiles_public no existe en este DB).
     const userIds = Array.from(new Set((data ?? []).map((c) => c.user_id)));
     let profilesById = new Map<string, { username: string | null; display_name: string | null; avatar_url: string | null }>();
     if (userIds.length > 0) {
       const { data: profiles } = await supabase
-        .from("profiles_public")
+        .from("profiles")
         .select("id, username, display_name, avatar_url")
         .in("id", userIds);
       profilesById = new Map(
