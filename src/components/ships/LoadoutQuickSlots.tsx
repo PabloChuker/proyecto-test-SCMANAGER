@@ -144,6 +144,35 @@ export function LoadoutQuickSlots({
     (idx: number) => {
       const slot = slots[idx];
       if (!slot) return;
+      // ── Comportamiento tipo "tabs" ──────────────────────────────────────
+      // Antes de saltar al slot destino, capturamos el ship+build de la URL
+      // actual y, si hay otro slot que apunta a ese MISMO ship, lo
+      // actualizamos con el último build code visto. Así, cuando volvés a
+      // ese slot más adelante, recuperás exactamente la última config que
+      // estabas viendo (no la que tenías al pinear).
+      const currUrl = new URL(window.location.href);
+      const currShip = currUrl.searchParams.get("ship");
+      const currBuild = currUrl.searchParams.get("build");
+      if (currShip && currShip !== slot.shipReference) {
+        setSlots((prev) => {
+          const next = prev.slice();
+          // Buscar el slot que apunta al ship actual (cualquier build) y
+          // refrescarle el buildCode con el state actual.
+          for (let i = 0; i < next.length; i++) {
+            const s = next[i];
+            if (s && s.shipReference === currShip) {
+              next[i] = {
+                ...s,
+                buildCode: currBuild,
+                savedAt: new Date().toISOString(),
+              };
+              break;
+            }
+          }
+          return next;
+        });
+      }
+      // Saltar al slot destino
       const url = new URL("/loadout", window.location.origin);
       url.searchParams.set("ship", slot.shipReference);
       if (slot.buildCode) url.searchParams.set("build", slot.buildCode);

@@ -746,7 +746,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const [wishlistItems, setWishlistItems] = useState<WishlistEntry[]>([]);
   const [wishlistSending, setWishlistSending] = useState(false);
   const [wishlistSent, setWishlistSent] = useState(false);
-  const mountedRef = useRef(false);
+  const lastLoadKey = useRef<string | null>(null);
   const overrideCountRef = useRef(0);
 
   // ─── Geometric grid layout (v11 — useDpsGridLayout + DpsGridCanvas) ────────
@@ -754,7 +754,19 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   // DpsGridCanvas renderiza el canvas con posicionamiento absoluto y dnd-kit.
   // Este componente sólo necesita exponer: visibleIds, widgetBlocks, widgetWidth.
 
-  useEffect(() => { if (mountedRef.current) return; mountedRef.current = true; const urlShip = searchParams.get("ship"); loadShip(urlShip || shipId, searchParams.get("build") || null); }, [shipId]);
+  // Reactivo a cambios de searchParams para soportar quick-slots tipo "tabs":
+  // cuando el usuario clickea otro slot, la URL cambia y este efecto recarga
+  // el ship+build correspondiente. Guardamos un key para evitar reload de la
+  // MISMA combinación (que dispararía un fetch redundante).
+  useEffect(() => {
+    const urlShip = searchParams.get("ship") || shipId || "titan";
+    const urlBuild = searchParams.get("build");
+    const key = urlShip + "::" + (urlBuild ?? "");
+    if (lastLoadKey.current === key) return;
+    lastLoadKey.current = key;
+    loadShip(urlShip, urlBuild);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, shipId]);
 
   // Loadout.4d (2026-05-04): prefetch del catálogo apenas cargan los
   // hardpoints. Por cada combo (categoría, size) único del ship dispara un
@@ -773,7 +785,9 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   }, [hardpoints]);
   useEffect(() => {
     const c = overrides.size;
-    if (!mountedRef.current) return;
+    // Antes de la primera carga del ship no actualizamos la URL — sino
+    // borraríamos el ?build= que el user puede haber traído en el link.
+    if (lastLoadKey.current === null) return;
     if (c === overrideCountRef.current && c === 0) return;
     overrideCountRef.current = c;
     const encoded = encodeBuild();
