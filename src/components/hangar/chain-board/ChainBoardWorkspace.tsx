@@ -12,7 +12,6 @@
 // =============================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useHangarStore, type HangarCCU } from "@/store/useHangarStore";
 import { getShipThumbUrl } from "../HangarShipCard";
 import { ChainBoardCanvasFlow } from "./ChainBoardCanvasFlow";
@@ -642,12 +641,6 @@ export function ChainBoardWorkspace() {
             La <span className="text-cyan-400">flecha</span> entre dos naves <span className="text-cyan-400">es</span> el CCU.
           </p>
         </div>
-        <Link
-          href="/hangar?tab=ccu-chains"
-          className="text-[10px] px-2.5 py-1.5 bg-zinc-900/60 border border-zinc-700/60 rounded-sm text-zinc-400 hover:text-cyan-300 hover:border-cyan-500/40 transition-colors"
-        >
-          ← Calculator clásico
-        </Link>
       </div>
 
       {/* Info bar global (cadena entera) */}

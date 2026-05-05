@@ -65,7 +65,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "My Fleet",   href: "/hangar?tab=fleet" },
       { label: "Buyback",    href: "/hangar?tab=buyback" },
       { label: "Wishlist",   href: "/hangar?tab=wishlist" },
-      { label: "CCU Chains", href: "/hangar?tab=ccu-chains" },
+      { label: "CCU Chains", href: "/hangar/chain-board" },
     ],
   },
   {

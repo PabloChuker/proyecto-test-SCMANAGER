@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useHangarStore, type InsuranceType, type ItemCategory, type CCUChain, type WishlistPriority, type HangarShip } from "@/store/useHangarStore";
+import { useHangarStore, type InsuranceType, type ItemCategory, type WishlistPriority, type HangarShip } from "@/store/useHangarStore";
 import { getLoanersFor } from "@/lib/loaners";
 import { FleetGrid } from "./FleetGrid";
 import { FleetList } from "./FleetList";
@@ -11,14 +11,15 @@ import { AddShipModal } from "./AddShipModal";
 import { CCUGrid } from "./CCUGrid";
 import { CCUList } from "./CCUList";
 import { AddCCUModal } from "./AddCCUModal";
-import { ChainList } from "./ChainList";
-import { ChainBuilder } from "./ChainBuilder";
-import { CCUChainCalculator } from "./CCUChainCalculator";
 import { QuickAddShip } from "./QuickAddShip";
 import { WishlistGrid } from "./WishlistGrid";
 import { WishlistList } from "./WishlistList";
 
-type TabType = "My Fleet" | "Buyback" | "Wishlist" | "CCU Chains";
+// 2026-05-05: tab "CCU Chains" eliminado del Hangar — ahora vive en su propia
+// ruta /hangar/chain-board (Ship Upgrade Planner v2). El header redirige
+// directamente ahí. Conservamos el alias del query para compatibilidad con
+// links viejos (redirige a Fleet).
+type TabType = "My Fleet" | "Buyback" | "Wishlist";
 
 const CATEGORY_OPTIONS: { value: ItemCategory | "all" | "ccu" | "fleet"; label: string }[] = [
   { value: "all", label: "All Items" },
@@ -44,17 +45,20 @@ const isPledgeShip = (s: HangarShip) =>
   (s.acquisitionType ?? "pledge") === "pledge" &&
   !s.isLoaner;
 
-// FEAT 2026-04-26: deep linking via ?tab= query param. El header ahora tiene
-// dropdown del Hangar con links directos a cada tab (Fleet/Buyback/Wishlist/
-// CCU Chains). Si la URL incluye ?tab=X, abrimos el tab correspondiente al
-// montar el dashboard.
+// FEAT 2026-04-26: deep linking via ?tab= query param. El header tiene
+// dropdown del Hangar con links directos a cada tab. Si la URL incluye
+// ?tab=X, abrimos el tab correspondiente al montar el dashboard.
+//
+// 2026-05-05: alias "ccu-chains"/"ccu" se mantienen para compatibilidad con
+// links viejos pero ahora redirigen a Fleet — el planner se mudó a su propia
+// ruta /hangar/chain-board (Ship Upgrade Planner v2).
 const TAB_FROM_QUERY: Record<string, TabType> = {
   fleet: "My Fleet",
   hangar: "My Fleet",
   buyback: "Buyback",
   wishlist: "Wishlist",
-  "ccu-chains": "CCU Chains",
-  ccu: "CCU Chains",
+  "ccu-chains": "My Fleet",
+  ccu: "My Fleet",
 };
 
 export function HangarDashboard() {
@@ -75,8 +79,6 @@ export function HangarDashboard() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [showAddShipModal, setShowAddShipModal] = useState(false);
   const [showAddCCUModal, setShowAddCCUModal] = useState(false);
-  const [showChainBuilder, setShowChainBuilder] = useState(false);
-  const [editingChain, setEditingChain] = useState<CCUChain | undefined>(undefined);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [showBulkMoveConfirm, setShowBulkMoveConfirm] = useState(false);
 
@@ -112,7 +114,6 @@ export function HangarDashboard() {
 
   const ships = useHangarStore((state) => state.ships);
   const ccus = useHangarStore((state) => state.ccus);
-  const chains = useHangarStore((state) => state.chains);
   const wishlist = useHangarStore((state) => state.wishlist);
   const exportToJSON = useHangarStore((state) => state.exportToJSON);
   const clearAll = useHangarStore((state) => state.clearAll);
@@ -269,9 +270,6 @@ export function HangarDashboard() {
     setShowBulkMoveConfirm(false);
   };
 
-  const handleOpenChainBuilder = (chain?: CCUChain) => { setEditingChain(chain); setShowChainBuilder(true); };
-  const handleCloseChainBuilder = () => { setShowChainBuilder(false); setEditingChain(undefined); };
-
   // Reset category filter when switching tabs
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
@@ -279,12 +277,11 @@ export function HangarDashboard() {
     setSearchQuery("");
   };
 
-  // Tab config
+  // Tab config — sin "CCU Chains" desde 2026-05-05 (mudado a /hangar/chain-board)
   const TABS: { id: TabType; label: string; count: number }[] = [
     { id: "My Fleet", label: "Hangar", count: fleetShips.length + fleetCCUs.length },
     { id: "Buyback", label: "Buyback", count: buybackShips.length + buybackCCUs.length },
     { id: "Wishlist", label: "Wishlist", count: wishlist.length },
-    { id: "CCU Chains", label: "CCU Chains", count: chains.length },
   ];
 
   // ── Wishlist filtering ──
@@ -572,43 +569,10 @@ export function HangarDashboard() {
         </div>
       )}
 
-      {/* ════════════════════════════════════════════════════════════════════════
-         CCU CHAINS TAB
-         ════════════════════════════════════════════════════════════════════════ */}
-      {activeTab === "CCU Chains" && (
-        <div className="space-y-8">
-          {/* ── Chain Calculator (Pathfinding) ── */}
-          <CCUChainCalculator />
-
-          {/* ── Separator ── */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-800/50" /></div>
-            <div className="relative flex justify-center">
-              <span className="bg-zinc-950 px-4 text-[10px] text-zinc-600 uppercase tracking-widest">Manual Chains</span>
-            </div>
-          </div>
-
-          {/* ── Manual Chain Builder (existing) ── */}
-          <div className="space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              <StatCard label="Total Chains" value={chains.length.toString()} accent="purple" />
-              <StatCard label="Total Chain Cost" value={`$${chains.reduce((sum, chain) => sum + chain.steps.reduce((s, step) => s + step.ccuPrice, 0), 0).toLocaleString()}`} />
-              <StatCard label="Status" value={`Active: ${chains.filter((c) => c.status === "in_progress").length} | Done: ${chains.filter((c) => c.status === "completed").length}`} />
-              <StatCard label="Planning" value={`${chains.filter((c) => c.status === "planning").length} chains`} />
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => handleOpenChainBuilder()} className="px-4 py-2 bg-amber-500/20 border border-amber-500/50 rounded-sm text-amber-400 text-sm font-medium hover:bg-amber-500/30 transition-all duration-300">New Chain</button>
-            </div>
-            <ChainList chains={chains} onEditChain={handleOpenChainBuilder} />
-          </div>
-        </div>
-      )}
-
       {/* ── Modals ── */}
       {showImportModal && <ImportModal onClose={() => setShowImportModal(false)} />}
       {showAddShipModal && <AddShipModal onClose={() => setShowAddShipModal(false)} />}
       {showAddCCUModal && <AddCCUModal onClose={() => setShowAddCCUModal(false)} />}
-      {showChainBuilder && <ChainBuilder chain={editingChain} onClose={handleCloseChainBuilder} />}
     </div>
   );
 }
