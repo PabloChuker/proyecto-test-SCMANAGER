@@ -1,17 +1,15 @@
 "use client";
 
 // =============================================================================
-// SC LABS — Canvas (Chain Board v2.1, 2026-05-05)
+// SC LABS — Canvas (Chain Board v2.2, 2026-05-05)
 //
-// Canvas free-form basado en @xyflow/react.
-// Drops aceptados:
-//   · application/x-sclabs-ship       → 1 ship
-//   · application/x-sclabs-hangar-ccu → 2 ships + edge LOCKED entre ellas
-// Edges:
-//   · normal/warbond/hanger con badge colored (Normal/WB/Hanger +$X)
-//   · si locked=true → candado, no cicla, kind/from/to inmutables
-//   · si invalid=true → línea roja sólida sin badge
-//   · click en badge (no-locked) cicla kind; doble click abre editor de precio
+// Cambios v2.2:
+//   · La flecha ES el CCU. Badge con label + precio + botón ✕ borrar (hover).
+//   · Edge locked (CCU del hangar): badge con candado, no cicla, no se borra
+//     individualmente (solo borrando uno de los nodos extremos).
+//   · Click badge no-locked = cicla kind. Doble-click = edita precio manual.
+//   · Edge invalid (sin CCU directo) = línea roja sólida.
+//   · Pasa accumulatedCostByNodeId al ShipNode para mostrar "tu costo" vs MSRP.
 // =============================================================================
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -49,7 +47,7 @@ import {
 } from "./types";
 import { ShipNode, type ShipNodeData } from "./ShipNode";
 
-// ── UpgradeEdge inline ───────────────────────────────────────────────────────
+// ── UpgradeEdge (la flecha = el CCU) ─────────────────────────────────────────
 
 type UpgradeEdgeData = {
   kind: UpgradeKind;
@@ -59,11 +57,12 @@ type UpgradeEdgeData = {
   priceManual?: boolean;
   onCycleKind?: (edgeId: string) => void;
   onEditPrice?: (edgeId: string) => void;
+  onDelete?: (edgeId: string) => void;
 } & Record<string, unknown>;
 
 const STYLE_BY_KIND: Record<UpgradeKind, { bg: string; text: string; label: string; stroke: string }> = {
   normal: { bg: "bg-blue-500", text: "text-white", label: "Normal", stroke: "#3b82f6" },
-  warbond: { bg: "bg-rose-600", text: "text-white", label: "WB", stroke: "#e11d48" },
+  warbond: { bg: "bg-rose-600", text: "text-white", label: "Warbond", stroke: "#e11d48" },
   hanger: { bg: "bg-cyan-500", text: "text-zinc-900", label: "Hanger", stroke: "#06b6d4" },
 };
 
@@ -76,10 +75,9 @@ function UpgradeEdgeImpl({
     sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition,
   });
 
-  // Si la edge es invalid, override: línea sólida roja, badge "?".
   const strokeColor = d.invalid ? "#ef4444" : style.stroke;
-  const dash = d.invalid ? undefined : "4 4";
-  const widthBase = d.invalid ? 2 : 1.75;
+  const dash = d.invalid ? undefined : "5 4";
+  const widthBase = d.invalid ? 2 : 2;
 
   return (
     <>
@@ -90,47 +88,73 @@ function UpgradeEdgeImpl({
           stroke: strokeColor,
           strokeWidth: selected ? widthBase + 0.75 : widthBase,
           strokeDasharray: dash,
-          opacity: selected ? 1 : 0.85,
+          opacity: selected ? 1 : 0.9,
         }}
       />
       <EdgeLabelRenderer>
         <div
-          className="nodrag nopan absolute pointer-events-auto"
+          className="nodrag nopan absolute pointer-events-auto group"
           style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
         >
           {d.invalid ? (
-            <div
-              className="bg-rose-600 text-white text-[10px] font-semibold px-2 py-0.5 rounded-sm shadow-md whitespace-nowrap"
-              title="No hay CCU directo entre estas naves. Agregá una intermedia."
-            >
-              ⚠ Sin CCU
+            <div className="bg-rose-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-md shadow-md whitespace-nowrap flex items-center gap-1 border border-rose-400/60">
+              <span>⚠ Sin CCU directo</span>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  d.onDelete?.(id);
+                }}
+                className="ml-1 text-white/80 hover:text-white text-[12px] leading-none"
+                title="Borrar conexión"
+              >
+                ✕
+              </button>
             </div>
           ) : (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (d.locked) return;
-                d.onCycleKind?.(id);
-              }}
-              onDoubleClick={(e) => {
-                e.stopPropagation();
-                if (d.locked) return;
-                d.onEditPrice?.(id);
-              }}
-              className={`${style.bg} ${style.text} text-[10px] font-semibold px-2 py-0.5 rounded-sm shadow-md whitespace-nowrap flex items-center gap-1 ${
-                d.locked ? "cursor-default" : "hover:scale-105 transition-transform cursor-pointer"
-              }`}
-              title={
-                d.locked
-                  ? "CCU del hangar — bloque inmutable. No se puede cambiar el tipo ni el precio."
-                  : `Click: cambiar tipo. Doble click: editar precio${d.priceManual ? " (manual)" : ""}.`
-              }
-            >
-              {d.locked && <span>🔒</span>}
-              <span>{style.label} +${d.price.toFixed(2)}</span>
-              {d.priceManual && !d.locked && <span className="text-[8px] opacity-80">✎</span>}
-            </button>
+            <div className={`flex items-stretch shadow-md rounded-md border-2 border-zinc-950 overflow-hidden ${d.locked ? "" : "hover:scale-105 transition-transform"}`}>
+              {/* CCU badge — la flecha entera */}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (d.locked) return;
+                  d.onCycleKind?.(id);
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  if (d.locked) return;
+                  d.onEditPrice?.(id);
+                }}
+                className={`${style.bg} ${style.text} text-[11px] font-bold px-2.5 py-1 whitespace-nowrap flex items-center gap-1.5 ${
+                  d.locked ? "cursor-default" : "cursor-pointer"
+                }`}
+                title={
+                  d.locked
+                    ? "CCU del hangar — bloque inmutable. Para borrarlo, eliminá una de las naves extremas."
+                    : `Click: cambiar tipo (Normal → WB → Hanger). Doble click: editar precio${d.priceManual ? " (manual)" : ""}.`
+                }
+              >
+                {d.locked && <span className="text-[10px]">🔒</span>}
+                <span>{style.label}</span>
+                <span className="font-mono">${d.price.toFixed(2)}</span>
+                {d.priceManual && !d.locked && <span className="text-[8px] opacity-80" title="Precio manual">✎</span>}
+              </button>
+              {/* Botón borrar (no para locked) */}
+              {!d.locked && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    d.onDelete?.(id);
+                  }}
+                  className="bg-zinc-950/90 text-zinc-400 hover:text-rose-300 hover:bg-rose-500/20 text-[12px] px-1.5 leading-none border-l border-zinc-800 transition-colors opacity-0 group-hover:opacity-100"
+                  title="Borrar este CCU"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
           )}
         </div>
       </EdgeLabelRenderer>
@@ -149,6 +173,8 @@ interface ChainBoardCanvasFlowProps {
   nodes: BoardNode[];
   edges: BoardEdge[];
   selectedNodeId: string | null;
+  /** Costo acumulado para llegar a cada nodo desde su raíz. */
+  accumulatedCostByNodeId: Map<string, number>;
   onMoveNode: (nodeId: string, position: { x: number; y: number }) => void;
   onSelectNode: (nodeId: string | null) => void;
   onDeleteNode: (nodeId: string) => void;
@@ -156,6 +182,7 @@ interface ChainBoardCanvasFlowProps {
   onConnect: (sourceId: string, targetId: string) => void;
   onCycleEdgeKind: (edgeId: string) => void;
   onEditEdgePrice: (edgeId: string) => void;
+  onDeleteEdge: (edgeId: string) => void;
   onAddShipAt: (ship: CatalogShip, position: { x: number; y: number }) => void;
   onAddHangarCcuAt: (payload: HangarCcuPayload, position: { x: number; y: number }) => void;
 }
@@ -164,6 +191,7 @@ function CanvasInner({
   nodes,
   edges,
   selectedNodeId,
+  accumulatedCostByNodeId,
   onMoveNode,
   onSelectNode,
   onDeleteNode,
@@ -171,6 +199,7 @@ function CanvasInner({
   onConnect,
   onCycleEdgeKind,
   onEditEdgePrice,
+  onDeleteEdge,
   onAddShipAt,
   onAddHangarCcuAt,
 }: ChainBoardCanvasFlowProps) {
@@ -192,13 +221,14 @@ function CanvasInner({
         ship: n.ship,
         selected: n.id === selectedNodeId,
         hasIncoming: incomingByTarget.has(n.id),
+        incomingPathCost: accumulatedCostByNodeId.get(n.id) ?? 0,
         onSelect: onSelectNode,
         onDelete: onDeleteNode,
         onEditPath,
       } satisfies ShipNodeData,
       draggable: true,
     }));
-  }, [nodes, selectedNodeId, incomingByTarget, onSelectNode, onDeleteNode, onEditPath]);
+  }, [nodes, selectedNodeId, incomingByTarget, accumulatedCostByNodeId, onSelectNode, onDeleteNode, onEditPath]);
 
   const rfEdges: Edge[] = useMemo(() => {
     return edges.map((e) => ({
@@ -216,9 +246,10 @@ function CanvasInner({
         priceManual: e.priceManual,
         onCycleKind: onCycleEdgeKind,
         onEditPrice: onEditEdgePrice,
+        onDelete: onDeleteEdge,
       } satisfies UpgradeEdgeData,
     }));
-  }, [edges, onCycleEdgeKind, onEditEdgePrice]);
+  }, [edges, onCycleEdgeKind, onEditEdgePrice, onDeleteEdge]);
 
   const [localNodes, setLocalNodes] = useState(rfNodes);
   const [localEdges, setLocalEdges] = useState(rfEdges);
@@ -277,9 +308,7 @@ function CanvasInner({
         if (!raw) return;
         const ship = JSON.parse(raw) as CatalogShip;
         onAddShipAt(ship, position);
-      } catch {
-        // payload corrupto
-      }
+      } catch {}
     },
     [flowInstance, onAddShipAt, onAddHangarCcuAt],
   );
@@ -303,7 +332,7 @@ function CanvasInner({
               Arrastrá una nave desde <span className="text-amber-400">Available Ships</span> o un CCU desde{" "}
               <span className="text-cyan-400">My Hangar</span>.
               <br />
-              Conectá naves arrastrando entre los puntos laterales.
+              La <span className="text-cyan-400">flecha</span> entre 2 naves ES el CCU.
             </p>
           </div>
         </div>

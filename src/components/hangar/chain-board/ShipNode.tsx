@@ -1,32 +1,27 @@
 "use client";
 
 // =============================================================================
-// SC LABS — ShipNode (Chain Board v2, 2026-05-05)
+// SC LABS — ShipNode (Chain Board v2.2, 2026-05-05)
 //
-// Custom node de @xyflow/react para el canvas. Replica el diseño del mockup
-// "Ship Upgrade Planner" — foto + nombre + manufacturer + role + precio +
-// EDIT PATH / DELETE — con tema oscuro.
-//
-// Handles:
-//   · target en el lado IZQUIERDO  (label "Upgrade from")
-//   · source en el lado DERECHO    (label "Upgrade to")
-// El user dragea de un handle a otro para crear un CCU edge entre dos naves.
+// Custom node de @xyflow/react. Replica el card del mockup, dark theme.
+// Muestra:
+//   · Foto + nombre + manufacturer + role + precio en tienda
+//   · Si tiene edge entrante (incomingPathCost > 0): el costo acumulado
+//     hasta esta nave + la diferencia vs MSRP (ahorro o sobreprecio).
+// Handles: target en LEFT, source en RIGHT.
 // =============================================================================
 
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { CatalogShip } from "./types";
 
-// xyflow requiere que el `data` de un Node extienda Record<string, unknown>.
-// Modelamos los campos tipados como intersección — TS los infiere bien y la
-// constraint del lib se respeta.
 export type ShipNodeData = {
   ship: CatalogShip;
-  /** True si este nodo está seleccionado (highlight cyan). */
   selected?: boolean;
-  /** True si tiene una edge entrante — habilita el botón EDIT PATH. */
   hasIncoming?: boolean;
-  /** Callbacks inyectados por el board. */
+  /** Costo acumulado para llegar a esta nave por la cadena. Si es 0 o
+   *  undefined, la nave es base (no se muestra el comparativo). */
+  incomingPathCost?: number;
   onEditPath?: (nodeId: string) => void;
   onDelete?: (nodeId: string) => void;
   onSelect?: (nodeId: string) => void;
@@ -41,15 +36,20 @@ function ShipNodeImpl({ id, data }: NodeProps) {
     ? "ring-2 ring-cyan-400/80 shadow-[0_0_24px_rgba(34,211,238,0.25)]"
     : "ring-1 ring-cyan-500/30";
 
+  // Calcular el ahorro/sobreprecio si hay incomingPathCost
+  const showCost = d.hasIncoming && typeof d.incomingPathCost === "number" && d.incomingPathCost > 0;
+  const diff = showCost ? ship.msrpUsd - (d.incomingPathCost ?? 0) : 0;
+  const savings = diff > 0; // verdadero ahorro si pagaste menos que MSRP
+  const overpay = diff < 0;
+
   return (
     <div
-      className={`relative w-[170px] rounded-md ${ringClass} bg-zinc-900/95 backdrop-blur-sm transition-all`}
+      className={`relative w-[180px] rounded-md ${ringClass} bg-zinc-900/95 backdrop-blur-sm transition-all`}
       onClick={(e) => {
         e.stopPropagation();
         d.onSelect?.(id);
       }}
     >
-      {/* ── Handles + labels "Upgrade from" / "Upgrade to" ─────────────── */}
       <Handle
         type="target"
         position={Position.Left}
@@ -63,13 +63,13 @@ function ShipNodeImpl({ id, data }: NodeProps) {
         className="!w-3 !h-3 !bg-zinc-700 !border-2 !border-cyan-400 hover:!bg-cyan-500 transition-colors !-right-[6px]"
       />
 
-      {/* Top labels alineadas con los handles */}
+      {/* Top labels alineadas con handles */}
       <div className="flex items-center justify-between px-2 pt-1.5 pb-0.5 text-[8px] font-mono uppercase tracking-widest">
-        <span className="text-zinc-500">Upgrade from</span>
-        <span className="text-zinc-500">Upgrade to</span>
+        <span className="text-zinc-500">From</span>
+        <span className="text-zinc-500">To</span>
       </div>
 
-      {/* ── Foto ───────────────────────────────────────────────────────── */}
+      {/* Foto */}
       <div className="relative h-[70px] mx-1.5 overflow-hidden rounded-sm bg-zinc-800/60">
         {ship.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -89,7 +89,7 @@ function ShipNodeImpl({ id, data }: NodeProps) {
         )}
       </div>
 
-      {/* ── Cuerpo ─────────────────────────────────────────────────────── */}
+      {/* Cuerpo */}
       <div className="px-2 pt-1.5 pb-2 space-y-0.5">
         <p className="text-[12px] font-semibold text-zinc-100 truncate leading-tight">
           {ship.name}
@@ -98,12 +98,44 @@ function ShipNodeImpl({ id, data }: NodeProps) {
           {ship.manufacturer ?? "—"}
           {ship.role ? ` · ${ship.role}` : ""}
         </p>
-        <p className="text-[14px] font-mono font-bold text-cyan-300 pt-0.5">
-          ${ship.msrpUsd.toFixed(2)}
-        </p>
 
-        {/* Botones EDIT PATH / DELETE — la convención `nodrag` evita que
-            xyflow registre el click como inicio de drag del nodo. */}
+        {/* Precios: MSRP siempre, y si hay path → tu costo + diff */}
+        <div className="pt-0.5">
+          <div className="flex items-baseline justify-between">
+            <span className="text-[8px] font-mono uppercase tracking-wider text-zinc-500">
+              Tienda
+            </span>
+            <span className="text-[12px] font-mono font-bold text-zinc-300">
+              ${ship.msrpUsd.toFixed(2)}
+            </span>
+          </div>
+          {showCost && (
+            <>
+              <div className="flex items-baseline justify-between">
+                <span className="text-[8px] font-mono uppercase tracking-wider text-cyan-500">
+                  Tu costo
+                </span>
+                <span className="text-[12px] font-mono font-bold text-cyan-300">
+                  ${(d.incomingPathCost ?? 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between mt-0.5 px-1 py-0.5 rounded-[2px] bg-zinc-950/60">
+                <span className="text-[8px] font-mono uppercase tracking-wider text-zinc-600">
+                  {savings ? "Ahorrás" : overpay ? "De más" : "Sin diff"}
+                </span>
+                <span
+                  className={`text-[11px] font-mono font-bold ${
+                    savings ? "text-emerald-400" : overpay ? "text-rose-400" : "text-zinc-500"
+                  }`}
+                >
+                  {savings ? "−" : overpay ? "+" : ""}${Math.abs(diff).toFixed(2)}
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Botones EDIT PATH / DELETE */}
         <div className="flex gap-1 pt-1">
           <button
             type="button"
@@ -119,11 +151,11 @@ function ShipNodeImpl({ id, data }: NodeProps) {
             }`}
             title={
               d.hasIncoming
-                ? "Cambiar tipo de upgrade entrante (Normal → WB → Hanger → ...)"
+                ? "Cambiar tipo de upgrade entrante"
                 : "Esta nave no tiene un upgrade entrante"
             }
           >
-            Edit Path
+            Edit
           </button>
           <button
             type="button"

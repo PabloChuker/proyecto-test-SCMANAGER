@@ -1,21 +1,14 @@
 "use client";
 
 // =============================================================================
-// SC LABS — ChainBoardWorkspace v2.1 (rewrite 2026-05-05)
+// SC LABS — ChainBoardWorkspace v2.2 (rewrite 2026-05-05)
 //
-// Layout 4-columnas + bottom toolbar al estilo "Ship Upgrade Planner":
-//   ┌────────┬────────┬─────────────────────┬──────────────┐
-//   │Available│My      │  Canvas (xyflow)    │ Right Panel  │
-//   │Ships    │Hangar  │ (drag/drop, conec.) │ Detail/Creator│
-//   └────────┴────────┴─────────────────────┴──────────────┘
-//
-// Funcionalidades v2.1:
-//   · Edges del hangar = locked (inmutables, candado)
-//   · Conexión inválida (no hay CCU directo) = roja con badge "Sin CCU"
-//   · Click badge edge = cicla kind, doble-click = edita precio
-//   · Right Panel = Detail | CCU Creator | Auto-Build (3 modos)
-//   · Auto-Build: solver clásico /api/ccu/calculate con base/target/modo
-//   · Persistencia localStorage
+// Cambios v2.2:
+//   · Fix bug: CCU Creator ahora SÍ agrega al canvas (closure issue)
+//   · Borrar flecha del canvas (botón ✕ en badge)
+//   · Cada nodo muestra MSRP + costo acumulado por la cadena + ahorro
+//   · Info bar global: total naves · total CCUs · costo total · ahorro vs MSRP
+//   · CCU del hangar: edge LOCKED muestra el precio real pagado (no calculado)
 // =============================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -67,7 +60,6 @@ export function ChainBoardWorkspace() {
   const [statusMsg, setStatusMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [rightPanelMode, setRightPanelMode] = useState<"detail" | "creator" | "auto">("detail");
 
-  // Catálogo compartido (para Right Panel + auto-build)
   const [catalog, setCatalog] = useState<CatalogShip[]>([]);
   useEffect(() => {
     fetch("/api/ccu/ships")
@@ -138,44 +130,51 @@ export function ChainBoardWorkspace() {
 
   const addHangarCcuAt = useCallback(
     (payload: HangarCcuPayload, position: { x: number; y: number }) => {
+      // IDs preallocados para evitar problemas con setState anidado.
+      const newFromId = newId("n");
+      const newToId = newId("n");
+      const edgeId = newId("e");
+      const fromPos = position;
+      const toPos = { x: position.x + 220, y: position.y };
+
+      let realFromId = newFromId;
+      let realToId = newToId;
+
       setNodes((prev) => {
         const next = prev.slice();
-        const fromIdx = next.findIndex((n) => n.ship.id === payload.from.id);
-        const toIdx = next.findIndex((n) => n.ship.id === payload.to.id);
-        let fromNode: BoardNode;
-        let toNode: BoardNode;
-        const fromPos = position;
-        const toPos = { x: position.x + 220, y: position.y };
-        if (fromIdx !== -1) {
-          next[fromIdx] = { ...next[fromIdx], position: fromPos };
-          fromNode = next[fromIdx];
+        const existingFromIdx = next.findIndex((n) => n.ship.id === payload.from.id);
+        const existingToIdx = next.findIndex((n) => n.ship.id === payload.to.id);
+        if (existingFromIdx !== -1) {
+          realFromId = next[existingFromIdx].id;
+          next[existingFromIdx] = { ...next[existingFromIdx], position: fromPos };
         } else {
-          fromNode = { id: newId("n"), ship: payload.from, position: fromPos };
-          next.push(fromNode);
+          next.push({ id: newFromId, ship: payload.from, position: fromPos });
         }
-        if (toIdx !== -1) {
-          next[toIdx] = { ...next[toIdx], position: toPos };
-          toNode = next[toIdx];
+        if (existingToIdx !== -1) {
+          realToId = next[existingToIdx].id;
+          next[existingToIdx] = { ...next[existingToIdx], position: toPos };
         } else {
-          toNode = { id: newId("n"), ship: payload.to, position: toPos };
-          next.push(toNode);
+          next.push({ id: newToId, ship: payload.to, position: toPos });
         }
-        setEdges((prevEdges) => {
-          const exists = prevEdges.some(
-            (e) => e.source === fromNode.id && e.target === toNode.id,
-          );
-          if (exists) return prevEdges;
-          const edge: BoardEdge = {
-            id: newId("e"),
-            source: fromNode.id,
-            target: toNode.id,
+        return next;
+      });
+
+      setEdges((prevEdges) => {
+        const exists = prevEdges.some(
+          (e) => e.source === realFromId && e.target === realToId,
+        );
+        if (exists) return prevEdges;
+        return [
+          ...prevEdges,
+          {
+            id: edgeId,
+            source: realFromId,
+            target: realToId,
             kind: payload.kind,
             price: payload.price,
-            locked: payload.owned, // CCU del hangar = bloque inmutable
-          };
-          return [...prevEdges, edge];
-        });
-        return next;
+            locked: payload.owned,
+          },
+        ];
       });
     },
     [],
@@ -191,63 +190,62 @@ export function ChainBoardWorkspace() {
     setSelectedNodeId((prev) => (prev === nodeId ? null : prev));
   }, []);
 
-  // Conectar manual: arrastrar handle → handle. Validamos contra ccu_prices
-  // de fondo; si no hay ruta directa, marcamos invalid (rojo).
-  const connectNodes = useCallback(
-    (sourceId: string, targetId: string) => {
-      setNodes((prevNodes) => {
-        const source = prevNodes.find((n) => n.id === sourceId);
-        const target = prevNodes.find((n) => n.id === targetId);
-        if (!source || !target) return prevNodes;
-        setEdges((prevEdges) => {
-          const exists = prevEdges.some((e) => e.source === sourceId && e.target === targetId);
-          if (exists) return prevEdges;
-          const kind: UpgradeKind = "normal";
-          const price = defaultPriceFor(kind, source.ship.msrpUsd, target.ship.msrpUsd);
-          const edgeId = newId("e");
-          // Validar async
-          fetch("/api/ccu/validate-edges", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              pairs: [{ fromShipId: source.ship.id, toShipId: target.ship.id }],
-              ownedCCUs: [],
-            }),
+  const deleteEdge = useCallback((edgeId: string) => {
+    setEdges((prev) => prev.filter((e) => e.id !== edgeId));
+  }, []);
+
+  // Conectar manual: validamos contra ccu_prices async; si invalid, marcamos.
+  const connectNodes = useCallback((sourceId: string, targetId: string) => {
+    setNodes((prevNodes) => {
+      const source = prevNodes.find((n) => n.id === sourceId);
+      const target = prevNodes.find((n) => n.id === targetId);
+      if (!source || !target) return prevNodes;
+      setEdges((prevEdges) => {
+        const exists = prevEdges.some((e) => e.source === sourceId && e.target === targetId);
+        if (exists) return prevEdges;
+        const kind: UpgradeKind = "normal";
+        const price = defaultPriceFor(kind, source.ship.msrpUsd, target.ship.msrpUsd);
+        const edgeId = newId("e");
+        // Validar async
+        fetch("/api/ccu/validate-edges", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pairs: [{ fromShipId: source.ship.id, toShipId: target.ship.id }],
+            ownedCCUs: [],
+          }),
+        })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((j) => {
+            const result = j?.results?.[0];
+            if (!result) return;
+            if (result.status === "invalid") {
+              setEdges((eds) => eds.map((e) => (e.id === edgeId ? { ...e, invalid: true } : e)));
+            } else if (result.standardPrice && result.standardPrice > 0) {
+              setEdges((eds) =>
+                eds.map((e) =>
+                  e.id === edgeId && !e.priceManual
+                    ? { ...e, price: Number(result.standardPrice), invalid: false }
+                    : e,
+                ),
+              );
+            }
           })
-            .then((r) => (r.ok ? r.json() : null))
-            .then((j) => {
-              const result = j?.results?.[0];
-              if (!result) return;
-              if (result.status === "invalid") {
-                setEdges((eds) => eds.map((e) => (e.id === edgeId ? { ...e, invalid: true } : e)));
-              } else if (result.standardPrice && result.standardPrice > 0) {
-                setEdges((eds) =>
-                  eds.map((e) =>
-                    e.id === edgeId && !e.priceManual
-                      ? { ...e, price: Number(result.standardPrice), invalid: false }
-                      : e,
-                  ),
-                );
-              }
-            })
-            .catch(() => {});
-          return [...prevEdges, { id: edgeId, source: sourceId, target: targetId, kind, price }];
-        });
-        return prevNodes;
+          .catch(() => {});
+        return [...prevEdges, { id: edgeId, source: sourceId, target: targetId, kind, price }];
       });
-    },
-    [],
-  );
+      return prevNodes;
+    });
+  }, []);
 
   const cycleEdgeKind = useCallback(
     (edgeId: string) => {
       setEdges((prev) =>
         prev.map((e) => {
           if (e.id !== edgeId) return e;
-          if (e.locked) return e; // CCU del hangar inmutable
+          if (e.locked) return e;
           const idx = KIND_CYCLE.indexOf(e.kind);
           const nextKind = KIND_CYCLE[(idx + 1) % KIND_CYCLE.length];
-          // Si el precio era manual, no lo recalculamos.
           if (e.priceManual) return { ...e, kind: nextKind };
           const fromNode = nodes.find((n) => n.id === e.source);
           const toNode = nodes.find((n) => n.id === e.target);
@@ -264,7 +262,7 @@ export function ChainBoardWorkspace() {
   const editEdgePrice = useCallback((edgeId: string) => {
     const target = edges.find((e) => e.id === edgeId);
     if (!target || target.locked) return;
-    const input = prompt(`Editar precio del CCU (USD):`, target.price.toFixed(2));
+    const input = prompt("Editar precio del CCU (USD):", target.price.toFixed(2));
     if (input === null) return;
     const parsed = parseFloat(input);
     if (isNaN(parsed) || parsed < 0) {
@@ -284,48 +282,51 @@ export function ChainBoardWorkspace() {
     [edges, cycleEdgeKind],
   );
 
-  // ── CCU Creator (Right Panel) ────────────────────────────────────────────
+  // ── CCU Creator (Right Panel) — FIXED ─────────────────────────────────────
 
   const createCcu = useCallback(
     (from: CatalogShip, to: CatalogShip, isWarbond: boolean, manualPrice: number | null) => {
       const kind: UpgradeKind = isWarbond ? "warbond" : "normal";
       const price = manualPrice ?? defaultPriceFor(kind, from.msrpUsd, to.msrpUsd);
-      const fromPos = { x: 100, y: 100 };
-      const toPos = { x: 100 + 220, y: 100 };
+      // Buscar nodos existentes en estado actual
+      const existingFromIdx = nodes.findIndex((n) => n.ship.id === from.id);
+      const existingToIdx = nodes.findIndex((n) => n.ship.id === to.id);
+      const fromId = existingFromIdx !== -1 ? nodes[existingFromIdx].id : newId("n");
+      const toId = existingToIdx !== -1 ? nodes[existingToIdx].id : newId("n");
+
+      // Posiciones: si la nave ya existe, mantener; sino colocar en grid libre
+      const baseY = 100 + (nodes.length * 30) % 400;
+      const fromPos = existingFromIdx !== -1 ? nodes[existingFromIdx].position : { x: 100, y: baseY };
+      const toPos = existingToIdx !== -1 ? nodes[existingToIdx].position : { x: fromPos.x + 240, y: baseY };
+
       setNodes((prev) => {
         const next = prev.slice();
-        let fromNode = next.find((n) => n.ship.id === from.id);
-        let toNode = next.find((n) => n.ship.id === to.id);
-        if (!fromNode) {
-          fromNode = { id: newId("n"), ship: from, position: fromPos };
-          next.push(fromNode);
+        if (!next.find((n) => n.id === fromId)) {
+          next.push({ id: fromId, ship: from, position: fromPos });
         }
-        if (!toNode) {
-          toNode = { id: newId("n"), ship: to, position: toPos };
-          next.push(toNode);
+        if (!next.find((n) => n.id === toId)) {
+          next.push({ id: toId, ship: to, position: toPos });
         }
-        setEdges((prevEdges) => {
-          const exists = prevEdges.some(
-            (e) => e.source === fromNode!.id && e.target === toNode!.id,
-          );
-          if (exists) return prevEdges;
-          return [
-            ...prevEdges,
-            {
-              id: newId("e"),
-              source: fromNode!.id,
-              target: toNode!.id,
-              kind,
-              price,
-              priceManual: manualPrice !== null,
-            },
-          ];
-        });
         return next;
       });
-      setStatusMsg({ kind: "ok", text: `CCU agregado: ${from.name} → ${to.name}` });
+      setEdges((prev) => {
+        const exists = prev.some((e) => e.source === fromId && e.target === toId);
+        if (exists) return prev;
+        return [
+          ...prev,
+          {
+            id: newId("e"),
+            source: fromId,
+            target: toId,
+            kind,
+            price,
+            priceManual: manualPrice !== null,
+          },
+        ];
+      });
+      setStatusMsg({ kind: "ok", text: `CCU agregado: ${from.name} → ${to.name} ($${price.toFixed(2)})` });
     },
-    [],
+    [nodes],
   );
 
   // ── Auto-build (solver) ──────────────────────────────────────────────────
@@ -334,11 +335,7 @@ export function ChainBoardWorkspace() {
   const [autoBusy, setAutoBusy] = useState(false);
 
   const autoBuild = useCallback(
-    async (
-      fromShip: CatalogShip,
-      toShip: CatalogShip,
-      mode: AutoMode,
-    ) => {
+    async (fromShip: CatalogShip, toShip: CatalogShip, mode: AutoMode) => {
       setAutoBusy(true);
       setStatusMsg(null);
       try {
@@ -366,7 +363,6 @@ export function ChainBoardWorkspace() {
         const data = await r.json();
         if (!r.ok || !data.chain) throw new Error(data.error || "Sin cadena válida.");
 
-        // Materializar en canvas: agregar nodos para cada step + edges
         type Step = {
           fromShip: { id: string; name: string; manufacturer: string | null; msrpUsd: number; warbondUsd: number | null; reference: string };
           toShip: { id: string; name: string; manufacturer: string | null; msrpUsd: number; warbondUsd: number | null; reference: string };
@@ -376,7 +372,6 @@ export function ChainBoardWorkspace() {
         };
         const steps = data.chain.steps as Step[];
         const newNodes: BoardNode[] = [];
-        const seenShipIds = new Set<string>();
         const ensureNode = (s: Step["fromShip"], idx: number): BoardNode => {
           const existing = newNodes.find((n) => n.ship.id === s.id);
           if (existing) return existing;
@@ -393,10 +388,9 @@ export function ChainBoardWorkspace() {
           const node: BoardNode = {
             id: newId("n"),
             ship,
-            position: { x: 80 + idx * 220, y: 80 },
+            position: { x: 80 + idx * 240, y: 100 },
           };
           newNodes.push(node);
-          seenShipIds.add(s.id);
           return node;
         };
         const newEdges: BoardEdge[] = [];
@@ -404,11 +398,7 @@ export function ChainBoardWorkspace() {
           const s = steps[i];
           const fromN = ensureNode(s.fromShip, i);
           const toN = ensureNode(s.toShip, i + 1);
-          const kind: UpgradeKind = s.isOwned
-            ? "hanger"
-            : s.isWarbond
-            ? "warbond"
-            : "normal";
+          const kind: UpgradeKind = s.isOwned ? "hanger" : s.isWarbond ? "warbond" : "normal";
           newEdges.push({
             id: newId("e"),
             source: fromN.id,
@@ -496,6 +486,30 @@ export function ChainBoardWorkspace() {
   // ── Derivados ────────────────────────────────────────────────────────────
 
   const usedShipIds = useMemo(() => new Set(nodes.map((n) => n.ship.id)), [nodes]);
+
+  // Costo acumulado por nodo: walk back de edges hasta la base
+  const accumulatedCostByNodeId = useMemo<Map<string, number>>(() => {
+    const map = new Map<string, number>();
+    const incomingByTarget = new Map<string, BoardEdge>();
+    for (const e of edges) incomingByTarget.set(e.target, e);
+    const compute = (nodeId: string, visiting: Set<string>): number => {
+      if (map.has(nodeId)) return map.get(nodeId)!;
+      if (visiting.has(nodeId)) return 0;
+      visiting.add(nodeId);
+      const incoming = incomingByTarget.get(nodeId);
+      if (!incoming) {
+        map.set(nodeId, 0);
+        return 0;
+      }
+      const upstream = compute(incoming.source, visiting);
+      const total = upstream + (incoming.price ?? 0);
+      map.set(nodeId, total);
+      return total;
+    };
+    for (const n of nodes) compute(n.id, new Set());
+    return map;
+  }, [nodes, edges]);
+
   const selectedNode = useMemo(
     () => (selectedNodeId ? nodes.find((n) => n.id === selectedNodeId) ?? null : null),
     [nodes, selectedNodeId],
@@ -520,7 +534,33 @@ export function ChainBoardWorkspace() {
     return steps;
   }, [selectedNode, edges, nodes]);
 
-  const totalCost = useMemo(
+  // Para la info bar global: el "leaf" node (mayor MSRP, sin outgoing edge) y su costo total
+  const globalChainStats = useMemo(() => {
+    if (nodes.length === 0) return null;
+    // Encontrar nodos que NO son source de ninguna edge (= leafs / targets finales)
+    const sourceIds = new Set(edges.map((e) => e.source));
+    const leafs = nodes.filter((n) => !sourceIds.has(n.id));
+    if (leafs.length === 0) return null;
+    // Tomar el leaf con mayor accumulatedCost
+    let bestLeaf: BoardNode | null = null;
+    let bestCost = 0;
+    for (const leaf of leafs) {
+      const cost = accumulatedCostByNodeId.get(leaf.id) ?? 0;
+      if (cost > bestCost || bestLeaf === null) {
+        bestCost = cost;
+        bestLeaf = leaf;
+      }
+    }
+    if (!bestLeaf) return null;
+    return {
+      finalShip: bestLeaf.ship,
+      totalCost: bestCost,
+      msrp: bestLeaf.ship.msrpUsd,
+      savings: bestLeaf.ship.msrpUsd - bestCost,
+    };
+  }, [nodes, edges, accumulatedCostByNodeId]);
+
+  const totalCostSelected = useMemo(
     () => upstreamChain.reduce((acc, s) => acc + s.edge.price, 0),
     [upstreamChain],
   );
@@ -535,11 +575,11 @@ export function ChainBoardWorkspace() {
             <span className="text-2xl">🛠️</span>
             Ship Upgrade Planner
             <span className="text-[10px] font-mono uppercase tracking-widest px-1.5 py-0.5 rounded-sm bg-amber-500/15 text-amber-300 border border-amber-500/30">
-              v2.1
+              v2.2
             </span>
           </h1>
           <p className="text-[11px] text-zinc-500">
-            Arrastrá naves y CCUs · conectá libremente · bloque hangar inmutable.
+            La <span className="text-cyan-400">flecha</span> entre dos naves <span className="text-cyan-400">es</span> el CCU.
           </p>
         </div>
         <Link
@@ -549,6 +589,53 @@ export function ChainBoardWorkspace() {
           ← Calculator clásico
         </Link>
       </div>
+
+      {/* Info bar global (cadena entera) */}
+      {globalChainStats && (
+        <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 bg-zinc-950/60 border border-zinc-800/60 rounded-sm">
+          <div className="flex items-center gap-3 flex-wrap text-[11px]">
+            <span className="text-zinc-500 font-mono uppercase tracking-widest text-[9px]">
+              Cadena al destino:
+            </span>
+            <span className="text-zinc-200 font-medium">{globalChainStats.finalShip.name}</span>
+            <span className="text-zinc-700">·</span>
+            <span className="text-zinc-500">
+              {nodes.length} naves · {edges.length} CCUs
+            </span>
+          </div>
+          <div className="flex items-center gap-4 text-[11px]">
+            <div>
+              <span className="text-zinc-500 font-mono uppercase tracking-widest text-[9px] mr-1">
+                Tienda
+              </span>
+              <span className="text-zinc-300 font-mono font-bold">${globalChainStats.msrp.toFixed(2)}</span>
+            </div>
+            <div>
+              <span className="text-cyan-500 font-mono uppercase tracking-widest text-[9px] mr-1">
+                Tu costo
+              </span>
+              <span className="text-cyan-300 font-mono font-bold">${globalChainStats.totalCost.toFixed(2)}</span>
+            </div>
+            <div>
+              <span
+                className={`font-mono uppercase tracking-widest text-[9px] mr-1 ${
+                  globalChainStats.savings > 0 ? "text-emerald-500" : globalChainStats.savings < 0 ? "text-rose-500" : "text-zinc-500"
+                }`}
+              >
+                {globalChainStats.savings > 0 ? "Ahorrás" : globalChainStats.savings < 0 ? "De más" : "Igual"}
+              </span>
+              <span
+                className={`font-mono font-bold ${
+                  globalChainStats.savings > 0 ? "text-emerald-300" : globalChainStats.savings < 0 ? "text-rose-300" : "text-zinc-400"
+                }`}
+              >
+                {globalChainStats.savings > 0 ? "−" : globalChainStats.savings < 0 ? "+" : ""}$
+                {Math.abs(globalChainStats.savings).toFixed(2)}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {statusMsg && (
         <div
@@ -580,6 +667,7 @@ export function ChainBoardWorkspace() {
             nodes={nodes}
             edges={edges}
             selectedNodeId={selectedNodeId}
+            accumulatedCostByNodeId={accumulatedCostByNodeId}
             onMoveNode={moveNode}
             onSelectNode={setSelectedNodeId}
             onDeleteNode={deleteNode}
@@ -587,6 +675,7 @@ export function ChainBoardWorkspace() {
             onConnect={connectNodes}
             onCycleEdgeKind={cycleEdgeKind}
             onEditEdgePrice={editEdgePrice}
+            onDeleteEdge={deleteEdge}
             onAddShipAt={addShipAt}
             onAddHangarCcuAt={addHangarCcuAt}
           />
@@ -598,7 +687,7 @@ export function ChainBoardWorkspace() {
             setMode={setRightPanelMode}
             selectedNode={selectedNode}
             upstreamChain={upstreamChain}
-            totalCost={totalCost}
+            totalCost={totalCostSelected}
             onSelectNode={setSelectedNodeId}
             onClose={() => setSelectedNodeId(null)}
             catalog={catalog}
@@ -626,7 +715,7 @@ export function ChainBoardWorkspace() {
 
 const KIND_LABEL: Record<UpgradeKind, { label: string; cls: string }> = {
   normal: { label: "Normal", cls: "bg-blue-500/15 text-blue-300 border-blue-500/40" },
-  warbond: { label: "WB", cls: "bg-rose-500/15 text-rose-300 border-rose-500/40" },
+  warbond: { label: "Warbond", cls: "bg-rose-500/15 text-rose-300 border-rose-500/40" },
   hanger: { label: "Hanger", cls: "bg-cyan-500/15 text-cyan-300 border-cyan-500/40" },
 };
 
@@ -645,27 +734,16 @@ interface RightPanelProps {
 }
 
 function RightPanel({
-  mode,
-  setMode,
-  selectedNode,
-  upstreamChain,
-  totalCost,
-  onSelectNode,
-  onClose,
-  catalog,
-  onCreateCcu,
-  autoBusy,
-  onAutoBuild,
+  mode, setMode, selectedNode, upstreamChain, totalCost, onSelectNode, onClose,
+  catalog, onCreateCcu, autoBusy, onAutoBuild,
 }: RightPanelProps) {
   return (
     <div className="h-full flex flex-col bg-zinc-900/40 border border-zinc-800/60 rounded-md overflow-hidden">
-      {/* Tabs del panel */}
       <div className="flex p-0.5 m-2 bg-zinc-950/60 rounded-sm gap-0.5 shrink-0">
         <PanelTab active={mode === "detail"} onClick={() => setMode("detail")} label="Detalle" />
         <PanelTab active={mode === "creator"} onClick={() => setMode("creator")} label="+ CCU" />
         <PanelTab active={mode === "auto"} onClick={() => setMode("auto")} label="Auto" />
       </div>
-
       <div className="flex-1 overflow-y-auto">
         {mode === "detail" && (
           <DetailMode
@@ -677,7 +755,7 @@ function RightPanel({
           />
         )}
         {mode === "creator" && <CreatorMode catalog={catalog} onCreateCcu={onCreateCcu} />}
-        {mode === "auto" && <AutoMode catalog={catalog} busy={autoBusy} onAutoBuild={onAutoBuild} />}
+        {mode === "auto" && <AutoModeUI catalog={catalog} busy={autoBusy} onAutoBuild={onAutoBuild} />}
       </div>
     </div>
   );
@@ -696,14 +774,8 @@ function PanelTab({ active, onClick, label }: { active: boolean; onClick: () => 
   );
 }
 
-// ── DetailMode ───────────────────────────────────────────────────────────────
-
 function DetailMode({
-  selectedNode,
-  upstreamChain,
-  totalCost,
-  onSelectNode,
-  onClose,
+  selectedNode, upstreamChain, totalCost, onSelectNode, onClose,
 }: {
   selectedNode: BoardNode | null;
   upstreamChain: { from: BoardNode; edge: BoardEdge; to: BoardNode }[];
@@ -716,15 +788,14 @@ function DetailMode({
       <div className="h-full p-4 flex flex-col items-center justify-center text-center">
         <p className="text-[12px] text-zinc-500 mb-1">Sin nave seleccionada</p>
         <p className="text-[10px] text-zinc-600 leading-relaxed">
-          Click en una nave del canvas
-          <br />
-          para ver su detalle.
+          Click en una nave del canvas para ver su detalle.
         </p>
       </div>
     );
   }
   const { ship } = selectedNode;
-  const hasWarbond = ship.warbondUsd != null && ship.warbondUsd > 0 && ship.warbondUsd !== ship.msrpUsd;
+  const savings = ship.msrpUsd - totalCost;
+  const hasChain = upstreamChain.length > 0;
 
   return (
     <div>
@@ -732,8 +803,7 @@ function DetailMode({
         <div className="min-w-0">
           <h3 className="text-[13px] font-semibold text-zinc-100 truncate">{ship.name}</h3>
           <p className="text-[10px] text-zinc-500 italic truncate">
-            {ship.manufacturer ?? "—"}
-            {ship.role ? ` · ${ship.role}` : ""}
+            {ship.manufacturer ?? "—"}{ship.role ? ` · ${ship.role}` : ""}
           </p>
         </div>
         <button onClick={onClose} className="text-zinc-500 hover:text-rose-300 text-[14px] px-1 shrink-0">
@@ -756,25 +826,43 @@ function DetailMode({
           🚀
         </div>
       )}
-      <div className="px-3 py-3 border-b border-zinc-800/40">
+      <div className="px-3 py-3 border-b border-zinc-800/40 space-y-1">
         <div className="flex items-center justify-between">
-          <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">Ship Value</span>
-          <span className="text-[18px] font-mono font-bold text-cyan-300">${ship.msrpUsd.toFixed(2)}</span>
+          <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">Tienda (MSRP)</span>
+          <span className="text-[14px] font-mono font-bold text-zinc-200">${ship.msrpUsd.toFixed(2)}</span>
         </div>
-        {hasWarbond && (
-          <div className="flex items-center justify-between mt-0.5">
-            <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-600">Warbond</span>
-            <span className="text-[12px] font-mono text-cyan-400">${ship.warbondUsd!.toFixed(2)}</span>
-          </div>
+        {hasChain && (
+          <>
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono uppercase tracking-widest text-cyan-500">Tu costo (cadena)</span>
+              <span className="text-[14px] font-mono font-bold text-cyan-300">${totalCost.toFixed(2)}</span>
+            </div>
+            <div className="flex items-center justify-between pt-1 border-t border-zinc-800/40">
+              <span
+                className={`text-[10px] font-mono uppercase tracking-widest ${
+                  savings > 0 ? "text-emerald-500" : savings < 0 ? "text-rose-500" : "text-zinc-500"
+                }`}
+              >
+                {savings > 0 ? "Ahorro" : savings < 0 ? "Sobreprecio" : "Igual"}
+              </span>
+              <span
+                className={`text-[14px] font-mono font-bold ${
+                  savings > 0 ? "text-emerald-300" : savings < 0 ? "text-rose-300" : "text-zinc-400"
+                }`}
+              >
+                {savings > 0 ? "−" : savings < 0 ? "+" : ""}${Math.abs(savings).toFixed(2)}
+              </span>
+            </div>
+          </>
         )}
       </div>
 
       <div className="px-3 py-3">
         <h4 className="text-[10px] font-mono uppercase tracking-widest text-zinc-400 mb-2">
-          Upgrade Path ({upstreamChain.length} {upstreamChain.length === 1 ? "step" : "steps"})
+          Pasos hacia esta nave ({upstreamChain.length})
         </h4>
-        {upstreamChain.length === 0 && (
-          <p className="text-[10px] text-zinc-600 italic">Esta nave no tiene un upgrade entrante en el canvas.</p>
+        {!hasChain && (
+          <p className="text-[10px] text-zinc-600 italic">Sin upgrade entrante en el canvas.</p>
         )}
         <div className="space-y-2">
           {upstreamChain.map((s) => {
@@ -803,8 +891,7 @@ function DetailMode({
                 </button>
                 <div className="flex items-center justify-between px-2 py-1 border-t border-zinc-800/40 bg-zinc-900/40">
                   <span className={`text-[9px] font-mono uppercase tracking-wider px-1 rounded-[2px] border ${ks.cls}`}>
-                    {s.edge.locked ? "🔒 " : ""}
-                    {ks.label}
+                    {s.edge.locked ? "🔒 " : ""}{ks.label}
                   </span>
                   <span className="text-[10px] font-mono text-zinc-300">${s.edge.price.toFixed(2)}</span>
                 </div>
@@ -812,22 +899,13 @@ function DetailMode({
             );
           })}
         </div>
-        {upstreamChain.length > 0 && (
-          <div className="mt-3 pt-2 border-t border-zinc-800/40 flex items-center justify-between">
-            <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-400">Total Path Cost</span>
-            <span className="text-[14px] font-mono font-bold text-amber-300">${totalCost.toFixed(2)}</span>
-          </div>
-        )}
       </div>
     </div>
   );
 }
 
-// ── CreatorMode ──────────────────────────────────────────────────────────────
-
 function CreatorMode({
-  catalog,
-  onCreateCcu,
+  catalog, onCreateCcu,
 }: {
   catalog: CatalogShip[];
   onCreateCcu: (from: CatalogShip, to: CatalogShip, isWarbond: boolean, manualPrice: number | null) => void;
@@ -845,8 +923,7 @@ function CreatorMode({
       <div>
         <h3 className="text-[12px] font-semibold text-zinc-200 mb-1">Crear CCU</h3>
         <p className="text-[10px] text-zinc-500 leading-snug">
-          Elegí FROM y TO. El precio se calcula auto, o ponelo manual si tenés un precio diferente
-          (concept ship que cambió, etc).
+          Elegí FROM y TO. El precio se calcula auto, o ponelo manual si tenés un precio diferente.
         </p>
       </div>
 
@@ -915,12 +992,8 @@ function CreatorMode({
   );
 }
 
-// ── AutoMode ─────────────────────────────────────────────────────────────────
-
-function AutoMode({
-  catalog,
-  busy,
-  onAutoBuild,
+function AutoModeUI({
+  catalog, busy, onAutoBuild,
 }: {
   catalog: CatalogShip[];
   busy: boolean;
@@ -937,7 +1010,8 @@ function AutoMode({
         <h3 className="text-[12px] font-semibold text-zinc-200 mb-1">Auto-armar cadena</h3>
         <p className="text-[10px] text-zinc-500 leading-snug">
           El solver arma la cadena óptima usando lo que tenés en hangar + lo disponible en tienda.
-          Reemplaza el contenido actual del canvas.
+          <br />
+          <span className="text-amber-400/80">Reemplaza el contenido actual del canvas.</span>
         </p>
       </div>
 
@@ -986,11 +1060,7 @@ function AutoMode({
 }
 
 function ModeOption({
-  mode,
-  value,
-  onClick,
-  title,
-  desc,
+  mode, value, onClick, title, desc,
 }: {
   mode: string;
   value: string;
@@ -1003,27 +1073,17 @@ function ModeOption({
     <button
       onClick={onClick}
       className={`w-full text-left p-2 rounded-sm border transition-colors ${
-        active
-          ? "bg-emerald-500/15 border-emerald-500/40"
-          : "bg-zinc-950/40 border-zinc-800/40 hover:border-zinc-700"
+        active ? "bg-emerald-500/15 border-emerald-500/40" : "bg-zinc-950/40 border-zinc-800/40 hover:border-zinc-700"
       }`}
     >
-      <p className={`text-[11px] font-semibold ${active ? "text-emerald-300" : "text-zinc-300"}`}>
-        {title}
-      </p>
+      <p className={`text-[11px] font-semibold ${active ? "text-emerald-300" : "text-zinc-300"}`}>{title}</p>
       <p className="text-[9px] text-zinc-500 leading-snug mt-0.5">{desc}</p>
     </button>
   );
 }
 
-// ── ShipPicker (autocomplete) ────────────────────────────────────────────────
-
 function ShipPicker({
-  label,
-  value,
-  onChange,
-  catalog,
-  filterFn,
+  label, value, onChange, catalog, filterFn,
 }: {
   label: string;
   value: CatalogShip | null;
@@ -1051,15 +1111,8 @@ function ShipPicker({
         <div className="bg-zinc-950/60 border border-zinc-800/60 rounded-sm p-1.5 flex items-center gap-2">
           {value.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={value.imageUrl}
-              alt=""
-              className="w-10 h-7 object-cover rounded-sm shrink-0"
-              draggable={false}
-              onError={(e) => {
-                (e.currentTarget as HTMLImageElement).style.opacity = "0.2";
-              }}
-            />
+            <img src={value.imageUrl} alt="" className="w-10 h-7 object-cover rounded-sm shrink-0" draggable={false}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = "0.2"; }} />
           ) : (
             <div className="w-10 h-7 rounded-sm bg-zinc-800/60 shrink-0" />
           )}
@@ -1067,23 +1120,14 @@ function ShipPicker({
             <p className="text-[11px] text-zinc-100 truncate">{value.name}</p>
             <p className="text-[9px] text-zinc-500 font-mono">${value.msrpUsd.toFixed(2)}</p>
           </div>
-          <button
-            onClick={() => onChange(null)}
-            className="text-zinc-500 hover:text-rose-300 text-[12px] px-1 shrink-0"
-            title="Cambiar"
-          >
-            ✕
-          </button>
+          <button onClick={() => onChange(null)} className="text-zinc-500 hover:text-rose-300 text-[12px] px-1 shrink-0" title="Cambiar">✕</button>
         </div>
       ) : (
         <div className="relative">
           <input
             type="text"
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setOpen(true);
-            }}
+            onChange={(e) => { setSearch(e.target.value); setOpen(true); }}
             onFocus={() => setOpen(true)}
             placeholder="Buscar nave..."
             className="w-full px-2 py-1.5 bg-zinc-950 border border-zinc-800/60 rounded-sm text-[11px] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-amber-500/50"
@@ -1093,24 +1137,13 @@ function ShipPicker({
               {filtered.map((s) => (
                 <button
                   key={s.id}
-                  onClick={() => {
-                    onChange(s);
-                    setOpen(false);
-                    setSearch("");
-                  }}
+                  onClick={() => { onChange(s); setOpen(false); setSearch(""); }}
                   className="w-full flex items-center gap-2 px-1.5 py-1 rounded-sm text-[11px] hover:bg-zinc-800/60"
                 >
                   {s.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={s.imageUrl}
-                      alt=""
-                      className="w-7 h-5 object-cover rounded-sm shrink-0"
-                      draggable={false}
-                      onError={(e) => {
-                        (e.currentTarget as HTMLImageElement).style.opacity = "0.2";
-                      }}
-                    />
+                    <img src={s.imageUrl} alt="" className="w-7 h-5 object-cover rounded-sm shrink-0" draggable={false}
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = "0.2"; }} />
                   ) : (
                     <div className="w-7 h-5 rounded-sm bg-zinc-800/60 shrink-0" />
                   )}
@@ -1126,8 +1159,6 @@ function ShipPicker({
   );
 }
 
-// ── ToolbarButton ────────────────────────────────────────────────────────────
-
 const TONE: Record<string, string> = {
   rose: "border-rose-500/40 text-rose-300 hover:bg-rose-500/15",
   emerald: "border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/15",
@@ -1136,10 +1167,7 @@ const TONE: Record<string, string> = {
 };
 
 function ToolbarButton({
-  onClick,
-  icon,
-  label,
-  tone,
+  onClick, icon, label, tone,
 }: {
   onClick: () => void;
   icon: string;
