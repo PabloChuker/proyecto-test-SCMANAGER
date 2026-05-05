@@ -345,10 +345,24 @@ export function ChainBoardInventoryColumn({
             const insColor = INSURANCE_COLOR[row.ship.insuranceType];
             const insTag = INSURANCE_TAG[row.ship.insuranceType];
             const thumb = getShipThumbUrl(row.ship.shipName);
+            // CB.10 Fase 2 (2026-05-05): la card de ship es draggable cuando
+            // matcheó en el catálogo y no está ya en la pizarra. Setea el MIME
+            // 'application/x-sc-ship-card' que el canvas captura en handleDrop
+            // y crea un nodo en la posición exacta del cursor.
+            const shipDraggable = !!row.match && !isUsed;
             return (
               <button
                 key={`s-${row.ship.id}`}
                 disabled={!row.match || isUsed}
+                draggable={shipDraggable}
+                onDragStart={(e) => {
+                  if (!shipDraggable || !row.match) return;
+                  e.dataTransfer.setData(
+                    "application/x-sc-ship-card",
+                    JSON.stringify(buildCardFromShip(row.match, row.ship.id)),
+                  );
+                  e.dataTransfer.effectAllowed = "copy";
+                }}
                 onClick={() =>
                   row.match && onAddCard(buildCardFromShip(row.match, row.ship.id))
                 }
@@ -357,14 +371,14 @@ export function ChainBoardInventoryColumn({
                     ? "bg-zinc-900/30 border-zinc-800/30 opacity-50 cursor-not-allowed"
                     : !row.match
                     ? "bg-zinc-900/30 border-rose-500/20 cursor-not-allowed"
-                    : "bg-zinc-900/60 border-zinc-800/60 hover:border-amber-500/40 hover:bg-zinc-800/40"
+                    : "bg-zinc-900/60 border-zinc-800/60 hover:border-amber-500/40 hover:bg-zinc-800/40 cursor-grab active:cursor-grabbing"
                 }`}
                 title={
                   isUsed
                     ? "Ya está en la pizarra"
                     : !row.match
                     ? `Sin match en BD para "${row.ship.shipName}"`
-                    : `Agregar a la pizarra como ${row.ship.shipName} (${row.ship.location} · ${insTag})`
+                    : `Arrastrá a la pizarra o click para agregar al final · ${row.ship.location} · ${insTag}`
                 }
               >
                 <img
@@ -646,3 +660,4 @@ export function ChainBoardInventoryColumn({
     </div>
   );
 }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  

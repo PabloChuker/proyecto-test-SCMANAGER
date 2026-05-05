@@ -336,6 +336,7 @@ export function ChainBoardStoreColumn({
                     setToShip(null);
                     setToOpen(true);
                   }}
+                  draggableToCanvas
                 />
               ) : (
                 <ShipSearchInput
@@ -377,12 +378,44 @@ export function ChainBoardStoreColumn({
 function SelectedShipCard({
   ship,
   onClear,
+  draggableToCanvas = false,
 }: {
   ship: BoardShipRow;
   onClear: () => void;
+  /** CB.10 Fase 2 (2026-05-05): si true, la card es draggable al canvas con
+   *  el MIME 'application/x-sc-ship-card'. Solo lo activamos en el panel TO
+   *  del Constructor — el FROM no, porque el FROM ya viene del board. */
+  draggableToCanvas?: boolean;
 }) {
   return (
-    <div className="bg-zinc-900/60 border border-zinc-800/40 rounded-sm p-1.5 flex items-center gap-2">
+    <div
+      draggable={draggableToCanvas}
+      onDragStart={
+        draggableToCanvas
+          ? (e) => {
+              const payload = {
+                shipId: ship.id,
+                shipName: ship.name,
+                shipReference: ship.reference,
+                manufacturer: ship.manufacturer,
+                msrpUsd: ship.msrpUsd,
+                warbondUsd: ship.warbondUsd,
+                imageUrl: getShipThumbUrl(ship.name),
+                origin: "store" as const,
+              };
+              e.dataTransfer.setData(
+                "application/x-sc-ship-card",
+                JSON.stringify(payload),
+              );
+              e.dataTransfer.effectAllowed = "copy";
+            }
+          : undefined
+      }
+      className={`bg-zinc-900/60 border border-zinc-800/40 rounded-sm p-1.5 flex items-center gap-2 ${
+        draggableToCanvas ? "cursor-grab active:cursor-grabbing hover:border-cyan-500/40" : ""
+      }`}
+      title={draggableToCanvas ? "Arrastrá esta nave a la pizarra o usá el botón ＋" : undefined}
+    >
       <img
         src={getShipThumbUrl(ship.name)}
         alt=""

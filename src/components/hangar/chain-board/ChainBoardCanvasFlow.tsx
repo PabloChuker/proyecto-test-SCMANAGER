@@ -51,6 +51,12 @@ const NODE_TYPES: NodeTypes = {
 // StoreColumn. La columna setea `application/x-sc-ship-card` con el
 // JSON del ship; el canvas lo recibe en onDrop y crea un node nuevo.
 const SHIP_CARD_MIME = "application/x-sc-ship-card";
+// CB.10 Fase 2 (2026-05-05): cuando se dragea un CCU completo desde
+// InventoryColumn (el container del par FROM/TO), el payload viaja con
+// este MIME y trae { from, to }. El canvas dropea ambas naves contiguas
+// (FROM en la posición del cursor, TO 260px a la derecha) — replica
+// visualmente el "el CCU es una entidad única" de Pablo.
+const CCU_PAIR_MIME = "application/x-sc-ccu-pair";
 
 interface ChainBoardCanvasFlowProps {
   cards: BoardCard[];
@@ -67,6 +73,14 @@ interface ChainBoardCanvasFlowProps {
     ship: Omit<BoardCard, "cardId" | "position">,
     position: { x: number; y: number },
   ) => void;
+  /** Drop de un CCU completo (par FROM→TO). Recibe ambas naves + posición
+   *  base; el workspace decide cómo distribuirlas (fase 2: contiguas con
+   *  offset horizontal). */
+  onAddCcuPairAt?: (
+    fromShip: Omit<BoardCard, "cardId" | "position">,
+    toShip: Omit<BoardCard, "cardId" | "position">,
+    position: { x: number; y: number },
+  ) => void;
   /** Roles calculados por el board (base/intermediate/target) — opcional.
    *  Si no se pasa, todos quedan como "intermediate". */
   roleByCardId?: Map<string, "base" | "intermediate" | "target">;
@@ -78,6 +92,7 @@ function ChainBoardCanvasFlowInner({
   onRemove,
   onConnect,
   onAddCardAt,
+  onAddCcuPairAt,
   roleByCardId,
 }: ChainBoardCanvasFlowProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -174,7 +189,10 @@ function ChainBoardCanvasFlowInner({
   // capturamos y agregamos un nodo en la posición del cursor.
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (e.dataTransfer.types.includes(SHIP_CARD_MIME)) {
+    if (
+      e.dataTransfer.types.includes(SHIP_CARD_MIME) ||
+      e.dataTransfer.types.includes(CCU_PAIR_MIME)
+    ) {
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
     }
@@ -182,24 +200,40 @@ function ChainBoardCanvasFlowInner({
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
-      if (!e.dataTransfer.types.includes(SHIP_CARD_MIME)) return;
+      const types = e.dataTransfer.types;
+      const isShip = types.includes(SHIP_CARD_MIME);
+      const isPair = types.includes(CCU_PAIR_MIME);
+      if (!isShip && !isPair) return;
       e.preventDefault();
-      const raw = e.dataTransfer.getData(SHIP_CARD_MIME);
-      if (!raw || !flowInstance || !wrapperRef.current) return;
+      if (!flowInstance || !wrapperRef.current) return;
+      const position = flowInstance.screenToFlowPosition({
+        x: e.clientX,
+        y: e.clientY,
+      });
       try {
+        if (isPair) {
+          // CCU completo: FROM en el cursor, TO 260px a la derecha (un
+          // ancho de card aprox), para que aparezcan contiguas como
+          // "una entidad" — replica el comportamiento del botón "+ Pizarra".
+          const raw = e.dataTransfer.getData(CCU_PAIR_MIME);
+          if (!raw) return;
+          const payload = JSON.parse(raw) as {
+            from: Omit<BoardCard, "cardId" | "position">;
+            to: Omit<BoardCard, "cardId" | "position">;
+          };
+          onAddCcuPairAt?.(payload.from, payload.to, position);
+          return;
+        }
+        // Ship único.
+        const raw = e.dataTransfer.getData(SHIP_CARD_MIME);
+        if (!raw) return;
         const ship = JSON.parse(raw) as Omit<BoardCard, "cardId" | "position">;
-        // Convertir las coordenadas del cursor al sistema de coordenadas del
-        // canvas (toma en cuenta zoom/pan).
-        const position = flowInstance.screenToFlowPosition({
-          x: e.clientX,
-          y: e.clientY,
-        });
         onAddCardAt?.(ship, position);
       } catch {
         // Silenciar payload corrupto — no rompemos la UI.
       }
     },
-    [flowInstance, onAddCardAt],
+    [flowInstance, onAddCardAt, onAddCcuPairAt],
   );
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -273,3 +307,4 @@ export function ChainBoardCanvasFlow(props: ChainBoardCanvasFlowProps) {
 }
 
 export { SHIP_CARD_MIME };
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
