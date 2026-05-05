@@ -30,6 +30,19 @@ export interface BoardCard {
   origin: "fleet" | "store" | "manual";
   /** Si origin=fleet, referencia al HangarShip o HangarCCU ID original. */
   sourceItemId?: string;
+  /**
+   * CB.10 (2026-05-05): posición {x, y} en el canvas free-form. Las cards
+   * mantienen su posición entre sesiones (persisted con el resto del board).
+   * Nodos sin posición se auto-layout al montarse.
+   */
+  position?: { x: number; y: number };
+  /**
+   * CB.10: rol del nodo en la cadena. Útil para colorear distinto el
+   * outline (BASE = naranja, TARGET = emerald, intermediate = zinc).
+   * Calculado por el board, no persisted (deriva de la posición en la
+   * cadena lógica).
+   */
+  role?: "base" | "intermediate" | "target";
 }
 
 /** Validación entre cards[i] y cards[i+1]. */

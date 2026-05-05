@@ -22,7 +22,10 @@ import { getShipThumbUrl } from "../HangarShipCard";
 import type { BoardCard } from "./types";
 import { ChainBoardInventoryColumn } from "./ChainBoardInventoryColumn";
 import { ChainBoardStoreColumn } from "./ChainBoardStoreColumn";
-import { ChainBoardCanvas } from "./ChainBoardCanvas";
+// CB.10 Fase 1 (2026-05-05): reemplazo del ChainBoardCanvas linear por el
+// canvas free-form basado en @xyflow/react. El componente viejo queda en
+// el repo por ahora para referencia, pero ya no se importa.
+import { ChainBoardCanvasFlow } from "./ChainBoardCanvasFlow";
 
 type MobileTab = "inventory" | "canvas" | "store";
 
@@ -63,6 +66,56 @@ export function ChainBoardWorkspace() {
   /** Elimina una card por cardId. */
   const removeCard = useCallback((cId: string) => {
     setCards((prev) => prev.filter((c) => c.cardId !== cId));
+  }, []);
+
+  /**
+   * CB.10 Fase 1 (2026-05-05): agrega una card con posición {x, y} explícita
+   * en el canvas (drop desde InventoryColumn / StoreColumn). Si la nave ya
+   * está, NO duplicamos pero SÍ actualizamos su posición — facilita
+   * reorganizar visualmente.
+   */
+  const addCardAt = useCallback(
+    (
+      ship: Omit<BoardCard, "cardId" | "position">,
+      position: { x: number; y: number },
+    ) => {
+      setCards((prev) => {
+        const existing = prev.findIndex((c) => c.shipId === ship.shipId);
+        if (existing !== -1) {
+          // Ya está — actualizar posición.
+          const next = prev.slice();
+          next[existing] = { ...next[existing], position };
+          return next;
+        }
+        return [...prev, { ...ship, cardId: cardId(), position }];
+      });
+      setMobileTab("canvas");
+    },
+    [],
+  );
+
+  /**
+   * CB.10 Fase 1: cuando el user dragea un nodo en el canvas, persistimos
+   * la nueva posición. Fase 4 lo manda a localStorage / BD.
+   */
+  const updateCardPosition = useCallback(
+    (cId: string, position: { x: number; y: number }) => {
+      setCards((prev) =>
+        prev.map((c) => (c.cardId === cId ? { ...c, position } : c)),
+      );
+    },
+    [],
+  );
+
+  /**
+   * CB.10 Fase 2 (placeholder, no-op por ahora): cuando el user crea una
+   * edge dragueando un handle al otro, validaremos contra ccu_prices. Por
+   * ahora solo logueamos.
+   */
+  const onConnectCards = useCallback((sourceId: string, targetId: string) => {
+    void sourceId;
+    void targetId;
+    // Fase 2 hace la validación + colorear edge.
   }, []);
 
   /** Reordena las cards (drag & drop). */
@@ -450,16 +503,16 @@ export function ChainBoardWorkspace() {
           />
         </section>
 
-        {/* Center — Pizarra */}
+        {/* Center — Pizarra (CB.10 Fase 1: canvas free-form con xyflow) */}
         <section
-          className={`min-h-[400px] ${mobileTab !== "canvas" ? "hidden md:block" : ""}`}
+          className={`min-h-[600px] ${mobileTab !== "canvas" ? "hidden md:block" : ""}`}
         >
-          <ChainBoardCanvas
+          <ChainBoardCanvasFlow
             cards={cards}
             onRemove={removeCard}
-            onReorder={reorderCards}
-            onInsertAt={insertCardAt}
-            onAddCcuPair={addCcuPair}
+            onMove={updateCardPosition}
+            onAddCardAt={addCardAt}
+            onConnect={onConnectCards}
           />
         </section>
 
