@@ -62,10 +62,11 @@ export const NAV_SECTIONS: NavSection[] = [
     key: "hangar",
     label: "Hangar",
     items: [
-      { label: "My Fleet",   href: "/hangar?tab=fleet" },
-      { label: "Buyback",    href: "/hangar?tab=buyback" },
-      { label: "Wishlist",   href: "/hangar?tab=wishlist" },
-      { label: "CCU Chains", href: "/hangar/chain-board" },
+      { label: "My Fleet",        href: "/hangar?tab=fleet" },
+      { label: "Buyback",         href: "/hangar?tab=buyback" },
+      { label: "Wishlist",        href: "/hangar?tab=wishlist" },
+      { label: "CCU Chains",      href: "/hangar/chain-board" },
+      { label: "Cadenas comunidad", href: "/hangar/chain-board/community" },
     ],
   },
   {
