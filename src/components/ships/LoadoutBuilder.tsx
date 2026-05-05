@@ -27,6 +27,7 @@ import { HardpointSlot, isUsefulSlot } from "./HardpointSlot";
 import { ComponentPicker } from "./ComponentPicker";
 import { PowerManagementPanel } from "./PowerManagementPanel";
 import { ShipSelector } from "./ShipSelector";
+import { LoadoutQuickSlots } from "./LoadoutQuickSlots";
 import { fmtStat, fmtDps } from "./loadout-utils";
 // ── Widget modules (each subscribes directly to the store) ───────────────────
 // Strafe / Turning / G-Forces se unificaron en `FlightDynamicsWidget` (Fase G.1):
@@ -1071,7 +1072,13 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   return (
     <div className="space-y-2">
       {/* ── Top Bar ── */}
-      <div className="flex items-center justify-end px-2.5 py-1.5 bg-zinc-900/80 border border-zinc-800/60">
+      <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-zinc-900/80 border border-zinc-800/60 flex-wrap">
+        {/* Quick slots — pin de hasta 6 ship+build configs para alternar
+            rápido entre naves manteniendo sus configuraciones. */}
+        <LoadoutQuickSlots
+          currentShipReference={shipInfo?.reference ?? null}
+          currentShipName={shipInfo?.name ?? null}
+        />
         {/* Móvil: los 5 botones se envuelven a 2 filas si no caben.
             Desktop (md+): se mantienen en una sola fila como siempre. */}
         <div className="flex flex-wrap md:flex-nowrap items-center gap-1.5">
