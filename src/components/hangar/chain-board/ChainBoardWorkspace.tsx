@@ -28,7 +28,15 @@ import {
 } from "./types";
 
 const LS_KEY = "sclabs-chain-board-v2";
+const LS_SAVES_KEY = "sclabs-chain-board-saves-v1";
 const KIND_CYCLE: UpgradeKind[] = ["normal", "warbond", "hanger"];
+
+interface NamedSave {
+  id: string;
+  name: string;
+  savedAt: string;
+  snapshot: BoardSnapshot;
+}
 
 const newId = (prefix: string) =>
   `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
@@ -59,6 +67,23 @@ export function ChainBoardWorkspace() {
   const [hydrated, setHydrated] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [rightPanelMode, setRightPanelMode] = useState<"detail" | "creator" | "auto">("detail");
+
+  const [savedChains, setSavedChains] = useState<NamedSave[]>([]);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LS_SAVES_KEY);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) setSavedChains(arr as NamedSave[]);
+      }
+    } catch {}
+  }, []);
+  const persistSaves = useCallback((next: NamedSave[]) => {
+    setSavedChains(next);
+    try {
+      localStorage.setItem(LS_SAVES_KEY, JSON.stringify(next));
+    } catch {}
+  }, []);
 
   const [catalog, setCatalog] = useState<CatalogShip[]>([]);
   useEffect(() => {
@@ -438,15 +463,47 @@ export function ChainBoardWorkspace() {
     } catch {}
   }, [nodes.length, edges.length]);
 
-  const saveBoard = useCallback(() => {
-    try {
-      const snap: BoardSnapshot = { version: 2, nodes, edges, savedAt: new Date().toISOString() };
-      localStorage.setItem(LS_KEY, JSON.stringify(snap));
-      setStatusMsg({ kind: "ok", text: "Pizarra guardada en este navegador." });
-    } catch (e: any) {
-      setStatusMsg({ kind: "err", text: e?.message ?? "No se pudo guardar." });
+  const saveAsNamed = useCallback(() => {
+    if (nodes.length === 0) {
+      setStatusMsg({ kind: "err", text: "Pizarra vacía — no hay nada para guardar." });
+      return;
     }
-  }, [nodes, edges]);
+    const name = prompt("Nombre de la cadena:", `Cadena ${new Date().toLocaleDateString()}`);
+    if (!name || !name.trim()) return;
+    const snap: BoardSnapshot = { version: 2, nodes, edges, savedAt: new Date().toISOString() };
+    const entry: NamedSave = {
+      id: newId("save"),
+      name: name.trim(),
+      savedAt: snap.savedAt,
+      snapshot: snap,
+    };
+    persistSaves([entry, ...savedChains]);
+    setStatusMsg({ kind: "ok", text: `Cadena "${entry.name}" guardada.` });
+  }, [nodes, edges, savedChains, persistSaves]);
+
+  const loadNamed = useCallback(
+    (id: string) => {
+      const entry = savedChains.find((s) => s.id === id);
+      if (!entry) return;
+      if (nodes.length > 0 && !confirm(`¿Cargar "${entry.name}"? Se reemplaza la pizarra actual.`)) return;
+      setNodes(entry.snapshot.nodes);
+      setEdges(entry.snapshot.edges);
+      setSelectedNodeId(null);
+      setStatusMsg({ kind: "ok", text: `Cadena "${entry.name}" cargada.` });
+    },
+    [savedChains, nodes.length],
+  );
+
+  const deleteNamed = useCallback(
+    (id: string) => {
+      const entry = savedChains.find((s) => s.id === id);
+      if (!entry) return;
+      if (!confirm(`¿Borrar la cadena "${entry.name}" guardada? No se puede deshacer.`)) return;
+      persistSaves(savedChains.filter((s) => s.id !== id));
+      setStatusMsg({ kind: "ok", text: `Cadena "${entry.name}" borrada.` });
+    },
+    [savedChains, persistSaves],
+  );
 
   const exportBoard = useCallback(() => {
     const snap: BoardSnapshot = { version: 2, nodes, edges, savedAt: new Date().toISOString() };
@@ -699,11 +756,16 @@ export function ChainBoardWorkspace() {
       </div>
 
       {/* Bottom toolbar */}
-      <div className="flex items-center justify-center gap-2 py-2 border-t border-zinc-800/40">
-        <ToolbarButton onClick={clearBoard} icon="🗑" label="Clear" tone="rose" />
-        <ToolbarButton onClick={saveBoard} icon="💾" label="Save" tone="emerald" />
-        <ToolbarButton onClick={exportBoard} icon="↓" label="Export" tone="cyan" />
-        <ToolbarButton onClick={importBoard} icon="↑" label="Import" tone="amber" />
+      <div className="flex items-center justify-center gap-2 py-2 border-t border-zinc-800/40 flex-wrap">
+        <ToolbarButton onClick={clearBoard} icon="🗑" label="Nueva" tone="rose" />
+        <ToolbarButton onClick={saveAsNamed} icon="💾" label="Guardar cadena" tone="emerald" />
+        <LoadChainDropdown
+          saves={savedChains}
+          onLoad={loadNamed}
+          onDelete={deleteNamed}
+        />
+        <ToolbarButton onClick={exportBoard} icon="↓" label="Export JSON" tone="cyan" />
+        <ToolbarButton onClick={importBoard} icon="↑" label="Import JSON" tone="amber" />
       </div>
     </div>
   );
@@ -1184,5 +1246,87 @@ function ToolbarButton({
       <span>{icon}</span>
       {label}
     </button>
+  );
+}
+
+// ─── LoadChainDropdown ──────────────────────────────────────────────────────
+// Dropdown para cargar/borrar cadenas guardadas con nombre.
+
+function LoadChainDropdown({
+  saves, onLoad, onDelete,
+}: {
+  saves: NamedSave[];
+  onLoad: (id: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Cerrar al click fuera
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [open]);
+
+  const disabled = saves.length === 0;
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => !disabled && setOpen((p) => !p)}
+        disabled={disabled}
+        className={`text-[11px] font-mono uppercase tracking-wider px-3 py-1.5 rounded-sm border bg-zinc-950/40 transition-colors flex items-center gap-1.5 ${
+          disabled
+            ? "border-zinc-800/40 text-zinc-700 cursor-not-allowed"
+            : "border-violet-500/40 text-violet-300 hover:bg-violet-500/15"
+        }`}
+        title={disabled ? "No hay cadenas guardadas" : `${saves.length} cadenas guardadas`}
+      >
+        <span>📂</span>
+        Cargar cadena
+        {saves.length > 0 && <span className="text-[9px] opacity-70">({saves.length})</span>}
+      </button>
+      {open && saves.length > 0 && (
+        <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-[320px] max-h-[360px] overflow-y-auto bg-zinc-950 border border-zinc-800 rounded-sm shadow-xl z-30 p-1">
+          {saves.map((s) => {
+            const stats = `${s.snapshot.nodes.length} naves · ${s.snapshot.edges.length} CCUs`;
+            const date = new Date(s.savedAt).toLocaleString();
+            return (
+              <div
+                key={s.id}
+                className="flex items-center gap-1 px-1.5 py-1 rounded-sm hover:bg-zinc-800/60 group"
+              >
+                <button
+                  onClick={() => {
+                    onLoad(s.id);
+                    setOpen(false);
+                  }}
+                  className="flex-1 min-w-0 text-left"
+                  title={`Cargar "${s.name}"`}
+                >
+                  <p className="text-[11px] text-zinc-200 truncate font-medium">{s.name}</p>
+                  <p className="text-[9px] text-zinc-500 font-mono">
+                    {stats} · {date}
+                  </p>
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(s.id);
+                  }}
+                  className="opacity-50 hover:opacity-100 text-zinc-500 hover:text-rose-300 text-[12px] px-1.5 transition-opacity shrink-0"
+                  title="Borrar esta cadena guardada"
+                >
+                  ✕
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

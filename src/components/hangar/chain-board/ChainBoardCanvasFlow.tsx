@@ -317,15 +317,41 @@ function CanvasInner({
     onSelectNode(null);
   }, [onSelectNode]);
 
-  // Centrar viewport sobre todos los nodos. Si está vacío, vuelve al origen.
+  // Centrar viewport sobre el centroide de la cadena. Más predecible que
+  // fitView (que se va al carajo cuando hay nodos dispersos por el canvas).
+  // Calculamos el bounding box de los nodos y mandamos el viewport al centro
+  // con zoom 1 — siempre escala consistente, siempre adentro de la pizarra.
   const handleFitView = useCallback(() => {
-    if (!flowInstance) return;
-    if (nodes.length === 0) {
-      flowInstance.setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 300 });
-      return;
+    if (!flowInstance || nodes.length === 0) return;
+    const NODE_W = 180; // ancho aprox de ShipNode
+    const NODE_H = 220; // alto aprox de ShipNode (incluye foto + cuerpo)
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const n of nodes) {
+      const x = n.position.x;
+      const y = n.position.y;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x + NODE_W > maxX) maxX = x + NODE_W;
+      if (y + NODE_H > maxY) maxY = y + NODE_H;
     }
-    flowInstance.fitView({ padding: 0.2, duration: 400, maxZoom: 1.2 });
-  }, [flowInstance, nodes.length]);
+    const cx = (minX + maxX) / 2;
+    const cy = (minY + maxY) / 2;
+    // Si la cadena es chica, zoom 1. Si es grande, achicar para que entre.
+    const width = maxX - minX;
+    const height = maxY - minY;
+    const wrap = wrapperRef.current;
+    const targetZoom =
+      wrap && (width > 0 || height > 0)
+        ? Math.min(
+            1,
+            Math.min(
+              (wrap.clientWidth - 80) / Math.max(width, 1),
+              (wrap.clientHeight - 80) / Math.max(height, 1),
+            ),
+          )
+        : 1;
+    flowInstance.setCenter(cx, cy, { zoom: Math.max(0.4, targetZoom), duration: 400 });
+  }, [flowInstance, nodes]);
 
   return (
     <div
