@@ -12,6 +12,7 @@
 // =============================================================================
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useHangarStore, type HangarCCU } from "@/store/useHangarStore";
 import { getShipThumbUrl } from "../HangarShipCard";
 import { ChainBoardCanvasFlow } from "./ChainBoardCanvasFlow";
@@ -65,7 +66,7 @@ export function ChainBoardWorkspace() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
-  const [rightPanelMode, setRightPanelMode] = useState<"detail" | "creator" | "auto">("detail");
+  const [rightPanelMode, setRightPanelMode] = useState<"detail" | "creator" | "auto" | "hangar">("detail");
 
   const [savedChains, setSavedChains] = useState<NamedSave[]>([]);
   useEffect(() => {
@@ -515,6 +516,32 @@ export function ChainBoardWorkspace() {
     URL.revokeObjectURL(url);
   }, [nodes, edges]);
 
+  const shareBoard = useCallback(async () => {
+    if (nodes.length === 0) {
+      setStatusMsg({ kind: "err", text: "Pizarra vacía — no hay nada para compartir." });
+      return;
+    }
+    const snap: BoardSnapshot = { version: 2, nodes, edges, savedAt: new Date().toISOString() };
+    const json = JSON.stringify(snap);
+    try {
+      await navigator.clipboard.writeText(json);
+      setStatusMsg({
+        kind: "ok",
+        text: "Cadena copiada al portapapeles. Pegala en 'Import JSON' de otro browser para importarla.",
+      });
+    } catch {
+      // Fallback: ofrecer descarga
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `sclabs-cadena-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatusMsg({ kind: "ok", text: "Cadena descargada (clipboard no disponible)." });
+    }
+  }, [nodes, edges]);
+
   const importBoard = useCallback(() => {
     const input = document.createElement("input");
     input.type = "file";
@@ -748,6 +775,7 @@ export function ChainBoardWorkspace() {
             onCreateCcu={createCcu}
             autoBusy={autoBusy}
             onAutoBuild={autoBuild}
+            usedShipIds={usedShipIds}
           />
         </section>
       </div>
@@ -755,14 +783,22 @@ export function ChainBoardWorkspace() {
       {/* Bottom toolbar */}
       <div className="flex items-center justify-center gap-2 py-2 border-t border-zinc-800/40 flex-wrap">
         <ToolbarButton onClick={clearBoard} icon="🗑" label="Nueva" tone="rose" />
-        <ToolbarButton onClick={saveAsNamed} icon="💾" label="Guardar cadena" tone="emerald" />
+        <ToolbarButton onClick={saveAsNamed} icon="💾" label="Guardar" tone="emerald" />
         <LoadChainDropdown
           saves={savedChains}
           onLoad={loadNamed}
           onDelete={deleteNamed}
         />
-        <ToolbarButton onClick={exportBoard} icon="↓" label="Export JSON" tone="cyan" />
-        <ToolbarButton onClick={importBoard} icon="↑" label="Import JSON" tone="amber" />
+        <ToolbarButton onClick={shareBoard} icon="🔗" label="Compartir" tone="violet" />
+        <Link
+          href="/hangar/chain-board/community"
+          className="text-[11px] font-mono uppercase tracking-wider px-3 py-1.5 rounded-sm border bg-zinc-950/40 transition-colors flex items-center gap-1.5 border-fuchsia-500/40 text-fuchsia-300 hover:bg-fuchsia-500/15"
+        >
+          <span>🌐</span>
+          Comunidad
+        </Link>
+        <ToolbarButton onClick={exportBoard} icon="↓" label="Export" tone="cyan" />
+        <ToolbarButton onClick={importBoard} icon="↑" label="Import" tone="amber" />
       </div>
     </div>
   );
@@ -779,8 +815,8 @@ const KIND_LABEL: Record<UpgradeKind, { label: string; cls: string }> = {
 };
 
 interface RightPanelProps {
-  mode: "detail" | "creator" | "auto";
-  setMode: (m: "detail" | "creator" | "auto") => void;
+  mode: "detail" | "creator" | "auto" | "hangar";
+  setMode: (m: "detail" | "creator" | "auto" | "hangar") => void;
   selectedNode: BoardNode | null;
   upstreamChain: { from: BoardNode; edge: BoardEdge; to: BoardNode }[];
   totalCost: number;
@@ -790,11 +826,12 @@ interface RightPanelProps {
   onCreateCcu: (from: CatalogShip, to: CatalogShip, isWarbond: boolean, manualPrice: number | null) => void;
   autoBusy: boolean;
   onAutoBuild: (from: CatalogShip, to: CatalogShip, mode: "now" | "save" | "credits") => void;
+  usedShipIds: Set<string>;
 }
 
 function RightPanel({
   mode, setMode, selectedNode, upstreamChain, totalCost, onSelectNode, onClose,
-  catalog, onCreateCcu, autoBusy, onAutoBuild,
+  catalog, onCreateCcu, autoBusy, onAutoBuild, usedShipIds,
 }: RightPanelProps) {
   return (
     <div className="h-full flex flex-col bg-zinc-900/40 border border-zinc-800/60 rounded-md overflow-hidden">
@@ -802,20 +839,29 @@ function RightPanel({
         <PanelTab active={mode === "detail"} onClick={() => setMode("detail")} label="Detalle" />
         <PanelTab active={mode === "creator"} onClick={() => setMode("creator")} label="+ CCU" />
         <PanelTab active={mode === "auto"} onClick={() => setMode("auto")} label="Auto" />
+        <PanelTab active={mode === "hangar"} onClick={() => setMode("hangar")} label="Mis CCUs" />
       </div>
-      <div className="flex-1 overflow-y-auto">
-        {mode === "detail" && (
-          <DetailMode
-            selectedNode={selectedNode}
-            upstreamChain={upstreamChain}
-            totalCost={totalCost}
-            onSelectNode={onSelectNode}
-            onClose={onClose}
-          />
-        )}
-        {mode === "creator" && <CreatorMode catalog={catalog} onCreateCcu={onCreateCcu} />}
-        {mode === "auto" && <AutoModeUI catalog={catalog} busy={autoBusy} onAutoBuild={onAutoBuild} />}
-      </div>
+      {/* Si está en modo hangar, renderizamos la columna 2 dentro del panel.
+          Tiene su propio scroll/filtros, así que no envolvemos en overflow. */}
+      {mode === "hangar" ? (
+        <div className="flex-1 overflow-hidden p-0">
+          <ChainBoardStoreColumn usedShipIds={usedShipIds} />
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto">
+          {mode === "detail" && (
+            <DetailMode
+              selectedNode={selectedNode}
+              upstreamChain={upstreamChain}
+              totalCost={totalCost}
+              onSelectNode={onSelectNode}
+              onClose={onClose}
+            />
+          )}
+          {mode === "creator" && <CreatorMode catalog={catalog} onCreateCcu={onCreateCcu} />}
+          {mode === "auto" && <AutoModeUI catalog={catalog} busy={autoBusy} onAutoBuild={onAutoBuild} />}
+        </div>
+      )}
     </div>
   );
 }
@@ -1225,6 +1271,8 @@ const TONE: Record<string, string> = {
   emerald: "border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/15",
   cyan: "border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/15",
   amber: "border-amber-500/40 text-amber-300 hover:bg-amber-500/15",
+  violet: "border-violet-500/40 text-violet-300 hover:bg-violet-500/15",
+  fuchsia: "border-fuchsia-500/40 text-fuchsia-300 hover:bg-fuchsia-500/15",
 };
 
 function ToolbarButton({
