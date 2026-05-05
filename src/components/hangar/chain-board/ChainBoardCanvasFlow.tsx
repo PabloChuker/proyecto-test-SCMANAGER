@@ -205,6 +205,7 @@ function CanvasInner({
 }: ChainBoardCanvasFlowProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null);
+  const [minimapCollapsed, setMinimapCollapsed] = useState(false);
 
   const incomingByTarget = useMemo(() => {
     const set = new Set<string>();
@@ -372,6 +373,31 @@ function CanvasInner({
         <span className="text-[12px]">⊕</span>
         Centrar
       </button>
+
+      {/* Toggle minimapa — botón posicionado encima de la esquina del MiniMap.
+          xyflow renderiza el MiniMap fijo abajo-izq con padding interno; el
+          botón se monta sobre el borde sup-der del minimapa, o queda solo
+          cuando está colapsado.  */}
+      {minimapCollapsed ? (
+        <button
+          type="button"
+          onClick={() => setMinimapCollapsed(false)}
+          className="absolute bottom-3 left-3 z-30 flex items-center gap-1.5 px-2 py-1.5 rounded-sm bg-zinc-900/90 border border-cyan-500/40 text-cyan-300 text-[10px] font-mono uppercase tracking-wider hover:bg-cyan-500/15 transition-colors shadow-md"
+          title="Mostrar minimapa"
+        >
+          <span className="text-[12px]">🗺</span>
+          Mapa
+        </button>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setMinimapCollapsed(true)}
+          className="absolute bottom-[95px] left-[125px] z-30 w-5 h-5 rounded-full bg-zinc-950 border border-cyan-500/60 text-cyan-300 hover:bg-cyan-500 hover:text-zinc-900 text-[11px] flex items-center justify-center transition-colors shadow-md"
+          title="Ocultar minimapa"
+        >
+          ▾
+        </button>
+      )}
       <ReactFlow
         nodes={localNodes}
         edges={localEdges}
@@ -395,19 +421,21 @@ function CanvasInner({
           position="bottom-right"
           showInteractive={false}
         />
-        <MiniMap
-          className="!bg-zinc-900/95 !border-2 !border-cyan-500/40 !rounded-md !w-[260px] !h-[180px] [&_.react-flow__minimap-mask]:!fill-zinc-950/80"
-          nodeColor={(n) => (n.id === selectedNodeId ? "#22d3ee" : "#f59e0b")}
-          nodeBorderRadius={4}
-          nodeStrokeColor="#fbbf24"
-          nodeStrokeWidth={3}
-          maskColor="rgba(9, 9, 11, 0.7)"
-          maskStrokeColor="#22d3ee"
-          maskStrokeWidth={2}
-          position="bottom-left"
-          pannable
-          zoomable
-        />
+        {!minimapCollapsed && (
+          <MiniMap
+            className="!bg-zinc-900/95 !border-2 !border-cyan-500/40 !rounded-md !w-[130px] !h-[90px] [&_.react-flow__minimap-mask]:!fill-zinc-950/80"
+            nodeColor={(n) => (n.id === selectedNodeId ? "#22d3ee" : "#f59e0b")}
+            nodeBorderRadius={4}
+            nodeStrokeColor="#fbbf24"
+            nodeStrokeWidth={3}
+            maskColor="rgba(9, 9, 11, 0.7)"
+            maskStrokeColor="#22d3ee"
+            maskStrokeWidth={2}
+            position="bottom-left"
+            pannable
+            zoomable
+          />
+        )}
       </ReactFlow>
     </div>
   );
