@@ -624,7 +624,10 @@ export function ChainBoardWorkspace() {
 
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="space-y-3 h-full flex flex-col">
+    // Bounded a la altura del viewport (menos header + paddings de la page)
+    // para que NO empuje la página entera hacia abajo. El usuario ve todo
+    // en una sola pantalla, sin scroll vertical infinito.
+    <div className="space-y-3 flex flex-col h-[calc(100vh-7rem)] min-h-[600px] max-h-[1100px]">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
@@ -709,17 +712,18 @@ export function ChainBoardWorkspace() {
         </div>
       )}
 
-      {/* Grid 4-col */}
-      <div className="flex-1 min-h-[600px] grid grid-cols-1 md:grid-cols-[210px_220px_1fr_300px] gap-3">
-        <section className="min-h-[400px] hidden md:block">
+      {/* Grid 4-col — flex-1 + min-h-0 + overflow-hidden permiten que las
+          columnas se ajusten a la altura disponible sin desbordar la página. */}
+      <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[210px_220px_1fr_300px] gap-3 overflow-hidden">
+        <section className="min-h-0 hidden md:block overflow-hidden">
           <ChainBoardInventoryColumn usedShipIds={usedShipIds} />
         </section>
 
-        <section className="min-h-[400px] hidden md:block">
+        <section className="min-h-0 hidden md:block overflow-hidden">
           <ChainBoardStoreColumn usedShipIds={usedShipIds} />
         </section>
 
-        <section className="min-h-[600px]">
+        <section className="min-h-[400px] overflow-hidden">
           <ChainBoardCanvasFlow
             nodes={nodes}
             edges={edges}
@@ -738,7 +742,7 @@ export function ChainBoardWorkspace() {
           />
         </section>
 
-        <section className="min-h-[400px] hidden md:block">
+        <section className="min-h-0 hidden md:block overflow-hidden">
           <RightPanel
             mode={rightPanelMode}
             setMode={setRightPanelMode}

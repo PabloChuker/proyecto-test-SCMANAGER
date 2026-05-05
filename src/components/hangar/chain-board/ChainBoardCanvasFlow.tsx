@@ -317,46 +317,29 @@ function CanvasInner({
     onSelectNode(null);
   }, [onSelectNode]);
 
-  // Centrar viewport sobre el centroide de la cadena. Más predecible que
-  // fitView (que se va al carajo cuando hay nodos dispersos por el canvas).
-  // Calculamos el bounding box de los nodos y mandamos el viewport al centro
-  // con zoom 1 — siempre escala consistente, siempre adentro de la pizarra.
+  // Centrar viewport en el PRIMER ESLABÓN de la cadena (= nodo root sin
+  // incoming edge). Si hay varias cadenas/roots, agarra el que esté más a
+  // la izquierda (la cadena "más natural" para leer).
   const handleFitView = useCallback(() => {
     if (!flowInstance || nodes.length === 0) return;
-    const NODE_W = 180; // ancho aprox de ShipNode
-    const NODE_H = 220; // alto aprox de ShipNode (incluye foto + cuerpo)
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const n of nodes) {
-      const x = n.position.x;
-      const y = n.position.y;
-      if (x < minX) minX = x;
-      if (y < minY) minY = y;
-      if (x + NODE_W > maxX) maxX = x + NODE_W;
-      if (y + NODE_H > maxY) maxY = y + NODE_H;
-    }
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
-    // Si la cadena es chica, zoom 1. Si es grande, achicar para que entre.
-    const width = maxX - minX;
-    const height = maxY - minY;
-    const wrap = wrapperRef.current;
-    const targetZoom =
-      wrap && (width > 0 || height > 0)
-        ? Math.min(
-            1,
-            Math.min(
-              (wrap.clientWidth - 80) / Math.max(width, 1),
-              (wrap.clientHeight - 80) / Math.max(height, 1),
-            ),
-          )
-        : 1;
-    flowInstance.setCenter(cx, cy, { zoom: Math.max(0.4, targetZoom), duration: 400 });
-  }, [flowInstance, nodes]);
+    const targetIds = new Set(edges.map((e) => e.target));
+    const roots = nodes.filter((n) => !targetIds.has(n.id));
+    // Si por algún motivo no hay roots (cadena con ciclo o nodos huérfanos
+    // sin edges), tomamos el más a la izquierda como fallback.
+    const candidates = roots.length > 0 ? roots : nodes;
+    const root = candidates.slice().sort((a, b) => a.position.x - b.position.x || a.position.y - b.position.y)[0];
+    const NODE_W = 180;
+    const NODE_H = 220;
+    flowInstance.setCenter(root.position.x + NODE_W / 2, root.position.y + NODE_H / 2, {
+      zoom: 1,
+      duration: 400,
+    });
+  }, [flowInstance, nodes, edges]);
 
   return (
     <div
       ref={wrapperRef}
-      className="w-full h-full min-h-[600px] bg-zinc-950 rounded-md border border-zinc-800/60 overflow-hidden relative"
+      className="w-full h-full min-h-[400px] bg-zinc-950 rounded-md border border-zinc-800/60 overflow-hidden relative"
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
@@ -413,9 +396,14 @@ function CanvasInner({
           showInteractive={false}
         />
         <MiniMap
-          className="!bg-zinc-900/90 !border !border-zinc-800/60"
-          nodeColor={(n) => (n.id === selectedNodeId ? "#22d3ee" : "#3f3f46")}
-          maskColor="rgba(9, 9, 11, 0.85)"
+          className="!bg-zinc-900/95 !border-2 !border-cyan-500/40 !rounded-md !w-[260px] !h-[180px] [&_.react-flow__minimap-mask]:!fill-zinc-950/80"
+          nodeColor={(n) => (n.id === selectedNodeId ? "#22d3ee" : "#f59e0b")}
+          nodeBorderRadius={4}
+          nodeStrokeColor="#fbbf24"
+          nodeStrokeWidth={3}
+          maskColor="rgba(9, 9, 11, 0.7)"
+          maskStrokeColor="#22d3ee"
+          maskStrokeWidth={2}
           position="bottom-left"
           pannable
           zoomable
