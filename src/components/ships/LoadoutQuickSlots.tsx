@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { getShipThumbUrl } from "@/components/hangar/HangarShipCard";
 
 const LS_KEY = "sc-labs-loadout-quick-slots-v1";
+const LS_ACTIVE_KEY = "sc-labs-loadout-quick-active-v1";
 const SLOT_COUNT = 6;
 
 interface QuickSlot {
@@ -45,6 +46,12 @@ export function LoadoutQuickSlots({
   const [slots, setSlots] = useState<(QuickSlot | null)[]>(() =>
     Array(SLOT_COUNT).fill(null),
   );
+  // ── Slot activo ──────────────────────────────────────────────────────────
+  // Trackeamos el slot "actualmente abierto" como un índice explícito (no por
+  // matching ship+URL). Esto permite que el usuario pinee la misma nave en
+  // varios slots con builds diferentes, y que al alternar entre ellos cada
+  // uno se actualice independientemente como una pestaña real.
+  const [activeSlotIdx, setActiveSlotIdx] = useState<number | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
   // Hidratar de localStorage
@@ -65,6 +72,13 @@ export function LoadoutQuickSlots({
           setSlots(next);
         }
       }
+      const rawActive = localStorage.getItem(LS_ACTIVE_KEY);
+      if (rawActive !== null) {
+        const idx = parseInt(rawActive, 10);
+        if (Number.isInteger(idx) && idx >= 0 && idx < SLOT_COUNT) {
+          setActiveSlotIdx(idx);
+        }
+      }
     } catch {}
     setHydrated(true);
   }, []);
@@ -77,9 +91,22 @@ export function LoadoutQuickSlots({
     } catch {}
   }, [slots, hydrated]);
 
+  // Persistir activeSlotIdx
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      if (activeSlotIdx === null) localStorage.removeItem(LS_ACTIVE_KEY);
+      else localStorage.setItem(LS_ACTIVE_KEY, String(activeSlotIdx));
+    } catch {}
+  }, [activeSlotIdx, hydrated]);
+
   // Pin: captura ship + build code de la URL actual y lo guarda en el slot
   // dado. Si idx no se especifica, busca el primer slot vacío. Si no hay
   // ninguno libre, sobreescribe el más viejo.
+  //
+  // NOTA: NO dedupeamos por ship+build. El usuario puede querer pinear la
+  // misma nave varias veces (ej. la misma nave con 2 builds distintos para
+  // comparar lado a lado), y cada slot funciona como una pestaña aislada.
   const pinCurrent = useCallback(
     (idx: number | null = null) => {
       if (!currentShipReference || !currentShipName) return;
@@ -94,6 +121,7 @@ export function LoadoutQuickSlots({
         savedAt: new Date().toISOString(),
       };
 
+      let pinnedAt = idx;
       setSlots((prev) => {
         const next = prev.slice();
         let target = idx;
@@ -113,84 +141,78 @@ export function LoadoutQuickSlots({
             target = oldestIdx;
           }
         }
-        // Si ya hay otro slot apuntando al mismo ship+build, lo dedupeamos
-        for (let i = 0; i < next.length; i++) {
-          if (i === target) continue;
-          const s = next[i];
-          if (
-            s &&
-            s.shipReference === newSlot.shipReference &&
-            (s.buildCode ?? null) === (newSlot.buildCode ?? null)
-          ) {
-            next[i] = null;
-          }
-        }
         next[target] = newSlot;
+        pinnedAt = target;
         return next;
       });
+      // El slot recién pineado pasa a ser el activo.
+      if (pinnedAt !== null) setActiveSlotIdx(pinnedAt);
     },
     [currentShipReference, currentShipName],
   );
 
-  const clearSlot = useCallback((idx: number) => {
-    setSlots((prev) => {
-      const next = prev.slice();
-      next[idx] = null;
-      return next;
-    });
-  }, []);
+  const clearSlot = useCallback(
+    (idx: number) => {
+      setSlots((prev) => {
+        const next = prev.slice();
+        next[idx] = null;
+        return next;
+      });
+      // Si borraron el activo, queda sin activo.
+      setActiveSlotIdx((prev) => (prev === idx ? null : prev));
+    },
+    [],
+  );
 
   const navigateToSlot = useCallback(
     (idx: number) => {
       const slot = slots[idx];
       if (!slot) return;
       // ── Comportamiento tipo "tabs" ──────────────────────────────────────
-      // Antes de saltar al slot destino, capturamos el ship+build de la URL
-      // actual y, si hay otro slot que apunta a ese MISMO ship, lo
-      // actualizamos con el último build code visto. Así, cuando volvés a
-      // ese slot más adelante, recuperás exactamente la última config que
-      // estabas viendo (no la que tenías al pinear).
+      // Antes de saltar, guardamos el build code actual al SLOT ACTIVO
+      // (no por matching ship). Esto permite que la misma nave aparezca en
+      // varios slots con diferentes builds y cada uno se actualice
+      // independientemente. Si no hay slot activo (primera vez o el user
+      // navegó por afuera), no guardamos en ningún slot.
       const currUrl = new URL(window.location.href);
       const currShip = currUrl.searchParams.get("ship");
       const currBuild = currUrl.searchParams.get("build");
-      if (currShip && currShip !== slot.shipReference) {
+      if (
+        activeSlotIdx !== null &&
+        activeSlotIdx !== idx &&
+        slots[activeSlotIdx] &&
+        currShip === slots[activeSlotIdx]!.shipReference
+      ) {
         setSlots((prev) => {
           const next = prev.slice();
-          // Buscar el slot que apunta al ship actual (cualquier build) y
-          // refrescarle el buildCode con el state actual.
-          for (let i = 0; i < next.length; i++) {
-            const s = next[i];
-            if (s && s.shipReference === currShip) {
-              next[i] = {
-                ...s,
-                buildCode: currBuild,
-                savedAt: new Date().toISOString(),
-              };
-              break;
-            }
+          const activeSlot = next[activeSlotIdx];
+          if (activeSlot) {
+            next[activeSlotIdx] = {
+              ...activeSlot,
+              buildCode: currBuild,
+              savedAt: new Date().toISOString(),
+            };
           }
           return next;
         });
       }
+      // Marcar el destino como activo
+      setActiveSlotIdx(idx);
       // Saltar al slot destino
       const url = new URL("/loadout", window.location.origin);
       url.searchParams.set("ship", slot.shipReference);
       if (slot.buildCode) url.searchParams.set("build", slot.buildCode);
       router.push(url.pathname + url.search);
     },
-    [slots, router],
+    [slots, router, activeSlotIdx],
   );
 
-  // Detectar si el slot apunta al ship+build actual
+  // El slot "activo" es el que el usuario está editando ahora — trackeado
+  // explícito (activeSlotIdx) en vez de inferido por URL para soportar misma
+  // nave en múltiples slots.
   const isCurrentSlot = useCallback(
-    (slot: QuickSlot | null) => {
-      if (!slot || !currentShipReference) return false;
-      if (slot.shipReference !== currentShipReference) return false;
-      const url = new URL(window.location.href);
-      const currentBuild = url.searchParams.get("build");
-      return (slot.buildCode ?? null) === currentBuild;
-    },
-    [currentShipReference],
+    (idx: number) => idx === activeSlotIdx,
+    [activeSlotIdx],
   );
 
   return (
@@ -223,7 +245,7 @@ export function LoadoutQuickSlots({
               </button>
             );
           }
-          const active = isCurrentSlot(slot);
+          const active = isCurrentSlot(idx);
           return (
             <div
               key={idx}
