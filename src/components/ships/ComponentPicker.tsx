@@ -459,10 +459,16 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     if (vw < 640) return undefined; // mobile: que use el inset-4 default
-    // Para weapons cap en 1100 px (panel claramente delimitado).
+    // Wide table caps según categoría:
+    //   WEAPON/TURRET: 1100 px (más columnas)
+    //   MISSILE/MISSILE_RACK: 900 px
+    //   resto: 360 px
+    const isMissile = hardpoint.resolvedCategory === "MISSILE" || hardpoint.resolvedCategory === "MISSILE_RACK";
     const PANEL_W = isWideTable
       ? Math.min(1100, vw - 2 * VIEWPORT_PAD)
-      : 360;
+      : isMissile
+        ? Math.min(900, vw - 2 * VIEWPORT_PAD)
+        : 360;
 
     // Intentar derecha primero (estilo dropdown nativo)
     const tryRight = anchorRect.right + MARGIN;
@@ -522,11 +528,15 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
           // columnas en una sola fila por arma (Burst/Eff/Alpha/RoF/Rng/V/Pwr/
           // Ammo/Rgn/Heat/HP + Name/Size/Grade/Price). Con max-w para no
           // sobresalir del viewport en pantallas chicas.
-          // Loadout.4m (2026-05-06): cap en 1100 px — panel delimitado, no
-          // se estira a todo el monitor. Name flex-1 absorbe el resto.
-          hardpoint.resolvedCategory === "WEAPON" || hardpoint.resolvedCategory === "TURRET"
+          // Loadout.4m (2026-05-06): wide-table picker para WEAPON/TURRET/
+          // MISSILE/MISSILE_RACK. Cap distinto según número de columnas:
+          // - WEAPON/TURRET: 1100 px (14 cols con stats de combate)
+          // - MISSILE/MISSILE_RACK: 900 px (8-9 cols, fits cómodo)
+          (hardpoint.resolvedCategory === "WEAPON" || hardpoint.resolvedCategory === "TURRET")
             ? "sm:w-[min(1100px,calc(100vw-2rem))]"
-            : "sm:w-[360px]"
+            : (hardpoint.resolvedCategory === "MISSILE" || hardpoint.resolvedCategory === "MISSILE_RACK")
+              ? "sm:w-[min(900px,calc(100vw-2rem))]"
+              : "sm:w-[360px]"
         }`}
         style={panelStyle}
       >
@@ -586,6 +596,24 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
               <span className="w-12 text-right" title="Regen ammo / s">Regen</span>
               <span className="w-14 text-right" title="Heat por disparo">Heat</span>
               <span className="w-14 text-right" title="Durability HP">HP</span>
+            </>
+          ) : hardpoint.resolvedCategory === "MISSILE" ? (
+            <>
+              {/* Misiles + bombas mezclados en el mismo slot child de un rack */}
+              <span className="w-14 text-center" title="Tracking signal: IR / CS / EM, o BOMB para gravity-drop">Track</span>
+              <ColHead label="Damage" k="stat" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-20 text-right" />
+              <span className="w-16 text-right" title="Linear speed (misiles)">Speed</span>
+              <span className="w-16 text-right" title="Explosion radius (bombas)">Radius</span>
+              <span className="w-14 text-right" title="Arm time (bombas)">Arm</span>
+            </>
+          ) : hardpoint.resolvedCategory === "MISSILE_RACK" ? (
+            <>
+              <ColHead label="Capacity" k="stat" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-20 text-right" />
+              <span className="w-12 text-right" title="Cantidad de ports de misil">Ports</span>
+              <span className="w-12 text-right" title="Min size del misil aceptado">Min</span>
+              <span className="w-12 text-right" title="Max size del misil aceptado">Max</span>
+              <span className="w-14 text-right" title="Durability HP">HP</span>
+              <span className="w-14 text-right" title="Mass (kg)">Mass</span>
             </>
           ) : (
             <ColHead label={statLabel} k="stat" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-12 text-right" />
@@ -659,10 +687,13 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
                 </div>
                 <div className="w-7 text-center text-[11px] font-mono text-zinc-400">{item.size != null ? `S${item.size}` : "?"}</div>
                 <div className="w-7 text-center text-[11px]">{item.grade ? <span className={gradeClass(item.grade)}>{item.grade}</span> : <span className="text-zinc-700">-</span>}</div>
-                {/* Para WEAPON/TURRET: columnas alineadas con todas las stats clave en
-                    una sola fila por arma — facilita comparar entre opciones. */}
+                {/* Stats por categoría — cada wide-table tiene sus columnas. */}
                 {(hardpoint.resolvedCategory === "WEAPON" || hardpoint.resolvedCategory === "TURRET") && item.weaponStats ? (
                   <WeaponStatCells stats={item.weaponStats} />
+                ) : hardpoint.resolvedCategory === "MISSILE" ? (
+                  <MissileStatCells item={item} />
+                ) : hardpoint.resolvedCategory === "MISSILE_RACK" ? (
+                  <MissileRackStatCells stats={item.missileRackStats} />
                 ) : (
                   <div className="w-12 text-right font-mono text-[11px]" style={{ color: catColor }}>{sv ? sv.v : <span className="text-zinc-700">-</span>}</div>
                 )}
@@ -732,6 +763,84 @@ function Cell({ width, cls, children }: { width: string; cls?: string; children:
   );
 }
 
+// ─── MissileStatCells ─────────────────────────────────────────────────────
+// Para slots child de un MISSILE_RACK — mezcla MISSILE y BOMB en una sola
+// tabla. Las columnas son distintas:
+//   - Track: IR/CS/EM (misiles) / BOMB (bombas)
+//   - Damage: damage_total
+//   - Speed: linear_speed (solo misiles, las bombas caen libres)
+//   - Radius: explosion_radius (solo bombas)
+//   - Arm: arm_time (solo bombas)
+function MissileStatCells({ item }: { item: any }) {
+  const stats = item.missileStats ?? item.bombStats ?? null;
+  const isBomb = item.type === "BOMB";
+  const damage = numOr(stats?.damage ?? stats?.alphaDamage);
+  const speed = numOr(stats?.speed);
+  const radius = numOr(stats?.explosionRadius);
+  const arm = numOr(stats?.armTime);
+  const track = isBomb ? "BOMB" : (stats?.trackingSignal ?? null);
+  return (
+    <>
+      <div className="w-14 text-center text-[10px] font-mono">
+        {track ? (
+          <span className={trackBadgeClass(track)}>{trackLabel(track)}</span>
+        ) : (
+          <span className="text-zinc-700">-</span>
+        )}
+      </div>
+      <Cell width="w-20" cls="text-emerald-400 font-semibold">{fmtCell(damage)}</Cell>
+      <Cell width="w-16">{fmtCell(speed)}</Cell>
+      <Cell width="w-16">{fmtCell(radius)}</Cell>
+      <Cell width="w-14">{fmtCell(arm)}</Cell>
+    </>
+  );
+}
+
+// ─── MissileRackStatCells ─────────────────────────────────────────────────
+// Para slots de tipo MISSILE_RACK (los lanzadores que se cambian completos).
+// Capacity es la stat principal (ej "4xS3"); ports / min / max indican qué
+// misiles entran adentro. HP y Mass como referencia secundaria.
+function MissileRackStatCells({ stats }: { stats: any }) {
+  const capacity = stats?.missilesLabel as string | null | undefined;
+  const ports = numOr(stats?.missilePorts);
+  const minSize = numOr(stats?.minMissileSize);
+  const maxSize = numOr(stats?.maxMissileSize);
+  const hp = numOr(stats?.hp);
+  const mass = numOr(stats?.mass);
+  return (
+    <>
+      <div className="w-20 text-right font-mono text-[11px] tabular-nums text-emerald-400 font-semibold">
+        {capacity ?? <span className="text-zinc-700">-</span>}
+      </div>
+      <Cell width="w-12">{fmtCell(ports)}</Cell>
+      <Cell width="w-12">{minSize != null ? `S${minSize}` : <span className="text-zinc-700">-</span>}</Cell>
+      <Cell width="w-12">{maxSize != null ? `S${maxSize}` : <span className="text-zinc-700">-</span>}</Cell>
+      <Cell width="w-14">{fmtCell(hp)}</Cell>
+      <Cell width="w-14">{fmtCell(mass)}</Cell>
+    </>
+  );
+}
+
+// Tracking signal helpers — IR (Infrared) / CS (Cross-Section) / EM
+// (Electromagnetic) / BOMB (gravity-drop).
+function trackLabel(t: string): string {
+  const k = t.toUpperCase();
+  if (k.includes("INFRARED") || k === "IR") return "IR";
+  if (k.includes("CROSSSECTION") || k.includes("CROSS_SECTION") || k === "CS") return "CS";
+  if (k.includes("ELECTRO") || k === "EM") return "EM";
+  if (k === "BOMB") return "BOMB";
+  return k.slice(0, 3);
+}
+function trackBadgeClass(t: string): string {
+  const k = trackLabel(t);
+  // Estilo sobrio: solo cambio de tono, sin background fuerte.
+  if (k === "IR") return "px-1 rounded-sm border border-orange-700/40 text-orange-300";
+  if (k === "CS") return "px-1 rounded-sm border border-cyan-700/40 text-cyan-300";
+  if (k === "EM") return "px-1 rounded-sm border border-violet-700/40 text-violet-300";
+  if (k === "BOMB") return "px-1 rounded-sm border border-rose-800/40 text-rose-300";
+  return "px-1 rounded-sm border border-zinc-700/40 text-zinc-400";
+}
+
 function fmtCell(n: number | null): React.ReactNode {
   if (n == null) return <span className="text-zinc-800">-</span>;
   return fmtNum(n);
@@ -760,8 +869,9 @@ function getStatColumnLabel(cat: string): string {
     case "COOLER": return "Rate";
     case "QUANTUM_DRIVE": return "Spool";
     // MISSILE_RACK slot: ahora muestra racks (tabla missile_launchers) con
-    // label de capacidad tipo "4xS3". El slot hijo MISSILE sigue siendo DMG.
-    case "MISSILE_RACK": return "CAP";
+    // label de capacidad tipo "4xS3". El slot hijo MISSILE muestra Damage.
+    case "MISSILE_RACK": return "Capacity";
+    case "MISSILE": return "Damage";
     // SALVAGE: las heads no tienen stat propia (el stat column queda "-");
     // los modifiers muestran Speed multiplier como métrica principal.
     case "SALVAGE": return "Spd";
@@ -786,6 +896,9 @@ function getSortStatVal(stats: Record<string, any> | null, cat: string): number 
     case "POWER_PLANT": return stats.powerOutput ?? 0;
     case "COOLER": return stats.coolingRate ?? 0;
     case "QUANTUM_DRIVE": return stats.spoolUpTime ?? stats.quantumSpoolUp ?? 999;
+    case "MISSILE":
+      // Misiles (y bombas mezcladas) ordenan por damage_total descendente.
+      return stats.damage ?? stats.alphaDamage ?? 0;
     case "MISSILE_RACK":
       // Racks (type=MISSILE_RACK) ordenan por cantidad de puertos de misil
       // (mas puertos = mas capacidad). Si stats es de un misil suelto
