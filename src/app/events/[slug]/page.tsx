@@ -246,19 +246,14 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
             )}
           </div>
 
-          {event.description && (
-            <>
-              <div className="medieval-divider mx-5" />
-              <p className="px-5 py-4 text-[13px] text-amber-100/85 leading-relaxed font-serif">
-                {event.description}
-              </p>
-            </>
-          )}
         </section>
 
         {/* Layout principal: registro + sorteo + anuncios | mapa */}
         <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-4">
           <div className="space-y-4">
+            {/* Descripción del evento (sale de la tabla, links clickeables) */}
+            {event.description && <DescriptionCard description={event.description} />}
+
             <RegistrationCard
               event={event}
               myRegistration={myRegistration}
@@ -594,7 +589,7 @@ function RaffleCard({ event, winners }: { event: CommunityEvent; winners: Raffle
     <div className="medieval-card rounded-md p-4 space-y-2">
       <h3 className="text-[14px] font-bold gold-text flex items-center gap-2">🏆 Sorteo de naves CIG</h3>
       {event.raffle_prize_description && (
-        <p className="text-[12px] text-amber-100/85 leading-snug font-serif">{event.raffle_prize_description}</p>
+        <p className="text-[12px] text-amber-100/85 leading-snug font-serif">{linkify(event.raffle_prize_description)}</p>
       )}
       {event.raffle_rules && (
         <details className="text-[11px] text-amber-200/60">
@@ -651,11 +646,65 @@ function AnnouncementsCard({ announcements }: { announcements: Announcement[] })
                 </h4>
                 <span className="text-[9px] text-amber-200/40 font-mono shrink-0">{new Date(a.created_at).toLocaleDateString()}</span>
               </div>
-              <p className="text-[11px] text-amber-100/80 whitespace-pre-line leading-relaxed font-serif">{a.body}</p>
+              <p className="text-[11px] text-amber-100/80 whitespace-pre-line leading-relaxed font-serif">{linkify(a.body)}</p>
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── linkify helper ─────────────────────────────────────────────────────────
+// Detecta URLs http/https/www dentro de un string y devuelve fragmentos React
+// con los links como <a target="_blank">. Soporta saltos de línea (whitespace
+// se preserva via la clase del contenedor — no transformamos `\n`).
+
+const URL_REGEX = /(https?:\/\/[^\s<]+|www\.[^\s<]+)/gi;
+
+function linkify(text: string) {
+  if (!text) return null;
+  const parts: (string | React.ReactNode)[] = [];
+  let lastIdx = 0;
+  let m: RegExpExecArray | null;
+  let key = 0;
+  // Hacemos una copia local del regex para no usar lastIndex compartido.
+  const re = new RegExp(URL_REGEX.source, URL_REGEX.flags);
+  while ((m = re.exec(text)) !== null) {
+    const start = m.index;
+    const url = m[0];
+    if (start > lastIdx) parts.push(text.slice(lastIdx, start));
+    const href = url.startsWith("www.") ? `https://${url}` : url;
+    parts.push(
+      <a
+        key={`u-${key++}`}
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-cyan-300 hover:text-cyan-200 underline decoration-cyan-500/40 hover:decoration-cyan-400 transition-colors break-words"
+      >
+        {url}
+      </a>
+    );
+    lastIdx = start + url.length;
+  }
+  if (lastIdx < text.length) parts.push(text.slice(lastIdx));
+  return parts;
+}
+
+// ─── DescriptionCard ────────────────────────────────────────────────────────
+// Muestra el texto descriptivo del evento como una tarjeta independiente,
+// con auto-detección de URLs.
+
+function DescriptionCard({ description }: { description: string }) {
+  return (
+    <div className="medieval-card rounded-md p-4 space-y-1.5">
+      <h3 className="text-[12px] font-bold gold-text flex items-center gap-2 mb-1">
+        ✒ Sobre el evento
+      </h3>
+      <p className="text-[12px] text-amber-100/85 leading-relaxed font-serif whitespace-pre-line">
+        {linkify(description)}
+      </p>
     </div>
   );
 }
