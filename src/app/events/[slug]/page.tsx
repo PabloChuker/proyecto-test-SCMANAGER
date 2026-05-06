@@ -82,6 +82,10 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Admin check — declarado ANTES de cualquier early return para no romper
+  // Rules of Hooks. El endpoint /admin devuelve 403 si no sos admin.
+  const [isAdmin, setIsAdmin] = useState(false);
+
   const refresh = useCallback(() => {
     Promise.all([
       fetch(`/api/events/${slug}`).then((r) => r.json()),
@@ -98,6 +102,11 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
   }, [slug]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  useEffect(() => {
+    if (!user) { setIsAdmin(false); return; }
+    fetch(`/api/events/${slug}/admin`).then((r) => setIsAdmin(r.ok)).catch(() => setIsAdmin(false));
+  }, [user, slug]);
 
   if (loading) {
     return (
@@ -124,12 +133,6 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
   const eventDate = new Date(event.event_date);
   const now = new Date();
   const daysUntil = Math.ceil((eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  // Es admin? Lo detectamos pidiendo al endpoint admin (devuelve 403 si no)
-  const [isAdmin, setIsAdmin] = useState(false);
-  useEffect(() => {
-    if (!user) { setIsAdmin(false); return; }
-    fetch(`/api/events/${slug}/admin`).then((r) => setIsAdmin(r.ok)).catch(() => setIsAdmin(false));
-  }, [user, slug]);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100">
