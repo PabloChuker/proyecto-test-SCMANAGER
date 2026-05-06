@@ -101,7 +101,7 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#1a1410] text-amber-50">
+      <main className="min-h-screen bg-zinc-950 text-amber-50">
         <Header subtitle="Bar Citizen" />
         <div className="flex items-center justify-center py-20 text-amber-200/50 font-serif italic text-sm">
           Cargando evento...
@@ -111,7 +111,7 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
   }
   if (error || !data) {
     return (
-      <main className="min-h-screen bg-[#1a1410] text-amber-50">
+      <main className="min-h-screen bg-zinc-950 text-amber-50">
         <Header subtitle="Bar Citizen" />
         <div className="max-w-3xl mx-auto px-4 py-12">
           <p className="text-rose-300 text-sm">{error ?? "Evento no encontrado."}</p>
@@ -126,34 +126,37 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
   const daysUntil = Math.ceil((eventDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 
   return (
-    <main className="min-h-screen bg-[#1a1410] text-amber-50 medieval-theme">
-      {/* Estilos medieval embebidos — limitados a esta página */}
+    <main className="min-h-screen bg-zinc-950 text-amber-50 medieval-theme relative">
+      {/* Fondo de video habitual del sitio + overlay con tinte pergamino */}
+      <video autoPlay loop muted playsInline className="fixed inset-0 w-full h-full object-cover opacity-15 pointer-events-none z-0">
+        <source src="/videos/bg.mp4" type="video/mp4" />
+      </video>
+      <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/75 via-zinc-950/85 to-zinc-950/95 pointer-events-none z-0" />
+
+      {/* Estilos medieval — paleta espacial+pergamino claro tomada del mapa */}
       <style jsx global>{`
-        .medieval-theme {
-          background-image:
-            radial-gradient(circle at 20% 10%, rgba(120, 80, 40, 0.15), transparent 50%),
-            radial-gradient(circle at 80% 70%, rgba(180, 130, 60, 0.1), transparent 50%),
-            linear-gradient(to bottom, #1a1410 0%, #14100c 50%, #1a1410 100%);
-          background-attachment: fixed;
-        }
         .medieval-theme h1, .medieval-theme h2, .medieval-theme h3 {
           font-family: 'Cinzel', 'Trajan Pro', 'Times New Roman', serif;
           letter-spacing: 0.05em;
         }
         .medieval-card {
-          background: linear-gradient(180deg, rgba(48, 34, 22, 0.85) 0%, rgba(34, 24, 16, 0.92) 100%);
-          border: 1px solid rgba(180, 130, 60, 0.35);
+          background: rgba(20, 18, 14, 0.55);
+          backdrop-filter: blur(6px);
+          border: 1px solid rgba(232, 213, 170, 0.30);
           box-shadow:
-            inset 0 1px 0 rgba(255, 220, 150, 0.08),
-            0 4px 12px rgba(0, 0, 0, 0.5);
+            inset 0 1px 0 rgba(255, 240, 200, 0.10),
+            0 4px 16px rgba(0, 0, 0, 0.6);
         }
         .medieval-divider {
           height: 1px;
-          background: linear-gradient(to right, transparent, rgba(180, 130, 60, 0.5), transparent);
+          background: linear-gradient(to right, transparent, rgba(232, 213, 170, 0.4), transparent);
         }
         .gold-text {
-          color: #d4a851;
-          text-shadow: 0 1px 0 rgba(0,0,0,0.5);
+          color: #e8d5aa;
+          text-shadow: 0 1px 0 rgba(0,0,0,0.7);
+        }
+        .parchment-border {
+          border-color: rgba(232, 213, 170, 0.45);
         }
       `}</style>
 
@@ -165,7 +168,7 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
         <section className="medieval-card rounded-md overflow-hidden">
           <div className="px-5 pt-5 pb-5 flex items-start gap-4 flex-wrap">
             {/* Logo */}
-            <div className="shrink-0 w-24 h-24 sm:w-32 sm:h-32 rounded-md overflow-hidden border-2 border-amber-700/40 bg-amber-950/30 shadow-lg">
+            <div className="shrink-0 w-24 h-24 sm:w-32 sm:h-32 rounded-md overflow-hidden border-2 parchment-border bg-zinc-950/30 shadow-lg">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src="/events/bar-citizen-ourense-logo.png"
@@ -194,7 +197,7 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
 
             {/* Countdown — único stat público */}
             {daysUntil >= 0 && (
-              <div className="shrink-0 text-center bg-gradient-to-b from-amber-700/20 to-amber-900/30 border-2 border-amber-600/50 rounded-md px-5 py-3 shadow-inner">
+              <div className="shrink-0 text-center bg-gradient-to-b from-amber-200/10 to-amber-200/5 border-2 border-amber-200/40 rounded-md px-5 py-3 shadow-inner">
                 <p className="text-[9px] font-mono uppercase tracking-[0.2em] gold-text">Faltan</p>
                 <p className="text-3xl font-bold font-mono gold-text">{daysUntil}</p>
                 <p className="text-[10px] gold-text font-serif italic">{daysUntil === 1 ? "día" : "días"}</p>
@@ -246,7 +249,7 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
           {isAdmin && (
             <Link
               href={`/events/${slug}/admin`}
-              className="px-2.5 py-1 rounded-sm border border-amber-700/40 text-amber-300/70 hover:text-amber-200 hover:border-amber-500/60 transition-colors not-italic"
+              className="px-2.5 py-1 rounded-sm border border-amber-200/30 text-amber-300/70 hover:text-amber-200 hover:border-amber-500/60 transition-colors not-italic"
             >
               ⚜ Panel Admin
             </Link>
@@ -393,7 +396,7 @@ function RegistrationCard({
           🎰 Si asistís presencialmente y el equipo te confirma, entrás automáticamente al sorteo.
         </p>
         <div className="flex gap-2 pt-1">
-          <button onClick={() => setEditing(true)} className="flex-1 px-2 py-1.5 rounded-sm border border-amber-700/40 text-amber-200 text-[11px] hover:bg-amber-900/30 transition-colors">Editar</button>
+          <button onClick={() => setEditing(true)} className="flex-1 px-2 py-1.5 rounded-sm border border-amber-200/30 text-amber-200 text-[11px] hover:bg-zinc-900/40 transition-colors">Editar</button>
           <button onClick={cancel} disabled={busy} className="flex-1 px-2 py-1.5 rounded-sm border border-rose-500/40 text-rose-300 text-[11px] hover:bg-rose-500/15 transition-colors disabled:opacity-50">Cancelar</button>
         </div>
         {msg && <p className={`text-[10px] ${msg.kind === "ok" ? "text-emerald-300" : "text-rose-300"}`}>{msg.text}</p>}
@@ -453,7 +456,7 @@ function RegistrationCard({
               onChange={(e) => setDisplayName(e.target.value)}
               maxLength={80}
               placeholder={discordName || "Cómo te llamamos"}
-              className="w-full px-2 py-1.5 bg-zinc-950/60 border border-amber-700/40 rounded-sm text-[12px] text-amber-50 placeholder-amber-200/30 focus:outline-none focus:border-amber-500/70"
+              className="w-full px-2 py-1.5 bg-zinc-950/60 border border-amber-200/30 rounded-sm text-[12px] text-amber-50 placeholder-amber-200/30 focus:outline-none focus:border-amber-500/70"
             />
           </Field>
           <Field label="Handle RSI (opcional)">
@@ -463,7 +466,7 @@ function RegistrationCard({
               onChange={(e) => setRsiHandle(e.target.value)}
               maxLength={80}
               placeholder="elchuker"
-              className="w-full px-2 py-1.5 bg-zinc-950/60 border border-amber-700/40 rounded-sm text-[12px] text-amber-50 placeholder-amber-200/30 focus:outline-none focus:border-amber-500/70"
+              className="w-full px-2 py-1.5 bg-zinc-950/60 border border-amber-200/30 rounded-sm text-[12px] text-amber-50 placeholder-amber-200/30 focus:outline-none focus:border-amber-500/70"
             />
           </Field>
           <Field label="Notas (opcional)">
@@ -473,7 +476,7 @@ function RegistrationCard({
               maxLength={500}
               rows={2}
               placeholder="Algo que quieras compartir con el organizador"
-              className="w-full px-2 py-1.5 bg-zinc-950/60 border border-amber-700/40 rounded-sm text-[12px] text-amber-50 placeholder-amber-200/30 focus:outline-none focus:border-amber-500/70 resize-none"
+              className="w-full px-2 py-1.5 bg-zinc-950/60 border border-amber-200/30 rounded-sm text-[12px] text-amber-50 placeholder-amber-200/30 focus:outline-none focus:border-amber-500/70 resize-none"
             />
           </Field>
         </div>
@@ -487,7 +490,7 @@ function RegistrationCard({
             <AttendanceOption value="no" current={attendance} onClick={() => setAttendance("no")} label="✕ No puedo" />
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setEditing(false)} className="flex-1 px-2 py-1.5 rounded-sm border border-amber-700/40 text-amber-200/80 text-[11px] hover:bg-amber-900/30">Cancelar edición</button>
+            <button onClick={() => setEditing(false)} className="flex-1 px-2 py-1.5 rounded-sm border border-amber-200/30 text-amber-200/80 text-[11px] hover:bg-zinc-900/40">Cancelar edición</button>
             <button
               onClick={() => submit()}
               disabled={busy || !displayName.trim()}
@@ -524,7 +527,7 @@ function AttendanceOption({ value, current, onClick, label }: { value: string; c
           ? value === "confirmed" ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
           : value === "maybe"     ? "border-amber-500/40 bg-amber-500/15 text-amber-300"
           :                         "border-rose-500/40 bg-rose-500/15 text-rose-300"
-          : "border-amber-700/40 text-amber-200/60 hover:text-amber-100"
+          : "border-amber-200/30 text-amber-200/60 hover:text-amber-100"
       }`}
     >
       {label}
@@ -547,7 +550,7 @@ function Badge({ text, accent }: { text: string; accent: "emerald" | "amber" | "
 
 function RaffleCard({ event, winners }: { event: CommunityEvent; winners: RaffleWinner[] }) {
   return (
-    <div className="medieval-card rounded-md p-4 space-y-2 border-amber-600/40">
+    <div className="medieval-card rounded-md p-4 space-y-2">
       <h3 className="text-[14px] font-bold gold-text flex items-center gap-2">🏆 Sorteo de naves CIG</h3>
       {event.raffle_prize_description && (
         <p className="text-[12px] text-amber-100/85 leading-snug font-serif">{event.raffle_prize_description}</p>
@@ -558,19 +561,19 @@ function RaffleCard({ event, winners }: { event: CommunityEvent; winners: Raffle
           <p className="mt-2 text-[11px] text-amber-200/70 whitespace-pre-line leading-relaxed font-serif">{event.raffle_rules}</p>
         </details>
       )}
-      <p className="text-[10px] text-amber-200/60 pt-1 border-t border-amber-700/30 leading-relaxed font-serif italic">
+      <p className="text-[10px] text-amber-200/60 pt-1 border-t border-amber-200/20 leading-relaxed font-serif italic">
         El sorteo se realiza entre los <strong className="text-amber-200 not-italic">asistentes presentes</strong>,
         confirmados por el equipo organizador en el lugar.
       </p>
 
       {winners.length > 0 && (
-        <div className="pt-2 border-t border-amber-700/30 space-y-2">
+        <div className="pt-2 border-t border-amber-200/20 space-y-2">
           <p className="text-[10px] font-mono uppercase tracking-widest gold-text">⚜ Ganadores</p>
           {winners.map((w) => (
-            <div key={w.id} className="flex items-start gap-2 bg-amber-900/30 border border-amber-700/40 rounded-sm p-2">
+            <div key={w.id} className="flex items-start gap-2 bg-zinc-900/40 border border-amber-200/30 rounded-sm p-2">
               {w.winner_avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={w.winner_avatar_url} alt="" className="w-8 h-8 rounded-full shrink-0 border border-amber-600/50" />
+                <img src={w.winner_avatar_url} alt="" className="w-8 h-8 rounded-full shrink-0 border border-amber-200/40" />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-[12px] shrink-0">🏆</div>
               )}
@@ -599,7 +602,7 @@ function AnnouncementsCard({ announcements }: { announcements: Announcement[] })
       ) : (
         <div className="space-y-2 max-h-[400px] overflow-y-auto">
           {announcements.map((a) => (
-            <div key={a.id} className={`rounded-sm border p-2 ${a.is_pinned ? "border-amber-500/50 bg-amber-500/10" : "border-amber-700/30 bg-amber-950/20"}`}>
+            <div key={a.id} className={`rounded-sm border p-2 ${a.is_pinned ? "border-amber-500/50 bg-amber-500/10" : "border-amber-200/20 bg-zinc-950/40"}`}>
               <div className="flex items-start justify-between gap-2 mb-1">
                 <h4 className="text-[12px] font-semibold text-amber-50">
                   {a.is_pinned && <span className="text-amber-400 mr-1">📌</span>}
@@ -628,10 +631,10 @@ function MapCard({ event }: { event: CommunityEvent }) {
   }
   return (
     <div className="medieval-card rounded-md overflow-hidden">
-      <div className="px-3 py-2 border-b border-amber-700/30">
+      <div className="px-3 py-2 border-b border-amber-200/20">
         <h3 className="text-[12px] font-bold gold-text flex items-center gap-2">🗺 Mapa del recorrido</h3>
       </div>
-      <div className="relative w-full bg-amber-950/20 flex items-center justify-center p-2">
+      <div className="relative w-full bg-zinc-950/40 flex items-center justify-center p-2">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={event.map_image_url}
