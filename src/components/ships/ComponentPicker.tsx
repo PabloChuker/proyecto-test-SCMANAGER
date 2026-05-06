@@ -505,9 +505,12 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
         // Loadout.4e: panel compacto. En desktop (sm+) el style inline maneja
         // left/top/width via `panelStyle`. Mobile usa inset-4 full-screen.
         className={`fixed inset-4 z-50 bg-zinc-950 border border-zinc-800/70 rounded-sm flex flex-col shadow-2xl shadow-black/60 sm:inset-auto sm:bottom-4 sm:right-4 sm:left-auto sm:top-auto sm:max-h-[70vh] ${
-          // Para weapons/turrets el picker es más ancho (necesita espacio para la fila de stats).
+          // Para weapons/turrets el picker es mucho más ancho — necesita 14
+          // columnas en una sola fila por arma (Burst/Eff/Alpha/RoF/Rng/V/Pwr/
+          // Ammo/Rgn/Heat/HP + Name/Size/Grade/Price). Con max-w para no
+          // sobresalir del viewport en pantallas chicas.
           hardpoint.resolvedCategory === "WEAPON" || hardpoint.resolvedCategory === "TURRET"
-            ? "sm:w-[600px]"
+            ? "sm:w-[min(1180px,calc(100vw-2rem))]"
             : "sm:w-[360px]"
         }`}
         style={panelStyle}
@@ -555,7 +558,23 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
           <ColHead label="Name" k="name" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="flex-1" />
           <ColHead label="S" k="size" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-5 text-center" />
           <ColHead label="Gr" k="grade" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-5 text-center" />
-          <ColHead label={statLabel} k="stat" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-12 text-right" />
+          {(hardpoint.resolvedCategory === "WEAPON" || hardpoint.resolvedCategory === "TURRET") ? (
+            <>
+              <ColHead label="Burst" k="stat" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-12 text-right" />
+              <span className="w-10 text-right" title="Eficiencia = Burst DPS / (Power × 100)">Eff</span>
+              <span className="w-12 text-right">α</span>
+              <span className="w-10 text-right" title="Rate of Fire (RPM)">RoF</span>
+              <span className="w-12 text-right" title="Effective range (m)">Rng</span>
+              <span className="w-12 text-right" title="Velocidad del proyectil">V</span>
+              <span className="w-10 text-right" title="Consumo de power">Pwr</span>
+              <span className="w-12 text-right">Ammo</span>
+              <span className="w-10 text-right" title="Regen ammo / s">Rgn</span>
+              <span className="w-10 text-right" title="Heat por disparo">Heat</span>
+              <span className="w-10 text-right" title="Durability HP">HP</span>
+            </>
+          ) : (
+            <ColHead label={statLabel} k="stat" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-12 text-right" />
+          )}
           <ColHead label="$" k="price" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-12 text-right" />
         </div>
 
@@ -620,15 +639,16 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
                   {item.manufacturer && (
                     <div className="text-[8px] text-zinc-600 truncate">{item.manufacturer}{shop ? ` · ${shop}` : ""}</div>
                   )}
-                  {/* 2026-05-06: Fila de stats expandidas para WEAPON/TURRET con weapon stats —
-                      el usuario quiere ver Burst DPS, Alpha, RoF, Range, Speed, Power, Ammo,
-                      Regen, Heat y HP de un golpe sin tener que abrir la nave. */}
-                  {(hardpoint.resolvedCategory === "WEAPON" || hardpoint.resolvedCategory === "TURRET") &&
-                    item.weaponStats && <WeaponStatChips stats={item.weaponStats} />}
                 </div>
                 <div className="w-5 text-center text-[10px] font-mono text-zinc-500">{item.size != null ? `S${item.size}` : "?"}</div>
                 <div className="w-5 text-center text-[10px]">{item.grade ? <span className={gradeClass(item.grade)}>{item.grade}</span> : <span className="text-zinc-800">-</span>}</div>
-                <div className="w-12 text-right font-mono text-[10px]" style={{ color: catColor }}>{sv ? sv.v : <span className="text-zinc-800">-</span>}</div>
+                {/* Para WEAPON/TURRET: columnas alineadas con todas las stats clave en
+                    una sola fila por arma — facilita comparar entre opciones. */}
+                {(hardpoint.resolvedCategory === "WEAPON" || hardpoint.resolvedCategory === "TURRET") && item.weaponStats ? (
+                  <WeaponStatCells stats={item.weaponStats} />
+                ) : (
+                  <div className="w-12 text-right font-mono text-[10px]" style={{ color: catColor }}>{sv ? sv.v : <span className="text-zinc-800">-</span>}</div>
+                )}
                 <div className="w-12 text-right">{price !== null ? <span className="text-[9px] font-mono text-amber-400/80">{fmtPrice(price)}</span> : <span className="text-[9px] text-zinc-800">-</span>}</div>
               </button>
             );
@@ -647,12 +667,12 @@ function ColHead({ label, k, cur, dir, toggle, cls }: { label: string; k: SortKe
   return <button onClick={() => toggle(k)} className={cls + " cursor-pointer hover:text-zinc-400 transition-colors select-none " + (active ? "text-zinc-400" : "")}>{label}{active ? (dir === "asc" ? " ↑" : " ↓") : ""}</button>;
 }
 
-// ─── WeaponStatChips ────────────────────────────────────────────────────────
-// Fila compacta con las stats clave de armas (debajo del nombre/manufacturer).
-// Muestra: Burst, Alpha, RoF, Range, Speed, Power, Ammo, Regen, Heat, HP.
-// Eficiencia se calcula client-side: Burst DPS / (Power × 100).
+// ─── WeaponStatCells ────────────────────────────────────────────────────────
+// Celdas alineadas con el header — una columna por stat. Estilo tabla
+// horizontal (no chips) para facilitar comparar entre armas leyendo en
+// vertical. Anchos calzan con los <span> del header (w-10/w-12).
 
-function WeaponStatChips({ stats }: { stats: any }) {
+function WeaponStatCells({ stats }: { stats: any }) {
   const dps = numOr(stats?.dps);
   const alpha = numOr(stats?.alphaDamage ?? stats?.damagePerShot);
   const rof = numOr(stats?.fireRate);
@@ -667,33 +687,34 @@ function WeaponStatChips({ stats }: { stats: any }) {
     ? Math.round((dps / (power * 100)) * 100) / 100
     : null;
 
-  // No hay nada que mostrar
-  if (dps == null && alpha == null && rof == null) return null;
-
   return (
-    <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] font-mono text-zinc-500">
-      {dps != null && <Stat label="Burst" value={fmtNum(dps)} cls="text-rose-400" />}
-      {efficiency != null && <Stat label="Eff" value={fmtNum(efficiency)} cls="text-amber-400" />}
-      {alpha != null && <Stat label="α" value={fmtNum(alpha)} cls="text-zinc-300" />}
-      {rof != null && <Stat label="RoF" value={fmtNum(rof)} cls="text-zinc-300" />}
-      {range != null && <Stat label="Rng" value={fmtNum(range) + "m"} cls="text-cyan-400" />}
-      {speed != null && <Stat label="V" value={fmtNum(speed)} cls="text-cyan-400" />}
-      {power != null && <Stat label="Pwr" value={fmtNum(power)} cls="text-yellow-400" />}
-      {ammo != null && <Stat label="Ammo" value={fmtNum(ammo)} cls="text-zinc-300" />}
-      {regen != null && <Stat label="Rgn" value={fmtNum(regen)} cls="text-emerald-400" />}
-      {heat != null && <Stat label="Heat" value={fmtNum(heat)} cls="text-orange-400" />}
-      {hp != null && <Stat label="HP" value={fmtNum(hp)} cls="text-zinc-400" />}
+    <>
+      <Cell width="w-12" cls="text-rose-400">{fmtCell(dps)}</Cell>
+      <Cell width="w-10" cls="text-amber-400">{fmtCell(efficiency)}</Cell>
+      <Cell width="w-12" cls="text-zinc-300">{fmtCell(alpha)}</Cell>
+      <Cell width="w-10" cls="text-zinc-300">{fmtCell(rof)}</Cell>
+      <Cell width="w-12" cls="text-cyan-400">{fmtCell(range)}</Cell>
+      <Cell width="w-12" cls="text-cyan-400">{fmtCell(speed)}</Cell>
+      <Cell width="w-10" cls="text-yellow-400">{fmtCell(power)}</Cell>
+      <Cell width="w-12" cls="text-zinc-300">{fmtCell(ammo)}</Cell>
+      <Cell width="w-10" cls="text-emerald-400">{fmtCell(regen)}</Cell>
+      <Cell width="w-10" cls="text-orange-400">{fmtCell(heat)}</Cell>
+      <Cell width="w-10" cls="text-zinc-400">{fmtCell(hp)}</Cell>
+    </>
+  );
+}
+
+function Cell({ width, cls, children }: { width: string; cls?: string; children: React.ReactNode }) {
+  return (
+    <div className={`${width} text-right font-mono text-[10px] tabular-nums ${cls ?? "text-zinc-300"}`}>
+      {children}
     </div>
   );
 }
 
-function Stat({ label, value, cls }: { label: string; value: string; cls?: string }) {
-  return (
-    <span className="whitespace-nowrap">
-      <span className="text-zinc-600">{label}</span>{" "}
-      <span className={cls ?? "text-zinc-300"}>{value}</span>
-    </span>
-  );
+function fmtCell(n: number | null): React.ReactNode {
+  if (n == null) return <span className="text-zinc-800">-</span>;
+  return fmtNum(n);
 }
 
 function numOr(v: unknown): number | null {
