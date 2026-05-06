@@ -21,12 +21,19 @@ interface CommunityEvent {
   slug: string;
   name: string;
   description: string | null;
+  tagline: string | null;
   event_date: string;
   location: string | null;
   sponsor_name: string | null;
   sponsor_url: string | null;
   banner_url: string | null;
+  logo_url: string | null;
   map_image_url: string | null;
+  google_maps_url: string | null;
+  discord_url: string | null;
+  twitter_url: string | null;
+  website_url: string | null;
+  custom_links: { label: string; url: string }[] | null;
   registration_open: boolean;
   raffle_active: boolean;
   raffle_prize_description: string | null;
@@ -168,31 +175,65 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
         <section className="medieval-card rounded-md overflow-hidden">
           <div className="px-5 pt-5 pb-5 flex items-start gap-4 flex-wrap">
             {/* Logo */}
-            <div className="shrink-0 w-24 h-24 sm:w-32 sm:h-32 rounded-md overflow-hidden border-2 parchment-border bg-zinc-950/30 shadow-lg">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/events/bar-citizen-ourense-logo.png"
-                alt="Logo Bar Citizen Ourense"
-                className="w-full h-full object-contain"
-                draggable={false}
-              />
-            </div>
+            {event.logo_url && (
+              <div className="shrink-0 w-24 h-24 sm:w-32 sm:h-32 rounded-md overflow-hidden border-2 parchment-border bg-zinc-950/30 shadow-lg">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={event.logo_url}
+                  alt={`Logo ${event.name}`}
+                  className="w-full h-full object-contain"
+                  draggable={false}
+                />
+              </div>
+            )}
 
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] font-mono uppercase tracking-[0.2em] gold-text mb-1">
-                Evento Comunitario · Auspiciado por {event.sponsor_name}
-              </p>
+              {event.sponsor_name && (
+                <p className="text-[10px] font-mono uppercase tracking-[0.2em] gold-text mb-1">
+                  Evento Comunitario · Auspiciado por{" "}
+                  {event.sponsor_url ? (
+                    <a href={event.sponsor_url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                      {event.sponsor_name}
+                    </a>
+                  ) : (
+                    event.sponsor_name
+                  )}
+                </p>
+              )}
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-amber-50 tracking-wide">
                 {event.name}
               </h1>
-              <p className="text-[12px] text-amber-200/70 mt-2 font-serif italic">
-                ⚜ {event.location}
-              </p>
-              <p className="text-[12px] text-amber-200/70 font-serif italic">
-                📜{" "}
-                {eventDate.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}{" "}
-                · {eventDate.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })} hs
-              </p>
+              {event.tagline && (
+                <p className="text-[12px] text-amber-100/85 mt-1 font-serif italic max-w-2xl">
+                  {event.tagline}
+                </p>
+              )}
+              <div className="mt-2 space-y-0.5">
+                {event.location && (
+                  <p className="text-[12px] text-amber-200/70 font-serif italic">
+                    {event.google_maps_url ? (
+                      <a
+                        href={event.google_maps_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-amber-100 transition-colors"
+                        title="Abrir en Google Maps"
+                      >
+                        ⚜ {event.location} <span className="text-[10px] not-italic text-cyan-300/80">↗</span>
+                      </a>
+                    ) : (
+                      <>⚜ {event.location}</>
+                    )}
+                  </p>
+                )}
+                <p className="text-[12px] text-amber-200/70 font-serif italic">
+                  📜{" "}
+                  {eventDate.toLocaleDateString("es-AR", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}{" "}
+                  · {eventDate.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })} hs
+                </p>
+              </div>
+              {/* Redes sociales + links extra */}
+              <SocialLinks event={event} />
             </div>
 
             {/* Countdown — único stat público */}
@@ -615,6 +656,38 @@ function AnnouncementsCard({ announcements }: { announcements: Announcement[] })
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── SocialLinks ────────────────────────────────────────────────────────────
+// Fila compacta de iconos hacia Discord, Twitter, web y links libres.
+// Solo se renderiza si hay al menos uno cargado.
+
+function SocialLinks({ event }: { event: CommunityEvent }) {
+  const items: { label: string; url: string; icon: string }[] = [];
+  if (event.discord_url) items.push({ label: "Discord", url: event.discord_url, icon: "💬" });
+  if (event.twitter_url) items.push({ label: "Twitter", url: event.twitter_url, icon: "𝕏" });
+  if (event.website_url) items.push({ label: "Web", url: event.website_url, icon: "🌐" });
+  for (const cl of event.custom_links ?? []) {
+    if (cl?.label && cl?.url) items.push({ label: cl.label, url: cl.url, icon: "🔗" });
+  }
+  if (items.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-2.5">
+      {items.map((it, idx) => (
+        <a
+          key={idx}
+          href={it.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 px-2 py-1 rounded-sm border parchment-border bg-zinc-950/40 text-amber-200/90 text-[10px] font-mono hover:bg-amber-500/15 hover:text-amber-100 transition-colors"
+          title={it.url}
+        >
+          <span>{it.icon}</span>
+          <span>{it.label}</span>
+        </a>
+      ))}
     </div>
   );
 }

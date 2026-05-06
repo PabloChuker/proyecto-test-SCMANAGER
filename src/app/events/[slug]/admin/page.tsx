@@ -136,9 +136,14 @@ export default function EventAdminPage({ params }: { params: Promise<{ slug: str
             <p className="text-[10px] font-mono uppercase tracking-[0.18em] text-rose-400 mb-0.5">Panel Admin</p>
             <h1 className="text-xl font-bold text-zinc-100">{event.name}</h1>
           </div>
-          <Link href={`/events/${slug}`} className="text-[11px] px-2.5 py-1.5 rounded-sm border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/15 transition-colors">
-            ← Volver al evento
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link href={`/events/${slug}/admin/edit`} className="text-[11px] px-2.5 py-1.5 rounded-sm border border-amber-500/40 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 transition-colors font-medium">
+              ✎ Editar evento
+            </Link>
+            <Link href={`/events/${slug}`} className="text-[11px] px-2.5 py-1.5 rounded-sm border border-cyan-500/40 text-cyan-300 hover:bg-cyan-500/15 transition-colors">
+              ← Volver al evento
+            </Link>
+          </div>
         </div>
 
         {/* Stats */}
