@@ -193,12 +193,12 @@ export default function EventEditPage({ params }: { params: Promise<{ slug: stri
                 </div>
               )}
             </Field>
-            <Field label="Mapa de la ruta (URL imagen)">
-              <input type="text" value={event.map_image_url ?? ""} onChange={(e) => updateField("map_image_url", e.target.value)} placeholder="/events/mapa.png o https://..." className={inputCls} />
+            <Field label="Cartel del evento (URL imagen)">
+              <input type="text" value={event.map_image_url ?? ""} onChange={(e) => updateField("map_image_url", e.target.value)} placeholder="/events/cartel.png o https://..." className={inputCls} />
               {event.map_image_url && (
                 <div className="mt-1.5 max-h-20 rounded-sm bg-zinc-950 border border-zinc-800 overflow-hidden flex items-center justify-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={event.map_image_url} alt="map preview" className="max-h-20 object-contain" />
+                  <img src={event.map_image_url} alt="cartel preview" className="max-h-20 object-contain" />
                 </div>
               )}
             </Field>

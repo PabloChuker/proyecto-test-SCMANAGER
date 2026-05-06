@@ -705,13 +705,13 @@ function MapCard({ event }: { event: CommunityEvent }) {
   return (
     <div className="medieval-card rounded-md overflow-hidden">
       <div className="px-3 py-2 border-b border-amber-200/20">
-        <h3 className="text-[12px] font-bold gold-text flex items-center gap-2">🗺 Mapa del recorrido</h3>
+        <h3 className="text-[12px] font-bold gold-text flex items-center gap-2">📜 Cartel del evento</h3>
       </div>
       <div className="relative w-full bg-zinc-950/40 flex items-center justify-center p-2">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={event.map_image_url}
-          alt={`Mapa de ${event.name}`}
+          alt={`Cartel de ${event.name}`}
           className="max-w-full max-h-[80vh] object-contain rounded-sm"
           draggable={false}
         />
