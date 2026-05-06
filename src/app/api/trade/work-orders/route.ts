@@ -34,17 +34,23 @@ export async function GET(request: NextRequest) {
     const partyId = request.nextUrl.searchParams.get("party_id");
     const status = request.nextUrl.searchParams.get("status");
 
+    // Bug fix 2026-05-06: `owner_id` faltaba en el SELECT, lo que rompía el
+    // filtro de scope="me" en ActiveRoutePanel/TradeDashboard (`o.owner_id ===
+    // user.id` siempre era undefined === uuid → false). Sin esto el panel
+    // mostraba "No tenés rutas activas" aunque las WOs existieran y la RLS
+    // las dejara pasar. Reportado por Pablo en el flujo Mining → "Vender en
+    // ruta" → /trade Ruta Activa.
     let query = supabase
       .from("trade_work_orders")
       .select(`
-        id, title, status, party_id,
+        id, owner_id, title, status, party_id,
         commodity_code, commodity_name,
         buy_station, buy_system, sell_station, sell_system,
         scu_bought, scu_sold, scu_lost,
         buy_price_per_scu, sell_price_per_scu,
         total_buy, total_sell, total_expenses, net_profit,
         notes, created_at, updated_at, completed_at,
-        trade_wo_participants(id, display_name, avatar_url, role, role_pct, contribution_uec, contribution_note, payout_uec, paid, paid_at),
+        trade_wo_participants(id, user_id, display_name, avatar_url, role, role_pct, contribution_uec, contribution_note, payout_uec, paid, paid_at),
         trade_wo_expenses(id, payer_name, description, amount, expense_type, created_at)
       `)
       .order("created_at", { ascending: false });

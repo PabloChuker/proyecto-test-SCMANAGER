@@ -285,6 +285,81 @@ export default function SellRoutePreviewModal({
     setProgress({ done: 0, total: totals.itemCount });
     let postedItems = 0;
     try {
+      // Fix 2026-05-06: cuando es party sell route, auto-poblar participantes
+      // desde party_members + profiles_public. Sin esto, la WO se crea con
+      // party_id pero sin filas en trade_wo_participants → CobrarStopModal
+      // no tiene a quién repartir. Bug raíz reportado por Pablo: "no me deja
+      // repartir beneficios ni nada". Para sesiones solo (effectivePartyId
+      // null) saltamos esta sección y dejamos `participants` vacío.
+      let baseParticipants:
+        | Array<{
+            user_id: string | null;
+            display_name: string;
+            avatar_url: string | null;
+            role: string;
+            role_pct: number;
+            contribution_uec: number;
+            payout_uec: number;
+          }>
+        | null = null;
+      if (effectivePartyId) {
+        try {
+          const supabase = createClient();
+          const { data: members } = await supabase
+            .from("party_members")
+            .select("user_id, role")
+            .eq("party_id", effectivePartyId);
+          const userIds = (members ?? [])
+            .map((m: any) => m.user_id)
+            .filter(Boolean);
+          let profilesById = new Map<
+            string,
+            { display_name: string | null; avatar_url: string | null; username: string | null }
+          >();
+          if (userIds.length > 0) {
+            const { data: profiles } = await supabase
+              .from("profiles_public")
+              .select("id, display_name, avatar_url, username")
+              .in("id", userIds);
+            for (const p of profiles ?? []) {
+              profilesById.set(p.id, {
+                display_name: p.display_name,
+                avatar_url: p.avatar_url,
+                username: p.username,
+              });
+            }
+          }
+          const list = members ?? [];
+          if (list.length > 0) {
+            // Reparto equitativo por defecto. El usuario puede ajustar
+            // role_pct individualmente desde el editor de la WO o desde
+            // CobrarStopModal a la hora de cerrar la ruta.
+            const evenPct = Math.round((10000 / list.length)) / 100;
+            baseParticipants = list.map((m: any) => {
+              const prof = profilesById.get(m.user_id) || {
+                display_name: null,
+                avatar_url: null,
+                username: null,
+              };
+              return {
+                user_id: m.user_id ?? null,
+                display_name:
+                  prof.display_name || prof.username || "Crew",
+                avatar_url: prof.avatar_url,
+                role: m.role || "crew",
+                role_pct: evenPct,
+                contribution_uec: 0,
+                payout_uec: 0,
+              };
+            });
+          }
+        } catch {
+          // Si falla la lectura de party_members o profiles_public, seguimos
+          // creando las WOs igual — el usuario las podrá editar después.
+          baseParticipants = null;
+        }
+      }
+
       for (let g = 0; g < groups.length; g++) {
         const group = groups[g];
         const stopNumber = g + 1;
@@ -323,6 +398,12 @@ export default function SellRoutePreviewModal({
             buy_price_per_scu: 0,
             sell_price_per_scu: stop.pricePerScu || 0,
             notes: notesHeader,
+            // Fix 2026-05-06: si es party route, mandamos los participantes
+            // con reparto equitativo. Sin esto las WOs party no tenían filas
+            // en trade_wo_participants → CobrarStopModal no podía repartir.
+            ...(baseParticipants && baseParticipants.length > 0
+              ? { participants: baseParticipants }
+              : {}),
           };
           const res = await fetch("/api/trade/work-orders", {
             method: "POST",
