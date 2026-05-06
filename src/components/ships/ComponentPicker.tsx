@@ -504,7 +504,12 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
         ref={panelRef}
         // Loadout.4e: panel compacto. En desktop (sm+) el style inline maneja
         // left/top/width via `panelStyle`. Mobile usa inset-4 full-screen.
-        className="fixed inset-4 z-50 bg-zinc-950 border border-zinc-800/70 rounded-sm flex flex-col shadow-2xl shadow-black/60 sm:inset-auto sm:bottom-4 sm:right-4 sm:left-auto sm:top-auto sm:w-[360px] sm:max-h-[60vh]"
+        className={`fixed inset-4 z-50 bg-zinc-950 border border-zinc-800/70 rounded-sm flex flex-col shadow-2xl shadow-black/60 sm:inset-auto sm:bottom-4 sm:right-4 sm:left-auto sm:top-auto sm:max-h-[70vh] ${
+          // Para weapons/turrets el picker es más ancho (necesita espacio para la fila de stats).
+          hardpoint.resolvedCategory === "WEAPON" || hardpoint.resolvedCategory === "TURRET"
+            ? "sm:w-[600px]"
+            : "sm:w-[360px]"
+        }`}
         style={panelStyle}
       >
         {/* Header compacto — categoría + size + close en 1 línea */}
@@ -615,6 +620,11 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
                   {item.manufacturer && (
                     <div className="text-[8px] text-zinc-600 truncate">{item.manufacturer}{shop ? ` · ${shop}` : ""}</div>
                   )}
+                  {/* 2026-05-06: Fila de stats expandidas para WEAPON/TURRET con weapon stats —
+                      el usuario quiere ver Burst DPS, Alpha, RoF, Range, Speed, Power, Ammo,
+                      Regen, Heat y HP de un golpe sin tener que abrir la nave. */}
+                  {(hardpoint.resolvedCategory === "WEAPON" || hardpoint.resolvedCategory === "TURRET") &&
+                    item.weaponStats && <WeaponStatChips stats={item.weaponStats} />}
                 </div>
                 <div className="w-5 text-center text-[10px] font-mono text-zinc-500">{item.size != null ? `S${item.size}` : "?"}</div>
                 <div className="w-5 text-center text-[10px]">{item.grade ? <span className={gradeClass(item.grade)}>{item.grade}</span> : <span className="text-zinc-800">-</span>}</div>
@@ -635,6 +645,70 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
 function ColHead({ label, k, cur, dir, toggle, cls }: { label: string; k: SortKey; cur: SortKey; dir: SortDir; toggle: (k: SortKey) => void; cls: string }) {
   const active = cur === k;
   return <button onClick={() => toggle(k)} className={cls + " cursor-pointer hover:text-zinc-400 transition-colors select-none " + (active ? "text-zinc-400" : "")}>{label}{active ? (dir === "asc" ? " ↑" : " ↓") : ""}</button>;
+}
+
+// ─── WeaponStatChips ────────────────────────────────────────────────────────
+// Fila compacta con las stats clave de armas (debajo del nombre/manufacturer).
+// Muestra: Burst, Alpha, RoF, Range, Speed, Power, Ammo, Regen, Heat, HP.
+// Eficiencia se calcula client-side: Burst DPS / (Power × 100).
+
+function WeaponStatChips({ stats }: { stats: any }) {
+  const dps = numOr(stats?.dps);
+  const alpha = numOr(stats?.alphaDamage ?? stats?.damagePerShot);
+  const rof = numOr(stats?.fireRate);
+  const range = numOr(stats?.effectiveRange ?? stats?.ammoRange);
+  const speed = numOr(stats?.ammoSpeed);
+  const power = numOr(stats?.powerDraw);
+  const ammo = numOr(stats?.ammoCapacity ?? stats?.maxAmmoLoad);
+  const regen = numOr(stats?.maxRegenPerSec);
+  const heat = numOr(stats?.heatPerShot);
+  const hp = numOr(stats?.durabilityHealth);
+  const efficiency = dps != null && power != null && power > 0
+    ? Math.round((dps / (power * 100)) * 100) / 100
+    : null;
+
+  // No hay nada que mostrar
+  if (dps == null && alpha == null && rof == null) return null;
+
+  return (
+    <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] font-mono text-zinc-500">
+      {dps != null && <Stat label="Burst" value={fmtNum(dps)} cls="text-rose-400" />}
+      {efficiency != null && <Stat label="Eff" value={fmtNum(efficiency)} cls="text-amber-400" />}
+      {alpha != null && <Stat label="α" value={fmtNum(alpha)} cls="text-zinc-300" />}
+      {rof != null && <Stat label="RoF" value={fmtNum(rof)} cls="text-zinc-300" />}
+      {range != null && <Stat label="Rng" value={fmtNum(range) + "m"} cls="text-cyan-400" />}
+      {speed != null && <Stat label="V" value={fmtNum(speed)} cls="text-cyan-400" />}
+      {power != null && <Stat label="Pwr" value={fmtNum(power)} cls="text-yellow-400" />}
+      {ammo != null && <Stat label="Ammo" value={fmtNum(ammo)} cls="text-zinc-300" />}
+      {regen != null && <Stat label="Rgn" value={fmtNum(regen)} cls="text-emerald-400" />}
+      {heat != null && <Stat label="Heat" value={fmtNum(heat)} cls="text-orange-400" />}
+      {hp != null && <Stat label="HP" value={fmtNum(hp)} cls="text-zinc-400" />}
+    </div>
+  );
+}
+
+function Stat({ label, value, cls }: { label: string; value: string; cls?: string }) {
+  return (
+    <span className="whitespace-nowrap">
+      <span className="text-zinc-600">{label}</span>{" "}
+      <span className={cls ?? "text-zinc-300"}>{value}</span>
+    </span>
+  );
+}
+
+function numOr(v: unknown): number | null {
+  if (v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function fmtNum(n: number): string {
+  if (n === 0) return "0";
+  const abs = Math.abs(n);
+  if (abs >= 10000) return Math.round(n).toLocaleString();
+  if (abs >= 100) return Math.round(n).toString();
+  if (abs >= 10) return n.toFixed(1).replace(/\.0$/, "");
+  return n.toFixed(2).replace(/\.?0+$/, "");
 }
 
 function getStatColumnLabel(cat: string): string {

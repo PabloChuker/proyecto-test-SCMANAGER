@@ -542,6 +542,7 @@ function buildStats(row: any, type: string): Record<string, any> | null {
       s.fireRate = numOrNull(row.rate_of_fire);
       s.effectiveRange = numOrNull(row.effective_range);
       s.ammoSpeed = numOrNull(row.ammo_speed);
+      s.ammoRange = numOrNull(row.ammo_range);
       s.ammoCapacity = numOrNull(row.ammo_capacity);
       s.weaponCapacity = numOrNull(row.weapon_capacity);
       s.requestedAmmoLoad = numOrNull(row.requested_ammo_load);
@@ -550,6 +551,10 @@ function buildStats(row: any, type: string): Record<string, any> | null {
       s.maxRegenPerSec = numOrNull(row.max_regen_per_sec);
       s.fireMode = row.fire_mode ?? null;
       s.heatPerShot = numOrNull(row.heat_per_shot);
+      s.spreadMin = numOrNull(row.spread_min);
+      s.spreadMax = numOrNull(row.spread_max);
+      s.pelletsPerShot = numOrNull(row.pellets_per_shot);
+      s.durabilityHealth = numOrNull(row.durability_health);
       s.emSignature = numOrNull(row.emission_em_max);
       // Power consumption (ballistic ≈ 0, energy > 0) — from migration 043
       s.powerDraw = numOrNull(row.power_consumption_max) ?? numOrNull(row.power_consumption);
