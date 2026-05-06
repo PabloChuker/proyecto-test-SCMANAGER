@@ -459,9 +459,9 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     if (vw < 640) return undefined; // mobile: que use el inset-4 default
-    // Para weapons cap en 1600 px (espacio cómodo sin tapar todo el viewport).
+    // Para weapons cap en 1100 px (panel claramente delimitado).
     const PANEL_W = isWideTable
-      ? Math.min(1600, vw - 2 * VIEWPORT_PAD)
+      ? Math.min(1100, vw - 2 * VIEWPORT_PAD)
       : 360;
 
     // Intentar derecha primero (estilo dropdown nativo)
@@ -522,10 +522,10 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
           // columnas en una sola fila por arma (Burst/Eff/Alpha/RoF/Rng/V/Pwr/
           // Ammo/Rgn/Heat/HP + Name/Size/Grade/Price). Con max-w para no
           // sobresalir del viewport en pantallas chicas.
-          // Loadout.4m (2026-05-06): cap en 1600 px — suficiente para que las
-          // 14 columnas respiren sin estirarse a todo el monitor. Estilo Erkul.
+          // Loadout.4m (2026-05-06): cap en 1100 px — panel delimitado, no
+          // se estira a todo el monitor. Name flex-1 absorbe el resto.
           hardpoint.resolvedCategory === "WEAPON" || hardpoint.resolvedCategory === "TURRET"
-            ? "sm:w-[min(1600px,calc(100vw-2rem))]"
+            ? "sm:w-[min(1100px,calc(100vw-2rem))]"
             : "sm:w-[360px]"
         }`}
         style={panelStyle}
