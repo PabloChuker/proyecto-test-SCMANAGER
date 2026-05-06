@@ -509,8 +509,10 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
           // columnas en una sola fila por arma (Burst/Eff/Alpha/RoF/Rng/V/Pwr/
           // Ammo/Rgn/Heat/HP + Name/Size/Grade/Price). Con max-w para no
           // sobresalir del viewport en pantallas chicas.
+          // Loadout.4m (2026-05-06): Pablo reportó "apelmasado" — columnas
+          // ensanchadas y picker más ancho aunque tape la stats panel.
           hardpoint.resolvedCategory === "WEAPON" || hardpoint.resolvedCategory === "TURRET"
-            ? "sm:w-[min(1180px,calc(100vw-2rem))]"
+            ? "sm:w-[min(1480px,calc(100vw-2rem))]"
             : "sm:w-[360px]"
         }`}
         style={panelStyle}
@@ -554,28 +556,28 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
           </div>
         )}
 
-        <div className="flex items-center gap-1 px-2 py-1 border-b border-zinc-800/40 bg-zinc-900/30 text-[8px] tracking-wider uppercase text-zinc-600 flex-shrink-0">
+        <div className="flex items-center gap-2 px-3 py-1 border-b border-zinc-800/40 bg-zinc-900/30 text-[8px] tracking-wider uppercase text-zinc-600 flex-shrink-0">
           <ColHead label="Name" k="name" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="flex-1" />
-          <ColHead label="S" k="size" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-5 text-center" />
-          <ColHead label="Gr" k="grade" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-5 text-center" />
+          <ColHead label="S" k="size" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-6 text-center" />
+          <ColHead label="Gr" k="grade" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-6 text-center" />
           {(hardpoint.resolvedCategory === "WEAPON" || hardpoint.resolvedCategory === "TURRET") ? (
             <>
-              <ColHead label="Burst" k="stat" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-12 text-right" />
-              <span className="w-10 text-right" title="Eficiencia = Burst DPS / (Power × 100)">Eff</span>
-              <span className="w-12 text-right">α</span>
-              <span className="w-10 text-right" title="Rate of Fire (RPM)">RoF</span>
-              <span className="w-12 text-right" title="Effective range (m)">Rng</span>
-              <span className="w-12 text-right" title="Velocidad del proyectil">V</span>
-              <span className="w-10 text-right" title="Consumo de power">Pwr</span>
-              <span className="w-12 text-right">Ammo</span>
-              <span className="w-10 text-right" title="Regen ammo / s">Rgn</span>
-              <span className="w-10 text-right" title="Heat por disparo">Heat</span>
-              <span className="w-10 text-right" title="Durability HP">HP</span>
+              <ColHead label="Burst" k="stat" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-16 text-right" />
+              <span className="w-14 text-right" title="Eficiencia = Burst DPS / (Power × 100)">Eff</span>
+              <span className="w-14 text-right">α</span>
+              <span className="w-14 text-right" title="Rate of Fire (RPM)">RoF</span>
+              <span className="w-16 text-right" title="Effective range (m)">Rng</span>
+              <span className="w-16 text-right" title="Velocidad del proyectil">V</span>
+              <span className="w-14 text-right" title="Consumo de power">Pwr</span>
+              <span className="w-16 text-right">Ammo</span>
+              <span className="w-14 text-right" title="Regen ammo / s">Rgn</span>
+              <span className="w-14 text-right" title="Heat por disparo">Heat</span>
+              <span className="w-14 text-right" title="Durability HP">HP</span>
             </>
           ) : (
             <ColHead label={statLabel} k="stat" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-12 text-right" />
           )}
-          <ColHead label="$" k="price" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-12 text-right" />
+          <ColHead label="$" k="price" cur={sortKey} dir={sortDir} toggle={toggleSort} cls="w-16 text-right" />
         </div>
 
         <div
@@ -592,7 +594,8 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
             const price = getBestPrice(item);
             const shop = getBestShop(item);
             // Loadout.4e: rows más densas (px-2 py-1.5 en vez de px-4 py-2)
-            const rowCls = isCurrent ? "w-full flex items-center gap-1 px-2 py-1.5 text-left bg-cyan-500/5 cursor-default border-b border-zinc-800/20" : "w-full flex items-center gap-1 px-2 py-1.5 text-left hover:bg-zinc-800/30 cursor-pointer border-b border-zinc-800/20 transition-colors";
+            // Loadout.4m (2026-05-06): gap-2 + px-3 para que las stats respiren.
+            const rowCls = isCurrent ? "w-full flex items-center gap-2 px-3 py-1.5 text-left bg-cyan-500/5 cursor-default border-b border-zinc-800/20" : "w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-zinc-800/30 cursor-pointer border-b border-zinc-800/20 transition-colors";
             return (
               <button
                 key={item.id}
@@ -640,8 +643,8 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
                     <div className="text-[8px] text-zinc-600 truncate">{item.manufacturer}{shop ? ` · ${shop}` : ""}</div>
                   )}
                 </div>
-                <div className="w-5 text-center text-[10px] font-mono text-zinc-500">{item.size != null ? `S${item.size}` : "?"}</div>
-                <div className="w-5 text-center text-[10px]">{item.grade ? <span className={gradeClass(item.grade)}>{item.grade}</span> : <span className="text-zinc-800">-</span>}</div>
+                <div className="w-6 text-center text-[10px] font-mono text-zinc-500">{item.size != null ? `S${item.size}` : "?"}</div>
+                <div className="w-6 text-center text-[10px]">{item.grade ? <span className={gradeClass(item.grade)}>{item.grade}</span> : <span className="text-zinc-800">-</span>}</div>
                 {/* Para WEAPON/TURRET: columnas alineadas con todas las stats clave en
                     una sola fila por arma — facilita comparar entre opciones. */}
                 {(hardpoint.resolvedCategory === "WEAPON" || hardpoint.resolvedCategory === "TURRET") && item.weaponStats ? (
@@ -649,7 +652,7 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
                 ) : (
                   <div className="w-12 text-right font-mono text-[10px]" style={{ color: catColor }}>{sv ? sv.v : <span className="text-zinc-800">-</span>}</div>
                 )}
-                <div className="w-12 text-right">{price !== null ? <span className="text-[9px] font-mono text-amber-400/80">{fmtPrice(price)}</span> : <span className="text-[9px] text-zinc-800">-</span>}</div>
+                <div className="w-16 text-right">{price !== null ? <span className="text-[9px] font-mono text-amber-400/80">{fmtPrice(price)}</span> : <span className="text-[9px] text-zinc-800">-</span>}</div>
               </button>
             );
           })}
@@ -689,17 +692,17 @@ function WeaponStatCells({ stats }: { stats: any }) {
 
   return (
     <>
-      <Cell width="w-12" cls="text-rose-400">{fmtCell(dps)}</Cell>
-      <Cell width="w-10" cls="text-amber-400">{fmtCell(efficiency)}</Cell>
-      <Cell width="w-12" cls="text-zinc-300">{fmtCell(alpha)}</Cell>
-      <Cell width="w-10" cls="text-zinc-300">{fmtCell(rof)}</Cell>
-      <Cell width="w-12" cls="text-cyan-400">{fmtCell(range)}</Cell>
-      <Cell width="w-12" cls="text-cyan-400">{fmtCell(speed)}</Cell>
-      <Cell width="w-10" cls="text-yellow-400">{fmtCell(power)}</Cell>
-      <Cell width="w-12" cls="text-zinc-300">{fmtCell(ammo)}</Cell>
-      <Cell width="w-10" cls="text-emerald-400">{fmtCell(regen)}</Cell>
-      <Cell width="w-10" cls="text-orange-400">{fmtCell(heat)}</Cell>
-      <Cell width="w-10" cls="text-zinc-400">{fmtCell(hp)}</Cell>
+      <Cell width="w-16" cls="text-rose-400">{fmtCell(dps)}</Cell>
+      <Cell width="w-14" cls="text-amber-400">{fmtCell(efficiency)}</Cell>
+      <Cell width="w-14" cls="text-zinc-300">{fmtCell(alpha)}</Cell>
+      <Cell width="w-14" cls="text-zinc-300">{fmtCell(rof)}</Cell>
+      <Cell width="w-16" cls="text-cyan-400">{fmtCell(range)}</Cell>
+      <Cell width="w-16" cls="text-cyan-400">{fmtCell(speed)}</Cell>
+      <Cell width="w-14" cls="text-yellow-400">{fmtCell(power)}</Cell>
+      <Cell width="w-16" cls="text-zinc-300">{fmtCell(ammo)}</Cell>
+      <Cell width="w-14" cls="text-emerald-400">{fmtCell(regen)}</Cell>
+      <Cell width="w-14" cls="text-orange-400">{fmtCell(heat)}</Cell>
+      <Cell width="w-14" cls="text-zinc-400">{fmtCell(hp)}</Cell>
     </>
   );
 }
