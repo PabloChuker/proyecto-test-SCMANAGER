@@ -56,7 +56,9 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "Party",      href: "/party" },
       { label: "Org",        href: "/org" },
       { label: "Activities", href: "/activities" },
-      { label: "🍺 Bar Citizen Ourense", href: "/events/bar-citizen-ourense-2026-06" },
+      // Oculto temporalmente hasta que Pablo dé el OK para abrirlo al público.
+      // La página sigue accesible vía URL directa y desde el endpoint admin.
+      // { label: "🍺 Bar Citizen Ourense", href: "/events/bar-citizen-ourense-2026-06" },
     ],
   },
   {
