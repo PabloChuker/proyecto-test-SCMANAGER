@@ -172,6 +172,16 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: full || order }, { status: 201 });
   } catch (e: any) {
-    return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
+    // Bug fix 2026-05-06: surfaceamos el mensaje real del error (Postgres
+    // check constraints, RLS denials, columns missing, etc.) en lugar del
+    // genérico "Error interno del servidor". Sin esto, el SellRoutePreview
+    // modal mostraba un toast inútil y debugger ciego. El detalle se loguea
+    // siempre en el server para poder cruzarlo con Vercel logs.
+    console.error("[/api/trade/work-orders POST]", e);
+    const message =
+      typeof e?.message === "string" && e.message.length > 0
+        ? e.message
+        : "Error interno del servidor";
+    return NextResponse.json({ error: message, code: e?.code ?? null }, { status: 500 });
   }
 }

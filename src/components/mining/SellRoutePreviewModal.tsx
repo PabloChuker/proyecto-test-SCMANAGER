@@ -335,18 +335,35 @@ export default function SellRoutePreviewModal({
             // role_pct individualmente desde el editor de la WO o desde
             // CobrarStopModal a la hora de cerrar la ruta.
             const evenPct = Math.round((10000 / list.length)) / 100;
+            // OJO con el role: el CHECK constraint de trade_wo_participants
+            // sólo acepta {pilot, escort, scout, financier, mule, crew, other}.
+            // party_members.role puede ser "MINER", "PILOT" en mayúsculas o
+            // cualquier string libre. Si no está en la whitelist forzamos
+            // "crew" para que el insert no rompa con un 500. El usuario
+            // puede ajustarlo después en el editor de la WO.
+            const VALID_ROLES = new Set([
+              "pilot",
+              "escort",
+              "scout",
+              "financier",
+              "mule",
+              "crew",
+              "other",
+            ]);
             baseParticipants = list.map((m: any) => {
               const prof = profilesById.get(m.user_id) || {
                 display_name: null,
                 avatar_url: null,
                 username: null,
               };
+              const rawRole = (m.role || "crew").toLowerCase();
+              const role = VALID_ROLES.has(rawRole) ? rawRole : "crew";
               return {
                 user_id: m.user_id ?? null,
                 display_name:
                   prof.display_name || prof.username || "Crew",
                 avatar_url: prof.avatar_url,
-                role: m.role || "crew",
+                role,
                 role_pct: evenPct,
                 contribution_uec: 0,
                 payout_uec: 0,
