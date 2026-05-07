@@ -15,6 +15,8 @@ import { useEffect, useState, useCallback, use } from "react";
 import Link from "next/link";
 import Header from "@/app/assets/header/Header";
 import { useAuth } from "@/contexts/AuthContext";
+import { RaffleStageAdmin } from "@/components/events/RaffleStageAdmin";
+import type { RaffleSession } from "@/components/events/RaffleStage";
 
 interface Registration {
   id: string;
@@ -43,7 +45,12 @@ interface RaffleWinner {
 }
 
 interface AdminData {
-  event: { id: string; slug: string; name: string };
+  event: {
+    id: string;
+    slug: string;
+    name: string;
+    raffle_session?: RaffleSession;
+  };
   registrations: Registration[];
   winners: RaffleWinner[];
 }
@@ -71,6 +78,19 @@ export default function EventAdminPage({ params }: { params: Promise<{ slug: str
   }, [slug]);
 
   useEffect(() => { refresh(); }, [refresh]);
+
+  // Polling cuando el modo sorteo esta activo (loading/loaded/spinning/won/claimed).
+  // Necesario para que el admin vea las transiciones automaticas (ej. spinning →
+  // won despues de 5.5s) sin tener que refrescar manualmente.
+  const phase = data?.event?.raffle_session?.phase ?? "idle";
+  const livePolling = phase !== "idle";
+  useEffect(() => {
+    if (!livePolling) return;
+    const id = window.setInterval(() => {
+      refresh();
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, [livePolling, refresh]);
 
   if (authLoading || loading) {
     return (
@@ -154,7 +174,15 @@ export default function EventAdminPage({ params }: { params: Promise<{ slug: str
           <Stat label="Ganadores" value={winners.length} accent="amber" icon="🏆" />
         </div>
 
-        {/* Sortear */}
+        {/* Modo sorteo en vivo (stage / pasarela) */}
+        <RaffleStageAdmin
+          slug={slug}
+          session={event.raffle_session ?? { phase: "idle", prize: null, winner: null }}
+          presentCount={presentCount}
+          onChange={refresh}
+        />
+
+        {/* Sortear (legacy: simple, sin stage) */}
         <RaffleSection slug={slug} winners={winners} presentCount={presentCount} onChange={refresh} />
 
         {/* Filtros */}

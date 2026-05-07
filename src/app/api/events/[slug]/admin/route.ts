@@ -21,7 +21,7 @@ export async function GET(
     // Cargar evento + check admin
     const { data: event } = await supabase
       .from("community_events")
-      .select("id, slug, name, admin_user_ids")
+      .select("id, slug, name, admin_user_ids, raffle_session")
       .eq("slug", slug)
       .maybeSingle();
     if (!event) return NextResponse.json({ error: "Evento no encontrado." }, { status: 404 });
@@ -62,7 +62,12 @@ export async function GET(
       .order("drawn_at", { ascending: false });
 
     return NextResponse.json({
-      event: { id: event.id, slug: event.slug, name: event.name },
+      event: {
+        id: event.id,
+        slug: event.slug,
+        name: event.name,
+        raffle_session: (event as any).raffle_session ?? { phase: "idle" },
+      },
       registrations: enriched,
       winners: winners ?? [],
     });

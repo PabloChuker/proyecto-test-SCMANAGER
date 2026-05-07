@@ -15,6 +15,7 @@ import { useEffect, useState, useCallback, use } from "react";
 import Link from "next/link";
 import Header from "@/app/assets/header/Header";
 import { useAuth } from "@/contexts/AuthContext";
+import { RaffleStage, type RaffleSession } from "@/components/events/RaffleStage";
 
 interface CommunityEvent {
   id: string;
@@ -38,6 +39,7 @@ interface CommunityEvent {
   raffle_active: boolean;
   raffle_prize_description: string | null;
   raffle_rules: string | null;
+  raffle_session?: RaffleSession | null;
 }
 
 interface Announcement {
@@ -105,6 +107,38 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
     if (!user) { setIsAdmin(false); return; }
     fetch(`/api/events/${slug}/admin`).then((r) => setIsAdmin(r.ok)).catch(() => setIsAdmin(false));
   }, [user, slug]);
+
+  // ── Live polling cuando el modo sorteo esta activo ─────────────────────
+  // Solo polleamos si raffle_session.phase != "idle". 1 fetch cada 1.5s
+  // mantiene el panel publico sincronizado con los cambios del admin sin
+  // martillar a Supabase cuando el evento esta calmo.
+  const phase = data?.event?.raffle_session?.phase ?? "idle";
+  const livePolling = phase !== "idle";
+  useEffect(() => {
+    if (!livePolling) return;
+    const id = window.setInterval(() => {
+      refresh();
+    }, 1500);
+    return () => window.clearInterval(id);
+  }, [livePolling, refresh]);
+
+  // ── Candidatos de la pasarela: lista publica de presentes (display_name +
+  //    avatar). Solo se hidrata cuando el modo sorteo esta activo, para no
+  //    pegarle al endpoint si no se necesita.
+  const [candidates, setCandidates] = useState<{ display_name: string; avatar_url: string | null }[]>([]);
+  useEffect(() => {
+    if (!livePolling) return;
+    let cancelled = false;
+    fetch(`/api/events/${slug}/raffle/candidates`)
+      .then((r) => (r.ok ? r.json() : { candidates: [] }))
+      .then((j) => {
+        if (cancelled) return;
+        const list = Array.isArray(j?.candidates) ? j.candidates : [];
+        setCandidates(list);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [livePolling, slug]);
 
   if (loading) {
     return (
@@ -269,7 +303,15 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
           </div>
 
           <div className="space-y-4">
-            <MapCard event={event} />
+            {event.raffle_session && event.raffle_session.phase !== "idle" ? (
+              <RaffleStage
+                session={event.raffle_session}
+                candidates={candidates}
+                eventName={event.name}
+              />
+            ) : (
+              <MapCard event={event} />
+            )}
           </div>
         </div>
 
