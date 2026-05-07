@@ -235,21 +235,39 @@ function SpinningPhase({
     [winner.display_name, winner.avatar_url],
   );
   const { reel, winnerIndex } = useMemo(() => {
-    const shuffled = shuffleSeeded(
+    const sameAsWinner = (c: CandidatePreview) =>
+      c.display_name === winner.display_name &&
+      c.avatar_url === winner.avatar_url;
+    const otherCandidates = candidates.filter((c) => !sameAsWinner(c));
+    const allShuffled = shuffleSeeded(
       candidates.length > 0
         ? candidates
         : [{ display_name: winner.display_name, avatar_url: winner.avatar_url }],
       spinSeed,
     );
+    // Para los chips ADYACENTES al ganador queremos garantizar que no sea
+    // tambien el ganador (sino se ve "Pablo | Pablo | Pablo" y queda como
+    // bug visual). Si hay otros candidatos, usamos esa lista para el ultimo
+    // chip pre-roll y todo el post-roll. Si NO hay otros (ganador es el
+    // unico inscripto), caemos a usar el shuffle completo — no hay opcion.
+    const adjacentPool = otherCandidates.length > 0
+      ? shuffleSeeded(otherCandidates, spinSeed + 1)
+      : allShuffled;
+
     const loops: CandidatePreview[] = [];
     // Pre-roll: 5 vueltas para que de impresion de muchos nombres pasando
-    for (let i = 0; i < 5; i++) loops.push(...shuffled);
+    for (let i = 0; i < 5; i++) loops.push(...allShuffled);
+    // Si la ultima posicion antes del ganador resulto ser el ganador
+    // (porque el shuffle lo dejo ahi), la swapeamos por uno del adjacentPool.
+    if (loops.length > 0 && sameAsWinner(loops[loops.length - 1]) && otherCandidates.length > 0) {
+      loops[loops.length - 1] = adjacentPool[0];
+    }
     // Insert ganador
     const idx = loops.length;
     loops.push(winnerChip);
-    // Post-roll: 2 vueltas adicionales despues del ganador (visible a la
-    // derecha del marcador cuando el reel se detiene)
-    for (let i = 0; i < 2; i++) loops.push(...shuffled);
+    // Post-roll: solo non-winner para evitar el duplicado a la derecha del
+    // marcador. 2 vueltas — suficiente para llenar el viewport visible.
+    for (let i = 0; i < 2; i++) loops.push(...adjacentPool);
     return { reel: loops, winnerIndex: idx };
   }, [candidates, winner.display_name, winner.avatar_url, winnerChip, spinSeed]);
 

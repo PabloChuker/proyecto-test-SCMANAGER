@@ -16,6 +16,7 @@ import Link from "next/link";
 import Header from "@/app/assets/header/Header";
 import { useAuth } from "@/contexts/AuthContext";
 import { RaffleStageAdmin } from "@/components/events/RaffleStageAdmin";
+import { EventDangerZone } from "@/components/events/EventDangerZone";
 import type { RaffleSession } from "@/components/events/RaffleStage";
 
 interface Registration {
@@ -223,6 +224,9 @@ export default function EventAdminPage({ params }: { params: Promise<{ slug: str
             )}
           </div>
         </div>
+
+        {/* Zona de peligro — al pie del panel para que no este al alcance accidental */}
+        <EventDangerZone slug={slug} onChange={refresh} />
       </div>
     </main>
   );
