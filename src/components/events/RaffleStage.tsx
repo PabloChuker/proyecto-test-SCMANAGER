@@ -223,25 +223,35 @@ function SpinningPhase({
   candidates: CandidatePreview[];
   spinSeed: number;
 }) {
-  // Construye la cinta de la pasarela: muchas iteraciones aleatorias terminando
-  // siempre con el ganador real para que el "frenado" coincida visualmente con
-  // el avatar correcto.
-  const reel = useMemo(() => {
-    const shuffled = shuffleSeeded(candidates.length > 0 ? candidates : [
-      { display_name: winner.display_name, avatar_url: winner.avatar_url },
-    ], spinSeed);
-    // Repetimos varias vueltas para sensación de pasarela
+  // Construye la cinta de la pasarela: pre-roll de nombres barajados, el
+  // chip GANADOR en una posicion intermedia (~80% del reel), y post-roll
+  // de mas nombres despues. Asi el frenado deja al ganador bajo el marcador
+  // PERO con nombres visibles a la derecha — da la sensacion de que la
+  // pasarela "podria seguir", evita el feeling de "se quedo al final".
+  // Pablo: "deberia ser n continuados de nombre para que no de la sensacion
+  // como que se quedo al final".
+  const winnerChip: CandidatePreview = useMemo(
+    () => ({ display_name: winner.display_name, avatar_url: winner.avatar_url }),
+    [winner.display_name, winner.avatar_url],
+  );
+  const { reel, winnerIndex } = useMemo(() => {
+    const shuffled = shuffleSeeded(
+      candidates.length > 0
+        ? candidates
+        : [{ display_name: winner.display_name, avatar_url: winner.avatar_url }],
+      spinSeed,
+    );
     const loops: CandidatePreview[] = [];
-    for (let i = 0; i < 6; i++) {
-      loops.push(...shuffled);
-    }
-    // Aseguramos que la última posición sea el ganador
-    loops.push({
-      display_name: winner.display_name,
-      avatar_url: winner.avatar_url,
-    });
-    return loops;
-  }, [candidates, winner, spinSeed]);
+    // Pre-roll: 5 vueltas para que de impresion de muchos nombres pasando
+    for (let i = 0; i < 5; i++) loops.push(...shuffled);
+    // Insert ganador
+    const idx = loops.length;
+    loops.push(winnerChip);
+    // Post-roll: 2 vueltas adicionales despues del ganador (visible a la
+    // derecha del marcador cuando el reel se detiene)
+    for (let i = 0; i < 2; i++) loops.push(...shuffled);
+    return { reel: loops, winnerIndex: idx };
+  }, [candidates, winner.display_name, winner.avatar_url, winnerChip, spinSeed]);
 
   const title = prize.label || prize.ship_name || "Premio";
 
@@ -259,7 +269,7 @@ function SpinningPhase({
   // arrancamos UNA vez por sorteo.
   const containerRef = useRef<HTMLDivElement>(null);
   const reelRef = useRef<HTMLDivElement>(null);
-  const lastChipRef = useRef<HTMLDivElement>(null);
+  const winnerChipRef = useRef<HTMLDivElement>(null);
   const animStartedKey = useRef<string | null>(null);
 
   // Key estable: combina spin_seed + winner_registration_id. Mientras el
@@ -271,8 +281,8 @@ function SpinningPhase({
     if (animStartedKey.current === spinKey) return; // ya estamos animando este sorteo
     const container = containerRef.current;
     const reelEl = reelRef.current;
-    const lastEl = lastChipRef.current;
-    if (!container || !reelEl || !lastEl) return;
+    const targetEl = winnerChipRef.current;
+    if (!container || !reelEl || !targetEl) return;
     animStartedKey.current = spinKey;
 
     // Esperamos al next frame para asegurar que el layout esta calculado.
@@ -281,12 +291,12 @@ function SpinningPhase({
     const id = requestAnimationFrame(() => {
       if (cancelled) return;
       const cRect = container.getBoundingClientRect();
-      const lRect = lastEl.getBoundingClientRect();
+      const tRect = targetEl.getBoundingClientRect();
       const containerCenterX = cRect.left + cRect.width / 2;
-      const lastCenterX = lRect.left + lRect.width / 2;
-      // delta: lo que tenemos que mover el reel para que el ultimo chip quede
-      // exactamente debajo del marcador central.
-      const delta = containerCenterX - lastCenterX;
+      const targetCenterX = tRect.left + tRect.width / 2;
+      // delta: lo que tenemos que mover el reel para que el chip GANADOR
+      // (no el ultimo) quede exactamente debajo del marcador central.
+      const delta = containerCenterX - targetCenterX;
 
       anim = reelEl.animate(
         [
@@ -333,7 +343,7 @@ function SpinningPhase({
             <CandidateChip
               key={i}
               c={c}
-              ref={i === reel.length - 1 ? lastChipRef : undefined}
+              ref={i === winnerIndex ? winnerChipRef : undefined}
             />
           ))}
         </div>
@@ -400,59 +410,120 @@ function WonPhase({
   const expired = remaining === 0;
   const title = prize.label || prize.ship_name || "Premio";
 
-  return (
-    <div className="space-y-3 pointer-events-auto relative">
-      {/* Confeti dorado solo para el ganador */}
-      {isMe && <Confetti />}
-      <p className={`text-[10px] font-mono uppercase tracking-[0.25em] won-stage-caption ${isMe ? "text-amber-200" : "gold-text"}`}>
-        {isMe ? "🎉 ¡GANASTE!" : `🏆 Ganador del sorteo · ${title}`}
-      </p>
-
-      <div
-        className={`inline-flex flex-col items-center gap-3 px-8 py-6 rounded-xl border-4 won-stage-card ${
-          isMe
-            ? "border-amber-300 bg-gradient-to-b from-amber-400/40 to-amber-700/30 shadow-[0_0_120px_rgba(252,211,77,0.85)]"
-            : "border-amber-400 bg-gradient-to-b from-amber-500/30 to-amber-700/20 shadow-[0_0_60px_rgba(245,158,11,0.6)]"
-        }`}
-      >
-        {winner.avatar_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={winner.avatar_url}
-            alt=""
-            className="w-24 h-24 rounded-full border-4 border-amber-300 shadow-[0_0_20px_rgba(252,211,77,0.7)] won-stage-avatar"
-            draggable={false}
-          />
-        ) : (
-          <div className="w-24 h-24 rounded-full bg-amber-500/30 border-4 border-amber-300 flex items-center justify-center text-5xl shadow-[0_0_20px_rgba(252,211,77,0.7)] won-stage-avatar">
-            👑
-          </div>
-        )}
-        <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-amber-200 won-stage-text-1">
-          Winner
+  // Vista del NO-GANADOR: card chica e informativa, sin confeti.
+  if (!isMe) {
+    return (
+      <div className="space-y-3 pointer-events-auto">
+        <p className="text-[10px] font-mono uppercase tracking-[0.25em] gold-text won-stage-caption">
+          🏆 Ganador del sorteo · {title}
         </p>
-        <h2 className="text-3xl sm:text-4xl font-bold text-amber-50 tracking-wider drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] won-stage-text-2">
+        <div className="inline-flex items-center gap-3 px-5 py-3 rounded-md border border-amber-500/50 bg-amber-500/10 won-stage-card">
+          {winner.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={winner.avatar_url}
+              alt=""
+              className="w-12 h-12 rounded-full border-2 border-amber-300 won-stage-avatar"
+              draggable={false}
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-amber-500/20 border-2 border-amber-300 flex items-center justify-center text-2xl won-stage-avatar">
+              🏆
+            </div>
+          )}
+          <div className="text-left">
+            <p className="text-[9px] font-mono uppercase tracking-widest text-amber-300 won-stage-text-1">
+              Ganador
+            </p>
+            <h2 className="text-xl font-bold text-amber-50 tracking-wide won-stage-text-2">
+              {winner.display_name}
+            </h2>
+            {winner.rsi_handle && (
+              <p className="text-[10px] text-amber-200/70 font-mono won-stage-text-3">
+                @{winner.rsi_handle}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="text-[10px] text-amber-200/60 font-serif italic won-stage-countdown">
+          {expired
+            ? "⚠ Tiempo agotado — re-sorteo en curso."
+            : `⏳ El ganador tiene ${remaining}s para reclamar.`}
+        </div>
+
+        <style jsx>{`
+          @keyframes won-fade-mini {
+            from { opacity: 0; transform: translateY(4px); }
+            to   { opacity: 1; transform: translateY(0); }
+          }
+          .won-stage-caption { animation: won-fade-mini 0.45s ease both; animation-delay: 0ms; }
+          .won-stage-card { animation: won-fade-mini 0.55s ease both; animation-delay: 120ms; }
+          .won-stage-avatar { animation: won-fade-mini 0.45s ease both; animation-delay: 240ms; }
+          .won-stage-text-1 { animation: won-fade-mini 0.4s ease both; animation-delay: 320ms; }
+          .won-stage-text-2 { animation: won-fade-mini 0.45s ease both; animation-delay: 420ms; }
+          .won-stage-text-3 { animation: won-fade-mini 0.4s ease both; animation-delay: 520ms; }
+          .won-stage-countdown { animation: won-fade-mini 0.4s ease both; animation-delay: 620ms; }
+        `}</style>
+      </div>
+    );
+  }
+
+  // Vista del GANADOR (isMe): pantalla MASIVA dorada con confeti, "¡ERES EL
+  // GANADOR!" enorme. Pablo: "esa tiene que ser dorada y con confeti y con
+  // la frase de eres el ganador".
+  return (
+    <div className="space-y-4 pointer-events-auto relative">
+      <Confetti />
+      <p className="text-[11px] font-mono uppercase tracking-[0.3em] text-amber-200 won-stage-caption">
+        🎉 Sorteo · {title}
+      </p>
+      <div className="inline-flex flex-col items-center gap-4 px-10 py-8 rounded-2xl border-4 border-amber-300 bg-gradient-to-b from-amber-400/45 to-amber-800/35 shadow-[0_0_140px_rgba(252,211,77,0.95)] won-stage-card">
+        <p className="text-[12px] font-mono uppercase tracking-[0.4em] text-amber-100/95 won-stage-text-1">
+          Felicitaciones
+        </p>
+        <h1
+          className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-wider text-amber-50 drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)] won-hero-title"
+          style={{ textShadow: "0 0 24px rgba(252,211,77,0.7), 0 2px 6px rgba(0,0,0,0.85)" }}
+        >
+          ¡ERES EL GANADOR!
+        </h1>
+        <div className="won-stage-avatar">
+          {winner.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={winner.avatar_url}
+              alt=""
+              className="w-32 h-32 rounded-full border-4 border-amber-200 shadow-[0_0_40px_rgba(252,211,77,0.95)]"
+              draggable={false}
+            />
+          ) : (
+            <div className="w-32 h-32 rounded-full bg-amber-400/40 border-4 border-amber-200 flex items-center justify-center text-7xl shadow-[0_0_40px_rgba(252,211,77,0.95)]">
+              👑
+            </div>
+          )}
+        </div>
+        <h2 className="text-2xl sm:text-3xl font-bold text-amber-50 tracking-wide drop-shadow-[0_2px_6px_rgba(0,0,0,0.85)] won-stage-text-2">
           {winner.display_name}
         </h2>
         {winner.rsi_handle && (
-          <p className="text-[11px] text-amber-200/80 font-mono won-stage-text-3">
+          <p className="text-[12px] text-amber-100/85 font-mono won-stage-text-3">
             @{winner.rsi_handle}
           </p>
         )}
       </div>
 
       <div
-        className={`mt-2 inline-block px-4 py-2 rounded-md border text-[12px] font-serif italic won-stage-countdown ${
+        className={`inline-block px-5 py-2.5 rounded-md border-2 text-[13px] font-serif italic won-stage-countdown ${
           expired
-            ? "border-rose-500/60 bg-rose-500/15 text-rose-200"
-            : "border-amber-500/40 bg-zinc-950/60 text-amber-200"
+            ? "border-rose-500/70 bg-rose-500/20 text-rose-100"
+            : "border-amber-300/70 bg-zinc-950/70 text-amber-100"
         }`}
       >
         {expired ? (
           <>⚠ Tiempo agotado — el equipo va a re-sortear.</>
         ) : (
           <>
-            ⏳ Tenés <strong className="font-mono not-italic">{remaining}s</strong> para reclamar el premio o se sortea de nuevo.
+            ⏳ Tenés <strong className="font-mono not-italic">{remaining}s</strong> para reclamar el premio.
           </>
         )}
       </div>
@@ -478,6 +549,15 @@ function WonPhase({
           animation: won-glow 0.85s cubic-bezier(0.18, 0.7, 0.25, 1) both;
           animation-delay: 180ms;
           transform-origin: center center;
+        }
+        @keyframes won-hero-pulse {
+          0%   { opacity: 0; transform: translateY(10px) scale(0.95); }
+          60%  { opacity: 1; transform: translateY(0)    scale(1.02); }
+          100% { opacity: 1; transform: translateY(0)    scale(1); }
+        }
+        .won-hero-title {
+          animation: won-hero-pulse 1s cubic-bezier(0.18, 0.7, 0.25, 1) both;
+          animation-delay: 280ms;
         }
         .won-stage-avatar {
           animation: won-fade 0.55s cubic-bezier(0.2, 0.7, 0.3, 1) both;
@@ -515,56 +595,121 @@ function ClaimedPhase({
   isMe: boolean;
   slug: string;
 }) {
+  const [emailFormOpen, setEmailFormOpen] = useState(false);
   const title = prize.label || prize.ship_name || "Premio";
+
+  // ── Vista NO-GANADOR ──
+  // Card compacta, sin confeti, sin botones de email. Solo informativa.
+  if (!isMe) {
+    return (
+      <div className="space-y-3 pointer-events-auto">
+        <p className="text-[10px] font-mono uppercase tracking-[0.25em] gold-text">
+          ✓ Premio reclamado · {title}
+        </p>
+        <div className="inline-flex items-center gap-3 px-5 py-3 rounded-md border border-emerald-500/50 bg-emerald-500/10">
+          {winner.avatar_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={winner.avatar_url}
+              alt=""
+              className="w-12 h-12 rounded-full border-2 border-emerald-400"
+              draggable={false}
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-full bg-emerald-500/30 border-2 border-emerald-400 flex items-center justify-center text-2xl">
+              ✓
+            </div>
+          )}
+          <div className="text-left">
+            <p className="text-[9px] font-mono uppercase tracking-widest text-emerald-300">
+              Ganador
+            </p>
+            <p className="text-base font-bold text-emerald-50">
+              {winner.display_name}
+            </p>
+          </div>
+        </div>
+        <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-amber-200/50">
+          Esperando próximo sorteo...
+        </p>
+      </div>
+    );
+  }
+
+  // ── Vista GANADOR (isMe) ──
+  // Pantalla dorada masiva con confeti + boton ROJO grande "CARGAR TU E-MAIL".
+  // Al click, expande el form. Pablo: "esa tiene que ser dorada y con confeti
+  // y con la frase de eres el ganador" + "un boton grande que diga cargar tu
+  // e-mail roja".
   return (
-    <div className="space-y-3 pointer-events-auto relative">
-      {isMe && <Confetti />}
-      <p className="text-[10px] font-mono uppercase tracking-[0.25em] gold-text">
-        {isMe ? "🎉 ¡Ganaste!" : `✓ Premio reclamado · ${title}`}
+    <div className="space-y-4 pointer-events-auto relative">
+      <Confetti />
+      <p className="text-[11px] font-mono uppercase tracking-[0.3em] text-amber-200">
+        🎉 Sorteo reclamado · {title}
       </p>
-      <div
-        className={`inline-flex flex-col items-center gap-3 px-8 py-5 rounded-xl border-2 ${
-          isMe
-            ? "border-amber-300 bg-gradient-to-b from-amber-400/30 to-amber-700/20 shadow-[0_0_60px_rgba(252,211,77,0.6)]"
-            : "border-emerald-500/60 bg-emerald-500/10"
-        }`}
-      >
+
+      <div className="inline-flex flex-col items-center gap-4 px-10 py-7 rounded-2xl border-4 border-amber-300 bg-gradient-to-b from-amber-400/45 to-amber-800/35 shadow-[0_0_140px_rgba(252,211,77,0.95)]">
+        <p className="text-[12px] font-mono uppercase tracking-[0.4em] text-amber-100/95">
+          Felicitaciones
+        </p>
+        <h1
+          className="text-4xl sm:text-5xl lg:text-6xl font-black tracking-wider text-amber-50 drop-shadow-[0_4px_8px_rgba(0,0,0,0.9)]"
+          style={{ textShadow: "0 0 24px rgba(252,211,77,0.7), 0 2px 6px rgba(0,0,0,0.85)" }}
+        >
+          ¡ERES EL GANADOR!
+        </h1>
         {winner.avatar_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={winner.avatar_url}
             alt=""
-            className={`w-16 h-16 rounded-full border-2 ${
-              isMe ? "border-amber-300" : "border-emerald-400"
-            }`}
+            className="w-28 h-28 rounded-full border-4 border-amber-200 shadow-[0_0_40px_rgba(252,211,77,0.95)]"
             draggable={false}
           />
         ) : (
-          <div className={`w-16 h-16 rounded-full border-2 flex items-center justify-center text-3xl ${
-            isMe ? "bg-amber-500/30 border-amber-300" : "bg-emerald-500/30 border-emerald-400"
-          }`}>
-            {isMe ? "👑" : "✓"}
+          <div className="w-28 h-28 rounded-full bg-amber-400/40 border-4 border-amber-200 flex items-center justify-center text-6xl shadow-[0_0_40px_rgba(252,211,77,0.95)]">
+            👑
           </div>
         )}
-        <p className={`text-2xl font-bold ${isMe ? "text-amber-50" : "text-emerald-50"}`}>
+        <h2 className="text-2xl sm:text-3xl font-bold text-amber-50 tracking-wide drop-shadow-[0_2px_6px_rgba(0,0,0,0.85)]">
           {winner.display_name}
-        </p>
-        <p className={`text-[11px] font-serif italic ${isMe ? "text-amber-100/90" : "text-emerald-200/70"}`}>
-          {isMe ? `Premio: ${title}` : "¡Felicitaciones!"}
+        </h2>
+        <p className="text-[12px] text-amber-100/85 font-serif italic">
+          Premio: <strong className="not-italic font-bold">{title}</strong>
         </p>
       </div>
 
-      {isMe && winner.winner_id ? (
+      {/* CTA: boton rojo grande para abrir el form de email. Cuando se
+          presiona, fade in del form abajo. */}
+      {!emailFormOpen && winner.winner_id && (
+        <button
+          onClick={() => setEmailFormOpen(true)}
+          className="claim-cta-button block w-full max-w-md mx-auto mt-2 px-6 py-4 rounded-lg border-2 border-rose-400 bg-gradient-to-b from-rose-500 to-rose-700 text-white text-lg sm:text-xl font-black tracking-wider uppercase shadow-[0_6px_24px_rgba(244,63,94,0.55)] hover:from-rose-400 hover:to-rose-600 hover:shadow-[0_6px_32px_rgba(244,63,94,0.75)] transition-all"
+        >
+          ✉ Cargar tu e-mail
+        </button>
+      )}
+      {emailFormOpen && winner.winner_id && (
         <ClaimEmailForm slug={slug} winnerId={winner.winner_id} />
-      ) : isMe ? (
+      )}
+      {!winner.winner_id && (
         <p className="text-[11px] text-amber-200/80 font-serif italic">
           Esperá un momento — el equipo está confirmando el reclamo.
         </p>
-      ) : (
-        <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-amber-200/50">
-          Esperando próximo sorteo...
-        </p>
       )}
+
+      <style jsx>{`
+        @keyframes claim-cta-pulse {
+          0%, 100% { transform: scale(1);    box-shadow: 0 6px 24px rgba(244, 63, 94, 0.55); }
+          50%      { transform: scale(1.03); box-shadow: 0 6px 36px rgba(244, 63, 94, 0.85); }
+        }
+        .claim-cta-button {
+          animation: claim-cta-pulse 1.6s ease-in-out infinite;
+        }
+        .claim-cta-button:hover {
+          animation: none;
+        }
+      `}</style>
     </div>
   );
 }
