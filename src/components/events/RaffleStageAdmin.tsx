@@ -52,7 +52,11 @@ export function RaffleStageAdmin({
   const [itemLabel, setItemLabel] = useState("");
   const [itemDescription, setItemDescription] = useState("");
 
-  // Buscador de naves: debounced fetch a /api/ships
+  // Buscador de naves: debounced fetch a /api/ships.
+  // Pablo: "el listado de naves para elegir no esta completo faltan naves".
+  // El endpoint /api/ships acepta limit hasta 200 (validateInt lo capea).
+  // Subimos el limit al maximo + sort por nombre asc para que el dropdown
+  // muestre la mayor cantidad de naves posible aun sin tipear nada.
   const searchAbortRef = useRef<AbortController | null>(null);
   useEffect(() => {
     if (!searchOpen) return;
@@ -64,7 +68,9 @@ export function RaffleStageAdmin({
       try {
         const params = new URLSearchParams();
         if (shipQuery.trim()) params.set("search", shipQuery.trim());
-        params.set("limit", "20");
+        params.set("limit", "200");
+        params.set("sortBy", "name");
+        params.set("sortOrder", "ASC");
         const r = await fetch(`/api/ships?${params.toString()}`, { signal: ctrl.signal });
         if (!r.ok) return;
         const j = await r.json();
@@ -270,7 +276,15 @@ export function RaffleStageAdmin({
                   className="w-full px-3 py-2 bg-zinc-950 border border-zinc-800/60 rounded-sm text-[12px] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-cyan-500/50"
                 />
                 {searchOpen && shipResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 max-h-72 overflow-y-auto bg-zinc-950 border border-zinc-800/80 rounded-sm shadow-xl z-30">
+                  <div className="absolute top-full left-0 right-0 mt-1 max-h-[520px] overflow-y-auto bg-zinc-950 border border-zinc-800/80 rounded-sm shadow-xl z-30">
+                    <div className="px-3 py-1.5 text-[9px] uppercase tracking-widest text-zinc-500 font-mono bg-zinc-900/60 border-b border-zinc-800/60 sticky top-0">
+                      {shipResults.length} {shipResults.length === 1 ? "nave" : "naves"}
+                      {shipResults.length === 200 && (
+                        <span className="ml-2 text-amber-400/80 normal-case">
+                          (cap 200 — buscá para filtrar más)
+                        </span>
+                      )}
+                    </div>
                     {shipResults.map((s) => (
                       <button
                         key={s.id}

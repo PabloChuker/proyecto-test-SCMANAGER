@@ -43,6 +43,10 @@ interface RaffleWinner {
   winner_rsi_handle: string | null;
   winner_username: string | null;
   winner_avatar_url: string | null;
+  // Migracion 074: el ganador puede registrar su email para recibir el
+  // premio. Si todavia no lo hizo, ambos quedan null.
+  winner_email: string | null;
+  claimed_at: string | null;
 }
 
 interface AdminData {
@@ -184,6 +188,9 @@ export default function EventAdminPage({ params }: { params: Promise<{ slug: str
           presentCount={presentCount}
           onChange={refresh}
         />
+
+        {/* Historial de ganadores con email — visible siempre que haya 1+ */}
+        {winners.length > 0 && <WinnersHistory winners={winners} />}
 
         {/* Sortear (legacy: simple, sin stage) */}
         <RaffleSection slug={slug} winners={winners} presentCount={presentCount} onChange={refresh} />
@@ -328,6 +335,129 @@ function IntentBadge({ intent }: { intent: "confirmed" | "maybe" | "no" }) {
     : "bg-rose-500/15 text-rose-300 border-rose-500/40";
   const text = intent === "confirmed" ? "Voy" : intent === "maybe" ? "Tal vez" : "No puedo";
   return <span className={`text-[9px] font-mono uppercase tracking-wider px-1 py-0.5 rounded-sm border ${cls}`}>{text}</span>;
+}
+
+// ─── WinnersHistory ─────────────────────────────────────────────────────────
+// Tabla visible y prominente con todos los ganadores del evento, incluyendo
+// el email que cada ganador registro despues de salir sorteado. Pablo:
+// "necesito poder ver en listado de ganadores con el correo".
+//
+// Si el ganador todavia no completo su email, mostramos una pill amarilla
+// "pendiente". Si lo completo, mostramos el email + boton de copiar.
+
+function WinnersHistory({ winners }: { winners: RaffleWinner[] }) {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const copyEmail = async (email: string, id: string) => {
+    try {
+      await navigator.clipboard.writeText(email);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 1500);
+    } catch {
+      // swallow — clipboard puede estar bloqueado
+    }
+  };
+
+  const claimedCount = winners.filter((w) => !!w.winner_email).length;
+
+  return (
+    <div className="bg-zinc-900/40 border border-amber-500/40 rounded-md p-4 space-y-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="text-[14px] font-semibold text-amber-300 flex items-center gap-2">
+            🏆 Historial de ganadores
+          </h2>
+          <p className="text-[10px] text-zinc-500 mt-0.5">
+            Lista completa con email registrado por cada ganador.
+            {" "}
+            <strong className="text-amber-300">
+              {claimedCount}/{winners.length} con email
+            </strong>
+            .
+          </p>
+        </div>
+      </div>
+
+      <div className="overflow-hidden border border-zinc-800/60 rounded-sm">
+        {/* Header */}
+        <div className="grid grid-cols-[40px_1fr_1.4fr_1.6fr_120px] gap-2 px-3 py-1.5 bg-zinc-900/70 border-b border-zinc-800/60 text-[9px] font-mono uppercase tracking-widest text-zinc-500">
+          <span></span>
+          <span>Ganador</span>
+          <span>Premio</span>
+          <span>Email</span>
+          <span className="text-right">Sorteado</span>
+        </div>
+        {winners.map((w) => (
+          <div
+            key={w.id}
+            className="grid grid-cols-[40px_1fr_1.4fr_1.6fr_120px] gap-2 px-3 py-2 border-b border-zinc-800/40 last:border-0 items-center text-[12px]"
+          >
+            {/* Avatar */}
+            {w.winner_avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={w.winner_avatar_url}
+                alt=""
+                className="w-7 h-7 rounded-full border border-amber-500/40 shrink-0"
+              />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-amber-500/15 border border-amber-500/40 flex items-center justify-center text-[12px] shrink-0">
+                🏆
+              </div>
+            )}
+            {/* Nombre + RSI handle */}
+            <div className="min-w-0">
+              <p className="text-zinc-100 font-medium truncate">{w.winner_display_name}</p>
+              {w.winner_rsi_handle && (
+                <p className="text-[9px] text-amber-400/80 font-mono truncate">RSI: {w.winner_rsi_handle}</p>
+              )}
+            </div>
+            {/* Premio */}
+            <div className="min-w-0">
+              <p className="text-amber-200 truncate" title={w.prize}>{w.prize}</p>
+              {w.notes && (
+                <p className="text-[9px] text-zinc-500 italic truncate" title={w.notes}>"{w.notes}"</p>
+              )}
+            </div>
+            {/* Email */}
+            <div className="min-w-0">
+              {w.winner_email ? (
+                <div className="flex items-center gap-1.5">
+                  <a
+                    href={`mailto:${w.winner_email}`}
+                    className="text-emerald-300 hover:text-emerald-200 truncate font-mono text-[11px]"
+                    title={w.winner_email}
+                  >
+                    {w.winner_email}
+                  </a>
+                  <button
+                    onClick={() => copyEmail(w.winner_email!, w.id)}
+                    title="Copiar email"
+                    className="text-[10px] px-1.5 py-0.5 rounded-sm border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 transition shrink-0 font-mono"
+                  >
+                    {copiedId === w.id ? "✓" : "Copiar"}
+                  </button>
+                </div>
+              ) : (
+                <span className="inline-block text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-sm bg-amber-500/15 border border-amber-500/40 text-amber-300">
+                  ⏳ pendiente
+                </span>
+              )}
+              {w.claimed_at && (
+                <p className="text-[9px] text-zinc-500 font-mono mt-0.5">
+                  reclamado: {new Date(w.claimed_at).toLocaleString()}
+                </p>
+              )}
+            </div>
+            {/* Drawn at */}
+            <p className="text-[10px] text-zinc-500 font-mono text-right">
+              {new Date(w.drawn_at).toLocaleString()}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ─── RaffleSection ──────────────────────────────────────────────────────────

@@ -38,7 +38,7 @@ export async function GET(
 
     const { data: regs } = await supabase
       .from("event_registrations")
-      .select("display_name, user_id")
+      .select("id, display_name, user_id")
       .eq("event_id", event.id)
       .eq("attended", true);
 
@@ -46,8 +46,27 @@ export async function GET(
       return NextResponse.json({ candidates: [] }, { status: 200 });
     }
 
+    // Pablo: "al marcar excluir ganadores estos no deben aparecer en la
+    // tira de nombres". El endpoint admin/raffle-state ya excluye previous
+    // winners del POOL DE PICKEO; ahora aplicamos la misma exclusion al
+    // fetch publico que alimenta la pasarela visual, asi los nombres que
+    // aparecen pasando son los mismos del pool real. Buscamos los winners
+    // previos del evento e ignoramos sus registration_id.
+    const { data: prevWinners } = await supabase
+      .from("event_raffle_winners")
+      .select("registration_id")
+      .eq("event_id", event.id);
+    const excludedRegIds = new Set(
+      (prevWinners ?? []).map((w: any) => w.registration_id).filter(Boolean),
+    );
+    const filteredRegs = regs.filter((r: any) => !excludedRegIds.has(r.id));
+
+    if (filteredRegs.length === 0) {
+      return NextResponse.json({ candidates: [] }, { status: 200 });
+    }
+
     // Hidrato avatares via profiles_public para los que tienen user_id.
-    const userIds = regs.map((r: any) => r.user_id).filter(Boolean) as string[];
+    const userIds = filteredRegs.map((r: any) => r.user_id).filter(Boolean) as string[];
     const profilesById = new Map<string, { avatar_url: string | null }>();
     if (userIds.length > 0) {
       const { data: profiles } = await supabase
@@ -59,7 +78,7 @@ export async function GET(
       }
     }
 
-    const candidates = regs.map((r: any) => ({
+    const candidates = filteredRegs.map((r: any) => ({
       display_name: r.display_name,
       avatar_url: r.user_id
         ? profilesById.get(r.user_id)?.avatar_url ?? null
