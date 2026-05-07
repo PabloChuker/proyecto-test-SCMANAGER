@@ -14,7 +14,7 @@
 //      el error con un link manual al evento para que el user vea el contexto.
 // =============================================================================
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Header from "@/app/assets/header/Header";
 import { useAuth } from "@/contexts/AuthContext";
@@ -50,18 +50,22 @@ export default function EventJoinPage({
 
   // Step 2: si ya esta logueado, hacer el POST a /api/events/[slug]/join.
   //
-  // BUGFIX (tercer intento, 2026-05-07): el setTimeout del redirect estaba
-  // en un useEffect separado y lo cancelaba el cleanup del effect cuando
-  // se actualizaba algun state intermedio. Solucion definitiva: meter el
-  // setTimeout del redirect DENTRO del .then() del POST exitoso. Una vez
-  // schedulado por un closure, ningun cleanup de effect lo puede tocar
-  // (no le pasamos el id a ningun lado). Cuando expira → hard navigation
-  // garantizada.
+  // BUGFIX (cuarto intento, 2026-05-07): el effect tenia `phase` en el dep
+  // array, asi que cuando hacia setPhase("joining") React corria el cleanup
+  // del effect anterior (cancelled=true) ANTES de que el fetch terminara.
+  // Resultado: la rama exitosa salia temprano por `if (cancelled) return`
+  // y nunca se llegaba a setPhase("joined") ni a schedular el redirect.
+  //
+  // Fix: sin `phase` en deps + ref como guard contra el doble-fire de
+  // StrictMode en dev. El fetch corre una sola vez por user logueado.
+  const didStartRef = useRef(false);
   useEffect(() => {
-    if (loading || !user || phase !== "waiting") return;
-    let cancelled = false;
+    if (loading || !user) return;
+    if (didStartRef.current) return;
+    didStartRef.current = true;
+
+    setPhase("joining");
     (async () => {
-      setPhase("joining");
       try {
         const r = await fetch(`/api/events/${slug}/join`, {
           method: "POST",
@@ -70,12 +74,10 @@ export default function EventJoinPage({
         });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) {
-          if (cancelled) return;
           setPhase("error");
           setMessage(j?.error ?? `Error ${r.status}`);
           return;
         }
-        if (cancelled) return;
         setRegistration({
           display_name: j?.registration?.display_name ?? "",
           action: j?.action ?? "created",
@@ -100,15 +102,11 @@ export default function EventJoinPage({
           window.location.href = targetUrl;
         }, REDIRECT_DELAY_MS);
       } catch (e: any) {
-        if (cancelled) return;
         setPhase("error");
         setMessage(e?.message ?? "No se pudo procesar la inscripción.");
       }
     })();
-    return () => {
-      cancelled = true;
-    };
-  }, [user, loading, slug, phase]);
+  }, [user, loading, slug]);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-amber-50 relative">
