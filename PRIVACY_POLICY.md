@@ -40,3 +40,5 @@ Any updates to this privacy policy will be reflected in this document with an up
 
 For questions about this privacy policy, please open an issue on our GitHub repository:
 https://github.com/PabloChuker/proyecto-test-SCMANAGER/issues
+
+<!-- nudge: 2026-05-07T17:07:49Z -->
