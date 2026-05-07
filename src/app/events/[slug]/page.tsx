@@ -270,14 +270,26 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
               <SocialLinks event={event} />
             </div>
 
-            {/* Countdown — único stat público */}
-            {daysUntil >= 0 && (
-              <div className="shrink-0 text-center bg-gradient-to-b from-amber-200/10 to-amber-200/5 border-2 border-amber-200/40 rounded-md px-5 py-3 shadow-inner">
-                <p className="text-[9px] font-mono uppercase tracking-[0.2em] gold-text">Faltan</p>
-                <p className="text-3xl font-bold font-mono gold-text">{daysUntil}</p>
-                <p className="text-[10px] gold-text font-serif italic">{daysUntil === 1 ? "día" : "días"}</p>
-              </div>
-            )}
+            {/* Countdown + admin badge */}
+            <div className="shrink-0 flex flex-col items-end gap-2">
+              {daysUntil >= 0 && (
+                <div className="text-center bg-gradient-to-b from-amber-200/10 to-amber-200/5 border-2 border-amber-200/40 rounded-md px-5 py-3 shadow-inner">
+                  <p className="text-[9px] font-mono uppercase tracking-[0.2em] gold-text">Faltan</p>
+                  <p className="text-3xl font-bold font-mono gold-text">{daysUntil}</p>
+                  <p className="text-[10px] gold-text font-serif italic">{daysUntil === 1 ? "día" : "días"}</p>
+                </div>
+              )}
+              {/* Atajo Panel Admin — visible solo para admins del evento */}
+              {isAdmin && (
+                <Link
+                  href={`/events/${slug}/admin`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-amber-400/60 bg-amber-500/15 text-amber-200 text-[11px] font-mono uppercase tracking-wider hover:bg-amber-500/25 hover:text-amber-100 transition-colors shadow-sm"
+                  title="Abrir panel de administración del evento"
+                >
+                  ⚜ Panel Admin
+                </Link>
+              )}
+            </div>
           </div>
 
         </section>

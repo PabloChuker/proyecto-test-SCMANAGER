@@ -18,15 +18,34 @@ export async function GET(
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // Cargar evento + check admin
+    // Cargar evento + check admin. Mantenemos el SELECT minimo para no
+    // depender de columnas opcionales que pueden no existir todavia (ej.
+    // raffle_session si la migracion 073 aun no se aplico en prod).
     const { data: event } = await supabase
       .from("community_events")
-      .select("id, slug, name, admin_user_ids, raffle_session")
+      .select("id, slug, name, admin_user_ids")
       .eq("slug", slug)
       .maybeSingle();
     if (!event) return NextResponse.json({ error: "Evento no encontrado." }, { status: 404 });
     if (!event.admin_user_ids?.includes(user.id)) {
       return NextResponse.json({ error: "Acceso denegado." }, { status: 403 });
+    }
+
+    // raffle_session: fetch separado y resiliente. Si la columna no existe
+    // (migracion 073 no aplicada), silenciamos el error y usamos el default
+    // {phase:"idle"} para que la pagina admin siga funcionando.
+    let raffleSession: { phase: string; [k: string]: any } = { phase: "idle" };
+    try {
+      const { data: rs, error: rsErr } = await supabase
+        .from("community_events")
+        .select("raffle_session")
+        .eq("id", event.id)
+        .maybeSingle();
+      if (!rsErr && rs && (rs as any).raffle_session) {
+        raffleSession = (rs as any).raffle_session;
+      }
+    } catch {
+      // Migracion 073 sin aplicar — fallback a idle.
     }
 
     // Registraciones con datos del usuario (username via profiles)
@@ -66,7 +85,7 @@ export async function GET(
         id: event.id,
         slug: event.slug,
         name: event.name,
-        raffle_session: (event as any).raffle_session ?? { phase: "idle" },
+        raffle_session: raffleSession,
       },
       registrations: enriched,
       winners: winners ?? [],
