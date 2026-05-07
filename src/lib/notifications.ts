@@ -14,7 +14,11 @@ export type NotificationType =
   // 2026-05-07 — cuando un admin de un evento registra a un usuario como
   // ganador del sorteo, le mandamos una notificacion al bell con link al
   // evento (?winner=<id>) para que entre y registre su email.
-  | "raffle_won";
+  | "raffle_won"
+  // 2026-05-07 — cuando un user escanea el QR del evento y queda inscripto
+  // (o se actualiza su attended=true), le confirmamos por el bell para que
+  // tenga registro de su inscripcion sin depender de la pantalla post-QR.
+  | "raffle_joined";
 
 interface SendNotificationParams {
   supabase: SupabaseClient;
