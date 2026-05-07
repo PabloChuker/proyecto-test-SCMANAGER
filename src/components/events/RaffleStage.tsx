@@ -236,18 +236,33 @@ function SpinningPhase({
   // viewport. Ahora medimos el DOM real y usamos Web Animations API para que
   // el centro del ULTIMO chip coincida exactamente con el centro del
   // contenedor.
+  //
+  // 2026-05-07 Fix #2: la pagina publica pollea cada 1.5s, lo que crea
+  // referencias nuevas de session.winner cada vez. Sin un guard, el useEffect
+  // reiniciaba la animacion cada poll → saltos visibles. Ahora trackeamos
+  // qué (spin_seed + winner_id) ya animamos via animStartedKey y solo
+  // arrancamos UNA vez por sorteo.
   const containerRef = useRef<HTMLDivElement>(null);
   const reelRef = useRef<HTMLDivElement>(null);
   const lastChipRef = useRef<HTMLDivElement>(null);
+  const animStartedKey = useRef<string | null>(null);
+
+  // Key estable: combina spin_seed + winner_registration_id. Mientras el
+  // server reporte el mismo sorteo (aunque el objeto venga por polling) la
+  // key no cambia y no re-ejecutamos la animacion.
+  const spinKey = `${spinSeed}-${winner.registration_id}`;
 
   useEffect(() => {
+    if (animStartedKey.current === spinKey) return; // ya estamos animando este sorteo
     const container = containerRef.current;
     const reelEl = reelRef.current;
     const lastEl = lastChipRef.current;
     if (!container || !reelEl || !lastEl) return;
+    animStartedKey.current = spinKey;
 
     // Esperamos al next frame para asegurar que el layout esta calculado.
     let cancelled = false;
+    let anim: Animation | null = null;
     const id = requestAnimationFrame(() => {
       if (cancelled) return;
       const cRect = container.getBoundingClientRect();
@@ -258,25 +273,27 @@ function SpinningPhase({
       // exactamente debajo del marcador central.
       const delta = containerCenterX - lastCenterX;
 
-      const anim = reelEl.animate(
+      anim = reelEl.animate(
         [
           { transform: "translate(0px, -50%)" },
           { transform: `translate(${delta}px, -50%)` },
         ],
         {
           duration: 5400,
-          easing: "cubic-bezier(0.15, 0.5, 0.05, 1)",
+          easing: "cubic-bezier(0.12, 0.55, 0.05, 1)", // un toque mas suave en el frenado
           fill: "forwards",
         },
       );
-      // Si el componente se desmonta antes de que termine, cortamos.
-      return () => anim.cancel();
     });
     return () => {
       cancelled = true;
       cancelAnimationFrame(id);
+      // Importante: NO cancelamos `anim` aca — lo dejamos correr para que el
+      // re-render del polling no reinicie la animacion. Solo se cancela si
+      // cambia el spinKey o se desmonta el SpinningPhase entero (cuando phase
+      // pasa a "won" y este componente desaparece).
     };
-  }, [reel, spinSeed]);
+  }, [spinKey]);
 
   return (
     <div className="space-y-3">
@@ -368,39 +385,39 @@ function WonPhase({
 
   return (
     <div className="space-y-3 pointer-events-auto">
-      <p className="text-[10px] font-mono uppercase tracking-[0.25em] gold-text">
+      <p className="text-[10px] font-mono uppercase tracking-[0.25em] gold-text won-stage-caption">
         🏆 Ganador del sorteo · {title}
       </p>
 
-      <div className="inline-flex flex-col items-center gap-3 px-8 py-6 rounded-xl border-4 border-amber-400 bg-gradient-to-b from-amber-500/30 to-amber-700/20 shadow-[0_0_60px_rgba(245,158,11,0.6)] animate-winner-pop">
+      <div className="inline-flex flex-col items-center gap-3 px-8 py-6 rounded-xl border-4 border-amber-400 bg-gradient-to-b from-amber-500/30 to-amber-700/20 shadow-[0_0_60px_rgba(245,158,11,0.6)] won-stage-card">
         {winner.avatar_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={winner.avatar_url}
             alt=""
-            className="w-24 h-24 rounded-full border-4 border-amber-300 shadow-[0_0_20px_rgba(252,211,77,0.7)]"
+            className="w-24 h-24 rounded-full border-4 border-amber-300 shadow-[0_0_20px_rgba(252,211,77,0.7)] won-stage-avatar"
             draggable={false}
           />
         ) : (
-          <div className="w-24 h-24 rounded-full bg-amber-500/30 border-4 border-amber-300 flex items-center justify-center text-5xl shadow-[0_0_20px_rgba(252,211,77,0.7)]">
+          <div className="w-24 h-24 rounded-full bg-amber-500/30 border-4 border-amber-300 flex items-center justify-center text-5xl shadow-[0_0_20px_rgba(252,211,77,0.7)] won-stage-avatar">
             👑
           </div>
         )}
-        <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-amber-200">
+        <p className="text-[10px] font-mono uppercase tracking-[0.3em] text-amber-200 won-stage-text-1">
           Winner
         </p>
-        <h2 className="text-3xl sm:text-4xl font-bold text-amber-50 tracking-wider drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)]">
+        <h2 className="text-3xl sm:text-4xl font-bold text-amber-50 tracking-wider drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] won-stage-text-2">
           {winner.display_name}
         </h2>
         {winner.rsi_handle && (
-          <p className="text-[11px] text-amber-200/80 font-mono">
+          <p className="text-[11px] text-amber-200/80 font-mono won-stage-text-3">
             @{winner.rsi_handle}
           </p>
         )}
       </div>
 
       <div
-        className={`mt-2 inline-block px-4 py-2 rounded-md border text-[12px] font-serif italic ${
+        className={`mt-2 inline-block px-4 py-2 rounded-md border text-[12px] font-serif italic won-stage-countdown ${
           expired
             ? "border-rose-500/60 bg-rose-500/15 text-rose-200"
             : "border-amber-500/40 bg-zinc-950/60 text-amber-200"
@@ -416,13 +433,46 @@ function WonPhase({
       </div>
 
       <style jsx>{`
-        @keyframes winner-pop {
-          0% { transform: scale(0.6); opacity: 0; }
-          60% { transform: scale(1.06); opacity: 1; }
-          100% { transform: scale(1); opacity: 1; }
+        /* Stagger suave estilo "credits" — cada elemento entra con fade+rise
+           sin overshoot. Total = ~1.6s para el ultimo elemento.
+           Pablo: el winner-pop con scale 0.6 → 1.06 se sentia brusco, esto es
+           fluido y mantiene la pose final estable.                            */
+        @keyframes won-fade {
+          from { opacity: 0; transform: translateY(8px) scale(0.985); }
+          to   { opacity: 1; transform: translateY(0)   scale(1); }
         }
-        .animate-winner-pop {
-          animation: winner-pop 0.7s cubic-bezier(0.2, 1.2, 0.4, 1) forwards;
+        @keyframes won-glow {
+          from { opacity: 0; transform: scale(0.92); filter: blur(4px); }
+          to   { opacity: 1; transform: scale(1);    filter: blur(0); }
+        }
+        .won-stage-caption {
+          animation: won-fade 0.55s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+          animation-delay: 0ms;
+        }
+        .won-stage-card {
+          animation: won-glow 0.85s cubic-bezier(0.18, 0.7, 0.25, 1) both;
+          animation-delay: 180ms;
+          transform-origin: center center;
+        }
+        .won-stage-avatar {
+          animation: won-fade 0.55s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+          animation-delay: 380ms;
+        }
+        .won-stage-text-1 {
+          animation: won-fade 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+          animation-delay: 540ms;
+        }
+        .won-stage-text-2 {
+          animation: won-fade 0.55s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+          animation-delay: 720ms;
+        }
+        .won-stage-text-3 {
+          animation: won-fade 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+          animation-delay: 900ms;
+        }
+        .won-stage-countdown {
+          animation: won-fade 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+          animation-delay: 1050ms;
         }
       `}</style>
     </div>
