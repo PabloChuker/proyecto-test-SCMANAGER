@@ -108,26 +108,28 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
     fetch(`/api/events/${slug}/admin`).then((r) => setIsAdmin(r.ok)).catch(() => setIsAdmin(false));
   }, [user, slug]);
 
-  // ── Live polling cuando el modo sorteo esta activo ─────────────────────
-  // Solo polleamos si raffle_session.phase != "idle". 1 fetch cada 1.5s
-  // mantiene el panel publico sincronizado con los cambios del admin sin
-  // martillar a Supabase cuando el evento esta calmo.
+  // ── Live polling ───────────────────────────────────────────────────────
+  // Polling base de 5s siempre activo: necesario para que la pagina detecte
+  // automaticamente cuando el admin arranca el modo sorteo (transicion
+  // idle → loading) sin que el usuario tenga que recargar. Cuando el modo
+  // ya esta activo, aceleramos a 1.5s para captar la pasarela / popup
+  // ganador en tiempo real.
   const phase = data?.event?.raffle_session?.phase ?? "idle";
-  const livePolling = phase !== "idle";
+  const liveSorteo = phase !== "idle";
   useEffect(() => {
-    if (!livePolling) return;
+    const interval = liveSorteo ? 1500 : 5000;
     const id = window.setInterval(() => {
       refresh();
-    }, 1500);
+    }, interval);
     return () => window.clearInterval(id);
-  }, [livePolling, refresh]);
+  }, [liveSorteo, refresh]);
 
   // ── Candidatos de la pasarela: lista publica de presentes (display_name +
   //    avatar). Solo se hidrata cuando el modo sorteo esta activo, para no
   //    pegarle al endpoint si no se necesita.
   const [candidates, setCandidates] = useState<{ display_name: string; avatar_url: string | null }[]>([]);
   useEffect(() => {
-    if (!livePolling) return;
+    if (!liveSorteo) return;
     let cancelled = false;
     fetch(`/api/events/${slug}/raffle/candidates`)
       .then((r) => (r.ok ? r.json() : { candidates: [] }))
@@ -138,7 +140,7 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
-  }, [livePolling, slug]);
+  }, [liveSorteo, slug]);
 
   if (loading) {
     return (
@@ -320,6 +322,8 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
                 session={event.raffle_session}
                 candidates={candidates}
                 eventName={event.name}
+                currentUserId={user?.id ?? null}
+                slug={slug}
               />
             ) : (
               <MapCard event={event} />

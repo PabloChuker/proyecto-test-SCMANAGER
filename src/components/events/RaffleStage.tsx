@@ -38,6 +38,9 @@ export interface RaffleSession {
     display_name: string;
     avatar_url: string | null;
     rsi_handle: string | null;
+    /** id de la fila en event_raffle_winners — solo presente cuando phase=claimed
+     *  para que el ganador self pueda PATCHear su email contra esa fila. */
+    winner_id?: string | null;
   } | null;
   won_at?: string | null;
   claim_deadline_seconds?: number;
@@ -53,11 +56,17 @@ export function RaffleStage({
   session,
   candidates,
   eventName,
+  currentUserId,
+  slug,
 }: {
   session: RaffleSession;
   /** Lista de presentes (display_name + avatar) para animar la pasarela. */
   candidates: CandidatePreview[];
   eventName: string;
+  /** id del usuario logueado, para detectar si es el ganador y mostrar UI especial. */
+  currentUserId?: string | null;
+  /** slug del evento para el endpoint claim-email. */
+  slug: string;
 }) {
   // ── ship 3D candidates URL chain ─────────────────────────────────────
   const glbUrls = useMemo<string[] | null>(() => {
@@ -125,10 +134,16 @@ export function RaffleStage({
               winner={session.winner}
               wonAt={session.won_at}
               claimDeadlineSeconds={session.claim_deadline_seconds ?? 60}
+              isMe={!!currentUserId && session.winner.user_id === currentUserId}
             />
           )}
           {session.phase === "claimed" && session.winner && session.prize && (
-            <ClaimedPhase prize={session.prize} winner={session.winner} />
+            <ClaimedPhase
+              prize={session.prize}
+              winner={session.winner}
+              isMe={!!currentUserId && session.winner.user_id === currentUserId}
+              slug={slug}
+            />
           )}
         </div>
       </div>
@@ -363,11 +378,13 @@ function WonPhase({
   winner,
   wonAt,
   claimDeadlineSeconds,
+  isMe,
 }: {
   prize: NonNullable<RaffleSession["prize"]>;
   winner: NonNullable<RaffleSession["winner"]>;
   wonAt: string | null | undefined;
   claimDeadlineSeconds: number;
+  isMe: boolean;
 }) {
   const [elapsed, setElapsed] = useState(0);
   const startedRef = useRef<number>(wonAt ? new Date(wonAt).getTime() : Date.now());
@@ -384,12 +401,20 @@ function WonPhase({
   const title = prize.label || prize.ship_name || "Premio";
 
   return (
-    <div className="space-y-3 pointer-events-auto">
-      <p className="text-[10px] font-mono uppercase tracking-[0.25em] gold-text won-stage-caption">
-        🏆 Ganador del sorteo · {title}
+    <div className="space-y-3 pointer-events-auto relative">
+      {/* Confeti dorado solo para el ganador */}
+      {isMe && <Confetti />}
+      <p className={`text-[10px] font-mono uppercase tracking-[0.25em] won-stage-caption ${isMe ? "text-amber-200" : "gold-text"}`}>
+        {isMe ? "🎉 ¡GANASTE!" : `🏆 Ganador del sorteo · ${title}`}
       </p>
 
-      <div className="inline-flex flex-col items-center gap-3 px-8 py-6 rounded-xl border-4 border-amber-400 bg-gradient-to-b from-amber-500/30 to-amber-700/20 shadow-[0_0_60px_rgba(245,158,11,0.6)] won-stage-card">
+      <div
+        className={`inline-flex flex-col items-center gap-3 px-8 py-6 rounded-xl border-4 won-stage-card ${
+          isMe
+            ? "border-amber-300 bg-gradient-to-b from-amber-400/40 to-amber-700/30 shadow-[0_0_120px_rgba(252,211,77,0.85)]"
+            : "border-amber-400 bg-gradient-to-b from-amber-500/30 to-amber-700/20 shadow-[0_0_60px_rgba(245,158,11,0.6)]"
+        }`}
+      >
         {winner.avatar_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -482,41 +507,203 @@ function WonPhase({
 function ClaimedPhase({
   prize,
   winner,
+  isMe,
+  slug,
 }: {
   prize: NonNullable<RaffleSession["prize"]>;
   winner: NonNullable<RaffleSession["winner"]>;
+  isMe: boolean;
+  slug: string;
 }) {
   const title = prize.label || prize.ship_name || "Premio";
   return (
-    <div className="space-y-3 pointer-events-auto">
+    <div className="space-y-3 pointer-events-auto relative">
+      {isMe && <Confetti />}
       <p className="text-[10px] font-mono uppercase tracking-[0.25em] gold-text">
-        ✓ Premio reclamado · {title}
+        {isMe ? "🎉 ¡Ganaste!" : `✓ Premio reclamado · ${title}`}
       </p>
-      <div className="inline-flex flex-col items-center gap-3 px-8 py-5 rounded-xl border-2 border-emerald-500/60 bg-emerald-500/10">
+      <div
+        className={`inline-flex flex-col items-center gap-3 px-8 py-5 rounded-xl border-2 ${
+          isMe
+            ? "border-amber-300 bg-gradient-to-b from-amber-400/30 to-amber-700/20 shadow-[0_0_60px_rgba(252,211,77,0.6)]"
+            : "border-emerald-500/60 bg-emerald-500/10"
+        }`}
+      >
         {winner.avatar_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={winner.avatar_url}
             alt=""
-            className="w-16 h-16 rounded-full border-2 border-emerald-400"
+            className={`w-16 h-16 rounded-full border-2 ${
+              isMe ? "border-amber-300" : "border-emerald-400"
+            }`}
             draggable={false}
           />
         ) : (
-          <div className="w-16 h-16 rounded-full bg-emerald-500/30 border-2 border-emerald-400 flex items-center justify-center text-3xl">
-            ✓
+          <div className={`w-16 h-16 rounded-full border-2 flex items-center justify-center text-3xl ${
+            isMe ? "bg-amber-500/30 border-amber-300" : "bg-emerald-500/30 border-emerald-400"
+          }`}>
+            {isMe ? "👑" : "✓"}
           </div>
         )}
-        <p className="text-2xl font-bold text-emerald-50">
+        <p className={`text-2xl font-bold ${isMe ? "text-amber-50" : "text-emerald-50"}`}>
           {winner.display_name}
         </p>
-        <p className="text-[10px] text-emerald-200/70 font-serif italic">
-          ¡Felicitaciones!
+        <p className={`text-[11px] font-serif italic ${isMe ? "text-amber-100/90" : "text-emerald-200/70"}`}>
+          {isMe ? `Premio: ${title}` : "¡Felicitaciones!"}
         </p>
       </div>
-      <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-amber-200/50">
-        Esperando próximo sorteo...
-      </p>
+
+      {isMe && winner.winner_id ? (
+        <ClaimEmailForm slug={slug} winnerId={winner.winner_id} />
+      ) : isMe ? (
+        <p className="text-[11px] text-amber-200/80 font-serif italic">
+          Esperá un momento — el equipo está confirmando el reclamo.
+        </p>
+      ) : (
+        <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-amber-200/50">
+          Esperando próximo sorteo...
+        </p>
+      )}
     </div>
+  );
+}
+
+// ─── Confetti ────────────────────────────────────────────────────────────
+// 60 partículas doradas/ambar cayendo con rotación. Pure CSS, sin libs.
+
+function Confetti() {
+  const pieces = useMemo(() => {
+    return Array.from({ length: 60 }).map((_, i) => ({
+      left: Math.random() * 100,
+      delay: Math.random() * 1.2,
+      duration: 2.5 + Math.random() * 2.5,
+      size: 6 + Math.random() * 8,
+      hue: 35 + Math.random() * 20, // amber/gold range
+      sat: 80 + Math.random() * 20,
+      lit: 50 + Math.random() * 25,
+      drift: -30 + Math.random() * 60,
+      rotateEnd: 360 + Math.random() * 720,
+      shape: i % 3, // 0=square, 1=circle, 2=line
+    }));
+  }, []);
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-visible z-20" aria-hidden>
+      {pieces.map((p, i) => (
+        <span
+          key={i}
+          className="confetti-piece"
+          style={{
+            left: `${p.left}%`,
+            width: `${p.size}px`,
+            height: p.shape === 2 ? "2px" : `${p.size}px`,
+            background: `hsl(${p.hue}, ${p.sat}%, ${p.lit}%)`,
+            borderRadius: p.shape === 1 ? "50%" : "1px",
+            animationDelay: `${p.delay}s`,
+            animationDuration: `${p.duration}s`,
+            ["--drift" as any]: `${p.drift}px`,
+            ["--rotate" as any]: `${p.rotateEnd}deg`,
+          }}
+        />
+      ))}
+      <style jsx>{`
+        .confetti-piece {
+          position: absolute;
+          top: -10%;
+          opacity: 0;
+          animation-name: confetti-fall;
+          animation-iteration-count: infinite;
+          animation-timing-function: linear;
+          will-change: transform, opacity;
+        }
+        @keyframes confetti-fall {
+          0%   { transform: translate(0, 0) rotate(0deg); opacity: 0; }
+          10%  { opacity: 1; }
+          85%  { opacity: 1; }
+          100% { transform: translate(var(--drift), 460px) rotate(var(--rotate)); opacity: 0; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+// ─── ClaimEmailForm ──────────────────────────────────────────────────────
+// El ganador completa su email para que el equipo le envíe el premio. Una
+// vez submit, queda grabado en event_raffle_winners.winner_email + claimed_at.
+
+function ClaimEmailForm({
+  slug,
+  winnerId,
+}: {
+  slug: string;
+  winnerId: string;
+}) {
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await fetch(`/api/events/${slug}/raffle/winner-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ winner_id: winnerId, email: email.trim() }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j?.error || `Error ${r.status}`);
+      setDone(true);
+    } catch (err: any) {
+      setError(err?.message ?? "No se pudo guardar.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <div className="inline-block px-4 py-3 rounded-md border-2 border-emerald-500/60 bg-emerald-500/10 text-emerald-200">
+        <p className="text-[12px] font-bold flex items-center gap-2">✓ Email guardado</p>
+        <p className="text-[10px] text-emerald-300/80 mt-1 font-serif italic">
+          El equipo organizador te va a contactar para entregarte el premio.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      className="inline-flex flex-col gap-2 items-stretch text-left bg-zinc-950/70 border-2 border-amber-300/70 rounded-md p-4 max-w-md mx-auto shadow-[0_0_30px_rgba(252,211,77,0.4)]"
+    >
+      <p className="text-[11px] font-bold text-amber-100 text-center">
+        ✉ Registrá tu email para recibir el premio
+      </p>
+      <input
+        type="email"
+        required
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="tu-email@ejemplo.com"
+        className="px-3 py-2 bg-zinc-900 border border-amber-400/40 rounded-sm text-[12px] text-amber-50 placeholder-zinc-600 focus:outline-none focus:border-amber-400"
+      />
+      <button
+        type="submit"
+        disabled={busy || !email.trim()}
+        className="px-4 py-2 bg-gradient-to-b from-amber-400 to-amber-600 text-zinc-950 rounded-sm font-bold text-[12px] hover:from-amber-300 hover:to-amber-500 transition disabled:opacity-50"
+      >
+        {busy ? "Guardando..." : "Confirmar email"}
+      </button>
+      {error && (
+        <p className="text-[11px] text-rose-300 font-mono">{error}</p>
+      )}
+      <p className="text-[9px] text-amber-200/60 font-serif italic text-center">
+        Solo el equipo organizador del evento ve tu email. No lo compartimos.
+      </p>
+    </form>
   );
 }
 

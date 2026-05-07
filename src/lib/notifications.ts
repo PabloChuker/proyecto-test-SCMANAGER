@@ -10,7 +10,11 @@ export type NotificationType =
   // Fase E.4 — cuando se crea un entry del settlement ledger (paid=false) con
   // to_user_id = usuario, notificamos con "Tenés un pago pendiente de {amount}
   // aUEC". Se marca as_read cuando se crea el payout_transferred asociado.
-  | "payout_pending";
+  | "payout_pending"
+  // 2026-05-07 — cuando un admin de un evento registra a un usuario como
+  // ganador del sorteo, le mandamos una notificacion al bell con link al
+  // evento (?winner=<id>) para que entre y registre su email.
+  | "raffle_won";
 
 interface SendNotificationParams {
   supabase: SupabaseClient;

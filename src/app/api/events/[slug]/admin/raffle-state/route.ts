@@ -229,7 +229,7 @@ export async function POST(
           current.prize.ship_name ||
           current.prize.description ||
           "Premio";
-        const { error: wErr } = await supabase
+        const { data: insertedWinner, error: wErr } = await supabase
           .from("event_raffle_winners")
           .insert({
             event_id: event.id,
@@ -237,9 +237,45 @@ export async function POST(
             prize: prizeLabel,
             notes: body?.notes ?? null,
             drawn_by: user.id,
-          });
+          })
+          .select("id")
+          .single();
         if (wErr) throw wErr;
-        next = { ...current, phase: "claimed" };
+
+        // Notificacion al bell del ganador (si esta logueado, tiene user_id).
+        // RLS de notifications: from_user_id debe ser el caller (admin) y
+        // user_id (recipient) puede ser cualquiera. Si la insercion falla
+        // por algun motivo, no abortamos el claim — solo logueamos.
+        if (current.winner.user_id) {
+          const { error: nErr } = await supabase.from("notifications").insert({
+            user_id: current.winner.user_id,
+            from_user_id: user.id,
+            type: "raffle_won",
+            title: `🏆 Ganaste un sorteo!`,
+            message: `Premio: ${prizeLabel}. Entrá a registrar tu email para que el equipo te lo envíe.`,
+            link: `/events/${slug}?winner=${insertedWinner?.id ?? ""}`,
+            metadata: {
+              event_slug: slug,
+              winner_id: insertedWinner?.id ?? null,
+              prize: prizeLabel,
+            },
+          });
+          if (nErr) {
+            console.warn(
+              "[raffle-state claim] notification insert failed:",
+              nErr.message,
+            );
+          }
+        }
+
+        // Embebemos el winner_id en la session para que el cliente del
+        // ganador encuentre su fila y pueda grabar el email sin tener que
+        // abrir el bell (UX directo en la propia stage).
+        next = {
+          ...current,
+          phase: "claimed",
+          winner: { ...current.winner, winner_id: insertedWinner?.id ?? null } as any,
+        };
         break;
       }
 
