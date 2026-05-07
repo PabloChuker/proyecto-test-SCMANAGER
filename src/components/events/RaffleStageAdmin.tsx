@@ -208,9 +208,24 @@ export function RaffleStageAdmin({
       <PhaseSummary session={session} presentCount={presentCount} />
 
       {error && (
-        <p className="text-[11px] text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-sm px-2 py-1">
-          {error}
-        </p>
+        <div className="text-[11px] text-rose-300 bg-rose-500/10 border border-rose-500/30 rounded-sm px-3 py-2 space-y-2">
+          <p className="font-mono">{error}</p>
+          {/raffle_session.*does not exist|column.*raffle_session/i.test(error) && (
+            <div className="text-amber-200/90 space-y-1.5 pt-2 border-t border-rose-500/30">
+              <p className="font-bold">⚠ Falta aplicar la migración 073 en Supabase.</p>
+              <p>
+                Abrí el SQL Editor de Supabase y ejecutá el contenido de{" "}
+                <code className="px-1 py-0.5 bg-zinc-950/60 border border-amber-500/30 rounded">
+                  database/migrations/073_event_raffle_session.sql
+                </code>
+                . Después recargá esta página y volvé a probar.
+              </p>
+              <p className="text-amber-200/70 italic">
+                Mientras tanto, el sorteo clásico de abajo sigue funcionando.
+              </p>
+            </div>
+          )}
+        </div>
       )}
 
       {/* Cargar premio (solo en loading o claimed) */}

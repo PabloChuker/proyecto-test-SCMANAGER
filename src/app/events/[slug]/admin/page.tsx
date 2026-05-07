@@ -79,18 +79,20 @@ export default function EventAdminPage({ params }: { params: Promise<{ slug: str
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Polling cuando el modo sorteo esta activo (loading/loaded/spinning/won/claimed).
-  // Necesario para que el admin vea las transiciones automaticas (ej. spinning →
-  // won despues de 5.5s) sin tener que refrescar manualmente.
+  // Polling base de 3s — el admin ve inscripciones nuevas + cambios de
+  // attendance sin tener que apretar refresh. Pablo: "los cambios deben
+  // verse al momento sin necesidad de refrescar".
+  // Se acelera a 1.5s cuando el modo sorteo esta activo, para captar las
+  // transiciones automaticas (spinning → won despues de 5.5s).
   const phase = data?.event?.raffle_session?.phase ?? "idle";
-  const livePolling = phase !== "idle";
+  const liveSorteo = phase !== "idle";
   useEffect(() => {
-    if (!livePolling) return;
+    const interval = liveSorteo ? 1500 : 3000;
     const id = window.setInterval(() => {
       refresh();
-    }, 2000);
+    }, interval);
     return () => window.clearInterval(id);
-  }, [livePolling, refresh]);
+  }, [liveSorteo, refresh]);
 
   if (authLoading || loading) {
     return (
