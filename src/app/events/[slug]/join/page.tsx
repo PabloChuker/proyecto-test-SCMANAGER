@@ -16,7 +16,6 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import Header from "@/app/assets/header/Header";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -27,7 +26,6 @@ export default function EventJoinPage({
 }) {
   const { slug } = use(params);
   const { user, loading } = useAuth();
-  const router = useRouter();
   const [phase, setPhase] = useState<
     "waiting" | "joining" | "joined" | "error"
   >("waiting");
@@ -88,32 +86,40 @@ export default function EventJoinPage({
 
   // Step 3: una vez confirmada la inscripcion, redirect automatico a la
   // pagina del evento despues de un delay corto. Pablo: "una vez inscrito
-  // haga un redirect a la pagina del sorteo". El delay deja que el user
-  // vea la confirmacion dorada antes de que se lo lleve.
+  // haga un redirect a la pagina del sorteo".
+  //
+  // BUGFIX (segundo intento): la version anterior dependia de `router` en
+  // las deps; en algunos renders esa referencia cambiaba y el cleanup
+  // cancelaba el setTimeout antes de que disparase, asi que el redirect
+  // nunca ocurria. Soluciones aplicadas:
+  //   1. Sacamos `router` de las deps — el redirect ahora usa
+  //      `window.location.href` (hard navigation), que no requiere
+  //      mantener una ref estable y ademas garantiza un reload limpio del
+  //      evento (paneles + polling arrancan frescos).
+  //   2. El countdown corre en un setInterval separado de 1s con un
+  //      contador local al closure, NO compite con el setTimeout del
+  //      redirect.
   useEffect(() => {
     if (phase !== "joined") {
       setRedirectIn(null);
       return;
     }
-    const start = Date.now();
+    let secondsLeft = Math.ceil(REDIRECT_DELAY_MS / 1000);
+    setRedirectIn(secondsLeft);
     const tickId = window.setInterval(() => {
-      const remaining = Math.max(
-        0,
-        Math.ceil((REDIRECT_DELAY_MS - (Date.now() - start)) / 1000),
-      );
-      setRedirectIn(remaining);
-      if (remaining === 0) {
-        window.clearInterval(tickId);
-      }
-    }, 200);
+      secondsLeft -= 1;
+      setRedirectIn(Math.max(0, secondsLeft));
+      if (secondsLeft <= 0) window.clearInterval(tickId);
+    }, 1000);
     const redirectId = window.setTimeout(() => {
-      router.push(`/events/${slug}`);
+      window.location.href = `/events/${slug}`;
     }, REDIRECT_DELAY_MS);
     return () => {
       window.clearInterval(tickId);
       window.clearTimeout(redirectId);
     };
-  }, [phase, slug, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, slug]);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-amber-50 relative">
