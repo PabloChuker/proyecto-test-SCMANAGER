@@ -17,6 +17,7 @@ import Header from "@/app/assets/header/Header";
 import { useAuth } from "@/contexts/AuthContext";
 import { RaffleStageAdmin } from "@/components/events/RaffleStageAdmin";
 import { EventDangerZone } from "@/components/events/EventDangerZone";
+import { EventJoinQR } from "@/components/events/EventJoinQR";
 import type { RaffleSession } from "@/components/events/RaffleStage";
 
 interface Registration {
@@ -180,6 +181,9 @@ export default function EventAdminPage({ params }: { params: Promise<{ slug: str
           <Stat label="Presentes" value={presentCount} accent="cyan" icon="✓" />
           <Stat label="Ganadores" value={winners.length} accent="amber" icon="🏆" />
         </div>
+
+        {/* QR de inscripcion publica — para imprimir/proyectar en el evento */}
+        <EventJoinQR slug={slug} />
 
         {/* Modo sorteo en vivo (stage / pasarela) */}
         <RaffleStageAdmin

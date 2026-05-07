@@ -33,7 +33,7 @@ interface AuthState {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
-  signInWithDiscord: () => Promise<void>;
+  signInWithDiscord: (nextUrl?: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -43,7 +43,7 @@ const AuthContext = createContext<AuthState>({
   session: null,
   profile: null,
   loading: true,
-  signInWithDiscord: async () => {},
+  signInWithDiscord: async () => undefined as unknown as void,
   signOut: async () => {},
   refreshProfile: async () => {},
 });
@@ -157,12 +157,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const signInWithDiscord = useCallback(async () => {
+  const signInWithDiscord = useCallback(async (nextUrl?: string) => {
+    // Si el caller pasa nextUrl, lo embebemos como ?next= en redirectTo para
+    // que el handler /auth/callback (que ya lee ese query param) vuelva al
+    // user al lugar correcto despues del flow OAuth de Discord.
+    // Validamos que nextUrl sea relativo (empiece con /) para no abrir un
+    // open-redirect — Discord+Supabase NO valida el destino final por nosotros.
+    let redirectTo = `${window.location.origin}/auth/callback`;
+    if (nextUrl && typeof nextUrl === "string" && nextUrl.startsWith("/")) {
+      redirectTo += `?next=${encodeURIComponent(nextUrl)}`;
+    }
     await supabase.auth.signInWithOAuth({
       provider: "discord",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
+      options: { redirectTo },
     });
   }, [supabase]);
 

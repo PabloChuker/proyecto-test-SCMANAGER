@@ -13,9 +13,15 @@ function LoginContent() {
   const error = params.get("error");
   const t = useTranslations("Login");
 
+  // ?next= soporta deep links tipo "/events/<slug>/join" que el QR del Bar
+  // Citizen apunta. Solo aceptamos paths relativos (empiezan con /) para
+  // evitar open-redirect.
+  const rawNext = params.get("next");
+  const next = rawNext && rawNext.startsWith("/") ? rawNext : null;
+
   useEffect(() => {
-    if (!loading && user) router.push("/profile");
-  }, [user, loading, router]);
+    if (!loading && user) router.push(next ?? "/profile");
+  }, [user, loading, router, next]);
 
   if (loading) {
     return (
@@ -57,7 +63,7 @@ function LoginContent() {
           )}
 
           <button
-            onClick={signInWithDiscord}
+            onClick={() => signInWithDiscord(next ?? undefined)}
             className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-lg bg-[#5865F2] hover:bg-[#4752C4] text-white font-medium transition-colors"
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
