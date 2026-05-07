@@ -16,6 +16,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Header from "@/app/assets/header/Header";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -26,6 +27,7 @@ export default function EventJoinPage({
 }) {
   const { slug } = use(params);
   const { user, loading } = useAuth();
+  const router = useRouter();
   const [phase, setPhase] = useState<
     "waiting" | "joining" | "joined" | "error"
   >("waiting");
@@ -34,6 +36,8 @@ export default function EventJoinPage({
     display_name: string;
     action: "created" | "updated";
   } | null>(null);
+  const REDIRECT_DELAY_MS = 2500;
+  const [redirectIn, setRedirectIn] = useState<number | null>(null);
 
   // Step 1: si no esta logueado, redirect a /login con next=
   useEffect(() => {
@@ -81,6 +85,35 @@ export default function EventJoinPage({
       cancelled = true;
     };
   }, [user, loading, slug, phase]);
+
+  // Step 3: una vez confirmada la inscripcion, redirect automatico a la
+  // pagina del evento despues de un delay corto. Pablo: "una vez inscrito
+  // haga un redirect a la pagina del sorteo". El delay deja que el user
+  // vea la confirmacion dorada antes de que se lo lleve.
+  useEffect(() => {
+    if (phase !== "joined") {
+      setRedirectIn(null);
+      return;
+    }
+    const start = Date.now();
+    const tickId = window.setInterval(() => {
+      const remaining = Math.max(
+        0,
+        Math.ceil((REDIRECT_DELAY_MS - (Date.now() - start)) / 1000),
+      );
+      setRedirectIn(remaining);
+      if (remaining === 0) {
+        window.clearInterval(tickId);
+      }
+    }, 200);
+    const redirectId = window.setTimeout(() => {
+      router.push(`/events/${slug}`);
+    }, REDIRECT_DELAY_MS);
+    return () => {
+      window.clearInterval(tickId);
+      window.clearTimeout(redirectId);
+    };
+  }, [phase, slug, router]);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-amber-50 relative">
@@ -137,14 +170,19 @@ export default function EventJoinPage({
               <strong className="text-emerald-300 not-italic">presente</strong>.
               Ya entrás al sorteo de naves CIG.
             </p>
-            <div className="grid grid-cols-1 gap-2 pt-2">
-              <Link
-                href={`/events/${slug}`}
-                className="block px-5 py-3 rounded-md border-2 border-amber-400/70 bg-gradient-to-b from-amber-500/30 to-amber-700/20 text-amber-100 font-bold tracking-wider uppercase hover:from-amber-500/40 hover:to-amber-700/30 transition"
-              >
-                Ver el evento →
-              </Link>
-            </div>
+            <p className="text-[12px] text-amber-200/70 font-mono">
+              {redirectIn !== null && redirectIn > 0
+                ? `Te llevamos al evento en ${redirectIn}s...`
+                : "Llevándote al evento..."}
+            </p>
+            {/* Fallback manual por si el auto-redirect falla (browsers raros,
+                back-button, etc) */}
+            <Link
+              href={`/events/${slug}`}
+              className="inline-block px-4 py-2 rounded-md border border-amber-400/40 text-amber-200 hover:bg-amber-500/10 transition text-[11px]"
+            >
+              Ir ahora →
+            </Link>
           </div>
         )}
 
