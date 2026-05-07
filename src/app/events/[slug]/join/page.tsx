@@ -48,7 +48,15 @@ export default function EventJoinPage({
     }
   }, [user, loading, slug]);
 
-  // Step 2: si ya esta logueado, hacer el POST a /api/events/[slug]/join
+  // Step 2: si ya esta logueado, hacer el POST a /api/events/[slug]/join.
+  //
+  // BUGFIX (tercer intento, 2026-05-07): el setTimeout del redirect estaba
+  // en un useEffect separado y lo cancelaba el cleanup del effect cuando
+  // se actualizaba algun state intermedio. Solucion definitiva: meter el
+  // setTimeout del redirect DENTRO del .then() del POST exitoso. Una vez
+  // schedulado por un closure, ningun cleanup de effect lo puede tocar
+  // (no le pasamos el id a ningun lado). Cuando expira → hard navigation
+  // garantizada.
   useEffect(() => {
     if (loading || !user || phase !== "waiting") return;
     let cancelled = false;
@@ -73,6 +81,24 @@ export default function EventJoinPage({
           action: j?.action ?? "created",
         });
         setPhase("joined");
+
+        // ── Auto-redirect schedulado aca, en el flujo exitoso ──
+        // Mostramos un countdown visual pero el setTimeout del redirect
+        // NO depende del state — corre solo, fire-and-forget.
+        const targetUrl = `/events/${slug}`;
+        let secondsLeft = Math.ceil(REDIRECT_DELAY_MS / 1000);
+        setRedirectIn(secondsLeft);
+        const tickId = window.setInterval(() => {
+          secondsLeft -= 1;
+          setRedirectIn(Math.max(0, secondsLeft));
+          if (secondsLeft <= 0) window.clearInterval(tickId);
+        }, 1000);
+        window.setTimeout(() => {
+          // Hard navigation — garantizada, no dependemos de router refs.
+          // eslint-disable-next-line no-console
+          console.info("[events/join] redirect →", targetUrl);
+          window.location.href = targetUrl;
+        }, REDIRECT_DELAY_MS);
       } catch (e: any) {
         if (cancelled) return;
         setPhase("error");
@@ -83,43 +109,6 @@ export default function EventJoinPage({
       cancelled = true;
     };
   }, [user, loading, slug, phase]);
-
-  // Step 3: una vez confirmada la inscripcion, redirect automatico a la
-  // pagina del evento despues de un delay corto. Pablo: "una vez inscrito
-  // haga un redirect a la pagina del sorteo".
-  //
-  // BUGFIX (segundo intento): la version anterior dependia de `router` en
-  // las deps; en algunos renders esa referencia cambiaba y el cleanup
-  // cancelaba el setTimeout antes de que disparase, asi que el redirect
-  // nunca ocurria. Soluciones aplicadas:
-  //   1. Sacamos `router` de las deps — el redirect ahora usa
-  //      `window.location.href` (hard navigation), que no requiere
-  //      mantener una ref estable y ademas garantiza un reload limpio del
-  //      evento (paneles + polling arrancan frescos).
-  //   2. El countdown corre en un setInterval separado de 1s con un
-  //      contador local al closure, NO compite con el setTimeout del
-  //      redirect.
-  useEffect(() => {
-    if (phase !== "joined") {
-      setRedirectIn(null);
-      return;
-    }
-    let secondsLeft = Math.ceil(REDIRECT_DELAY_MS / 1000);
-    setRedirectIn(secondsLeft);
-    const tickId = window.setInterval(() => {
-      secondsLeft -= 1;
-      setRedirectIn(Math.max(0, secondsLeft));
-      if (secondsLeft <= 0) window.clearInterval(tickId);
-    }, 1000);
-    const redirectId = window.setTimeout(() => {
-      window.location.href = `/events/${slug}`;
-    }, REDIRECT_DELAY_MS);
-    return () => {
-      window.clearInterval(tickId);
-      window.clearTimeout(redirectId);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, slug]);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-amber-50 relative">
