@@ -428,9 +428,6 @@ function RegistrationCard({
             }
           />
         </div>
-        <p className="text-[10px] text-amber-200/60 leading-snug pt-1 font-serif italic">
-          🎰 Si asistís presencialmente y el equipo te confirma, entrás automáticamente al sorteo.
-        </p>
         <div className="flex gap-2 pt-1">
           <button onClick={() => setEditing(true)} className="flex-1 px-2 py-1.5 rounded-sm border border-amber-200/30 text-amber-200 text-[11px] hover:bg-zinc-900/40 transition-colors">Editar</button>
           <button onClick={cancel} disabled={busy} className="flex-1 px-2 py-1.5 rounded-sm border border-rose-500/40 text-rose-300 text-[11px] hover:bg-rose-500/15 transition-colors disabled:opacity-50">Cancelar</button>
