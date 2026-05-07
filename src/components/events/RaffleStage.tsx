@@ -18,7 +18,7 @@
 // pasarela "frena" en el ganador real reportado por el server.
 // =============================================================================
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import { ShipViewer3D } from "@/components/shared/flight-dynamics/ShipViewer3D";
 import { shipGlbCandidates } from "@/lib/shipGlb";
 
@@ -230,63 +230,116 @@ function SpinningPhase({
 
   const title = prize.label || prize.ship_name || "Premio";
 
+  // 2026-05-07 Fix: el chip ganador no caia bajo el marcador (caia el
+  // siguiente). El bug estaba en el end transform `calc(-100% + 50vw)`: usaba
+  // 50vw como referencia del centro pero la card del reel no es full
+  // viewport. Ahora medimos el DOM real y usamos Web Animations API para que
+  // el centro del ULTIMO chip coincida exactamente con el centro del
+  // contenedor.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const reelRef = useRef<HTMLDivElement>(null);
+  const lastChipRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const reelEl = reelRef.current;
+    const lastEl = lastChipRef.current;
+    if (!container || !reelEl || !lastEl) return;
+
+    // Esperamos al next frame para asegurar que el layout esta calculado.
+    let cancelled = false;
+    const id = requestAnimationFrame(() => {
+      if (cancelled) return;
+      const cRect = container.getBoundingClientRect();
+      const lRect = lastEl.getBoundingClientRect();
+      const containerCenterX = cRect.left + cRect.width / 2;
+      const lastCenterX = lRect.left + lRect.width / 2;
+      // delta: lo que tenemos que mover el reel para que el ultimo chip quede
+      // exactamente debajo del marcador central.
+      const delta = containerCenterX - lastCenterX;
+
+      const anim = reelEl.animate(
+        [
+          { transform: "translate(0px, -50%)" },
+          { transform: `translate(${delta}px, -50%)` },
+        ],
+        {
+          duration: 5400,
+          easing: "cubic-bezier(0.15, 0.5, 0.05, 1)",
+          fill: "forwards",
+        },
+      );
+      // Si el componente se desmonta antes de que termine, cortamos.
+      return () => anim.cancel();
+    });
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(id);
+    };
+  }, [reel, spinSeed]);
+
   return (
     <div className="space-y-3">
       <p className="text-[10px] font-mono uppercase tracking-[0.25em] gold-text">
         🎲 Sorteando · {title}
       </p>
-      <div className="relative h-24 overflow-hidden rounded-md border-2 border-amber-400/50 bg-zinc-950/60 backdrop-blur-sm shadow-[0_0_30px_rgba(232,213,170,0.3)]">
+      <div
+        ref={containerRef}
+        className="relative h-24 overflow-hidden rounded-md border-2 border-amber-400/50 bg-zinc-950/60 backdrop-blur-sm shadow-[0_0_30px_rgba(232,213,170,0.3)]"
+      >
         {/* Indicador central */}
         <div className="absolute left-1/2 top-0 bottom-0 w-px bg-amber-400 z-20 -translate-x-1/2" />
         <div className="absolute left-1/2 top-0 -translate-x-1/2 z-30 text-amber-400 text-[10px]">▼</div>
         <div className="absolute left-1/2 bottom-0 -translate-x-1/2 z-30 text-amber-400 text-[10px]">▲</div>
-        {/* Cinta animada */}
-        <div className="raffle-reel flex items-center gap-4 absolute top-1/2 -translate-y-1/2 left-0 px-[50%]">
+        {/* Cinta — empieza con el primer chip ya alineado al marcador (left:50%) */}
+        <div
+          ref={reelRef}
+          className="flex items-center gap-4 absolute top-1/2 left-1/2"
+          style={{ transform: "translate(0px, -50%)", willChange: "transform" }}
+        >
           {reel.map((c, i) => (
-            <CandidateChip key={i} c={c} />
+            <CandidateChip
+              key={i}
+              c={c}
+              ref={i === reel.length - 1 ? lastChipRef : undefined}
+            />
           ))}
         </div>
       </div>
       <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-amber-200/50">
         Quien ríe último, ríe mejor...
       </p>
-
-      <style jsx>{`
-        .raffle-reel {
-          animation: raffle-spin 5.4s cubic-bezier(0.15, 0.5, 0.05, 1) forwards;
-          will-change: transform;
-        }
-        @keyframes raffle-spin {
-          0% { transform: translate(0%, -50%); }
-          100% { transform: translate(calc(-100% + 50vw), -50%); }
-        }
-      `}</style>
     </div>
   );
 }
 
-function CandidateChip({ c }: { c: CandidatePreview }) {
-  return (
-    <div className="flex items-center gap-2 shrink-0 bg-zinc-900/70 border border-amber-200/30 rounded-md px-3 py-1.5">
-      {c.avatar_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={c.avatar_url}
-          alt=""
-          className="w-8 h-8 rounded-full border border-amber-200/40 shrink-0"
-          draggable={false}
-        />
-      ) : (
-        <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-[14px] shrink-0">
-          ⚔
-        </div>
-      )}
-      <span className="text-[12px] font-bold text-amber-50 whitespace-nowrap">
-        {c.display_name}
-      </span>
-    </div>
-  );
-}
+const CandidateChip = forwardRef<HTMLDivElement, { c: CandidatePreview }>(
+  function CandidateChip({ c }, ref) {
+    return (
+      <div
+        ref={ref}
+        className="flex items-center gap-2 shrink-0 bg-zinc-900/70 border border-amber-200/30 rounded-md px-3 py-1.5"
+      >
+        {c.avatar_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={c.avatar_url}
+            alt=""
+            className="w-8 h-8 rounded-full border border-amber-200/40 shrink-0"
+            draggable={false}
+          />
+        ) : (
+          <div className="w-8 h-8 rounded-full bg-amber-500/20 flex items-center justify-center text-[14px] shrink-0">
+            ⚔
+          </div>
+        )}
+        <span className="text-[12px] font-bold text-amber-50 whitespace-nowrap">
+          {c.display_name}
+        </span>
+      </div>
+    );
+  },
+);
 
 function WonPhase({
   prize,
