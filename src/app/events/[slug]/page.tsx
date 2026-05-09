@@ -312,8 +312,6 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
             />
 
             {event.raffle_active && <RaffleCard event={event} winners={winners} />}
-
-            <AnnouncementsCard announcements={announcements} />
           </div>
 
           <div className="space-y-4">
