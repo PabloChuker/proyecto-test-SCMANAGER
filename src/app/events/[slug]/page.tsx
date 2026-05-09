@@ -501,7 +501,6 @@ function RegistrationCard({
 
       {!myRegistration && (
         <div className="space-y-2">
-          <p className="text-[11px] text-amber-100/80 font-serif italic">¿Vas a venir, valiente ciudadano?</p>
           <div className="grid grid-cols-3 gap-1.5">
             <button
               type="button"
