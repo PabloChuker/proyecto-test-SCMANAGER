@@ -1378,6 +1378,33 @@ function ShipPicker({
 }) {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  // 2026-05-12 (Audit Planner): el dropdown se quedaba abierto si el user
+  // cliqueaba fuera o cambiaba a otro picker, ocupando toda la columna y
+  // tapando otras opciones. Agregamos:
+  //   1. click-outside cierra el dropdown
+  //   2. ESC cierra el dropdown
+  //   3. onMouseDown en los items (en vez de onClick) — evita que un blur
+  //      del input se procese ANTES del click y cancele la selección.
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      if (!containerRef.current) return;
+      if (!containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
   const filtered = useMemo(() => {
     let arr = filterFn ? catalog.filter(filterFn) : catalog;
     const q = search.trim().toLowerCase();
@@ -1392,7 +1419,7 @@ function ShipPicker({
   }, [catalog, search, filterFn]);
 
   return (
-    <div>
+    <div ref={containerRef}>
       <p className="text-[9px] font-mono uppercase tracking-widest text-zinc-500 mb-1">{label}</p>
       {value ? (
         <div className="bg-zinc-950/60 border border-zinc-800/60 rounded-sm p-1.5 flex items-center gap-2">
@@ -1411,21 +1438,45 @@ function ShipPicker({
         </div>
       ) : (
         <div className="relative">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setOpen(true); }}
-            onFocus={() => setOpen(true)}
-            placeholder="Buscar nave..."
-            className="w-full px-2 py-1.5 bg-zinc-950 border border-zinc-800/60 rounded-sm text-[11px] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-amber-500/50"
-          />
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setOpen(true); }}
+              onFocus={() => setOpen(true)}
+              placeholder="Buscar nave..."
+              className="flex-1 px-2 py-1.5 bg-zinc-950 border border-zinc-800/60 rounded-sm text-[11px] text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-amber-500/50"
+            />
+            {open && (
+              <button
+                type="button"
+                onClick={() => { setOpen(false); setSearch(""); }}
+                className="text-zinc-500 hover:text-zinc-200 px-1.5 py-1 text-[11px]"
+                title="Cerrar"
+                aria-label="Cerrar dropdown"
+              >
+                ✕
+              </button>
+            )}
+          </div>
           {open && filtered.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-1 max-h-[420px] overflow-y-auto bg-zinc-950 border border-zinc-800 rounded-sm shadow-xl z-30 p-0.5 space-y-0.5">
+            <div
+              className="absolute top-full left-0 right-0 mt-1 max-h-[280px] overflow-y-auto overscroll-contain bg-zinc-950 border border-zinc-800 rounded-sm shadow-xl z-30 p-0.5 space-y-0.5"
+              onWheel={(e) => e.stopPropagation()}
+            >
               {filtered.map((s) => (
                 <button
                   key={s.id}
-                  onClick={() => { onChange(s); setOpen(false); setSearch(""); }}
-                  className="w-full flex items-center gap-2 px-1.5 py-1 rounded-sm text-[11px] hover:bg-zinc-800/60"
+                  // onMouseDown en vez de onClick: dispara ANTES que el blur
+                  // del input, así la selección no se pierde si el usuario
+                  // hace mousedown sobre un item.
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    onChange(s);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                  className="w-full flex items-center gap-2 px-1.5 py-1 rounded-sm text-[11px] hover:bg-zinc-800/60 cursor-pointer"
                 >
                   {s.imageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
