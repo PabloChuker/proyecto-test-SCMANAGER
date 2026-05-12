@@ -912,10 +912,18 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     if (!pickerHp) return;
     const idMatch = pickerHp.id.match(/^(.+):missile:(\d+)$/);
     const portCount = parseMissileRackSpec(pickerParentItem).slots;
-    if (idMatch && portCount > 1) {
+    // 2026-05-12 BUGFIX: el else original solo setea pickerHp.id, pero si
+    // pickerHp.id es un slot sintético `${rackHpId}:missile:N` (caso single-
+    // shot rack como MSD-313 con portCount=1), los `rack.children` del API
+    // NO se sincronizan y computeStats sigue leyendo el misil viejo
+    // (los stats no se actualizan al cambiar misil). Ahora siempre que
+    // pickerHp.id sea un slot sintético de misil, actualizamos TANTO el
+    // sintético como los real children del rack — sin importar portCount.
+    if (idMatch) {
       const rackHpId = idMatch[1];
+      const ports = Math.max(1, portCount);
       // 1) Slots sintéticos (lo que el LoadoutBuilder renderiza visualmente)
-      for (let i = 1; i <= portCount; i++) {
+      for (let i = 1; i <= ports; i++) {
         equipItem(`${rackHpId}:missile:${i}`, item);
       }
       // 2) Children del API del rack (lo que computeStats agrega para
@@ -926,6 +934,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
         for (const ch of rack.children) equipItem(ch.id, item);
       }
     } else {
+      // Slot normal (no es un missile child sintético).
       equipItem(pickerHp.id, item);
     }
     setPickerHp(null);
@@ -936,9 +945,13 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     const idMatch = pickerHp.id.match(/^(.+):missile:(\d+)$/);
     // Mismo helper que handleSelect — single source of truth para el slot count.
     const portCount = parseMissileRackSpec(pickerParentItem).slots;
-    if (idMatch && portCount > 1) {
+    // 2026-05-12: idem handleSelect — siempre que sea un slot sintético de
+    // misil, limpiamos también los real children del API para que
+    // computeStats no quede leyendo el misil viejo.
+    if (idMatch) {
       const rackHpId = idMatch[1];
-      for (let i = 1; i <= portCount; i++) {
+      const ports = Math.max(1, portCount);
+      for (let i = 1; i <= ports; i++) {
         clearSlot(`${rackHpId}:missile:${i}`);
       }
       const rack = hardpoints.find((h) => h.id === rackHpId);

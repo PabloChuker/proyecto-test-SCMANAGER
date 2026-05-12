@@ -1449,23 +1449,60 @@ export async function GET(
     // ── 5. Batch-fetch components from all tables ──
     const componentMap = new Map<string, { table: string; row: any }>();
 
+    // 2026-05-12 (Loadout.9): la game_version EFECTIVA es la de los hardpoints
+    // realmente usados — `hardpointsFallbackFrom` si hubo fallback, sino la del
+    // ship. Filtrar el batchFetch por esta gv evita que una row más reciente del
+    // catálogo (importada incompleta, ej. 4.8 PTU sin dps/sustained_dps) pise
+    // la row vieja con stats correctos. Si no hay filas con ese filter (caso
+    // típico: la tabla del componente NO se reimportó en la gv solicitada),
+    // hacemos fallback automático al query sin filtro para no devolver vacío.
+    const effectiveGV = hardpointsFallbackFrom ?? shipGV ?? null;
+
     const batchFetch = async (
       table: string,
       classCol: string,
       classes: string[],
     ) => {
       if (classes.length === 0) return;
-      try {
-        const placeholders = classes.map((_, i) => `$${i + 1}`).join(",");
-        const rows: any[] = await sql.unsafe(
-          `SELECT * FROM ${table} WHERE ${classCol} IN (${placeholders})`,
-          classes,
-        );
-        for (const row of rows) {
-          componentMap.set(row[classCol], { table, row });
+      const placeholders = classes.map((_, i) => `$${i + 1}`).join(",");
+
+      // Intento 1: filtrar por game_version efectiva si tenemos una.
+      let rows: any[] = [];
+      if (effectiveGV) {
+        try {
+          rows = await sql.unsafe(
+            `SELECT * FROM ${table}
+             WHERE ${classCol} IN (${placeholders}) AND game_version = $${classes.length + 1}`,
+            [...classes, String(effectiveGV)],
+          );
+        } catch {
+          // Tabla sin columna game_version — caemos al sin-filtro abajo.
         }
-      } catch {
-        // Table might not exist or have issues — skip
+      }
+
+      // Intento 2: sin filtro de game_version (legacy / tablas version-agnostic
+      // o caso donde la gv pedida no tiene filas para estos class_names).
+      if (rows.length === 0) {
+        try {
+          rows = await sql.unsafe(
+            `SELECT * FROM ${table} WHERE ${classCol} IN (${placeholders})`,
+            classes,
+          );
+        } catch {
+          // Tabla no existe o falló — skip silencioso.
+          return;
+        }
+      }
+
+      for (const row of rows) {
+        // Si una clase aparece DOS veces (distinta gv), preferimos la que
+        // matchee `effectiveGV` — si no, la primera (BD devuelve sin orden
+        // determinístico, pero el set posterior preserva la última).
+        const prev = componentMap.get(row[classCol]);
+        if (prev && effectiveGV && prev.row?.game_version === effectiveGV) {
+          continue; // ya tenemos la versión exacta, no pisar
+        }
+        componentMap.set(row[classCol], { table, row });
       }
     };
 
