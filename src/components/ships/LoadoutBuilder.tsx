@@ -749,6 +749,16 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const [wishlistSent, setWishlistSent] = useState(false);
   const lastLoadKey = useRef<string | null>(null);
   const overrideCountRef = useRef(0);
+  // 2026-05-12 (Loadout.12): ref para distinguir "deep link externo cambió el
+  // build" vs "nosotros mismos actualizamos la URL post-equip". Cuando el user
+  // equipa un arma, el segundo useEffect hace `replaceState` para persistir el
+  // build en la URL. Next 16 considera ese cambio una nueva `searchParams`
+  // reference → el primer useEffect re-evalúa, ve el `build` nuevo (que no
+  // matchea `lastLoadKey`) y dispara `loadShip()` completo → fetch a la API,
+  // reset de hardpoints, percepción de "se recargó toda la página".
+  // Solución: marcar el build que NOSOTROS escribimos en la URL en esta ref,
+  // y el primer efecto lo ignora cuando matchea.
+  const ownedBuildRef = useRef<string | null>(null);
 
   // ─── Geometric grid layout (v11 — useDpsGridLayout + DpsGridCanvas) ────────
   // El estado de posiciones, drag y persistencia vive en useDpsGridLayout.
@@ -762,6 +772,11 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   useEffect(() => {
     const urlShip = searchParams.get("ship") || shipId || "titan";
     const urlBuild = searchParams.get("build");
+    // 2026-05-12 (Loadout.12): si el build en la URL es el que NOSOTROS
+    // escribimos via replaceState (post-equip), ignorar — no es un deep link
+    // externo. Sin este guard, cada cambio de arma disparaba loadShip()
+    // completo y recargaba todo el loadout.
+    if (urlBuild && urlBuild === ownedBuildRef.current) return;
     const key = urlShip + "::" + (urlBuild ?? "");
     if (lastLoadKey.current === key) return;
     lastLoadKey.current = key;
@@ -797,6 +812,10 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     if (shipInfo?.reference) url.searchParams.set("ship", shipInfo.reference);
     if (encoded) url.searchParams.set("build", encoded);
     else url.searchParams.delete("build");
+    // 2026-05-12 (Loadout.12): marcar el build como "nuestro" ANTES del
+    // replaceState. Así si Next 16 dispara el efecto de searchParams,
+    // ownedBuildRef.current === urlBuild → ignorar, sin re-loadear el ship.
+    ownedBuildRef.current = encoded || null;
     window.history.replaceState({}, "", url.toString());
   }, [overrides, encodeBuild, shipInfo]);
 
