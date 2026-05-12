@@ -246,17 +246,44 @@ export function ChainBoardWorkspace() {
             if (!result) return;
             if (result.status === "invalid") {
               setEdges((eds) => eds.map((e) => (e.id === edgeId ? { ...e, invalid: true } : e)));
-            } else if (result.standardPrice && result.standardPrice > 0) {
-              setEdges((eds) =>
-                eds.map((e) =>
-                  e.id === edgeId && !e.priceManual
-                    ? { ...e, price: Number(result.standardPrice), invalid: false }
-                    : e,
-                ),
-              );
+              return;
             }
+            // 2026-05-12 (Audit Planner): mapear bestPriceKind del validador a
+            // UpgradeKind y usar minPrice (el efectivo: warbond si aplica) en
+            // lugar de standardPrice. Antes solo se aplicaba standardPrice y
+            // se ignoraba ownership/warbond → edges mal etiquetadas y precios
+            // sin descuento.
+            const minPrice =
+              typeof result.minPrice === "number"
+                ? result.minPrice
+                : typeof result.standardPrice === "number"
+                  ? result.standardPrice
+                  : null;
+            const bestKind: UpgradeKind =
+              result.bestPriceKind === "warbond"
+                ? "warbond"
+                : result.bestPriceKind === "owned-hangar" || result.bestPriceKind === "owned-buyback"
+                  ? "hanger"
+                  : "normal";
+            setEdges((eds) =>
+              eds.map((e) =>
+                e.id === edgeId && !e.priceManual
+                  ? {
+                      ...e,
+                      kind: bestKind,
+                      price: minPrice != null && minPrice > 0 ? Number(minPrice) : e.price,
+                      invalid: false,
+                      locked: bestKind === "hanger",
+                    }
+                  : e,
+              ),
+            );
           })
-          .catch(() => {});
+          .catch((e) => {
+            // 2026-05-12: log mínimo para visibilidad si la red falla — antes
+            // se ignoraba 100% silencioso y la edge quedaba con defaultPriceFor.
+            console.warn("[chain-board] validate-edges failed:", e?.message ?? e);
+          });
         return [...prevEdges, { id: edgeId, source: sourceId, target: targetId, kind, price }];
       });
       return prevNodes;
@@ -388,12 +415,21 @@ export function ChainBoardWorkspace() {
         const data = await r.json();
         if (!r.ok || !data.chain) throw new Error(data.error || "Sin cadena válida.");
 
+        // 2026-05-12 (Audit Planner): el cliente declaraba `ccuPrice/isWarbond/
+        // isOwned` que NO EXISTEN en el response del solver (`/api/ccu/calculate`
+        // devuelve ChainStep con `effectivePrice/standardPrice/warbondPrice/
+        // priceType`). Como resultado todos los steps caian a `defaultPriceFor`
+        // (diff MSRP) y se renderizaban como "normal" — perdiendo los precios
+        // reales warbond/owned/buyback y mostrando $0.00 en pasos donde
+        // toMsrp <= fromMsrp. Corregido para leer los campos REALES del solver.
         type Step = {
           fromShip: { id: string; name: string; manufacturer: string | null; msrpUsd: number; warbondUsd: number | null; reference: string };
           toShip: { id: string; name: string; manufacturer: string | null; msrpUsd: number; warbondUsd: number | null; reference: string };
-          isWarbond?: boolean;
-          isOwned?: boolean;
-          ccuPrice?: number;
+          standardPrice?: number;
+          warbondPrice?: number | null;
+          effectivePrice?: number;
+          priceType?: "standard" | "warbond" | "owned" | "buyback-cash" | "buyback-token";
+          pricePaid?: number;
         };
         const steps = data.chain.steps as Step[];
         const newNodes: BoardNode[] = [];
@@ -423,14 +459,29 @@ export function ChainBoardWorkspace() {
           const s = steps[i];
           const fromN = ensureNode(s.fromShip, i);
           const toN = ensureNode(s.toShip, i + 1);
-          const kind: UpgradeKind = s.isOwned ? "hanger" : s.isWarbond ? "warbond" : "normal";
+          // 2026-05-12: mapear priceType del solver al UpgradeKind del board.
+          // owned + buyback son ambos "hanger" (no requieren cash adicional en
+          // el flujo de la cadena). standard + warbond se mapean directo.
+          const isOwned =
+            s.priceType === "owned" ||
+            s.priceType === "buyback-cash" ||
+            s.priceType === "buyback-token";
+          const isWarbond = s.priceType === "warbond";
+          const kind: UpgradeKind = isOwned ? "hanger" : isWarbond ? "warbond" : "normal";
+          // Preferir `effectivePrice` (lo que realmente vas a pagar en este
+          // step, post-warbond/owned). Si por alguna razón viene null/undefined,
+          // caer a standardPrice → defaultPriceFor.
+          const resolvedPrice =
+            (typeof s.effectivePrice === "number" ? s.effectivePrice : null) ??
+            (typeof s.standardPrice === "number" ? s.standardPrice : null) ??
+            defaultPriceFor(kind, s.fromShip.msrpUsd, s.toShip.msrpUsd);
           newEdges.push({
             id: newId("e"),
             source: fromN.id,
             target: toN.id,
             kind,
-            price: s.ccuPrice ?? defaultPriceFor(kind, s.fromShip.msrpUsd, s.toShip.msrpUsd),
-            locked: !!s.isOwned,
+            price: resolvedPrice,
+            locked: isOwned,
           });
         }
         setNodes(newNodes);
@@ -745,8 +796,13 @@ export function ChainBoardWorkspace() {
                   globalChainStats.savings > 0 ? "text-emerald-300" : globalChainStats.savings < 0 ? "text-rose-300" : "text-zinc-400"
                 }`}
               >
-                {globalChainStats.savings > 0 ? "−" : globalChainStats.savings < 0 ? "+" : ""}$
-                {Math.abs(globalChainStats.savings).toFixed(2)}
+                {/*
+                  2026-05-12 (Audit Planner): el label ya dice "Ahorrás"/"De más"
+                  según el signo de savings, así que el monto va sin prefijo.
+                  Antes se prefijaba "−" cuando savings>0 → "Ahorrás −$15.00"
+                  leía como pérdida y confundía a todos los users.
+                */}
+                ${Math.abs(globalChainStats.savings).toFixed(2)}
               </span>
             </div>
           </div>
