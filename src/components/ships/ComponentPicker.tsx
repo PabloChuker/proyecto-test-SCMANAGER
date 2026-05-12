@@ -394,8 +394,45 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
     if (isSalvageHeadClass(parentClassName)) {
       out = out.filter((i) => i.type === "SALVAGE_MODIFIER");
     }
+    // 2026-05-12 (Loadout.13): filtro defensivo de size client-side.
+    // El backend ya filtra por minSize/maxSize pero (a) cuando los datos del
+    // /api/ships/[id] tienen child.minSize=0/maxSize=0 (caso típico de gimbal
+    // children con loadout_json incompleto en algunas naves importadas) el
+    // body.minSize no se setea y el catálogo devuelve TODO; (b) la response
+    // del catalog está cacheada 5min y puede traer items pre-filtro.
+    //
+    // Reglas:
+    // - Para slots WEAPON dentro de un parentClassName (gimbal/turret child):
+    //   exigimos size EXACTO al maxSize del slot. SC en práctica no permite
+    //   meter una S3 en un gimbal S4: el mount está pinneado al size del slot.
+    // - Para slots TURRET (mount mismo, NO child): respetamos el rango
+    //   minSize-maxSize del slot, que sí permite mounts más chicos.
+    // - Otros (MISSILE, BOMB, SHIELD, etc.): respetar el rango.
+    const hpMin = Number(hardpoint.minSize) || 0;
+    const hpMax = Number(hardpoint.maxSize) || 0;
+    const isGimbalWeaponChild =
+      !!parentClassName && hardpoint.resolvedCategory === "WEAPON";
+    if (isGimbalWeaponChild && hpMax > 0) {
+      // Gimbal child: size exacto (no sub-sizes).
+      out = out.filter((i) => {
+        // Mounts (type=TURRET) no deberían aparecer en un child, pero por
+        // las dudas no los filtramos por size del child.
+        if (i.type === "TURRET") return true;
+        const s = Number(i.size) || 0;
+        return s === hpMax;
+      });
+    } else if (hpMax > 0 || hpMin > 0) {
+      out = out.filter((i) => {
+        if (i.type === "TURRET") return true; // mounts: ya filtramos arriba
+        const s = Number(i.size) || 0;
+        if (s === 0) return true; // size desconocido: dejar pasar (defaults)
+        if (hpMax > 0 && s > hpMax) return false;
+        if (hpMin > 0 && s < hpMin) return false;
+        return true;
+      });
+    }
     return out;
-  }, [sorted, subFilter, isTurretSlot, brandFilter, parentClassName]);
+  }, [sorted, subFilter, isTurretSlot, brandFilter, parentClassName, hardpoint.minSize, hardpoint.maxSize, hardpoint.resolvedCategory]);
 
   // Loadout.4: builder compartido entre click (select) y hover (preview).
   // Devuelve un `EquippedItem` listo para meter en overrides o previewItem.
