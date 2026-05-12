@@ -234,7 +234,9 @@ export const LoadoutDetailContent = memo(function LoadoutDetailContent() {
           <div className="flex gap-2">
             <DeflectionChip label="Physical"   deflection={si.deflectionPhysical}   dmgMult={res.dmgMultPhysical}   color={STAT_COLOR.physical} />
             <DeflectionChip label="Energy"     deflection={si.deflectionEnergy}     dmgMult={res.dmgMultEnergy}     color={STAT_COLOR.energy} />
-            <DeflectionChip label="Distortion" deflection={si.deflectionDistortion} dmgMult={res.dmgMultDistortion} color={STAT_COLOR.distortion} />
+            {/* 2026-05-12: Pablo pidió quitar el cuadro Distortion Deflection
+                — el dato existe en BD pero visualmente saturaba el widget.
+                Si lo querés volver a mostrar, ver git log de este archivo. */}
           </div>
         </div>
       )}

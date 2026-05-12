@@ -1336,6 +1336,7 @@ export async function GET(
     // para devolver solo el set consistente. Si ship_hardpoints no tiene la
     // columna `game_version`, el catch hace fallback al query sin filtro.
     let hardpointRows: any[] = [];
+    let hardpointsFallbackFrom: string | null = null;
     const shipGV = ship.game_version ?? null;
     try {
       if (shipGV) {
@@ -1367,6 +1368,49 @@ export async function GET(
       } catch (e2: any) {
         console.warn("[ships/[id]] ship_hardpoints query failed (ship may be new):", e2?.message);
         hardpointRows = [];
+      }
+    }
+
+    // FIX 2026-05-12: si la game_version del ship NO tiene hardpoints
+    // todavia (caso tipico: 4.8 PTU recien importado donde solo trajeron
+    // hardpoints para 13 ships AEGS y resto vacio), hacer fallback a la
+    // version mas reciente del MISMO ship_reference que SI tenga data.
+    // Sin esto el loadout aparece en blanco — todos los widgets (Weapons,
+    // Shields, Power Plants, Coolers, QT, Radar, Missiles) bailan porque
+    // no hay hardpoints de su categoria.
+    if (hardpointRows.length === 0 && ship.reference) {
+      try {
+        const fbCandidates: any[] = await sql.unsafe(
+          `SELECT game_version, COUNT(*)::int AS n
+           FROM ship_hardpoints
+           WHERE ship_reference = $1
+           GROUP BY game_version
+           ORDER BY game_version DESC NULLS LAST`,
+          [String(ship.reference)],
+        );
+        const best = fbCandidates.find((r: any) => (r?.n ?? 0) > 0);
+        if (best && best.game_version) {
+          hardpointRows = await sql.unsafe(
+            `SELECT * FROM ship_hardpoints
+             WHERE ship_reference = $1 AND game_version = $2
+             ORDER BY hardpoint_type, max_size DESC, hardpoint_name ASC`,
+            [String(ship.reference), String(best.game_version)],
+          );
+          hardpointsFallbackFrom = best.game_version;
+          console.log(
+            "[ships/[id]] hardpoint fallback applied:",
+            ship.reference,
+            "requested gv=",
+            shipGV,
+            "→ using gv=",
+            best.game_version,
+            "(",
+            hardpointRows.length,
+            "rows)",
+          );
+        }
+      } catch (e: any) {
+        console.warn("[ships/[id]] hardpoint fallback lookup failed:", e?.message);
       }
     }
 
@@ -2090,7 +2134,19 @@ export async function GET(
     } : null;
 
     return NextResponse.json(
-      { data, flatHardpoints, computed, shipPower, flightController, insurance: insuranceData },
+      {
+        data,
+        flatHardpoints,
+        computed,
+        shipPower,
+        flightController,
+        insurance: insuranceData,
+        // Si la game_version pedida no tenia hardpoints y usamos los de
+        // otra version, exponemos el flag para que el cliente muestre un
+        // warning ("Mostrando hardpoints de 4.7.2 — 4.8 aun no se importo
+        // completo"). null cuando no hubo fallback.
+        hardpointsFallbackFrom,
+      },
       {
         headers: {
           "Cache-Control":

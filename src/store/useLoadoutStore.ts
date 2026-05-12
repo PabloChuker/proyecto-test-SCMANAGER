@@ -1164,6 +1164,14 @@ interface LoadoutState {
   shipId: string | null; shipInfo: ShipInfo | null;
   hardpoints: ResolvedHardpoint[]; overrides: Map<string, EquippedItem | null>;
   /**
+   * 2026-05-12: si /api/ships/[id] tuvo que caer al fallback de hardpoints
+   * (la game_version pedida no tenia data — caso tipico de 4.8 PTU recien
+   * importado donde solo trajeron hardpoints para 13 ships), el endpoint
+   * devuelve `hardpointsFallbackFrom: <gv>` con la version que se usó.
+   * El LoadoutBuilder muestra un banner amarillo cuando esto está seteado.
+   */
+  hardpointsFallbackFrom: string | null;
+  /**
    * Loadout.4 (2026-05-04): preview override temporal (NO persistido).
    * Cuando el user pasa el mouse sobre un item en el ComponentPicker, se
    * setea acá. `getEffectiveItem(hpId)` lo prefiere sobre overrides/default,
@@ -1233,6 +1241,7 @@ interface LoadoutState {
 
 export const useLoadoutStore = create<LoadoutState>((set, get) => ({
   shipId: null, shipInfo: null, hardpoints: [], overrides: new Map(),
+  hardpointsFallbackFrom: null,
   previewItem: null,                   // Loadout.4
   componentStates: {}, flightMode: "SCM" as FlightMode,
   instancePower: {}, shipPowerGen: 0, flightControllerPower: null, powerPools: null,
@@ -1467,6 +1476,8 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
 
       set({
         shipId: id, shipInfo, hardpoints: resolved, overrides: restored,
+        // El flag viene en el root del response (json), no en data (que es solo ship.*).
+        hardpointsFallbackFrom: (json?.hardpointsFallbackFrom as string | null) ?? null,
         componentStates: states, flightMode: "SCM",
         instancePower: {}, shipPowerGen, flightControllerPower, powerPools,
         usedGroupedScm,

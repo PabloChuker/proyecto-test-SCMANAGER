@@ -80,7 +80,7 @@ export function ArmorCheckPanel({
     <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[11px] font-mono text-zinc-500 tracking-[0.2em] uppercase">
-          Armor Check
+          Armor Deflection Check
         </span>
         <span className="text-[10px] font-mono text-zinc-600 tracking-wider">
           {loading ? "loading…" : data ? `${data.totalWeapons} armas evaluadas` : ""}

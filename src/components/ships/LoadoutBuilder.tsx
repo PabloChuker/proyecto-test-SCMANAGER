@@ -179,7 +179,7 @@ const WIDGET_LABELS: Record<WidgetId, string> = {
   "flight-dynamics": "FLIGHT DYNAMICS",
   "flight-dynamics-3d": "FLIGHT DYNAMICS 3D",
   "ttk-calculator": "TTK CALCULATOR",
-  "armor-check": "ARMOR CHECK",
+  "armor-check": "ARMOR DEFLECTION CHECK",
 };
 
 const ALL_WIDGET_IDS: WidgetId[] = [
@@ -650,7 +650,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   // instancePower + componentStates included so Zustand triggers a re-render
   // when the user adjusts power pips or toggles components on/off.
   const { shipInfo, isLoading, error, hardpoints, overrides, flightMode,
-    instancePower: _ip, componentStates: _cs, previewItem: _pi } = useLoadoutStore(
+    instancePower: _ip, componentStates: _cs, previewItem: _pi, hardpointsFallbackFrom } = useLoadoutStore(
     useShallow(s => ({
       shipInfo: s.shipInfo,
       isLoading: s.isLoading,
@@ -658,6 +658,7 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
       hardpoints: s.hardpoints,
       overrides: s.overrides,
       flightMode: s.flightMode,
+      hardpointsFallbackFrom: s.hardpointsFallbackFrom,
       instancePower: s.instancePower,
       componentStates: s.componentStates,
       // Loadout.4c: previewItem incluido para que el LoadoutBuilder y todos
@@ -1085,6 +1086,19 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
 
   return (
     <div className="space-y-2">
+      {/* Banner cuando los hardpoints vienen de otra game_version porque la
+          actual no tiene data importada todavía. Caso típico: 4.8 PTU recién
+          importado con sólo 13 ships con hardpoints. Asi Pablo (y los users)
+          ven que las stats que aparecen son de la version previa, no del PTU. */}
+      {hardpointsFallbackFrom && (
+        <div className="border border-amber-700/50 bg-amber-950/30 px-3 py-1.5 text-[11px] text-amber-300 flex items-center gap-2 flex-wrap">
+          <span className="text-base leading-none">⚠</span>
+          <span className="font-mono">
+            Mostrando hardpoints de <strong className="text-amber-200">{hardpointsFallbackFrom}</strong>
+            {" "}— la versión actual del juego aún no tiene esta nave en el catálogo. Cambia o sortea hasta que se complete la ingesta.
+          </span>
+        </div>
+      )}
       {/* ── Top Bar ── */}
       <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-zinc-900/80 border border-zinc-800/60 flex-wrap">
         {/* Quick slots — pin de hasta 6 ship+build configs para alternar
