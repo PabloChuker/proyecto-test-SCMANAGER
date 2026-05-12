@@ -1461,34 +1461,53 @@ function ShipPicker({
           </div>
           {open && filtered.length > 0 && (
             <div
-              className="absolute top-full left-0 right-0 mt-1 max-h-[280px] overflow-y-auto overscroll-contain bg-zinc-950 border border-zinc-800 rounded-sm shadow-xl z-30 p-0.5 space-y-0.5"
+              className="absolute top-full left-0 right-0 mt-1 bg-zinc-950 border border-zinc-800 rounded-sm shadow-xl z-30 flex flex-col"
+              // Wheel listener evita que el scroll dentro del dropdown
+              // arrastre toda la página cuando estás al tope/fondo.
               onWheel={(e) => e.stopPropagation()}
             >
-              {filtered.map((s) => (
-                <button
-                  key={s.id}
-                  // onMouseDown en vez de onClick: dispara ANTES que el blur
-                  // del input, así la selección no se pierde si el usuario
-                  // hace mousedown sobre un item.
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    onChange(s);
-                    setOpen(false);
-                    setSearch("");
-                  }}
-                  className="w-full flex items-center gap-2 px-1.5 py-1 rounded-sm text-[11px] hover:bg-zinc-800/60 cursor-pointer"
-                >
-                  {s.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={s.imageUrl} alt="" className="w-7 h-5 object-cover rounded-sm shrink-0" draggable={false}
-                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = "0.2"; }} />
-                  ) : (
-                    <div className="w-7 h-5 rounded-sm bg-zinc-800/60 shrink-0" />
-                  )}
-                  <span className="flex-1 truncate text-left text-zinc-200">{s.name}</span>
-                  <span className="text-amber-400/80 font-mono shrink-0">${s.msrpUsd}</span>
-                </button>
-              ))}
+              <div
+                className="max-h-[400px] overflow-y-auto overscroll-contain p-0.5 space-y-0.5"
+              >
+                {filtered.map((s) => (
+                  <button
+                    key={s.id}
+                    // onMouseDown en vez de onClick: dispara ANTES que el blur
+                    // del input, así la selección no se pierde si el usuario
+                    // hace mousedown sobre un item.
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      onChange(s);
+                      setOpen(false);
+                      setSearch("");
+                    }}
+                    className="w-full flex items-center gap-2 px-1.5 py-1 rounded-sm text-[11px] hover:bg-zinc-800/60 cursor-pointer"
+                  >
+                    {s.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={s.imageUrl} alt="" className="w-7 h-5 object-cover rounded-sm shrink-0" draggable={false}
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = "0.2"; }} />
+                    ) : (
+                      <div className="w-7 h-5 rounded-sm bg-zinc-800/60 shrink-0" />
+                    )}
+                    <span className="flex-1 truncate text-left text-zinc-200">{s.name}</span>
+                    <span className="text-amber-400/80 font-mono shrink-0">${s.msrpUsd}</span>
+                  </button>
+                ))}
+              </div>
+              {/*
+                2026-05-12 (Audit Planner): contador de naves visible en el
+                footer. Pablo reportaba "faltan un montón de naves" cuando en
+                realidad estaban abajo del scroll. Ahora se ve cuántas hay
+                exactamente — y si el filtro recortó algunas, se nota.
+              */}
+              <div className="border-t border-zinc-800/60 px-1.5 py-1 text-[9px] font-mono text-zinc-500 flex items-center justify-between">
+                <span>
+                  {filtered.length}
+                  {catalog.length !== filtered.length ? ` / ${catalog.length}` : ""} naves
+                </span>
+                <span className="text-zinc-600">scroll ↓</span>
+              </div>
             </div>
           )}
         </div>
