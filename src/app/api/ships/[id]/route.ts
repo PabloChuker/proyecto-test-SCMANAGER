@@ -575,11 +575,18 @@ function buildChildren(
   loadoutJson: any,
   weaponMap: Map<string, any>,
   missileMap: Map<string, any>,
+  parentHpId: string | null = null,
 ): any[] {
   const entries = normalizeLoadoutEntries(loadoutJson);
   if (entries.length === 0) return [];
 
   const results: any[] = [];
+  // 2026-05-12 (Loadout.11): namespace de IDs para evitar colisiones entre
+  // children de distintos hardpoints. Antes, dos gimbal mounts S4 + S3 con
+  // loadout_json[0] = una sola entrada cada uno generaban ambos `child-0-0`,
+  // y `overrides.set("child-0-0", weapon)` se aplicaba al primero en orden de
+  // render → cambiabas la S4 Revenant y aparecía en la S3 Omnisky.
+  const ns = parentHpId ? `${parentHpId}::` : "";
 
   for (let idx = 0; idx < entries.length; idx++) {
     const entry = entries[idx];
@@ -611,7 +618,7 @@ function buildChildren(
         }
         if (!childItem) {
           childItem = {
-            id: child.UUID || `child-${idx}-${ci}`,
+            id: ns + (child.UUID || `child-${idx}-${ci}`),
             reference: childClassName,
             name: child.Name || childClassName,
             localizedName: null,
@@ -624,12 +631,27 @@ function buildChildren(
           };
         }
 
+        // 2026-05-12 (Loadout.11): size del gimbal slot.
+        // - maxSize: el size declarado del slot (child.MaxSize/Size) o, en su
+        //   defecto, el size del default item. Si TODO falla, dejamos en 0
+        //   (sin restricción) — preferible mostrar de más a dejar al usuario
+        //   sin opciones.
+        // - minSize: para gimbal slots, lo seteamos = maxSize. En SC el gimbal
+        //   se ata a un size específico, no acepta sub-sizes. Antes minSize=0
+        //   permitía que el picker mostrara armas más chicas → S3 en slot S4.
+        const slotSize =
+          (typeof child.MaxSize === "number" && child.MaxSize > 0 ? child.MaxSize : null) ??
+          (typeof child.Size === "number" && child.Size > 0 ? child.Size : null) ??
+          (typeof childItem.size === "number" && childItem.size > 0 ? childItem.size : null) ??
+          (typeof entry.MaxSize === "number" && entry.MaxSize > 0 ? entry.MaxSize : null) ??
+          0;
+
         results.push({
-          id: child.UUID || `child-${idx}-${ci}`,
+          id: ns + (child.UUID || `child-${idx}-${ci}`),
           hardpointName: child.HardpointName || entry.HardpointName || `sub_${idx}_${ci}`,
           category: "WEAPON",
-          minSize: 0,
-          maxSize: child.MaxSize ?? childItem.size ?? entry.MaxSize ?? 0,
+          minSize: slotSize,
+          maxSize: slotSize,
           isFixed: false,
           equippedItem: childItem,
         });
@@ -660,7 +682,7 @@ function buildChildren(
       const industrialType = isSalvageHead || isSalvageModifier ? "SALVAGE" : "MINING";
       // Emitir el head/laser como child
       const headItem = {
-        id: entry.UUID || `child-${idx}`,
+        id: ns + (entry.UUID || `child-${idx}`),
         reference: className,
         name: entry.Name || className,
         localizedName: null,
@@ -672,7 +694,7 @@ function buildChildren(
         componentStats: null,
       };
       results.push({
-        id: entry.UUID || `child-${idx}`,
+        id: ns + (entry.UUID || `child-${idx}`),
         hardpointName: entry.HardpointName || `sub_${idx}`,
         category: industrialType,
         minSize: 0,
@@ -703,14 +725,14 @@ function buildChildren(
           const subCat = subIsSalvage ? "SALVAGE" : "MINING";
           const subClass = sub.ClassName || sub.className || "";
           results.push({
-            id: sub.UUID || `child-${idx}-sub-${li}`,
+            id: ns + (sub.UUID || `child-${idx}-sub-${li}`),
             hardpointName: sub.HardpointName || `sub_${idx}_${li}`,
             category: subCat,
             minSize: 0,
             maxSize: sub.MaxSize ?? sub.Size ?? 0,
             isFixed: false,
             equippedItem: {
-              id: sub.UUID || `child-${idx}-sub-${li}`,
+              id: ns + (sub.UUID || `child-${idx}-sub-${li}`),
               reference: subClass,
               name: sub.Name || subClass,
               localizedName: null,
@@ -779,7 +801,7 @@ function buildChildren(
         equippedItem.reference = className || equippedItem.reference;
       } else {
         equippedItem = {
-          id: entry.UUID || `child-${idx}`,
+          id: ns + (entry.UUID || `child-${idx}`),
           reference: className,
           name: entry.Name || className,
           localizedName: null,
@@ -811,7 +833,7 @@ function buildChildren(
     }
 
     results.push({
-      id: entry.UUID || `child-${idx}`,
+      id: ns + (entry.UUID || `child-${idx}`),
       hardpointName: entry.HardpointName || `sub_${idx}`,
       category: childCategory,
       minSize: numOrNull(entry.MinSize) ?? 0,
@@ -1640,7 +1662,11 @@ export async function GET(
 
         // For weapons: check if this is a gimbal/turret with nested weapons
         // The loadout_json contains the actual weapons inside gimbals
-        const children = buildChildren(hp.loadout_json, weaponMap, missileMap);
+        // 2026-05-12 (Loadout.11): pasamos hp.id como namespace para que los
+        // child.id sean únicos entre hardpoints. Sin esto dos gimbals con la
+        // misma shape de loadout_json generaban ids colisionantes → cambiar
+        // un arma S4 se aplicaba al gimbal S3 que tenía el mismo child.id.
+        const children = buildChildren(hp.loadout_json, weaponMap, missileMap, String(hp.id));
 
         // Detect turrets: by children, by item name, or by hardpoint name
         let finalCategory = category;
