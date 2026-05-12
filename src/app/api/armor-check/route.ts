@@ -7,16 +7,21 @@
 //     if Weapon Alpha (per-type) <= Armor Deflect Value → Damage = 0
 //     if Weapon Alpha (per-type) >  Armor Deflect Value → daño completo
 //
-// Por cada tipo (Physical / Energy) devolvemos las 6 armas más cercanas al
-// umbral — 3 que penetran y 3 que son deflectadas — ordenadas por |alpha -
-// threshold|. Sirve para responder "¿qué arma necesito para perforar esta
-// nave?".
+// Por cada tipo (Physical / Energy) devolvemos las `count` armas más cercanas
+// al umbral — half que penetran y half que son deflectadas — ordenadas por
+// |alpha - threshold|. Sirve para responder "¿qué arma necesito para perforar
+// esta nave?".
+//
+// 2026-05-12: agregamos `mode=full` que devuelve TODAS las armas del catálogo
+// ordenadas por alpha ascendente (Pablo pidió listado completo + filtros en
+// un modal). En full mode el set ignora el slice de count.
 //
 // Params:
 //   ?physical=N       (umbral physical, requerido — viene de ships.deflection_physical)
 //   ?energy=N         (umbral energy, requerido)
 //   ?gv=4.7.2         (game_version a filtrar; default LIVE actual)
-//   ?count=6          (cuántas armas por tipo, default 6)
+//   ?count=6          (cuántas armas por tipo, default 6, ignorado si mode=full)
+//   ?mode=full        (cuando esta seteado, devuelve TODAS las armas)
 // =============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -30,6 +35,9 @@ interface ArmorCheckWeapon {
   name: string;
   size: number | null;
   manufacturer: string | null;
+  grade: number | null;
+  itemClass: string | null;
+  subType: string | null;
   alphaPhysical: number;
   alphaEnergy: number;
   alphaDistortion: number;
@@ -47,6 +55,8 @@ export async function GET(request: NextRequest) {
     const energy = Number(url.searchParams.get("energy") ?? "");
     const gv = url.searchParams.get("gv") ?? null;
     const count = Math.max(1, Math.min(20, Number(url.searchParams.get("count") ?? "6")));
+    const mode = url.searchParams.get("mode") ?? "compact";
+    const fullMode = mode === "full";
 
     if (!Number.isFinite(physical) || physical < 0) {
       return NextResponse.json({ error: "physical threshold required" }, { status: 400 });
@@ -62,6 +72,7 @@ export async function GET(request: NextRequest) {
     const rows: any[] = await sql.unsafe(
       `SELECT
          w.class_name, w.name, w.size,
+         w.grade, w.sub_type,
          m.name AS manufacturer,
          (COALESCE(w.alpha_physical,0))::float AS alpha_physical,
          (COALESCE(w.alpha_energy,0))::float   AS alpha_energy,
@@ -86,6 +97,9 @@ export async function GET(request: NextRequest) {
       name: r.name ?? r.class_name,
       size: r.size ?? null,
       manufacturer: r.manufacturer ?? null,
+      grade: r.grade ?? null,
+      itemClass: null,
+      subType: r.sub_type ?? null,
       alphaPhysical: r.alpha_physical,
       alphaEnergy: r.alpha_energy,
       alphaDistortion: r.alpha_distortion,
@@ -126,13 +140,41 @@ export async function GET(request: NextRequest) {
       );
     };
 
-    const physicalCheck = pickClosest(all, "alphaPhysical", physical);
-    const energyCheck = pickClosest(all, "alphaEnergy", energy);
+    // Full mode: TODO el catálogo ordenado ASC por alpha-per-type, anotado con
+    // penetrates/delta para que el cliente filtre y pinte ✓/✕. No corta por count.
+    const enrichAllAsc = (
+      arr: ArmorCheckWeapon[],
+      alphaKey: keyof ArmorCheckWeapon,
+      threshold: number,
+    ): ArmorCheckWeapon[] => {
+      return arr
+        .filter((w) => Number(w[alphaKey] as number) > 0)
+        .map((w) => {
+          const a = Number(w[alphaKey] as number);
+          return {
+            ...w,
+            penetrates: a > threshold,
+            delta: a - threshold,
+          };
+        })
+        .sort(
+          (a, b) =>
+            Number(a[alphaKey] as number) - Number(b[alphaKey] as number),
+        );
+    };
+
+    const physicalCheck = fullMode
+      ? enrichAllAsc(all, "alphaPhysical", physical)
+      : pickClosest(all, "alphaPhysical", physical);
+    const energyCheck = fullMode
+      ? enrichAllAsc(all, "alphaEnergy", energy)
+      : pickClosest(all, "alphaEnergy", energy);
 
     return NextResponse.json(
       {
         threshold: { physical, energy },
         gameVersion: gv,
+        mode: fullMode ? "full" : "compact",
         physicalCheck,
         energyCheck,
         totalWeapons: all.length,

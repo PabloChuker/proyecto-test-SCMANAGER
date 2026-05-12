@@ -14,6 +14,7 @@
 // =============================================================================
 
 import { useEffect, useState } from "react";
+import { ArmorCheckModal } from "./ArmorCheckModal";
 
 interface ArmorCheckWeapon {
   className: string;
@@ -49,6 +50,7 @@ export function ArmorCheckPanel({
 }: Props) {
   const [data, setData] = useState<ArmorCheckResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
 
   // Si no hay umbrales válidos, no renderizamos nada (la mayoría de fighters
   // tiene alpha-deflect bajo, así que esto pasa rara vez).
@@ -78,13 +80,22 @@ export function ArmorCheckPanel({
 
   return (
     <div className="bg-zinc-900/80 border border-zinc-800/60 p-3">
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-2 gap-2">
         <span className="text-[11px] font-mono text-zinc-500 tracking-[0.2em] uppercase">
           Armor Deflection Check
         </span>
-        <span className="text-[10px] font-mono text-zinc-600 tracking-wider">
-          {loading ? "loading…" : data ? `${data.totalWeapons} armas evaluadas` : ""}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-mono text-zinc-600 tracking-wider">
+            {loading ? "loading…" : data ? `${data.totalWeapons} armas evaluadas` : ""}
+          </span>
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="text-[10px] font-mono uppercase tracking-wider px-2 py-0.5 border border-amber-600/40 text-amber-300 hover:bg-amber-500/10 transition-colors"
+          >
+            Ver todas
+          </button>
+        </div>
       </div>
 
       {data && (
@@ -111,6 +122,14 @@ export function ArmorCheckPanel({
           No hay datos de catálogo para evaluar.
         </div>
       )}
+
+      <ArmorCheckModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        deflectionPhysical={deflectionPhysical}
+        deflectionEnergy={deflectionEnergy}
+        gameVersion={gameVersion}
+      />
     </div>
   );
 }
