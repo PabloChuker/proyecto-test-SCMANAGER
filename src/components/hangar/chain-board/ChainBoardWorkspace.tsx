@@ -18,6 +18,7 @@ import { getShipThumbUrl } from "../HangarShipCard";
 import { ChainBoardCanvasFlow } from "./ChainBoardCanvasFlow";
 import { ChainBoardInventoryColumn } from "./ChainBoardInventoryColumn";
 import { ChainBoardStoreColumn } from "./ChainBoardStoreColumn";
+import { useShipsCatalog } from "./useShipsCatalog";
 import {
   type BoardEdge,
   type BoardNode,
@@ -29,6 +30,10 @@ import {
 
 const LS_KEY = "sclabs-chain-board-v2";
 const LS_SAVES_KEY = "sclabs-chain-board-saves-v1";
+// 2026-05-13 (P2-4): key separada para preferencias UI del panel derecho.
+const LS_UI_KEY = "sclabs-chain-board-ui-v1";
+// Nota: "buyback" se asigna automáticamente desde el solver/validate-edges,
+// NO se cicla con click. Por eso no está en KIND_CYCLE.
 const KIND_CYCLE: UpgradeKind[] = ["normal", "warbond", "hanger"];
 
 interface NamedSave {
@@ -45,18 +50,16 @@ function defaultPriceFor(kind: UpgradeKind, fromMsrp: number, toMsrp: number): n
   const diff = Math.max(0, toMsrp - fromMsrp);
   if (kind === "warbond") return Math.round(diff * 0.92 * 100) / 100;
   if (kind === "hanger") return 0;
+  // 2026-05-13 (P3-1): buyback es un fallback razonable a la diff de MSRP
+  // cuando no tenemos el precio efectivo del solver — el precio REAL
+  // viene de result.minPrice del validador, pero si por alguna razón no
+  // está disponible, asumimos diff plain (el user puede editar manual).
+  if (kind === "buyback") return Math.round(diff * 100) / 100;
   return Math.round(diff * 100) / 100;
 }
 
-interface RawCatalogRow {
-  id: string;
-  reference?: string;
-  name: string;
-  manufacturer: string | null;
-  msrpUsd: number;
-  warbondUsd: number | null;
-  flightStatus?: string | null;
-}
+// 2026-05-13 (P1-6): RawCatalogRow se movió a useShipsCatalog.ts junto con el
+// fetch. Este archivo ya no necesita la interface local.
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -67,6 +70,29 @@ export function ChainBoardWorkspace() {
   const [hydrated, setHydrated] = useState(false);
   const [statusMsg, setStatusMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [rightPanelMode, setRightPanelMode] = useState<"detail" | "creator" | "auto" | "hangar">("detail");
+
+  // 2026-05-13 (P2-4): persistir el modo del panel derecho. Antes al
+  // refrescar la página volvía siempre a "Detalle" aunque el user estuviera
+  // armando una cadena en Auto/+ CCU. Lo guardamos en una key separada
+  // (LS_UI_KEY) porque es UI state y no debe mezclarse con el snapshot del
+  // board (LS_KEY).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LS_UI_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const mode = parsed?.rightPanelMode;
+        if (mode === "detail" || mode === "creator" || mode === "auto" || mode === "hangar") {
+          setRightPanelMode(mode);
+        }
+      }
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_UI_KEY, JSON.stringify({ rightPanelMode }));
+    } catch {}
+  }, [rightPanelMode]);
 
   const [savedChains, setSavedChains] = useState<NamedSave[]>([]);
   useEffect(() => {
@@ -85,27 +111,12 @@ export function ChainBoardWorkspace() {
     } catch {}
   }, []);
 
-  const [catalog, setCatalog] = useState<CatalogShip[]>([]);
-  useEffect(() => {
-    fetch("/api/ccu/ships")
-      .then((r) => r.json())
-      .then((d) => {
-        const arr = Array.isArray(d?.ships) ? (d.ships as RawCatalogRow[]) : [];
-        setCatalog(
-          arr.map((x) => ({
-            id: String(x.id ?? ""),
-            reference: String(x.reference ?? ""),
-            name: String(x.name ?? ""),
-            manufacturer: x.manufacturer ?? null,
-            role: x.flightStatus ?? null,
-            msrpUsd: Number(x.msrpUsd) || 0,
-            warbondUsd: x.warbondUsd != null ? Number(x.warbondUsd) : null,
-            imageUrl: getShipThumbUrl(String(x.name ?? "")),
-          })),
-        );
-      })
-      .catch(() => {});
-  }, []);
+  // 2026-05-13 (P1-6): catalog viene del hook compartido `useShipsCatalog`
+  // que cachea module-level y deduplica requests in-flight. Antes este
+  // archivo y los dos column components hacían un fetch independiente cada
+  // uno → 3 requests redundantes al cargar + posibles divergencias por
+  // cache CDN refrescando en distintos momentos.
+  const { catalog } = useShipsCatalog();
 
   const ccusInHangar = useHangarStore((s) => s.ccus);
 
@@ -262,9 +273,11 @@ export function ChainBoardWorkspace() {
             const bestKind: UpgradeKind =
               result.bestPriceKind === "warbond"
                 ? "warbond"
-                : result.bestPriceKind === "owned-hangar" || result.bestPriceKind === "owned-buyback"
+                : result.bestPriceKind === "owned-hangar"
                   ? "hanger"
-                  : "normal";
+                  : result.bestPriceKind === "owned-buyback"
+                    ? "buyback"
+                    : "normal";
             setEdges((eds) =>
               eds.map((e) =>
                 e.id === edgeId && !e.priceManual
@@ -273,7 +286,9 @@ export function ChainBoardWorkspace() {
                       kind: bestKind,
                       price: minPrice != null && minPrice > 0 ? Number(minPrice) : e.price,
                       invalid: false,
-                      locked: bestKind === "hanger",
+                      // 2026-05-13 (P3-1): buyback también es locked (no se
+                      // cambia kind con click) porque proviene de tu inventario.
+                      locked: bestKind === "hanger" || bestKind === "buyback",
                     }
                   : e,
               ),
@@ -422,13 +437,19 @@ export function ChainBoardWorkspace() {
         // (diff MSRP) y se renderizaban como "normal" — perdiendo los precios
         // reales warbond/owned/buyback y mostrando $0.00 en pasos donde
         // toMsrp <= fromMsrp. Corregido para leer los campos REALES del solver.
+        //
+        // 2026-05-13 (Audit Chain Board): el priceType "owned" NO EXISTE en el
+        // solver (ver lib/ccu-engine.ts:51-56). Los valores reales son:
+        //   "hangar" | "buyback-token" | "buyback-cash" | "warbond" | "standard"
+        // Antes el check `s.priceType === "owned"` era siempre false → steps
+        // del hangar se renderizaban como compras normales (locked=false).
         type Step = {
           fromShip: { id: string; name: string; manufacturer: string | null; msrpUsd: number; warbondUsd: number | null; reference: string };
           toShip: { id: string; name: string; manufacturer: string | null; msrpUsd: number; warbondUsd: number | null; reference: string };
           standardPrice?: number;
           warbondPrice?: number | null;
           effectivePrice?: number;
-          priceType?: "standard" | "warbond" | "owned" | "buyback-cash" | "buyback-token";
+          priceType?: "hangar" | "buyback-token" | "buyback-cash" | "warbond" | "standard";
           pricePaid?: number;
         };
         const steps = data.chain.steps as Step[];
@@ -459,15 +480,29 @@ export function ChainBoardWorkspace() {
           const s = steps[i];
           const fromN = ensureNode(s.fromShip, i);
           const toN = ensureNode(s.toShip, i + 1);
-          // 2026-05-12: mapear priceType del solver al UpgradeKind del board.
-          // owned + buyback son ambos "hanger" (no requieren cash adicional en
-          // el flujo de la cadena). standard + warbond se mapean directo.
-          const isOwned =
-            s.priceType === "owned" ||
-            s.priceType === "buyback-cash" ||
-            s.priceType === "buyback-token";
+          // 2026-05-12 (Audit Chain Board): mapear priceType REAL del solver
+          // al UpgradeKind del board. Valores reales del enum (ccu-engine.ts):
+          //   "hangar"        → ya en hangar, $0 adicional → "hanger" locked
+          //   "buyback-token" → buyback con token, costo en créditos → "buyback" locked
+          //   "buyback-cash"  → buyback con cash, costo el original que pagó
+          //                     → "buyback" (sí requiere cash, el price viene del solver)
+          //   "warbond"       → "warbond"
+          //   "standard"      → "normal"
+          // 2026-05-13 (P3-1): los buyback son ahora UpgradeKind "buyback" para
+          // diferenciarlos visualmente del hangar real. Locked sigue siendo true
+          // para ambos (no se cambian con click una vez que el solver los
+          // determinó como parte de tu inventario).
+          const isHangar = s.priceType === "hangar";
+          const isBuyback = s.priceType === "buyback-token" || s.priceType === "buyback-cash";
           const isWarbond = s.priceType === "warbond";
-          const kind: UpgradeKind = isOwned ? "hanger" : isWarbond ? "warbond" : "normal";
+          const kind: UpgradeKind = isHangar
+            ? "hanger"
+            : isBuyback
+              ? "buyback"
+              : isWarbond
+                ? "warbond"
+                : "normal";
+          const isLockedFree = isHangar || isBuyback;
           // Preferir `effectivePrice` (lo que realmente vas a pagar en este
           // step, post-warbond/owned). Si por alguna razón viene null/undefined,
           // caer a standardPrice → defaultPriceFor.
@@ -481,7 +516,7 @@ export function ChainBoardWorkspace() {
             target: toN.id,
             kind,
             price: resolvedPrice,
-            locked: isOwned,
+            locked: isLockedFree,
           });
         }
         setNodes(newNodes);
@@ -992,6 +1027,7 @@ const KIND_LABEL: Record<UpgradeKind, { label: string; cls: string }> = {
   normal: { label: "Normal", cls: "bg-blue-500/15 text-blue-300 border-blue-500/40" },
   warbond: { label: "Warbond", cls: "bg-rose-500/15 text-rose-300 border-rose-500/40" },
   hanger: { label: "Hanger", cls: "bg-cyan-500/15 text-cyan-300 border-cyan-500/40" },
+  buyback: { label: "Buyback", cls: "bg-violet-500/15 text-violet-300 border-violet-500/40" },
 };
 
 interface RightPanelProps {
@@ -1409,10 +1445,27 @@ function ShipPicker({
     let arr = filterFn ? catalog.filter(filterFn) : catalog;
     const q = search.trim().toLowerCase();
     if (q) {
-      arr = arr.filter(
-        (s) => s.name.toLowerCase().includes(q) || (s.manufacturer ?? "").toLowerCase().includes(q),
-      );
+      arr = arr.filter((s) => {
+        // 2026-05-13 (Audit Chain Board): extender el search a `reference`
+        // (= class_name) además de name/manufacturer. Sin esto, búsquedas
+        // como "ironcla" no encontraban "Drake Ironclad" si su `name` en BD
+        // viene mal sincronizado pero el class_name sí es correcto.
+        if (s.name.toLowerCase().includes(q)) return true;
+        if ((s.manufacturer ?? "").toLowerCase().includes(q)) return true;
+        if ((s.reference ?? "").toLowerCase().includes(q)) return true;
+        return false;
+      });
     }
+    // Dedupe defensivo client-side por reference (class_name). El endpoint
+    // /api/ccu/ships ya hace DISTINCT ON, pero si por race condition o cache
+    // viejo entran duplicados, el dropdown muestra una sola entry por nave.
+    const seenRefs = new Set<string>();
+    arr = arr.filter((s) => {
+      const ref = s.reference || s.id;
+      if (seenRefs.has(ref)) return false;
+      seenRefs.add(ref);
+      return true;
+    });
     // Sort por precio asc para que sea más fácil escanear visualmente.
     arr = arr.slice().sort((a, b) => a.msrpUsd - b.msrpUsd);
     return arr;
@@ -1471,7 +1524,11 @@ function ShipPicker({
               >
                 {filtered.map((s) => (
                   <button
-                    key={s.id}
+                    // 2026-05-13: key compuesta para sobrevivir IDs duplicados
+                    // del catalog. Si dos rows tienen s.id idéntico (race del
+                    // import 4.7.2 LIVE+PTU), key={s.id} hace que React renderee
+                    // SOLO uno y descarte el resto silenciosamente.
+                    key={`${s.id}::${s.reference}`}
                     // onMouseDown en vez de onClick: dispara ANTES que el blur
                     // del input, así la selección no se pierde si el usuario
                     // hace mousedown sobre un item.

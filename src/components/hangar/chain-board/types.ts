@@ -20,8 +20,14 @@ export interface CatalogShip {
   imageUrl: string | null;
 }
 
-/** Tipo de upgrade entre dos naves del board. */
-export type UpgradeKind = "normal" | "warbond" | "hanger";
+/** Tipo de upgrade entre dos naves del board.
+ *
+ * 2026-05-13 (Audit Chain Board P3-1): agregado "buyback" para diferenciar
+ * visualmente los CCUs que vienen del buyback del user (sea con cash o con
+ * token de buyback). Antes se renderizaban como "normal" o "hanger" y se
+ * perdía la información de procedencia.
+ */
+export type UpgradeKind = "normal" | "warbond" | "hanger" | "buyback";
 
 /** Un nodo en la pizarra: una nave colocada en una posición. */
 export interface BoardNode {

@@ -8,13 +8,12 @@
 // CCUs: precio FROM (MSRP) + precio TO (MSRP) + lo pagado.
 // =============================================================================
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useHangarStore,
   type HangarShip,
   type InsuranceType,
 } from "@/store/useHangarStore";
-import { getShipThumbUrl } from "../HangarShipCard";
 import {
   HANGAR_CCU_MIME,
   SHIP_MIME,
@@ -22,16 +21,7 @@ import {
   type HangarCcuPayload,
   type UpgradeKind,
 } from "./types";
-
-interface RawCatalogRow {
-  id: string;
-  reference?: string;
-  name: string;
-  manufacturer: string | null;
-  msrpUsd: number;
-  warbondUsd: number | null;
-  flightStatus?: string | null;
-}
+import { useShipsCatalog } from "./useShipsCatalog";
 
 type Tab = "ships" | "ccus";
 type SortDir = "asc" | "desc";
@@ -68,52 +58,58 @@ export function ChainBoardStoreColumn({ usedShipIds }: MyHangarProps) {
   const ships = useHangarStore((s) => s.ships);
   const ccus = useHangarStore((s) => s.ccus);
 
-  const [catalog, setCatalog] = useState<CatalogShip[]>([]);
-  const [loadingCatalog, setLoadingCatalog] = useState(true);
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/ccu/ships")
-      .then((r) => r.json())
-      .then((d) => {
-        if (cancelled) return;
-        const arr = Array.isArray(d?.ships) ? (d.ships as RawCatalogRow[]) : [];
-        setCatalog(
-          arr.map((x) => ({
-            id: String(x.id ?? ""),
-            reference: String(x.reference ?? ""),
-            name: String(x.name ?? ""),
-            manufacturer: x.manufacturer ?? null,
-            role: x.flightStatus ?? null,
-            msrpUsd: Number(x.msrpUsd) || 0,
-            warbondUsd: x.warbondUsd != null ? Number(x.warbondUsd) : null,
-            imageUrl: getShipThumbUrl(String(x.name ?? "")),
-          })),
-        );
-      })
-      .catch(() => {})
-      .finally(() => !cancelled && setLoadingCatalog(false));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // 2026-05-13 (P1-6): catalog desde hook compartido. Antes este componente
+  // hacía su propio fetch independiente — 3 componentes (Workspace + 2
+  // columnas) lanzaban la misma request en paralelo al cargar la página.
+  const { catalog, loading: loadingCatalog } = useShipsCatalog();
 
+  // 2026-05-13 (Audit P2-3): matching mejorado entre el `shipName` del hangar
+  // (viene de la extensión RSI, con prefijos de manufacturer y sufijos como
+  // "Mk II", "Black", "Standalone") y el catalog. Estrategia en cascada:
+  //   1. Match EXACTO por name (case-insensitive)
+  //   2. Match exacto por reference (class_name) si el hangar usa ese formato
+  //   3. Match con manufacturer stripping ("Anvil Hornet" vs "Hornet")
+  //   4. Match con variant stripping ("Black", "Steel", "Mk II", "Standalone")
+  //   5. endsWith de ambas direcciones (legacy behavior)
+  //   6. Match más largo entre los candidatos (más específico gana)
   const findShip = useMemo(() => {
+    const MFR_RE = /^(aegis|anvil|drake|rsi|origin|misc|crusader|esperia|banu|tumbril|argo|greycat|kruger|mirai|vanduul|aopoa|consolidated outland|gatac|cnou)\s+/i;
+    const VARIANT_RE = /\s+(mk\s*i+v?|standalone|black|steel|warbond|edition|special)$/i;
+    const stripMfr = (n: string) => n.replace(MFR_RE, "").trim();
+    const stripVariant = (n: string) => n.replace(VARIANT_RE, "").trim();
+    const norm = (n: string) => n.toLowerCase().replace(/\s+/g, " ").trim();
     return (rawName: string): CatalogShip | null => {
-      const name = (rawName ?? "").toLowerCase().trim();
+      const name = norm(rawName ?? "");
       if (!name) return null;
-      const candidates = catalog.filter((s) => {
-        const sName = s.name.toLowerCase();
-        return (
-          sName === name ||
-          sName.endsWith(" " + name) ||
-          name.endsWith(" " + sName.split(" ").slice(1).join(" ").toLowerCase())
-        );
+      const nameNoMfr = norm(stripMfr(name));
+      const nameNoVar = norm(stripVariant(name));
+      const nameStripped = norm(stripVariant(stripMfr(name)));
+      // Build candidates with score (mayor = mejor match).
+      const scored: { ship: CatalogShip; score: number }[] = [];
+      for (const s of catalog) {
+        const sName = norm(s.name);
+        const sNameNoMfr = norm(stripMfr(sName));
+        const sNameNoVar = norm(stripVariant(sName));
+        const sStripped = norm(stripVariant(stripMfr(sName)));
+        const sRef = norm(s.reference ?? "");
+        let score = 0;
+        if (sName === name) score = 100;
+        else if (sRef && sRef === name.replace(/\s+/g, "_")) score = 95;
+        else if (sNameNoMfr === nameNoMfr && nameNoMfr.length > 0) score = 90;
+        else if (sNameNoVar === nameNoVar && nameNoVar.length > 0) score = 85;
+        else if (sStripped === nameStripped && nameStripped.length > 0) score = 80;
+        else if (sName.endsWith(" " + name)) score = 70;
+        else if (name.endsWith(" " + sName)) score = 65;
+        else if (sName.includes(name) || name.includes(sName)) score = 50;
+        if (score > 0) scored.push({ ship: s, score });
+      }
+      if (scored.length === 0) return null;
+      // Mejor score; tie-breaker: nombre más largo (más específico)
+      scored.sort((a, b) => {
+        if (a.score !== b.score) return b.score - a.score;
+        return b.ship.name.length - a.ship.name.length;
       });
-      if (candidates.length === 0) return null;
-      return (
-        candidates.find((s) => s.name.toLowerCase() === name) ??
-        candidates.sort((a, b) => b.name.length - a.name.length)[0]
-      );
+      return scored[0].ship;
     };
   }, [catalog]);
 

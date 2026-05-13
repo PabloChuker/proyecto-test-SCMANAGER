@@ -132,13 +132,25 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Construir lookup de owned CCUs por par de nombres (case-insensitive).
+    // 2026-05-13 (Audit P2-2): owned CCU lookup ahora normaliza los nombres
+    // antes del match. Antes "Drake Cutlass" del hangar no matcheaba con
+    // "Drake Cutlass Black" del catalog y el CCU owned se perdía.
+    //
+    // Helper: normaliza removiendo manufacturer prefix + sufijos de variante
+    // comunes. Aplicamos AMBOS: el del key (owned) y el del lookup (catalog).
+    const MFR_RE = /^(aegis|anvil|drake|rsi|origin|misc|crusader|esperia|banu|tumbril|argo|greycat|kruger|mirai|vanduul|aopoa|consolidated outland|gatac|cnou)\s+/i;
+    const normalizeShipName = (n: string) =>
+      n.toLowerCase().replace(MFR_RE, "").replace(/\s+/g, " ").trim();
     const ownedByPair = new Map<string, OwnedCCURequest>();
     for (const o of ownedCCUs) {
-      const k = `${o.fromShip.toLowerCase()}|${o.toShip.toLowerCase()}`;
-      // Si hay duplicados (raro), preferir el de hangar al de buyback
-      if (!ownedByPair.has(k) || (o.location === "hangar" && ownedByPair.get(k)!.location !== "hangar")) {
-        ownedByPair.set(k, o);
+      // Guardamos por ambas keys: la cruda y la normalizada, para que el
+      // lookup encuentre match aunque el prefijo "Drake "/"Anvil " difiera.
+      const kRaw = `${o.fromShip.toLowerCase()}|${o.toShip.toLowerCase()}`;
+      const kNorm = `${normalizeShipName(o.fromShip)}|${normalizeShipName(o.toShip)}`;
+      for (const k of [kRaw, kNorm]) {
+        if (!ownedByPair.has(k) || (o.location === "hangar" && ownedByPair.get(k)!.location !== "hangar")) {
+          ownedByPair.set(k, o);
+        }
       }
     }
 
@@ -168,9 +180,11 @@ export async function POST(request: NextRequest) {
         };
       }
 
-      // Owned CCU match (gana sobre cualquier edge nuevo)
-      const ownedKey = `${fromInfo.name.toLowerCase()}|${toInfo.name.toLowerCase()}`;
-      const owned = ownedByPair.get(ownedKey);
+      // Owned CCU match (gana sobre cualquier edge nuevo).
+      // 2026-05-13 (P2-2): probamos primero match exacto, después normalizado.
+      const ownedKeyRaw = `${fromInfo.name.toLowerCase()}|${toInfo.name.toLowerCase()}`;
+      const ownedKeyNorm = `${normalizeShipName(fromInfo.name)}|${normalizeShipName(toInfo.name)}`;
+      const owned = ownedByPair.get(ownedKeyRaw) ?? ownedByPair.get(ownedKeyNorm);
       // El edge en BD aún si está owned, lo cargamos para info del builder
       const key = `${fromId}->${toId}`;
       const edge = edgeMap.get(key);
@@ -197,14 +211,18 @@ export async function POST(request: NextRequest) {
       }
 
       // Downgrade detection
-      if (toInfo.msrp <= fromInfo.msrp) {
+      // 2026-05-13 (Audit P2-1): cambiado de <= a <. Swaps horizontales entre
+      // variantes del mismo precio son válidos en RSI (ej. dos Hornet F7C-M
+      // de mismo MSRP), no son downgrades. Si el path no existe en ccu_prices,
+      // de todos modos cae en el check de `!edge || !edge.isAvailable` abajo.
+      if (toInfo.msrp < fromInfo.msrp) {
         return {
           fromShipId: fromId,
           toShipId: toId,
           status: "invalid",
           minPrice: null,
           bestPriceKind: null,
-          reason: `Downgrade: ${toInfo.name} ($${toInfo.msrp}) ≤ ${fromInfo.name} ($${fromInfo.msrp}). RSI no permite CCU hacia menor valor.`,
+          reason: `Downgrade: ${toInfo.name} ($${toInfo.msrp}) < ${fromInfo.name} ($${fromInfo.msrp}). RSI no permite CCU hacia menor valor.`,
           standardPrice,
           warbondPrice,
           warbondAvailable,

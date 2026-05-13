@@ -7,69 +7,41 @@
 // asc/desc por precio o nombre. Cada row es draggable al canvas.
 // =============================================================================
 
-import { useEffect, useMemo, useState } from "react";
-import { getShipThumbUrl } from "../HangarShipCard";
+import { useMemo, useState } from "react";
 import { SHIP_MIME, type CatalogShip } from "./types";
+import { useShipsCatalog } from "./useShipsCatalog";
 
 interface AvailableShipsColumnProps {
   usedShipIds: Set<string>;
-}
-
-interface RawCatalogRow {
-  id: string;
-  reference?: string;
-  name: string;
-  manufacturer: string | null;
-  msrpUsd: number;
-  warbondUsd: number | null;
-  flightStatus?: string | null;
-  pledgeAvailability?: string | null;
 }
 
 type SortField = "price" | "name";
 type SortDir = "asc" | "desc";
 
 export function ChainBoardInventoryColumn({ usedShipIds }: AvailableShipsColumnProps) {
-  const [catalog, setCatalog] = useState<CatalogShip[]>([]);
-  const [loading, setLoading] = useState(true);
+  // 2026-05-13 (P1-6): catalog desde hook compartido. Antes este componente
+  // hacía su propio fetch independiente — ahora todos los consumers comparten
+  // un cache module-level y una sola request in-flight.
+  const { catalog, loading } = useShipsCatalog();
   const [search, setSearch] = useState("");
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [sortField, setSortField] = useState<SortField>("price");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/ccu/ships")
-      .then((r) => r.json())
-      .then((d) => {
-        if (cancelled) return;
-        const arr = Array.isArray(d?.ships) ? (d.ships as RawCatalogRow[]) : [];
-        const mapped: CatalogShip[] = arr.map((x) => ({
-          id: String(x.id ?? ""),
-          reference: String(x.reference ?? ""),
-          name: String(x.name ?? ""),
-          manufacturer: x.manufacturer ?? null,
-          role: x.flightStatus ?? null,
-          msrpUsd: Number(x.msrpUsd) || 0,
-          warbondUsd: x.warbondUsd != null ? Number(x.warbondUsd) : null,
-          imageUrl: getShipThumbUrl(String(x.name ?? "")),
-        }));
-        setCatalog(mapped);
-      })
-      .catch(() => {})
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const min = minPrice ? parseFloat(minPrice) : -Infinity;
     const max = maxPrice ? parseFloat(maxPrice) : Infinity;
     let arr = catalog.filter((s) => {
-      if (q && !s.name.toLowerCase().includes(q) && !(s.manufacturer ?? "").toLowerCase().includes(q)) return false;
+      // 2026-05-13 (Audit P0-2c): incluir reference (class_name) en el search
+      // para buscar por código de clase ej. "DRAK_Ironclad" además del name.
+      if (q) {
+        const matchName = s.name.toLowerCase().includes(q);
+        const matchMfr = (s.manufacturer ?? "").toLowerCase().includes(q);
+        const matchRef = (s.reference ?? "").toLowerCase().includes(q);
+        if (!matchName && !matchMfr && !matchRef) return false;
+      }
       if (s.msrpUsd < min || s.msrpUsd > max) return false;
       return true;
     });
