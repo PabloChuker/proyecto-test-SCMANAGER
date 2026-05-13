@@ -103,14 +103,23 @@ export async function POST(request: NextRequest) {
     // (UTV, MTC, etc.) salían con msrp=0 y el downgrade detection las
     // marcaba como inválidas para cualquier upgrade. Ahora coalesce con
     // ship_prices_canonical.pledge_usd.
+    // 2026-05-12 (CCU.17): segundo JOIN fallback por nombre para naves cuyo
+    // ship_id en ship_prices_canonical quedó NULL (ej. Anvil Spartan).
     const allShipIds = [...new Set([...fromIds, ...toIds])];
     const shipRows: any[] = await sql.unsafe(
       `SELECT s.id, s.name,
-              COALESCE(sp.msrp_usd, spc.pledge_usd) AS msrp_usd,
+              COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) AS msrp_usd,
               COALESCE(sp.is_ccu_eligible, true) AS is_ccu_eligible
          FROM ships s
          LEFT JOIN ship_price sp ON sp.id = s.id
          LEFT JOIN ship_prices_canonical spc ON spc.ship_id = s.id
+         LEFT JOIN ship_prices_canonical spc_name
+           ON spc.ship_id IS NULL
+          AND spc_name.ship_id IS NULL
+          AND LOWER(spc_name.ship_name) = LOWER(REGEXP_REPLACE(
+                s.name,
+                '^(Aegis|Anvil|Drake|RSI|Origin|MISC|Crusader|Esperia|Banu|Tumbril|Argo|Greycat|Kruger|Mirai|Vanduul|Aopoa|Consolidated Outland|Gatac|CNOU)\\s+',
+                '', 'i'))
         WHERE s.id::text = ANY($1::text[])`,
       [allShipIds],
     );

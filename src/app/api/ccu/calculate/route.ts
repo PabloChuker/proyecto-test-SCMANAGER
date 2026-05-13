@@ -71,12 +71,16 @@ export async function POST(request: NextRequest) {
     // al elegirlas como FROM/TO fallaba "ship not found or missing MSRP data".
     // Ahora cualquier nave con precio en alguna de las dos tablas entra al
     // grafo y puede ser punto de partida o destino de una cadena.
+    // 2026-05-12 (CCU.17): segundo LEFT JOIN por nombre — ver comentario
+    // detallado en /api/ccu/ships. Cubre el caso de naves cuyo ship_id quedó
+    // NULL en ship_prices_canonical porque el script de matching falló (ej.
+    // Anvil Spartan: JSON wiki dice "Spartan", BD dice "Anvil Spartan").
     const shipRows: any[] = await sql.unsafe(`
       SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer,
-             COALESCE(sp.msrp_usd, spc.pledge_usd) AS msrp_usd,
-             COALESCE(sp.warbond_usd, spc.warbond_usd) AS warbond_usd,
-             spc.warbond_usd AS warbond_usd_real,
-             spc.pledge_availability,
+             COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) AS msrp_usd,
+             COALESCE(sp.warbond_usd, spc.warbond_usd, spc_name.warbond_usd) AS warbond_usd,
+             COALESCE(spc.warbond_usd, spc_name.warbond_usd) AS warbond_usd_real,
+             COALESCE(spc.pledge_availability, spc_name.pledge_availability) AS pledge_availability,
              COALESCE(sp.is_ccu_eligible, true) AS is_ccu_eligible,
              COALESCE(sp.is_limited, false) AS is_limited,
              COALESCE(s.flight_status, 'flight_ready') AS flight_status
@@ -84,9 +88,16 @@ export async function POST(request: NextRequest) {
       LEFT JOIN ship_price sp ON sp.id = s.id
       LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
       LEFT JOIN ship_prices_canonical spc ON spc.ship_id = s.id
-      WHERE COALESCE(sp.msrp_usd, spc.pledge_usd) IS NOT NULL
-        AND COALESCE(sp.msrp_usd, spc.pledge_usd) > 0
-      ORDER BY COALESCE(sp.msrp_usd, spc.pledge_usd) ASC
+      LEFT JOIN ship_prices_canonical spc_name
+        ON spc.ship_id IS NULL
+       AND spc_name.ship_id IS NULL
+       AND LOWER(spc_name.ship_name) = LOWER(REGEXP_REPLACE(
+             s.name,
+             '^(Aegis|Anvil|Drake|RSI|Origin|MISC|Crusader|Esperia|Banu|Tumbril|Argo|Greycat|Kruger|Mirai|Vanduul|Aopoa|Consolidated Outland|Gatac|CNOU)\\s+',
+             '', 'i'))
+      WHERE COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) IS NOT NULL
+        AND COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) > 0
+      ORDER BY COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) ASC
     `, []);
 
     const ships = new Map<string, ShipNode>();

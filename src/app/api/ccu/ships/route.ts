@@ -26,10 +26,19 @@ export async function GET(request: NextRequest) {
     //
     // Fix: COALESCE entre las 2 fuentes. ship_price gana cuando existe (es la
     // tabla canónica del módulo CCU), sino caemos al wiki cache.
+    //
+    // 2026-05-12 (CCU.17): segundo LEFT JOIN por nombre con strip de manufacturer
+    // prefix. Caso típico: Anvil Spartan en BD se llama "Anvil Spartan" pero el
+    // wiki canonical solo dice "Spartan" → load_rsi_prices_canonical.mjs deja
+    // `ship_id` NULL → join por id no matchea → la nave no aparece en el
+    // dropdown aunque tenga pledge_usd $80 en SPC. Solución: si el join por
+    // ship_id no trajo precio, intentamos un match por nombre normalizado
+    // (lower + strip "Aegis|Anvil|Drake|RSI|..." prefix). Esto cubre el gap
+    // hasta que se corra de nuevo el script de matching.
     let query = `
       SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer,
-             COALESCE(sp.msrp_usd, spc.pledge_usd) AS msrp_usd,
-             COALESCE(sp.warbond_usd, spc.warbond_usd) AS warbond_usd,
+             COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) AS msrp_usd,
+             COALESCE(sp.warbond_usd, spc.warbond_usd, spc_name.warbond_usd) AS warbond_usd,
              COALESCE(sp.is_ccu_eligible, true) AS is_ccu_eligible,
              COALESCE(sp.is_limited, false) AS is_limited,
              COALESCE(s.flight_status, 'flight_ready') AS flight_status,
@@ -37,11 +46,18 @@ export async function GET(request: NextRequest) {
       FROM ships s
       LEFT JOIN ship_price sp ON sp.id = s.id
       LEFT JOIN ship_prices_canonical spc ON spc.ship_id = s.id
+      LEFT JOIN ship_prices_canonical spc_name
+        ON spc.ship_id IS NULL
+       AND spc_name.ship_id IS NULL
+       AND LOWER(spc_name.ship_name) = LOWER(REGEXP_REPLACE(
+             s.name,
+             '^(Aegis|Anvil|Drake|RSI|Origin|MISC|Crusader|Esperia|Banu|Tumbril|Argo|Greycat|Kruger|Mirai|Vanduul|Aopoa|Consolidated Outland|Gatac|CNOU)\\s+',
+             '', 'i'))
       LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
-      WHERE COALESCE(sp.msrp_usd, spc.pledge_usd) IS NOT NULL
-        AND COALESCE(sp.msrp_usd, spc.pledge_usd) > 0
-        AND COALESCE(sp.msrp_usd, spc.pledge_usd) >= $1
-        AND COALESCE(sp.msrp_usd, spc.pledge_usd) <= $2
+      WHERE COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) IS NOT NULL
+        AND COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) > 0
+        AND COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) >= $1
+        AND COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) <= $2
     `;
     const params: any[] = [minPrice, maxPrice];
     let paramIdx = 3;
@@ -52,7 +68,7 @@ export async function GET(request: NextRequest) {
       paramIdx++;
     }
 
-    query += ` ORDER BY COALESCE(sp.msrp_usd, spc.pledge_usd) ASC, s.name ASC`;
+    query += ` ORDER BY COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) ASC, s.name ASC`;
 
     const rows: any[] = await sql.unsafe(query, params);
 
