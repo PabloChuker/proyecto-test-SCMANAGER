@@ -98,11 +98,19 @@ export async function POST(request: NextRequest) {
 
     // También cargamos info de naves para poder dar reason explicativa cuando
     // no hay edge (ej. "downgrade detectado" si toMsrp < fromMsrp).
+    // 2026-05-12 (Loadout.14): unificar fuente de MSRP con /api/ccu/ships y
+    // /api/ccu/calculate. Antes solo se miraba sp.msrp_usd → concept ships
+    // (UTV, MTC, etc.) salían con msrp=0 y el downgrade detection las
+    // marcaba como inválidas para cualquier upgrade. Ahora coalesce con
+    // ship_prices_canonical.pledge_usd.
     const allShipIds = [...new Set([...fromIds, ...toIds])];
     const shipRows: any[] = await sql.unsafe(
-      `SELECT s.id, s.name, sp.msrp_usd, sp.is_ccu_eligible
+      `SELECT s.id, s.name,
+              COALESCE(sp.msrp_usd, spc.pledge_usd) AS msrp_usd,
+              COALESCE(sp.is_ccu_eligible, true) AS is_ccu_eligible
          FROM ships s
          LEFT JOIN ship_price sp ON sp.id = s.id
+         LEFT JOIN ship_prices_canonical spc ON spc.ship_id = s.id
         WHERE s.id::text = ANY($1::text[])`,
       [allShipIds],
     );

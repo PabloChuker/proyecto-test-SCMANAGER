@@ -62,8 +62,19 @@ export async function POST(request: NextRequest) {
     // warbond_usd REAL del Wiki (mejor que el cap teórico del 10%). Si la
     // tabla canónica no tiene match, cae a sp.warbond_usd local. La columna
     // `warbond_usd_real` se prioriza en el cálculo de edges abajo.
+    //
+    // 2026-05-12 (Loadout.14 / CCU.16): unificar fuente de MSRP con el endpoint
+    // /api/ccu/ships → usar COALESCE(sp.msrp_usd, spc.pledge_usd). Antes este
+    // solver solo miraba sp.msrp_usd y excluía concept ships (Greycat UTV,
+    // Anvil MTC, etc.) que tienen precio en el wiki canonical pero aún no en
+    // ship_price. Resultado: el user las veía en el dropdown del Planner pero
+    // al elegirlas como FROM/TO fallaba "ship not found or missing MSRP data".
+    // Ahora cualquier nave con precio en alguna de las dos tablas entra al
+    // grafo y puede ser punto de partida o destino de una cadena.
     const shipRows: any[] = await sql.unsafe(`
-      SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer, sp.msrp_usd, sp.warbond_usd,
+      SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer,
+             COALESCE(sp.msrp_usd, spc.pledge_usd) AS msrp_usd,
+             COALESCE(sp.warbond_usd, spc.warbond_usd) AS warbond_usd,
              spc.warbond_usd AS warbond_usd_real,
              spc.pledge_availability,
              COALESCE(sp.is_ccu_eligible, true) AS is_ccu_eligible,
@@ -73,8 +84,9 @@ export async function POST(request: NextRequest) {
       LEFT JOIN ship_price sp ON sp.id = s.id
       LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
       LEFT JOIN ship_prices_canonical spc ON spc.ship_id = s.id
-      WHERE sp.msrp_usd IS NOT NULL AND sp.msrp_usd > 0
-      ORDER BY sp.msrp_usd ASC
+      WHERE COALESCE(sp.msrp_usd, spc.pledge_usd) IS NOT NULL
+        AND COALESCE(sp.msrp_usd, spc.pledge_usd) > 0
+      ORDER BY COALESCE(sp.msrp_usd, spc.pledge_usd) ASC
     `, []);
 
     const ships = new Map<string, ShipNode>();
