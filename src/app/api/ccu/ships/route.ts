@@ -35,8 +35,15 @@ export async function GET(request: NextRequest) {
     // ship_id no trajo precio, intentamos un match por nombre normalizado
     // (lower + strip "Aegis|Anvil|Drake|RSI|..." prefix). Esto cubre el gap
     // hasta que se corra de nuevo el script de matching.
+    // 2026-05-12 (CCU.18): DISTINCT ON (class_name) para deduplicar naves
+    // que están N veces en la tabla `ships` (caso típico: Garnok importó
+    // 4.7.2 LIVE + PTU → MRAI_Pulse aparece 2-4 veces, una por game_version).
+    // Sin esto, el dropdown mostraba "Mirai Pulse" repetido 4 veces.
+    // Tomamos la entrada con mayor msrp (proxy de "live más reciente"), y
+    // ante empate, la más nueva por id (ordering descendente).
     let query = `
-      SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer,
+      SELECT DISTINCT ON (s.class_name)
+             s.id, s.class_name AS reference, s.name, m.name AS manufacturer,
              COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) AS msrp_usd,
              COALESCE(sp.warbond_usd, spc.warbond_usd, spc_name.warbond_usd) AS warbond_usd,
              COALESCE(sp.is_ccu_eligible, true) AS is_ccu_eligible,
@@ -68,23 +75,33 @@ export async function GET(request: NextRequest) {
       paramIdx++;
     }
 
-    query += ` ORDER BY COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) ASC, s.name ASC`;
+    // DISTINCT ON requiere que el primer ORDER BY columna sea la misma del
+    // DISTINCT (class_name), después podemos usar el orden lógico que queramos.
+    // El SELECT final lo re-ordenamos en JS por msrp ASC.
+    query += ` ORDER BY s.class_name, COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) DESC NULLS LAST, s.id DESC`;
 
     const rows: any[] = await sql.unsafe(query, params);
 
-    const ships = rows.map((row) => ({
-      id: String(row.id),
-      reference: row.reference,
-      name: row.name,
-      manufacturer: row.manufacturer,
-      msrpUsd: Number(row.msrp_usd) || 0,
-      warbondUsd: row.warbond_usd ? Number(row.warbond_usd) : null,
-      isCcuEligible: row.is_ccu_eligible !== false,
-      isLimited: row.is_limited === true,
-      flightStatus: row.flight_status || "flight_ready",
-      size: row.size,
-      role: row.role,
-    }));
+    const ships = rows
+      .map((row) => ({
+        id: String(row.id),
+        reference: row.reference,
+        name: row.name,
+        manufacturer: row.manufacturer,
+        msrpUsd: Number(row.msrp_usd) || 0,
+        warbondUsd: row.warbond_usd ? Number(row.warbond_usd) : null,
+        isCcuEligible: row.is_ccu_eligible !== false,
+        isLimited: row.is_limited === true,
+        flightStatus: row.flight_status || "flight_ready",
+        size: row.size,
+        role: row.role,
+      }))
+      // Re-orden final por msrp asc (el SQL ordenó por class_name para el
+      // DISTINCT). Tie-breaker por name ASC para estabilidad visual.
+      .sort((a, b) => {
+        if (a.msrpUsd !== b.msrpUsd) return a.msrpUsd - b.msrpUsd;
+        return a.name.localeCompare(b.name);
+      });
 
     return NextResponse.json(
       { ships, total: ships.length },
