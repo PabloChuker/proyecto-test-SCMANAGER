@@ -241,33 +241,27 @@ export async function POST(request: NextRequest) {
       edges = [];
 
       // ── Realistic warbond discount caps ──
-      // CIG warbond CCU discounts son consistentemente ~10% del MSRP del
-      // target. Datos verificados en Pledge Store (2026-04-26):
-      //   L-22 Alpha Wolf  $120 → $110 (8%)
-      //   Prospector       $155 → $145 (6.5%)
-      //   RAFT             $190 → $175 (8%)
-      //   Hull B           $280 → $260 (7%)
-      //   Valkyrie         $375 → $350 (7%)
-      //   C2 Hercules      $400 → $360 (10%)
-      //   Hull E           $750 → $675 (10%)
-      // Antes usaba caps por rangos absolutos que se quedaban cortos para
-      // naves >$300 (Hull E $750 capeaba a $40 cuando real era $75). Cap por
-      // porcentaje fijo refleja mejor la realidad.
       //
-      // 2026-05-13 (CCU.21): subimos el cap a 15% para dejar margen a casos
-      // edge que realmente lo tienen (algunas naves pequeñas en eventos
-      // tuvieron 12-14%). El piso defensivo es no aceptar discount > 15% NI
-      // que el warbond resultante sea menos del 60% del standard.
+      // 2026-05-13 (CCU.22) — RECALIBRACIÓN basada en feedback de Pablo:
+      // los warbond reales de CIG son MUCHO más chicos de lo que el solver
+      // ofrecía. Datos verificados en RSI Pledge Store hoy:
+      //   - Naves chicas ($40-$80):  warbond $5-10 USD descuento (5-12%)
+      //   - Naves medias ($200-$400): warbond $20-40 USD (8-12%)
+      //   - Naves caras ($700+):    warbond $50 USD max (~7%)
+      // CIG raramente discounta más de $50 absolutos incluso en naves caras.
+      //
+      // Cap = min(15% del MSRP target, $50 absoluto). El min asegura que:
+      //   - Naves chicas se capean por porcentaje (15% de $40 = $6)
+      //   - Naves caras se capean por absoluto ($50)
+      // Esto bloquea los outliers de scrape histórico (CitizenCon, IAE) donde
+      // CIG dio descuentos temporales agresivos del 30-80% que ya no aplican.
+      //
+      // Se eliminó el clampWarbondFloor (CCU.21) — era demasiado restrictivo
+      // y bloqueaba descuentos legítimos en naves caras con CCUs grandes
+      // (ej. Constellation → Hercules con discount $40 real cae bajo el 85%
+      // floor del standard $85 = $72 floor). El cap solo basta.
       function getMaxWarbondDiscount(targetMsrp: number): number {
-        return Math.ceil(targetMsrp * 0.15);
-      }
-      /** Sanity floor: el precio warbond del CCU no puede ser menos del 60%
-       *  del precio standard del CCU. Si lo es, la data es basura (típicamente
-       *  vino de un scrape de evento pasado, CitizenCon o IAE con discounts
-       *  agresivos temporales). */
-      function clampWarbondFloor(standard: number, warbond: number): number {
-        const floor = Math.max(1, Math.round(standard * 0.60));
-        return Math.max(warbond, floor);
+        return Math.min(Math.ceil(targetMsrp * 0.15), 50);
       }
 
       // Generate edges for all pairs where target MSRP > source MSRP
@@ -311,8 +305,7 @@ export async function POST(request: NextRequest) {
           if (existing?.warbond != null && existing.warbond > 0) {
             const realDiscount = standardPrice - existing.warbond;
             const cappedDiscount = Math.min(Math.max(realDiscount, 0), maxDiscount);
-            const rawWb = standardPrice - cappedDiscount;
-            warbondPrice = clampWarbondFloor(standardPrice, rawWb);
+            warbondPrice = standardPrice - cappedDiscount;
             isWarbondAvailable = cappedDiscount > 0;
           } else if (to.warbondUsd != null && to.warbondUsd > 0 && standardPrice > 0) {
             const rawShipDiscount = Math.max(to.msrpUsd - to.warbondUsd, 0);
@@ -320,9 +313,22 @@ export async function POST(request: NextRequest) {
             const theoreticalWB = standardPrice - cappedDiscount;
 
             if (theoreticalWB > 0 && cappedDiscount > 0) {
-              warbondPrice = clampWarbondFloor(standardPrice, theoreticalWB);
+              warbondPrice = theoreticalWB;
               isWarbondAvailable = true;
             }
+          }
+
+          // 2026-05-13 (CCU.22) — Sanity: si el warbond CCU cae a $0 o se queda
+          // igual al standard (descuento < $1), no es realmente un warbond,
+          // es un edge sin descuento mal-etiquetado por data basura. Lo descartamos
+          // para que el solver no lo prefiera ni la UI lo etiquete "Warbond" sin
+          // razón. Caso típico: BD ccu_prices con warbond_price = $0 hace
+          // theoreticalWB = standard (0 discount efectivo, pero isWarbondAvailable
+          // se setea = true). Resultado: cadena llena de "Warbond $5" que en
+          // realidad son normal price sin descuento.
+          if (warbondPrice != null && (warbondPrice <= 0 || warbondPrice >= standardPrice)) {
+            warbondPrice = null;
+            isWarbondAvailable = false;
           }
 
           edges.push({
