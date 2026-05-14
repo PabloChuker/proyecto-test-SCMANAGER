@@ -412,13 +412,21 @@ export function ChainBoardWorkspace() {
           pricePaid: c.pricePaid,
           location: c.location,
         }));
+        // 2026-05-13 (CCU.24): el solver espera "prefer-credits" / "prefer-cash"
+        // / "balanced". Antes el cliente mandaba "credits" que no matchea
+        // ninguno → el switch caía al default "balanced", haciendo que
+        // "Priorizar créditos" se comportara IGUAL que "Esperar y ahorrar".
         const body = {
           fromShipId: fromShip.id,
           toShipId: toShip.id,
           ownedCCUs,
           preferWarbond: mode !== "now",
-          hasBuybackToken: false,
-          paymentPriority: mode === "credits" ? "credits" : "balanced",
+          // "prefer-credits" mode → asume que el user tiene token de buyback
+          // (sino el solver penaliza buyback-cash con factor 1.5 y prefiere
+          // tienda de cash, lo cual contradice el modo). Si el user no tiene
+          // token, igualmente prioriza CCUs del hangar (hangar=$0 siempre gana).
+          hasBuybackToken: mode === "credits",
+          paymentPriority: mode === "credits" ? "prefer-credits" : "balanced",
           onlyAvailable: mode === "now",
           maxSteps: 15,
         };
@@ -428,7 +436,27 @@ export function ChainBoardWorkspace() {
           body: JSON.stringify(body),
         });
         const data = await r.json();
-        if (!r.ok || !data.chain) throw new Error(data.error || "Sin cadena válida.");
+        // 2026-05-13 (CCU.24): mensajes de error específicos por modo.
+        // Antes "Sin cadena válida." sin más info — el user no sabía si era
+        // problema de naves, de modo, o de data. Ahora explica y sugiere.
+        if (!r.ok) {
+          throw new Error(data?.error || "Error al calcular la cadena.");
+        }
+        if (!data?.chain) {
+          if (mode === "now") {
+            throw new Error(
+              "No hay cadena armable hoy en RSI entre estas naves. Probá 'Esperar y ahorrar' para incluir CCUs warbond y de eventos.",
+            );
+          } else if (mode === "credits") {
+            throw new Error(
+              "No se encontró cadena usando los CCUs de tu hangar. Probá 'Esperar y ahorrar' para incluir compras nuevas.",
+            );
+          } else {
+            throw new Error(
+              "No hay cadena válida entre estas naves. Verificá que la nave destino sea más cara que la base y que ambas sean elegibles para CCU.",
+            );
+          }
+        }
 
         // 2026-05-12 (Audit Planner): el cliente declaraba `ccuPrice/isWarbond/
         // isOwned` que NO EXISTEN en el response del solver (`/api/ccu/calculate`
