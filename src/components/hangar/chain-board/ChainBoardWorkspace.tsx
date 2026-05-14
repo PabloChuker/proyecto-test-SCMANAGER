@@ -503,13 +503,24 @@ export function ChainBoardWorkspace() {
                 ? "warbond"
                 : "normal";
           const isLockedFree = isHangar || isBuyback;
-          // Preferir `effectivePrice` (lo que realmente vas a pagar en este
-          // step, post-warbond/owned). Si por alguna razón viene null/undefined,
-          // caer a standardPrice → defaultPriceFor.
+          // 2026-05-13 (Audit Chain Board P0-5): para CCUs del hangar / buyback,
+          // el solver setea effectivePrice = 0 (cash adicional hoy = $0). Pero
+          // el user ya pagó algo por ese CCU en su momento (sunk cost) que está
+          // en `pricePaid`. Si lo mostramos como $0, "Tu costo" subestima cuánto
+          // realmente costó la cadena. Caso típico: CCU Freelancer DUR→Hull B
+          // que pagaste $5 en su momento → aparecía "Hanger $0.00".
+          //
+          // Solución: para hangar/buyback-token (donde no hay cash NUEVO),
+          // mostrar el `pricePaid` cuando existe → "Hanger $5.00". Para
+          // buyback-cash y warbond/standard, el effectivePrice ya refleja el
+          // cash que pagás HOY.
           const resolvedPrice =
-            (typeof s.effectivePrice === "number" ? s.effectivePrice : null) ??
-            (typeof s.standardPrice === "number" ? s.standardPrice : null) ??
-            defaultPriceFor(kind, s.fromShip.msrpUsd, s.toShip.msrpUsd);
+            (isHangar || s.priceType === "buyback-token") &&
+            typeof s.pricePaid === "number" && s.pricePaid > 0
+              ? s.pricePaid
+              : (typeof s.effectivePrice === "number" ? s.effectivePrice : null) ??
+                (typeof s.standardPrice === "number" ? s.standardPrice : null) ??
+                defaultPriceFor(kind, s.fromShip.msrpUsd, s.toShip.msrpUsd);
           newEdges.push({
             id: newId("e"),
             source: fromN.id,
@@ -523,9 +534,14 @@ export function ChainBoardWorkspace() {
         setEdges(newEdges);
         setSelectedNodeId(null);
         setRightPanelMode("detail");
+        // 2026-05-13 (Audit P0-5): usar la suma de price de los newEdges en
+        // vez de data.chain.totalCost porque ahora los hangar/buyback-token
+        // usan pricePaid (sunk cost) en lugar de $0. El totalCost del solver
+        // solo cuenta cash adicional hoy y divergiría del "Tu costo" del header.
+        const realTotalCost = newEdges.reduce((sum, e) => sum + (e.price || 0), 0);
         setStatusMsg({
           kind: "ok",
-          text: `Cadena armada: ${steps.length} pasos · costo $${data.chain.totalCost.toFixed(0)}`,
+          text: `Cadena armada: ${steps.length} pasos · costo $${realTotalCost.toFixed(0)}`,
         });
       } catch (e: any) {
         setStatusMsg({ kind: "err", text: e?.message ?? "No se pudo armar la cadena." });
