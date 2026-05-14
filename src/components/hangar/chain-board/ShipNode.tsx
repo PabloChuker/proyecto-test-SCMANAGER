@@ -128,7 +128,14 @@ function ShipNodeImpl({ id, data }: NodeProps) {
                     savings ? "text-emerald-400" : overpay ? "text-rose-400" : "text-zinc-500"
                   }`}
                 >
-                  {savings ? "−" : overpay ? "+" : ""}${Math.abs(diff).toFixed(2)}
+                  {/*
+                    2026-05-13 (Audit P0-4): quitar prefijo "−" / "+". El
+                    label arriba ("Ahorrás" / "De más") y el color (verde /
+                    rojo) ya indican el signo. Antes "Ahorrás −$70" leía como
+                    pérdida — el mismo bug que el header global resolvimos
+                    en la primera auditoría, faltaba en este componente.
+                  */}
+                  ${Math.abs(diff).toFixed(2)}
                 </span>
               </div>
             </>

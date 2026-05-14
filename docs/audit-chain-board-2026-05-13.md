@@ -182,7 +182,41 @@ Catálogo crece monotonically. Cuando llegue a 500+ naves el filtrado client-sid
 
 ---
 
-## Fixes aplicados en esta sesión (todos en una sola tanda)
+## Tanda 2 (después de evidencia de bugs visibles aún): warbond + display
+
+Pablo mostró captura donde una cadena de 9 pasos para llegar a Drake Ironclad
+($525) costaba $40 total — descuento del 92%. CCUs con warbond a $5 fijo en
+casi todos los pasos. Causa raíz:
+
+**CCU.21 — bypass del cap warbond cuando hasRealWarbond=true.** La lógica
+de CCU.5 (mayo 3) decía "naves con warbond real en el wiki no se capean
+porque algunas tienen >10% legítimo". Eso es cierto para el WARBOND DEL
+STANDALONE de la nave, pero el código usaba `existing.warbond` (de la tabla
+`ccu_prices`) sin validar. Esa tabla tiene scrapes históricos de eventos
+(CitizenCon, IAE) con descuentos agresivos que ya no aplican. Resultado:
+el solver creía que UTV→Spartan costaba $5 warbond (87% off) y armaba
+paths irreales.
+
+**Fix:**
+- Cap del descuento subido a 15% (margen para warbond agresivos legítimos).
+- **SIEMPRE** se aplica el cap, sin excepciones por hasRealWarbond.
+- Nuevo `clampWarbondFloor`: el precio warbond del CCU no puede ser menor
+  que el 60% del standard. Si lo es, la data es basura y se ignora.
+- Esto garantiza que cualquier CCU warbond cueste entre 60-100% del
+  standard — coherente con lo que CIG vende realmente.
+
+**P0-4 — signo invertido en ShipNode (nodo individual).** Mismo bug que
+arreglamos en el header global la primera ronda, pero faltaba este lugar.
+"Ahorrás −$70" en cada card del canvas. Quitado el prefijo `"−"`/`"+"`,
+el label ("Ahorrás" / "De más") y el color (verde/rojo) ya bastan.
+
+**P3-1 bis — buyback en ChainBoardCanvasFlow.tsx.** Al extender `UpgradeKind`
+con `"buyback"`, faltaba la entrada en el `STYLE_BY_KIND` Record del canvas
+de flechas. Type-check lo detectó. Agregado con paleta violet.
+
+---
+
+## Fixes aplicados en esta sesión (tanda 1)
 
 | ID | Cambio | Archivo |
 |----|--------|---------|

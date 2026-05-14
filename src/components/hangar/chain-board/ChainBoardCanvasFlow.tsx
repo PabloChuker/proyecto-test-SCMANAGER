@@ -64,6 +64,8 @@ const STYLE_BY_KIND: Record<UpgradeKind, { bg: string; text: string; label: stri
   normal: { bg: "bg-blue-500", text: "text-white", label: "Normal", stroke: "#3b82f6" },
   warbond: { bg: "bg-rose-600", text: "text-white", label: "Warbond", stroke: "#e11d48" },
   hanger: { bg: "bg-cyan-500", text: "text-zinc-900", label: "Hanger", stroke: "#06b6d4" },
+  // 2026-05-13 (P3-1): buyback con paleta violet, distinta de hanger (cyan).
+  buyback: { bg: "bg-violet-600", text: "text-white", label: "Buyback", stroke: "#7c3aed" },
 };
 
 function UpgradeEdgeImpl({
