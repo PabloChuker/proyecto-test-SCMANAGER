@@ -606,6 +606,30 @@ function buildChildren(
         ? entry.Loadout
         : [];
 
+    // 2026-05-15 (Loadout.14): SINTETIZAR slot empty cuando un gimbal mount
+    // viene con `Loadout: []` vacío (caso 4.8 PTU — la nueva shape de
+    // scunpacked no trae los children del gimbal). Antes el bloque
+    // `if (isGimbal && gimbalChildren.length > 0)` se saltaba completamente
+    // → el gimbal aparecía sin slots adentro y el user no podía equipar nada.
+    // Ahora si la lista viene vacía, generamos UN slot WEAPON sin equippedItem
+    // del size del mount (entry.MaxSize) para que el picker pueda llenarlo.
+    if (isGimbal && gimbalChildren.length === 0) {
+      const slotSize =
+        (typeof entry.MaxSize === "number" && entry.MaxSize > 0 ? entry.MaxSize : null) ??
+        (typeof entry.Size === "number" && entry.Size > 0 ? entry.Size : null) ??
+        0;
+      results.push({
+        id: ns + (entry.UUID ? `${entry.UUID}-slot1` : `child-${idx}-empty`),
+        hardpointName: entry.HardpointName ? `${entry.HardpointName}_gun_1` : `sub_${idx}_empty`,
+        category: "WEAPON",
+        minSize: slotSize,
+        maxSize: slotSize,
+        isFixed: false,
+        equippedItem: null,
+      });
+      continue;
+    }
+
     if (isGimbal && gimbalChildren.length > 0) {
       // This is a gimbal inside a turret — flatten to show the actual weapons
       for (let ci = 0; ci < gimbalChildren.length; ci++) {
@@ -617,10 +641,24 @@ function buildChildren(
           childItem = buildWeaponItem(weaponMap.get(childClassName));
         }
         if (!childItem) {
+          // 2026-05-15 (Loadout.14): logueamos las weapons que el ship_hardpoint
+          // referencia pero NO encontramos en weapon_guns. Síntoma del bug 4.8
+          // PTU: el ship_hardpoints se importó con class_names nuevos pero
+          // weapon_guns sigue con los viejos → match falla → fallback genérico
+          // sin stats → UI muestra el gimbal "empty" sin daño calculado.
+          if (childClassName) {
+            console.warn(
+              `[ships/[id]] weapon child no encontrado en weapon_guns: "${childClassName}"`,
+            );
+          }
           childItem = {
             id: ns + (child.UUID || `child-${idx}-${ci}`),
             reference: childClassName,
-            name: child.Name || childClassName,
+            // 2026-05-15: prefer child.Name como display si lo trae el loadout_json
+            // (a veces scunpacked lo pobla incluso si weapon_guns no tiene la
+            // class). Sino mostramos el className como fallback para que el
+            // user vea ALGO en vez de "empty" silencioso.
+            name: child.Name || childClassName || "(arma sin data)",
             localizedName: null,
             className: childClassName,
             type: "WEAPON",
@@ -1490,6 +1528,7 @@ export async function GET(
 
       // Intento 1: filtrar por game_version efectiva si tenemos una.
       let rows: any[] = [];
+      let triedWithGv = false;
       if (effectiveGV) {
         try {
           rows = await sql.unsafe(
@@ -1497,8 +1536,19 @@ export async function GET(
              WHERE ${classCol} IN (${placeholders}) AND game_version = $${classes.length + 1}`,
             [...classes, String(effectiveGV)],
           );
-        } catch {
-          // Tabla sin columna game_version — caemos al sin-filtro abajo.
+          triedWithGv = true;
+        } catch (e: any) {
+          // 2026-05-15 (Loadout.14): Antes este catch era silencioso. Si la
+          // tabla no tiene columna game_version o cualquier otro error de SQL
+          // pasaba inadvertido — quedó como el bug principal del rollout 4.8
+          // PTU porque weapon_guns estaba en otro estado. Ahora logueamos.
+          const msg = String(e?.message ?? e);
+          if (!/column .*game_version.* does not exist/i.test(msg)) {
+            console.warn(
+              `[ships/[id]] batchFetch(${table}) with gv=${effectiveGV} failed:`,
+              msg,
+            );
+          }
         }
       }
 
@@ -1510,10 +1560,27 @@ export async function GET(
             `SELECT * FROM ${table} WHERE ${classCol} IN (${placeholders})`,
             classes,
           );
-        } catch {
-          // Tabla no existe o falló — skip silencioso.
+        } catch (e: any) {
+          // 2026-05-15 (Loadout.14): logueamos si la tabla no existe o falla
+          // de verdad. Antes era completamente silencioso → buildChildren
+          // recibía un weaponMap vacío y mostraba "empty" sin avisar.
+          console.warn(
+            `[ships/[id]] batchFetch(${table}) sin filtro falló:`,
+            e?.message ?? e,
+          );
           return;
         }
+      }
+
+      // 2026-05-15 (Loadout.14): si los dos intentos devolvieron 0 rows pero
+      // pedimos N class_names, registramos esto. Es la firma del bug 4.8 PTU
+      // (table existe, no falla, pero las class_names del loadout_json no
+      // matchean ninguna fila → weapons quedan "empty" silenciosamente).
+      if (rows.length === 0 && classes.length > 0) {
+        console.warn(
+          `[ships/[id]] batchFetch(${table}) returned 0 rows for ${classes.length} class_names ` +
+            `(triedWithGv=${triedWithGv}, effectiveGV=${effectiveGV ?? "null"}, sample=${classes.slice(0, 3).join(",")})`,
+        );
       }
 
       for (const row of rows) {
