@@ -565,6 +565,22 @@ function buildGenericItem(hp: any): any {
 function normalizeLoadoutEntries(loadoutJson: any): any[] {
   if (Array.isArray(loadoutJson)) return loadoutJson;
   if (loadoutJson && typeof loadoutJson === "object") {
+    // 2026-05-15 (Loadout.15 — Bug raíz del 4.8 PTU): si el objeto tiene
+    // ClassName o className, es UN ENTRY (gimbal mount, missile rack, etc.)
+    // y su `Loadout` interno son SUS PROPIOS CHILDREN. Antes este código
+    // devolvía `loadoutJson.Loadout` siempre, lo cual rompía:
+    //   - shape Fase Y (4.7.2): { ClassName: "...", Loadout: [child1, ...] }
+    //     → devolvía children como si fueran top-level entries → mal
+    //   - shape 4.8.0: { ClassName: "Mount_Gimbal_S4", Loadout: [] }
+    //     → devolvía [] (sin children) → buildChildren retornaba []
+    //     → gimbal SIN slots en el LoadoutBuilder → DPS=0
+    // Ahora: si el objeto es un entry, lo retornamos como `[entry]` y
+    // buildChildren va a procesar sus children correctamente.
+    if (loadoutJson.ClassName || loadoutJson.className) {
+      return [loadoutJson];
+    }
+    // Si NO tiene ClassName pero sí Loadout array, es un wrapper de la
+    // lista de top-level entries (shape original Fase Y temprana).
     const inner = loadoutJson.Loadout;
     if (Array.isArray(inner)) return inner;
   }
@@ -1471,6 +1487,156 @@ export async function GET(
         }
       } catch (e: any) {
         console.warn("[ships/[id]] hardpoint fallback lookup failed:", e?.message);
+      }
+    }
+
+    // ── 3.5. Loadout fallback per-hardpoint cuando un gimbal viene con
+    // Loadout vacío en la GV actual pero tenemos data en una GV anterior.
+    //
+    // 2026-05-15 (Loadout.15) — Solución robusta a los parches del juego:
+    // cada vez que CIG lanza un parche, scunpacked (o el ingest) puede dejar
+    // el campo `loadout_json.Loadout: []` vacío para gimbal mounts, missile
+    // racks, salvage heads, etc. Antes el LoadoutBuilder mostraba esos
+    // hardpoints sin children y el user veía "WEAPONS 3" pero sin armas
+    // adentro → DPS=0.
+    //
+    // Ahora: si un hp tiene loadout_json con entries de tipo gimbal/turret/
+    // missile_rack/salvage_head pero con `Loadout: []` vacío, buscamos el
+    // loadout_json del MISMO hardpoint (ship_reference + hardpoint_name) en
+    // OTRA game_version anterior que SÍ tenga children. Si encontramos data
+    // utilizable, sobreescribimos hp.loadout_json. Resultado: el ship muestra
+    // las weapons defaults de la versión anterior hasta que el ingest del
+    // parche actual se complete.
+    //
+    // Esto se autocura — la próxima vez que CIG cambie el schema, los
+    // valores del parche viejo siguen disponibles como fallback.
+    function entryNeedsLoadoutFallback(entry: any): boolean {
+      const className = String(entry?.ClassName || entry?.className || "");
+      const type = String(entry?.Type || "");
+      // Categorías que esperamos tener Loadout children:
+      const expectsChildren =
+        className.startsWith("Mount_Gimbal") ||
+        className.includes("Missile_Rack") ||
+        type.includes("Turret") ||
+        type.includes("MissileLauncher") ||
+        type.includes("SalvageHead") ||
+        type.includes("MiningArm");
+      if (!expectsChildren) return false;
+      const loadout = Array.isArray(entry?.Loadout) ? entry.Loadout : [];
+      const children = Array.isArray(entry?.Children) ? entry.Children : [];
+      return loadout.length === 0 && children.length === 0;
+    }
+
+    function hpHasEmptyExpectedLoadouts(hp: any): boolean {
+      const entries = normalizeLoadoutEntries(hp?.loadout_json);
+      return entries.some(entryNeedsLoadoutFallback);
+    }
+
+    const hpsNeedingFallback = hardpointRows.filter(hpHasEmptyExpectedLoadouts);
+    if (hpsNeedingFallback.length > 0 && ship.reference) {
+      try {
+        const hpNames = hpsNeedingFallback.map((h) => String(h.hardpoint_name));
+        // Buscar el mismo hardpoint_name en otras gv ordenado por gv DESC.
+        // Asumimos que la gv del current es la "más nueva"; otras gv son fallback.
+        const fbRows: any[] = await sql.unsafe(
+          `SELECT hardpoint_name, loadout_json, game_version
+           FROM ship_hardpoints
+           WHERE ship_reference = $1
+             AND game_version <> $2
+             AND hardpoint_name = ANY($3::text[])
+           ORDER BY game_version DESC`,
+          [String(ship.reference), String(shipGV ?? ""), hpNames],
+        );
+
+        // Para cada hp_name, encontrar la primera fila cuyos entries tengan
+        // children no vacíos. Usamos como fuente de loadout_json.
+        const fallbackByHpName = new Map<string, any>();
+        for (const fb of fbRows) {
+          if (fallbackByHpName.has(fb.hardpoint_name)) continue;
+          const entries = normalizeLoadoutEntries(fb.loadout_json);
+          // Buscar AL MENOS un entry de tipo "expects children" CON children.
+          const hasUsefulChildren = entries.some((e: any) => {
+            const className = String(e?.ClassName || e?.className || "");
+            const type = String(e?.Type || "");
+            const expectsChildren =
+              className.startsWith("Mount_Gimbal") ||
+              className.includes("Missile_Rack") ||
+              type.includes("Turret") ||
+              type.includes("MissileLauncher");
+            if (!expectsChildren) return false;
+            const loadout = Array.isArray(e?.Loadout) ? e.Loadout : [];
+            const children = Array.isArray(e?.Children) ? e.Children : [];
+            return loadout.length > 0 || children.length > 0;
+          });
+          if (hasUsefulChildren) {
+            fallbackByHpName.set(fb.hardpoint_name, {
+              loadout_json: fb.loadout_json,
+              from_gv: fb.game_version,
+            });
+          }
+        }
+
+        let appliedCount = 0;
+        for (const hp of hardpointRows) {
+          const fb = fallbackByHpName.get(hp.hardpoint_name);
+          if (!fb) continue;
+          // Merge: por cada entry CURRENT con Loadout vacío, buscar el entry
+          // equivalente en el fallback (por ClassName o por orden) y copiar
+          // su Loadout. Mantener el resto del current intacto.
+          const currentEntries = normalizeLoadoutEntries(hp.loadout_json);
+          const fbEntries = normalizeLoadoutEntries(fb.loadout_json);
+          if (currentEntries.length === 0) continue;
+          let touched = false;
+          for (const ce of currentEntries) {
+            if (!entryNeedsLoadoutFallback(ce)) continue;
+            // Match por ClassName si existe, si no, por orden de tipo gimbal/turret.
+            const ceClass = String(ce?.ClassName || ce?.className || "");
+            let fbMatch = fbEntries.find(
+              (fe: any) => String(fe?.ClassName || fe?.className || "") === ceClass,
+            );
+            if (!fbMatch) {
+              // Fallback: buscar el primer entry del fb que sea del mismo tipo
+              fbMatch = fbEntries.find((fe: any) => {
+                const fc = String(fe?.ClassName || fe?.className || "");
+                const isSameKind =
+                  (fc.startsWith("Mount_Gimbal") && ceClass.startsWith("Mount_Gimbal")) ||
+                  (fc.includes("Missile_Rack") && ceClass.includes("Missile_Rack"));
+                if (!isSameKind) return false;
+                const fbLoad = Array.isArray(fe?.Loadout) ? fe.Loadout : [];
+                const fbChild = Array.isArray(fe?.Children) ? fe.Children : [];
+                return fbLoad.length > 0 || fbChild.length > 0;
+              });
+            }
+            if (fbMatch) {
+              const fbLoad = Array.isArray(fbMatch.Loadout) ? fbMatch.Loadout : [];
+              const fbChild = Array.isArray(fbMatch.Children) ? fbMatch.Children : [];
+              if (fbLoad.length > 0) {
+                ce.Loadout = fbLoad;
+                touched = true;
+              } else if (fbChild.length > 0) {
+                ce.Children = fbChild;
+                touched = true;
+              }
+            }
+          }
+          if (touched) {
+            // Si el loadout_json era array, lo dejamos como array; si era objeto,
+            // como objeto. normalizeLoadoutEntries devuelve referencias, así que
+            // ce.Loadout = ... ya mutó la estructura original.
+            appliedCount++;
+          }
+        }
+        if (appliedCount > 0) {
+          console.log(
+            `[ships/[id]] loadout fallback aplicado a ${appliedCount}/${hpsNeedingFallback.length} hardpoints ` +
+              `(ship=${ship.reference}, gv=${shipGV}, fb_sources=${Array.from(new Set(fbRows.map((r) => r.game_version))).join(",")})`,
+          );
+        }
+      } catch (e: any) {
+        console.warn(
+          "[ships/[id]] loadout fallback lookup failed:",
+          e?.message ?? e,
+        );
       }
     }
 
