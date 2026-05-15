@@ -1378,26 +1378,90 @@ export async function GET(
       game_version: ship.game_version,
     });
 
+    // 2026-05-15 (Loadout.16): helper que carga una fila SHIP-level (single-row)
+    // priorizando la GV actual; si los campos críticos vienen NULL (caso típico
+    // 4.8 PTU mal ingestado), mergea con la GV anterior. Lo que vale es: si
+    // current field is non-NULL → ganar; si no → usar la GV anterior. Esto
+    // hace que cada vez que CIG / Garnok rompe una tabla en un parche, los
+    // datos viejos cubran el hueco automáticamente.
+    const loadShipRowMerged = async (table: string): Promise<any> => {
+      try {
+        const currentGv = ship.game_version ?? null;
+        const allRows: any[] = currentGv
+          ? await sql.unsafe(
+              `SELECT * FROM ${table} WHERE ship_id::text = $1 ORDER BY (game_version = $2) DESC, game_version DESC`,
+              [String(ship.id), String(currentGv)],
+            )
+          : await sql.unsafe(
+              `SELECT * FROM ${table} WHERE ship_id::text = $1 LIMIT 1`,
+              [String(ship.id)],
+            );
+        if (allRows.length === 0) return null;
+        if (allRows.length === 1) return allRows[0];
+        // Merge: current (allRows[0]) gana si non-null, sino caemos a allRows[1+]
+        const merged: any = { ...allRows[allRows.length - 1] }; // base = la más vieja
+        for (let i = allRows.length - 2; i >= 0; i--) {
+          for (const k of Object.keys(allRows[i])) {
+            if (allRows[i][k] != null && allRows[i][k] !== "") merged[k] = allRows[i][k];
+          }
+        }
+        return merged;
+      } catch (e: any) {
+        console.warn(`[ships/[id]] loadShipRowMerged(${table}) failed:`, e?.message ?? e);
+        return null;
+      }
+    };
+
+    // 2026-05-15 (Loadout.16): ship_pools tiene multi-rows (1 por item_type).
+    // Si el current GV trajo pools con max_size=0 (caso 4.8 PTU vacío), reemplazar
+    // por las del GV anterior donde max_size > 0.
+    const loadShipPoolsMerged = async (): Promise<any[]> => {
+      try {
+        const allRows: any[] = await sql.unsafe(
+          `SELECT item_type, max_size, game_version FROM ship_pools WHERE ship_id::text = $1`,
+          [String(ship.id)],
+        );
+        if (allRows.length === 0) return [];
+        const currentGv = ship.game_version ?? null;
+        // Para cada item_type: si la fila del current GV tiene max_size > 0 → usarla
+        // sino → buscar otra GV con max_size > 0
+        const byItemType = new Map<string, any>();
+        // Primer pass: agregamos las filas del current GV con max_size > 0
+        for (const r of allRows) {
+          if (currentGv && r.game_version === currentGv && Number(r.max_size) > 0) {
+            byItemType.set(r.item_type, r);
+          }
+        }
+        // Segundo pass: completamos con filas de OTRAS GVs si la actual no tenía data
+        for (const r of allRows) {
+          if (byItemType.has(r.item_type)) continue;
+          if (Number(r.max_size) > 0) {
+            byItemType.set(r.item_type, r);
+          }
+        }
+        // Tercer pass: si TODAVÍA no hay nada, devolver la actual aunque sea 0
+        for (const r of allRows) {
+          if (byItemType.has(r.item_type)) continue;
+          byItemType.set(r.item_type, r);
+        }
+        return Array.from(byItemType.values());
+      } catch (e: any) {
+        console.warn("[ships/[id]] loadShipPoolsMerged failed:", e?.message ?? e);
+        return [];
+      }
+    };
+
     // ── 2. Load satellite data in parallel ──
+    // 2026-05-15 (Loadout.16): cada tabla single-row usa el merge helper para
+    // que NULLs en la GV actual caigan al fallback de GV anterior. Esto resuelve
+    // el bug donde ship_power_reference 4.8.0 venía con 32/35 campos NULL.
     const [flightStats, fuelStats, powerRef, poolRows, resistances, insurance] = await Promise.all([
-      sql.unsafe(`SELECT * FROM ship_flight_stats WHERE ship_id::text = $1 LIMIT 1`, [String(ship.id)])
-        .then((rows: any[]) => rows[0] ?? null)
-        .catch((e: unknown) => { console.warn("[ships/[id]] Could not load flight stats:", e); return null; }),
-      sql.unsafe(`SELECT * FROM ship_fuel WHERE ship_id::text = $1 LIMIT 1`, [String(ship.id)])
-        .then((rows: any[]) => rows[0] ?? null)
-        .catch((e: unknown) => { console.warn("[ships/[id]] Could not load fuel stats:", e); return null; }),
-      sql.unsafe(`SELECT * FROM ship_power_reference WHERE ship_id = $1 LIMIT 1`, [String(ship.id)])
-        .then((rows: any[]) => rows[0] ?? null)
-        .catch((e: unknown) => { console.warn("[ships/[id]] Could not load power reference:", e); return null; }),
-      sql.unsafe(`SELECT item_type, max_size FROM ship_pools WHERE ship_id = $1`, [String(ship.id)])
-        .then((rows: any[]) => rows ?? [])
-        .catch((e: unknown) => { console.warn("[ships/[id]] Could not load ship pools:", e); return []; }),
-      sql.unsafe(`SELECT * FROM ship_resistances WHERE ship_id::text = $1 LIMIT 1`, [String(ship.id)])
-        .then((rows: any[]) => rows[0] ?? null)
-        .catch((e: unknown) => { console.warn("[ships/[id]] Could not load ship resistances:", e); return null; }),
-      sql.unsafe(`SELECT * FROM ship_insurance WHERE ship_id::text = $1 LIMIT 1`, [String(ship.id)])
-        .then((rows: any[]) => rows[0] ?? null)
-        .catch((e: unknown) => { console.warn("[ships/[id]] Could not load insurance:", e); return null; }),
+      loadShipRowMerged("ship_flight_stats"),
+      loadShipRowMerged("ship_fuel"),
+      loadShipRowMerged("ship_power_reference"),
+      loadShipPoolsMerged(),
+      loadShipRowMerged("ship_resistances"),
+      loadShipRowMerged("ship_insurance"),
     ]);
 
     // ── 3. Get hardpoints from NEW schema (match by ship reference) ──
