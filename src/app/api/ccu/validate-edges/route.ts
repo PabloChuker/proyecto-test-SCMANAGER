@@ -105,10 +105,12 @@ export async function POST(request: NextRequest) {
     // ship_prices_canonical.pledge_usd.
     // 2026-05-12 (CCU.17): segundo JOIN fallback por nombre para naves cuyo
     // ship_id en ship_prices_canonical quedó NULL (ej. Anvil Spartan).
+    // 2026-05-13 (CCU.25): wiki canonical primero (más actualizado), ship_price
+    // como fallback histórico (ver comentario detallado en /api/ccu/ships).
     const allShipIds = [...new Set([...fromIds, ...toIds])];
     const shipRows: any[] = await sql.unsafe(
       `SELECT s.id, s.name,
-              COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) AS msrp_usd,
+              COALESCE(spc.pledge_usd, spc_name.pledge_usd, sp.msrp_usd) AS msrp_usd,
               COALESCE(sp.is_ccu_eligible, true) AS is_ccu_eligible
          FROM ships s
          LEFT JOIN ship_price sp ON sp.id = s.id

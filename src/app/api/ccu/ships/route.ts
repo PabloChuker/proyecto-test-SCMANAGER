@@ -24,8 +24,13 @@ export async function GET(request: NextRequest) {
     // por el WHERE de ship_price → quedaban afuera del catálogo y rompían el
     // matching del Inventario en /hangar/chain-board.
     //
-    // Fix: COALESCE entre las 2 fuentes. ship_price gana cuando existe (es la
-    // tabla canónica del módulo CCU), sino caemos al wiki cache.
+    // 2026-05-13 (CCU.25): INVERTIDA la prioridad del COALESCE. Antes ship_price
+    // ganaba sobre wiki canonical, lo cual rompía las actualizaciones de precio:
+    // si una nave aumentó de $400 a $450 en RSI (Drake Ironclad caso real), el
+    // wiki canonical se actualiza con $450 al correr el scraper, pero
+    // ship_price.msrp_usd se quedaba en $400 hasta que alguien corra populate_prices.
+    // El COALESCE devolvía $400 (no NULL) → endpoint mostraba precio viejo.
+    // Solución: spc.pledge_usd (más reciente) gana, ship_price es fallback histórico.
     //
     // 2026-05-12 (CCU.17): segundo LEFT JOIN por nombre con strip de manufacturer
     // prefix. Caso típico: Anvil Spartan en BD se llama "Anvil Spartan" pero el
@@ -44,8 +49,8 @@ export async function GET(request: NextRequest) {
     let query = `
       SELECT DISTINCT ON (s.class_name)
              s.id, s.class_name AS reference, s.name, m.name AS manufacturer,
-             COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) AS msrp_usd,
-             COALESCE(sp.warbond_usd, spc.warbond_usd, spc_name.warbond_usd) AS warbond_usd,
+             COALESCE(spc.pledge_usd, spc_name.pledge_usd, sp.msrp_usd) AS msrp_usd,
+             COALESCE(spc.warbond_usd, spc_name.warbond_usd, sp.warbond_usd) AS warbond_usd,
              COALESCE(sp.is_ccu_eligible, true) AS is_ccu_eligible,
              COALESCE(sp.is_limited, false) AS is_limited,
              COALESCE(s.flight_status, 'flight_ready') AS flight_status,
@@ -61,10 +66,10 @@ export async function GET(request: NextRequest) {
              '^(Aegis|Anvil|Drake|RSI|Origin|MISC|Crusader|Esperia|Banu|Tumbril|Argo|Greycat|Kruger|Mirai|Vanduul|Aopoa|Consolidated Outland|Gatac|CNOU)\\s+',
              '', 'i'))
       LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
-      WHERE COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) IS NOT NULL
-        AND COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) > 0
-        AND COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) >= $1
-        AND COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) <= $2
+      WHERE COALESCE(spc.pledge_usd, spc_name.pledge_usd, sp.msrp_usd) IS NOT NULL
+        AND COALESCE(spc.pledge_usd, spc_name.pledge_usd, sp.msrp_usd) > 0
+        AND COALESCE(spc.pledge_usd, spc_name.pledge_usd, sp.msrp_usd) >= $1
+        AND COALESCE(spc.pledge_usd, spc_name.pledge_usd, sp.msrp_usd) <= $2
     `;
     const params: any[] = [minPrice, maxPrice];
     let paramIdx = 3;
@@ -78,7 +83,7 @@ export async function GET(request: NextRequest) {
     // DISTINCT ON requiere que el primer ORDER BY columna sea la misma del
     // DISTINCT (class_name), después podemos usar el orden lógico que queramos.
     // El SELECT final lo re-ordenamos en JS por msrp ASC.
-    query += ` ORDER BY s.class_name, COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) DESC NULLS LAST, s.id DESC`;
+    query += ` ORDER BY s.class_name, COALESCE(spc.pledge_usd, spc_name.pledge_usd, sp.msrp_usd) DESC NULLS LAST, s.id DESC`;
 
     const rows: any[] = await sql.unsafe(query, params);
 

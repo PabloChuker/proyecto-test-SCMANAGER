@@ -75,10 +75,15 @@ export async function POST(request: NextRequest) {
     // detallado en /api/ccu/ships. Cubre el caso de naves cuyo ship_id quedó
     // NULL en ship_prices_canonical porque el script de matching falló (ej.
     // Anvil Spartan: JSON wiki dice "Spartan", BD dice "Anvil Spartan").
+    // 2026-05-13 (CCU.25): wiki canonical primero (más actualizado), ship_price
+    // como fallback histórico. Antes ship_price ganaba siempre y bloqueaba
+    // las actualizaciones de precio (Drake Ironclad subió $400→$450 en RSI,
+    // el wiki se actualizó pero ship_price quedó viejo → el solver y el
+    // dropdown mostraban $400).
     const shipRows: any[] = await sql.unsafe(`
       SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer,
-             COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) AS msrp_usd,
-             COALESCE(sp.warbond_usd, spc.warbond_usd, spc_name.warbond_usd) AS warbond_usd,
+             COALESCE(spc.pledge_usd, spc_name.pledge_usd, sp.msrp_usd) AS msrp_usd,
+             COALESCE(spc.warbond_usd, spc_name.warbond_usd, sp.warbond_usd) AS warbond_usd,
              COALESCE(spc.warbond_usd, spc_name.warbond_usd) AS warbond_usd_real,
              COALESCE(spc.pledge_availability, spc_name.pledge_availability) AS pledge_availability,
              COALESCE(sp.is_ccu_eligible, true) AS is_ccu_eligible,
@@ -95,9 +100,9 @@ export async function POST(request: NextRequest) {
              s.name,
              '^(Aegis|Anvil|Drake|RSI|Origin|MISC|Crusader|Esperia|Banu|Tumbril|Argo|Greycat|Kruger|Mirai|Vanduul|Aopoa|Consolidated Outland|Gatac|CNOU)\\s+',
              '', 'i'))
-      WHERE COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) IS NOT NULL
-        AND COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) > 0
-      ORDER BY COALESCE(sp.msrp_usd, spc.pledge_usd, spc_name.pledge_usd) ASC
+      WHERE COALESCE(spc.pledge_usd, spc_name.pledge_usd, sp.msrp_usd) IS NOT NULL
+        AND COALESCE(spc.pledge_usd, spc_name.pledge_usd, sp.msrp_usd) > 0
+      ORDER BY COALESCE(spc.pledge_usd, spc_name.pledge_usd, sp.msrp_usd) ASC
     `, []);
 
     const ships = new Map<string, ShipNode>();
