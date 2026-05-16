@@ -11,6 +11,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { computeRealFireRate } from "@/lib/fireRate";
 import { computeSustainedDps } from "@/lib/sustainedDps";
+import {
+  getDefaultOnlineVersion,
+  getOnlineVersionsArray,
+  getOnlineVersionsSet,
+  resolveEffectiveGv,
+} from "@/lib/onlineVersions";
 // Fallback: static JSON for data not yet in DB (flight controllers, etc.)
 import powerNetworkLookup from "@/data/power-network-lookup.json";
 import shipPowerData from "@/data/ship-power-data.json";
@@ -1261,29 +1267,24 @@ export async function GET(
     // es agnóstico al timing del client. El síntoma sin esto era: primera carga
     // muestra hardpoints de la versión vieja (4.7.0-LIVE.11518367) con shape
     // distinta, F5 arreglaba porque el segundo fetch ya tenía gv resuelto.
-    let gvParam = request.nextUrl.searchParams.get("gv");
+    // Fase GV-Online (2026-05-15): el admin usa game_versions.online como
+    // kill-switch. Si una versión está offline, el endpoint NO debe servir
+    // datos de ella — ni como default, ni como gvParam respetado, ni como
+    // fallback merge. resolveEffectiveGv() normaliza: si vino ?gv=X y X NO
+    // está online, lo descartamos y caemos al default online (no devolver
+    // 404 — el cliente puede tener cache local).
+    const rawGv = request.nextUrl.searchParams.get("gv");
+    let gvParam: string | null = await resolveEffectiveGv(rawGv);
     if (!gvParam) {
-      try {
-        // game_versions schema: version, source, "processedAt", notes, online.
-        // Filtramos PTU, formato semver-ish y online=true. Ordenamos por
-        // processedAt desc para tomar la última importada como default LIVE.
-        const latest: any[] = await sql.unsafe(
-          `SELECT version FROM game_versions
-            WHERE version !~* 'PTU'
-              AND version ~ '^[0-9]+\\.[0-9]+'
-              AND COALESCE(online, true) = true
-            ORDER BY "processedAt" DESC NULLS LAST, version DESC
-            LIMIT 1`,
-          [],
-        );
-        if (latest[0]?.version) {
-          gvParam = String(latest[0].version);
-        }
-      } catch {
-        // Si la query falla (tabla missing en algún ambiente), seguimos
-        // sin gv y caemos al match_rank básico.
-      }
+      gvParam = await getDefaultOnlineVersion();
     }
+    // Snapshot del set/array de versiones online para usar como filtro en
+    // TODOS los queries y fallbacks de esta request. Si el set está vacío
+    // (cache fail-open), trabajamos como antes (no filtramos) para no romper
+    // entornos sin la columna online.
+    const onlineSet = await getOnlineVersionsSet();
+    const onlineList = await getOnlineVersionsArray(); // null si vacío
+    const enforceOnline = onlineList !== null && onlineSet.size > 0;
 
     // ── 1. Find the ship (exact matches prioritized over partial) ──
     // Cuando hay gv, la prioridad es: match exacto + game_version coincide.
@@ -1302,9 +1303,12 @@ export async function GET(
     // exacto devuelve NULL y los chips no se muestran.
     // Fix: matchear precios por CUALQUIER fila hermana del mismo `class_name` —
     // un solo subquery LIMIT 1 por columna mantiene perf bajo (LIMIT 1 outer).
-    const shipRows: any[] = gvParam
-      ? await sql.unsafe(
-          `SELECT s.*, s.class_name AS reference,
+    // Fase GV-Online (2026-05-15): cuando hay versiones online, restringimos
+    // la búsqueda de ships a esas versiones. Si la versión pedida en gvParam
+    // ya está online, se preserva como tie-breaker via gv_rank.
+    const onlineFilter = enforceOnline ? ` AND s.game_version = ANY($${gvParam ? 3 : 2}::text[])` : "";
+    const shipQuery = gvParam
+      ? `SELECT s.*, s.class_name AS reference,
              COALESCE(sp.msrp_usd, (SELECT sp2.msrp_usd FROM ships s2 JOIN ship_price sp2 ON sp2.id = s2.id WHERE s2.class_name = s.class_name AND sp2.msrp_usd IS NOT NULL LIMIT 1)) AS msrp_usd,
              COALESCE(sp.warbond_usd, (SELECT sp2.warbond_usd FROM ships s2 JOIN ship_price sp2 ON sp2.id = s2.id WHERE s2.class_name = s.class_name AND sp2.warbond_usd IS NOT NULL LIMIT 1)) AS warbond_usd,
              COALESCE(sp.acquisition_method, (SELECT sp2.acquisition_method FROM ships s2 JOIN ship_price sp2 ON sp2.id = s2.id WHERE s2.class_name = s.class_name AND sp2.acquisition_method IS NOT NULL LIMIT 1)) AS acquisition_method,
@@ -1324,17 +1328,14 @@ export async function GET(
            LEFT JOIN ship_price sp ON sp.id = s.id
            LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
            LEFT JOIN ship_prices_canonical spc ON spc.ship_id = s.id
-           WHERE s.class_name = $1
+           WHERE (s.class_name = $1
               OR s.class_name ILIKE $1
               OR s.name ILIKE $1
               OR s.id::text = $1
-              OR s.class_name ILIKE '%' || $1 || '%'
+              OR s.class_name ILIKE '%' || $1 || '%')${onlineFilter}
            ORDER BY gv_rank ASC, match_rank ASC, has_satellites_rank ASC
-           LIMIT 1`,
-          [String(id), String(gvParam)],
-        )
-      : await sql.unsafe(
-          `SELECT s.*, s.class_name AS reference,
+           LIMIT 1`
+      : `SELECT s.*, s.class_name AS reference,
              COALESCE(sp.msrp_usd, (SELECT sp2.msrp_usd FROM ships s2 JOIN ship_price sp2 ON sp2.id = s2.id WHERE s2.class_name = s.class_name AND sp2.msrp_usd IS NOT NULL LIMIT 1)) AS msrp_usd,
              COALESCE(sp.warbond_usd, (SELECT sp2.warbond_usd FROM ships s2 JOIN ship_price sp2 ON sp2.id = s2.id WHERE s2.class_name = s.class_name AND sp2.warbond_usd IS NOT NULL LIMIT 1)) AS warbond_usd,
              COALESCE(sp.acquisition_method, (SELECT sp2.acquisition_method FROM ships s2 JOIN ship_price sp2 ON sp2.id = s2.id WHERE s2.class_name = s.class_name AND sp2.acquisition_method IS NOT NULL LIMIT 1)) AS acquisition_method,
@@ -1353,15 +1354,16 @@ export async function GET(
            LEFT JOIN ship_price sp ON sp.id = s.id
            LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
            LEFT JOIN ship_prices_canonical spc ON spc.ship_id = s.id
-           WHERE s.class_name = $1
+           WHERE (s.class_name = $1
               OR s.class_name ILIKE $1
               OR s.name ILIKE $1
               OR s.id::text = $1
-              OR s.class_name ILIKE '%' || $1 || '%'
+              OR s.class_name ILIKE '%' || $1 || '%')${onlineFilter}
            ORDER BY match_rank ASC, has_satellites_rank ASC
-           LIMIT 1`,
-          [String(id)],
-        );
+           LIMIT 1`;
+    const shipParams: any[] = gvParam ? [String(id), String(gvParam)] : [String(id)];
+    if (enforceOnline) shipParams.push(onlineList as string[]);
+    const shipRows: any[] = await sql.unsafe(shipQuery, shipParams);
 
     if (shipRows.length === 0) {
       return NextResponse.json({ error: "Nave no encontrada" }, { status: 404 });
@@ -1387,15 +1389,38 @@ export async function GET(
     const loadShipRowMerged = async (table: string): Promise<any> => {
       try {
         const currentGv = ship.game_version ?? null;
-        const allRows: any[] = currentGv
-          ? await sql.unsafe(
-              `SELECT * FROM ${table} WHERE ship_id::text = $1 ORDER BY (game_version = $2) DESC, game_version DESC`,
-              [String(ship.id), String(currentGv)],
-            )
-          : await sql.unsafe(
-              `SELECT * FROM ${table} WHERE ship_id::text = $1 LIMIT 1`,
-              [String(ship.id)],
-            );
+        // Fase GV-Online (2026-05-15): solo aceptamos filas cuya game_version
+        // esté online. Esto cierra el agujero donde el merge tomaba datos de
+        // versiones offline (ej. 4.7.2 offline pero igual hidrataba 4.8.0).
+        let allRows: any[];
+        if (enforceOnline) {
+          allRows = currentGv
+            ? await sql.unsafe(
+                `SELECT * FROM ${table}
+                 WHERE ship_id::text = $1
+                   AND game_version = ANY($3::text[])
+                 ORDER BY (game_version = $2) DESC, game_version DESC`,
+                [String(ship.id), String(currentGv), onlineList as string[]],
+              )
+            : await sql.unsafe(
+                `SELECT * FROM ${table}
+                 WHERE ship_id::text = $1
+                   AND game_version = ANY($2::text[])
+                 LIMIT 1`,
+                [String(ship.id), onlineList as string[]],
+              );
+        } else {
+          // Fail-open: si no hay datos online (cache fail), comportamos como antes.
+          allRows = currentGv
+            ? await sql.unsafe(
+                `SELECT * FROM ${table} WHERE ship_id::text = $1 ORDER BY (game_version = $2) DESC, game_version DESC`,
+                [String(ship.id), String(currentGv)],
+              )
+            : await sql.unsafe(
+                `SELECT * FROM ${table} WHERE ship_id::text = $1 LIMIT 1`,
+                [String(ship.id)],
+              );
+        }
         if (allRows.length === 0) return null;
         if (allRows.length === 1) return allRows[0];
         // Merge: current (allRows[0]) gana si non-null, sino caemos a allRows[1+]
@@ -1417,10 +1442,17 @@ export async function GET(
     // por las del GV anterior donde max_size > 0.
     const loadShipPoolsMerged = async (): Promise<any[]> => {
       try {
-        const allRows: any[] = await sql.unsafe(
-          `SELECT item_type, max_size, game_version FROM ship_pools WHERE ship_id::text = $1`,
-          [String(ship.id)],
-        );
+        // Fase GV-Online: filtrar por versions online
+        const allRows: any[] = enforceOnline
+          ? await sql.unsafe(
+              `SELECT item_type, max_size, game_version FROM ship_pools
+               WHERE ship_id::text = $1 AND game_version = ANY($2::text[])`,
+              [String(ship.id), onlineList as string[]],
+            )
+          : await sql.unsafe(
+              `SELECT item_type, max_size, game_version FROM ship_pools WHERE ship_id::text = $1`,
+              [String(ship.id)],
+            );
         if (allRows.length === 0) return [];
         const currentGv = ship.game_version ?? null;
         // Para cada item_type: si la fila del current GV tiene max_size > 0 → usarla
@@ -1479,12 +1511,22 @@ export async function GET(
     let hardpointsFallbackFrom: string | null = null;
     const shipGV = ship.game_version ?? null;
     try {
-      if (shipGV) {
+      // Fase GV-Online: si shipGV NO está online (puede pasar si la fila ship
+      // matcheó una versión offline en el filtro upstream — defensive), igualmente
+      // filtramos hardpoints por gv online.
+      if (shipGV && (!enforceOnline || onlineSet.has(shipGV))) {
         hardpointRows = await sql.unsafe(
           `SELECT * FROM ship_hardpoints
            WHERE ship_reference = $1 AND game_version = $2
            ORDER BY hardpoint_type, max_size DESC, hardpoint_name ASC`,
           [String(ship.reference ?? ""), String(shipGV)],
+        );
+      } else if (enforceOnline) {
+        hardpointRows = await sql.unsafe(
+          `SELECT * FROM ship_hardpoints
+           WHERE ship_reference = $1 AND game_version = ANY($2::text[])
+           ORDER BY hardpoint_type, max_size DESC, hardpoint_name ASC`,
+          [String(ship.reference ?? ""), onlineList as string[]],
         );
       } else {
         hardpointRows = await sql.unsafe(
@@ -1520,14 +1562,24 @@ export async function GET(
     // no hay hardpoints de su categoria.
     if (hardpointRows.length === 0 && ship.reference) {
       try {
-        const fbCandidates: any[] = await sql.unsafe(
-          `SELECT game_version, COUNT(*)::int AS n
-           FROM ship_hardpoints
-           WHERE ship_reference = $1
-           GROUP BY game_version
-           ORDER BY game_version DESC NULLS LAST`,
-          [String(ship.reference)],
-        );
+        // Fase GV-Online: solo buscamos fallback en versiones online
+        const fbCandidates: any[] = enforceOnline
+          ? await sql.unsafe(
+              `SELECT game_version, COUNT(*)::int AS n
+               FROM ship_hardpoints
+               WHERE ship_reference = $1 AND game_version = ANY($2::text[])
+               GROUP BY game_version
+               ORDER BY game_version DESC NULLS LAST`,
+              [String(ship.reference), onlineList as string[]],
+            )
+          : await sql.unsafe(
+              `SELECT game_version, COUNT(*)::int AS n
+               FROM ship_hardpoints
+               WHERE ship_reference = $1
+               GROUP BY game_version
+               ORDER BY game_version DESC NULLS LAST`,
+              [String(ship.reference)],
+            );
         const best = fbCandidates.find((r: any) => (r?.n ?? 0) > 0);
         if (best && best.game_version) {
           hardpointRows = await sql.unsafe(
@@ -1602,15 +1654,27 @@ export async function GET(
         const hpNames = hpsNeedingFallback.map((h) => String(h.hardpoint_name));
         // Buscar el mismo hardpoint_name en otras gv ordenado por gv DESC.
         // Asumimos que la gv del current es la "más nueva"; otras gv son fallback.
-        const fbRows: any[] = await sql.unsafe(
-          `SELECT hardpoint_name, loadout_json, game_version
-           FROM ship_hardpoints
-           WHERE ship_reference = $1
-             AND game_version <> $2
-             AND hardpoint_name = ANY($3::text[])
-           ORDER BY game_version DESC`,
-          [String(ship.reference), String(shipGV ?? ""), hpNames],
-        );
+        // Fase GV-Online: el fallback de loadout también respeta online flag
+        const fbRows: any[] = enforceOnline
+          ? await sql.unsafe(
+              `SELECT hardpoint_name, loadout_json, game_version
+               FROM ship_hardpoints
+               WHERE ship_reference = $1
+                 AND game_version <> $2
+                 AND game_version = ANY($4::text[])
+                 AND hardpoint_name = ANY($3::text[])
+               ORDER BY game_version DESC`,
+              [String(ship.reference), String(shipGV ?? ""), hpNames, onlineList as string[]],
+            )
+          : await sql.unsafe(
+              `SELECT hardpoint_name, loadout_json, game_version
+               FROM ship_hardpoints
+               WHERE ship_reference = $1
+                 AND game_version <> $2
+                 AND hardpoint_name = ANY($3::text[])
+               ORDER BY game_version DESC`,
+              [String(ship.reference), String(shipGV ?? ""), hpNames],
+            );
 
         // Para cada hp_name, encontrar la primera fila cuyos entries tengan
         // children no vacíos. Usamos como fuente de loadout_json.

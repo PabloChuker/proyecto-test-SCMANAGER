@@ -22,6 +22,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { resolveEffectiveGv } from "@/lib/onlineVersions";
 
 export const revalidate = 300;
 
@@ -34,23 +35,15 @@ export async function GET(request: NextRequest) {
     const gameVersion = url.searchParams.get("gameVersion");
     const includeTemplates = url.searchParams.get("includeTemplates") === "1";
 
-    // Default gameVersion: el registro online=true. Si no hay ninguno, usamos
-    // el MAX (varchar) como fallback determinístico.
-    let version = gameVersion;
+    // Fase GV-Online: si vino gameVersion en query string, validamos contra
+    // las versions online. Si la pedida está offline, caemos al default online.
+    let version = await resolveEffectiveGv(gameVersion);
     if (!version) {
-      const gv: any[] = await sql.unsafe(
-        `SELECT version FROM game_versions
-         WHERE online = true
-         ORDER BY "processedAt" DESC NULLS LAST, version DESC
-         LIMIT 1`,
+      // Fallback (cache fail-open o sin filas online): query antigua
+      const fallback: any[] = await sql.unsafe(
+        `SELECT version FROM game_versions ORDER BY version DESC LIMIT 1`,
       );
-      version = gv[0]?.version ?? null;
-      if (!version) {
-        const fallback: any[] = await sql.unsafe(
-          `SELECT version FROM game_versions ORDER BY version DESC LIMIT 1`,
-        );
-        version = fallback[0]?.version ?? null;
-      }
+      version = fallback[0]?.version ?? null;
     }
     if (!version) {
       return NextResponse.json(

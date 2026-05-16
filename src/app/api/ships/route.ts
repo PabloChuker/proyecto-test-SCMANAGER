@@ -19,6 +19,7 @@ import {
   parsePostBody,
   secureHeaders,
 } from "@/lib/api-security";
+import { getOnlineVersionsArray } from "@/lib/onlineVersions";
 
 export const revalidate = 300;
 
@@ -149,6 +150,16 @@ async function handleShipsQuery(params: ShipsQueryParams) {
       // Solo flight_ready (o NULL por compatibilidad con filas antiguas que
       // no tenían el campo poblado). Excluye 'concept' e 'in_development'.
       conditions.push(`(s.flight_status IS NULL OR s.flight_status = 'flight_ready')`);
+    }
+
+    // Fase GV-Online (2026-05-15): solo naves cuyo game_version esté en
+    // game_versions.online = true. Si no hay versiones online (raro), no
+    // filtramos para no devolver lista vacía.
+    const onlineList = await getOnlineVersionsArray();
+    if (onlineList && onlineList.length > 0) {
+      conditions.push(`s.game_version = ANY($${paramIdx}::text[])`);
+      queryParams.push(onlineList);
+      paramIdx++;
     }
 
     const whereClause = "WHERE " + conditions.join(" AND ");

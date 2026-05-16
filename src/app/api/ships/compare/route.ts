@@ -10,6 +10,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { validateIds, parsePostBody, secureHeaders } from "@/lib/api-security";
+import { getOnlineVersionsArray } from "@/lib/onlineVersions";
 
 function numOrNull(v: any): number | null {
   if (v === null || v === undefined) return null;
@@ -29,14 +30,21 @@ async function compareShips(ids: string[]) {
   try {
     // ── 1. Fetch ships by ID ──
     // Build parameterized query for multiple IDs
+    // Fase GV-Online: filtramos a versions online
+    const onlineList = await getOnlineVersionsArray();
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(", ");
+    const onlineClause = onlineList && onlineList.length > 0
+      ? ` AND s.game_version = ANY($${ids.length + 1}::text[])`
+      : "";
+    const shipParams: any[] = [...ids];
+    if (onlineList && onlineList.length > 0) shipParams.push(onlineList);
     const ships: any[] = await sql.unsafe(
       `SELECT s.*, s.class_name AS reference, sp.msrp_usd, sp.warbond_usd, m.name AS manufacturer
        FROM ships s
        LEFT JOIN ship_price sp ON sp.id = s.id
        LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
-       WHERE s.id::text IN (${placeholders})`,
-      ids,
+       WHERE s.id::text IN (${placeholders})${onlineClause}`,
+      shipParams,
     );
 
     if (ships.length === 0) {

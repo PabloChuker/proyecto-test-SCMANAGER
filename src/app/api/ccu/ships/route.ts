@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { getOnlineVersionsArray } from "@/lib/onlineVersions";
 
 export const revalidate = 300; // Cache for 5 minutes
 
@@ -77,6 +78,14 @@ export async function GET(request: NextRequest) {
     if (search) {
       query += ` AND (s.name ILIKE $${paramIdx} OR s.class_name ILIKE $${paramIdx} OR m.name ILIKE $${paramIdx})`;
       params.push(`%${search}%`);
+      paramIdx++;
+    }
+
+    // Fase GV-Online: filtrar naves a versions online
+    const onlineList = await getOnlineVersionsArray();
+    if (onlineList && onlineList.length > 0) {
+      query += ` AND s.game_version = ANY($${paramIdx}::text[])`;
+      params.push(onlineList);
       paramIdx++;
     }
 

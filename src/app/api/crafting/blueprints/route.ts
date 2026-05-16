@@ -10,6 +10,7 @@
 
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { getOnlineVersionsArray } from "@/lib/onlineVersions";
 
 export const dynamic = "force-dynamic";
 
@@ -133,11 +134,14 @@ export async function GET() {
       ORDER BY blueprint_uuid
     `, []);
 
-    // ── 3b. Load armor base stats indexed by class_name. Joineamos por
-    //        class_name (= blueprints.output_class). Usamos DISTINCT ON para
-    //        que si en el futuro hay varias game_versions cogemos la fila más
-    //        reciente sin duplicados. Para el cálculo FINAL = BASE × (1+pct/100)
-    //        en el frontend.
+    // Fase GV-Online: limitar armor/weapon item lookups a versions online,
+    // así offline flags se respetan también en crafting.
+    const onlineList = await getOnlineVersionsArray();
+    const armorWhere = onlineList && onlineList.length > 0 ? `WHERE game_version = ANY($1::text[])` : "";
+    const weaponWhere = onlineList && onlineList.length > 0 ? `WHERE game_version = ANY($1::text[])` : "";
+    const armorArgs: any[] = onlineList && onlineList.length > 0 ? [onlineList] : [];
+
+    // ── 3b. Load armor base stats indexed by class_name.
     const armorRows: any[] = await sql.unsafe(`
       SELECT DISTINCT ON (class_name)
         class_name, damage_reduction,
@@ -145,20 +149,18 @@ export async function GET() {
         radiation_capacity_rem, radiation_scrub_rem_s,
         carrying_capacity_uscu
       FROM armor_items
+      ${armorWhere}
       ORDER BY class_name, game_version DESC
-    `, []);
+    `, armorArgs);
 
-    // ── 3c. Load weapon base stats. Mismo patrón que armor: DISTINCT ON
-    //        (class_name) cogiendo la game_version más reciente. Solo cargamos
-    //        las stats que se usan como BASE en el frontend (damage alpha,
-    //        rate of fire). El resto está disponible en fps_weapon_items para
-    //        otros módulos.
+    // ── 3c. Load weapon base stats (online versions only).
     const weaponRows: any[] = await sql.unsafe(`
       SELECT DISTINCT ON (class_name)
         class_name, damage_alpha_total, rate_of_fire_rpm
       FROM fps_weapon_items
+      ${weaponWhere}
       ORDER BY class_name, game_version DESC
-    `, []);
+    `, armorArgs);
 
     // ── 4. Index materials by blueprint_uuid ──
     const matByBp = new Map<string, any[]>();

@@ -47,18 +47,22 @@ export async function GET() {
   try {
     let rows: GameVersionRow[] = [];
 
-    // Intentar query rica (con is_current/applied_at). Si esas columnas no
-    // existen, fallback a query simple.
+    // Fase GV-Online (2026-05-15): respetar el flag `online`. Si está marcada
+    // offline (kill-switch del admin), NO la incluimos en el toggle del header.
+    // COALESCE(online, true) = true es defensivo para filas sin la columna.
     try {
       rows = await sql.unsafe(`
         SELECT version, is_current, applied_at
         FROM game_versions
+        WHERE COALESCE(online, true) = true
         ORDER BY applied_at DESC NULLS LAST, version DESC
       `, []) as any;
     } catch {
       try {
         rows = await sql.unsafe(`
-          SELECT version FROM game_versions ORDER BY version DESC
+          SELECT version FROM game_versions
+          WHERE COALESCE(online, true) = true
+          ORDER BY version DESC
         `, []) as any;
       } catch (e) {
         console.warn("[game-versions] query failed:", (e as any)?.message);

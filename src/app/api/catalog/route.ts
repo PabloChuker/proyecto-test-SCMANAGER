@@ -20,6 +20,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { getOnlineVersionsArray } from "@/lib/onlineVersions";
 import {
   sanitizeString,
   validateInt,
@@ -314,6 +315,18 @@ async function queryCatalog(params: CatalogParams) {
       // no viene del user — no se paramatriza.
       if (def.extraWhere) {
         conds.push(`(${def.extraWhere})`);
+      }
+
+      // Fase GV-Online (2026-05-15): si la tabla tiene game_version, filtramos
+      // a versions online. Tablas sin game_version (paints legacy, etc.) se
+      // saltean para no romper la query.
+      if (def.hasGameVersion) {
+        const onlineList = await getOnlineVersionsArray();
+        if (onlineList && onlineList.length > 0) {
+          conds.push(`t.game_version = ANY($${idx}::text[])`);
+          params.push(onlineList);
+          idx++;
+        }
       }
 
       const where = conds.length > 0 ? "WHERE " + conds.join(" AND ") : "";

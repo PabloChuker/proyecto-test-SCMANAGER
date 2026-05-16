@@ -27,6 +27,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
 import { secureHeaders } from "@/lib/api-security";
+import { getOnlineVersionsArray, resolveEffectiveGv } from "@/lib/onlineVersions";
 
 export const revalidate = 300;
 
@@ -53,7 +54,10 @@ export async function GET(request: NextRequest) {
     const url = request.nextUrl;
     const physical = Number(url.searchParams.get("physical") ?? "");
     const energy = Number(url.searchParams.get("energy") ?? "");
-    const gv = url.searchParams.get("gv") ?? null;
+    // Fase GV-Online: si pidieron una gv offline, caemos al default online
+    const rawGv = url.searchParams.get("gv") ?? null;
+    const gv = await resolveEffectiveGv(rawGv);
+    const onlineList = await getOnlineVersionsArray();
     const count = Math.max(1, Math.min(20, Number(url.searchParams.get("count") ?? "6")));
     const mode = url.searchParams.get("mode") ?? "compact";
     const fullMode = mode === "full";
@@ -69,6 +73,18 @@ export async function GET(request: NextRequest) {
     // armas con alpha = 0 (defensivos / utility) y NPC-only obvious por
     // class_name. Limitamos a un set sano para el cliente (40 weapons cerca
     // de cada umbral por type, después se filtran client-side).
+    // Fase GV-Online: filtrar por gv específica si vino, sino restringir a
+    // todas las versions online como pool. Sin esto el catálogo de armas
+    // mezclaba versions offline.
+    let gvClause = "";
+    const gvParams: any[] = [];
+    if (gv) {
+      gvClause = "AND w.game_version = $1";
+      gvParams.push(gv);
+    } else if (onlineList && onlineList.length > 0) {
+      gvClause = "AND w.game_version = ANY($1::text[])";
+      gvParams.push(onlineList);
+    }
     const rows: any[] = await sql.unsafe(
       `SELECT
          w.class_name, w.name, w.size,
@@ -87,9 +103,9 @@ export async function GET(request: NextRequest) {
               + COALESCE(w.alpha_energy,0)
               + COALESCE(w.alpha_distortion,0)
               + COALESCE(w.alpha_thermal,0)) > 0
-         ${gv ? "AND w.game_version = $1" : ""}
+         ${gvClause}
        `,
-      gv ? [gv] : [],
+      gvParams,
     );
 
     const all: ArmorCheckWeapon[] = rows.map((r) => ({
