@@ -152,12 +152,18 @@ async function handleShipsQuery(params: ShipsQueryParams) {
       conditions.push(`(s.flight_status IS NULL OR s.flight_status = 'flight_ready')`);
     }
 
-    // Fase GV-Online (2026-05-15): solo naves cuyo game_version esté en
-    // game_versions.online = true. Si no hay versiones online (raro), no
-    // filtramos para no devolver lista vacía.
+    // Fase GV-Online (2026-05-15 → fix 2026-05-16): el filtro online tiene que
+    // entrar DENTRO del CTE dedup. Si lo aplicamos después, el dedup elige una
+    // fila por (name, manufacturer) entre TODAS las versiones (incluidas las
+    // offline) — y si la "ganadora" es offline (4.7.2 con más campos populated
+    // que el 4.8.0 recién importado), después la descartamos del filtro y la
+    // nave entera desaparece. Resultado del bug: 938 ships totales colapsadas
+    // a 87 únicos en el endpoint. Fix: pasar onlineList al CTE como pre-filtro.
     const onlineList = await getOnlineVersionsArray();
+    const onlineGvFilterCTE = (onlineList && onlineList.length > 0)
+      ? `WHERE game_version = ANY($${paramIdx}::text[])`
+      : "";
     if (onlineList && onlineList.length > 0) {
-      conditions.push(`s.game_version = ANY($${paramIdx}::text[])`);
       queryParams.push(onlineList);
       paramIdx++;
     }
@@ -181,6 +187,7 @@ async function handleShipsQuery(params: ShipsQueryParams) {
               id ASC
           ) AS __rn
         FROM ships
+        ${onlineGvFilterCTE}
       )
     `;
 
