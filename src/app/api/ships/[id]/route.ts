@@ -2326,9 +2326,22 @@ export async function GET(
         accelStrafe: numOrNull(
           col(flightStats, "accel_strafe", "accelStrafe"),
         ),
+        // Fase G-Force (2026-05-16): el dumper 4.7.0 popula accel_*_g (G-force
+        // expressed in multiples of Earth gravity); el frontend lo usa para el
+        // widget G-FORCES. Sin estos campos el front cae al fallback m/s²/9.81.
+        accelForwardG: numOrNull(col(flightStats, "accel_forward_g", "accelForwardG")),
+        accelBackwardG: numOrNull(col(flightStats, "accel_backward_g", "accelBackwardG")),
+        accelUpG: numOrNull(col(flightStats, "accel_up_g", "accelUpG")),
+        accelDownG: numOrNull(col(flightStats, "accel_down_g", "accelDownG")),
+        accelStrafeG: numOrNull(col(flightStats, "accel_strafe_g", "accelStrafeG")),
         boostSpeedBackward: numOrNull(
           col(flightStats, "boost_speed_backward", "boostSpeedBackward"),
         ),
+        // boost_mult_* — multiplicador de aceleración con AFB encendido. Antes
+        // solo exponíamos up/strafe, agregamos forward/backward para que el
+        // widget G-FORCES calcule los valores AFB correctamente.
+        boostMultForward: numOrNull(col(flightStats, "boost_mult_forward", "boostMultForward")),
+        boostMultBackward: numOrNull(col(flightStats, "boost_mult_backward", "boostMultBackward")),
         boostMultUp: numOrNull(
           col(flightStats, "boost_mult_up", "boostMultUp"),
         ),
