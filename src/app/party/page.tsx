@@ -46,10 +46,15 @@ export default function PartyPage() {
   const [activities, setActivities] = useState<ActivityType[]>(activityTypesFallback as ActivityType[]);
   const [creating, setCreating] = useState(false);
 
-  // Online friends for quick invite
-  const [onlineFriends, setOnlineFriends] = useState<Profile[]>([]);
+  // Friends para quick invite — ahora soportamos invitar también a OFFLINE
+  // porque si comparten org el auto-join silencioso los mete sin necesidad
+  // de que estén conectados.
+  const [allFriends, setAllFriends] = useState<Profile[]>([]);
   const [invitingIds, setInvitingIds] = useState<Set<string>>(new Set());
   const [invitedIds, setInvitedIds] = useState<Set<string>>(new Set());
+  // Set de friend_ids que comparten org con el user — para mostrar badge "auto"
+  // y permitir invitar offline.
+  const [orgMateIds, setOrgMateIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!loading && !user) router.push("/login");
@@ -62,8 +67,10 @@ export default function PartyPage() {
       .catch(() => {});
   }, []);
 
-  // Load online friends
-  const loadOnlineFriends = useCallback(async () => {
+  // Load TODOS los amigos (online + offline) — los offline se pueden invitar
+  // si comparten org (auto-join silencioso), si no, queda como invite pending.
+  // Marcamos orgMates con un Set para que el botón de invite tenga el badge.
+  const loadFriendsAndOrgMates = useCallback(async () => {
     if (!user) return;
     // Get accepted friendships
     const { data: friendships } = await supabase
@@ -72,7 +79,11 @@ export default function PartyPage() {
       .or(`requester_id.eq.${user.id},addressee_id.eq.${user.id}`)
       .eq("status", "accepted");
 
-    if (!friendships || friendships.length === 0) { setOnlineFriends([]); return; }
+    if (!friendships || friendships.length === 0) {
+      setAllFriends([]);
+      setOrgMateIds(new Set());
+      return;
+    }
 
     const friendIds = friendships.map((f) =>
       f.requester_id === user.id ? f.addressee_id : f.requester_id
@@ -83,10 +94,27 @@ export default function PartyPage() {
     const { data: profiles } = await supabase
       .from("profiles")
       .select("id, username, display_name, avatar_url, is_online")
-      .in("id", friendIds)
-      .eq("is_online", true);
+      .in("id", friendIds);
 
-    setOnlineFriends((profiles ?? []) as Profile[]);
+    setAllFriends(((profiles ?? []) as Profile[]).sort((a, b) => {
+      // Online primero, después por nombre
+      if (!!a.is_online !== !!b.is_online) return a.is_online ? -1 : 1;
+      return (a.display_name ?? a.username ?? "").localeCompare(b.display_name ?? b.username ?? "");
+    }));
+
+    // Detectar amigos que comparten org conmigo
+    const { data: myOrgs } = await supabase.from("org_members").select("org_id").eq("user_id", user.id);
+    const myOrgIds = (myOrgs ?? []).map((o: any) => o.org_id);
+    if (myOrgIds.length === 0) {
+      setOrgMateIds(new Set());
+      return;
+    }
+    const { data: orgMembers } = await supabase
+      .from("org_members")
+      .select("user_id")
+      .in("org_id", myOrgIds)
+      .in("user_id", friendIds);
+    setOrgMateIds(new Set((orgMembers ?? []).map((m: any) => m.user_id)));
   }, [user, supabase]);
 
   const loadMyParty = useCallback(async () => {
@@ -156,8 +184,8 @@ export default function PartyPage() {
 
   useEffect(() => {
     loadMyParty();
-    loadOnlineFriends();
-  }, [loadMyParty, loadOnlineFriends]);
+    loadFriendsAndOrgMates();
+  }, [loadMyParty, loadFriendsAndOrgMates]);
 
   // Realtime
   useEffect(() => {
@@ -166,10 +194,10 @@ export default function PartyPage() {
       .channel("party-realtime")
       .on("postgres_changes", { event: "*", schema: "public", table: "party_members" }, () => { loadMyParty(); })
       .on("postgres_changes", { event: "*", schema: "public", table: "parties" }, () => { loadMyParty(); })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, () => { loadOnlineFriends(); })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, () => { loadFriendsAndOrgMates(); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [user, supabase, loadMyParty, loadOnlineFriends]);
+  }, [user, supabase, loadMyParty, loadFriendsAndOrgMates]);
 
   // ═════════════════════════════════════════════════════════════════════════
   // Session-tied lifecycle  (Fase H.11 — "solo Leave Party")
@@ -295,21 +323,30 @@ export default function PartyPage() {
   const inviteToParty = useCallback(async (userId: string) => {
     if (!myParty || !user) return;
     setInvitingIds((prev) => new Set(prev).add(userId));
-    // Solo enviamos la notificacion — el usuario se une cuando ACEPTA
-    const myName = profile?.display_name ?? user.user_metadata?.full_name ?? "Alguien";
-    await sendNotification({
-      supabase,
-      recipientId: userId,
-      fromUserId: user.id,
-      type: "party_invite",
-      title: "Invitacion a Party",
-      message: `${myName} te invito a su party`,
-      link: "/party",
-      metadata: { party_id: myParty.id },
-    });
+    // El endpoint /api/party/invite decide entre auto-join (si comparten org)
+    // o notificación tradicional. La UI ya marca el badge "AUTO" para los
+    // org-mates así el usuario sabe qué va a pasar antes de tocar Invite.
+    try {
+      const r = await fetch("/api/party/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ party_id: myParty.id, invitee_id: userId }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (j?.mode === "auto-join") {
+        // Realtime trigger refrescará partyMembers; mientras tanto, optimistic
+        // refresh para mostrar el nuevo miembro al toque.
+        loadMyParty();
+      }
+    } catch {
+      /* el endpoint loguea; la UI igual marca como "sent" */
+    }
     setInvitingIds((prev) => { const s = new Set(prev); s.delete(userId); return s; });
     setInvitedIds((prev) => new Set(prev).add(userId));
-  }, [myParty, user, profile, supabase]);
+  }, [myParty, user, loadMyParty]);
+  // `profile` y `supabase` se mantienen importados arriba pero ya no se usan
+  // acá — el endpoint resuelve sender name desde la sesión.
+  void profile;
 
   if (loading || !user) {
     return (
@@ -321,10 +358,15 @@ export default function PartyPage() {
 
   const isLeader = myParty?.leader_id === user.id;
   const activityName = activities.find((a) => a.id === myParty?.activity_type)?.name;
-  // Friends not already in party
-  const invitableFriends = onlineFriends.filter(
+  // Friends not already in party — incluimos OFFLINE ahora.
+  // Para los que son orgMates, el endpoint hará auto-join silencioso (incluso
+  // si están offline) → permite armar parties sin esperar que nadie se conecte.
+  // Para los que no son orgMates pero están offline, igual permitimos enviar
+  // la invitación: la van a ver en su notification bell cuando vuelvan.
+  const invitableFriends = allFriends.filter(
     (f) => !partyMembers.some((m) => m.user_id === f.id)
   );
+  const onlineFriendsList = allFriends.filter((f) => f.is_online);
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
@@ -361,14 +403,17 @@ export default function PartyPage() {
                   </button>
                 </div>
 
-                {/* Online friends — quick invite after creating */}
-                {onlineFriends.length > 0 && (
+                {/* Friends online — solo display antes de crear la party */}
+                {onlineFriendsList.length > 0 && (
                   <div className="p-4 rounded-lg border border-zinc-800/50 bg-zinc-900/40">
                     <h3 className="text-xs text-emerald-400 uppercase tracking-wider mb-3">
-                      Amigos Conectados ({onlineFriends.length})
+                      Amigos Conectados ({onlineFriendsList.length})
                     </h3>
+                    <p className="text-xs text-zinc-500 mb-3">
+                      Creá la party para invitarlos. Los de tu organización entran automáticamente.
+                    </p>
                     <div className="space-y-1.5">
-                      {onlineFriends.map((f) => (
+                      {onlineFriendsList.map((f) => (
                         <div key={f.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-zinc-800/30">
                           <div className="relative">
                             {f.avatar_url ? (
@@ -379,6 +424,11 @@ export default function PartyPage() {
                             <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-zinc-900" />
                           </div>
                           <span className="text-sm text-zinc-300 flex-1">{f.display_name ?? f.username}</span>
+                          {orgMateIds.has(f.id) && (
+                            <span className="text-[9px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                              Org
+                            </span>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -430,46 +480,77 @@ export default function PartyPage() {
                   ))}
                 </div>
 
-                {/* Quick invite — online friends */}
+                {/* Quick invite — TODOS los amigos (online + offline).
+                    Los de mi org muestran badge AUTO porque entran sin que
+                    tengan que aceptar (incluso si están offline). */}
                 {partyMembers.length < myParty.max_members && invitableFriends.length > 0 && (
                   <div className="p-3 rounded-lg border border-emerald-800/30 bg-emerald-900/10">
                     <h3 className="text-xs text-emerald-400 uppercase tracking-wider mb-2">
-                      Invite Online Friends
+                      Invitar Amigos
                     </h3>
-                    <div className="space-y-1">
-                      {invitableFriends.map((f) => (
-                        <div key={f.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-zinc-800/30">
-                          <div className="relative">
-                            {f.avatar_url ? (
-                              <img src={f.avatar_url} alt="" className="w-7 h-7 rounded-full" />
-                            ) : (
-                              <div className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center text-xs">👤</div>
+                    <p className="text-[11px] text-zinc-500 mb-2">
+                      <span className="text-amber-400/90">AUTO</span> = compañero de organización (entra sin aceptar, incluso offline).
+                      El resto recibe invitación normal.
+                    </p>
+                    <div className="space-y-1 max-h-[480px] overflow-y-auto">
+                      {invitableFriends.map((f) => {
+                        const isOrgMate = orgMateIds.has(f.id);
+                        const isInviting = invitingIds.has(f.id);
+                        const isInvited = invitedIds.has(f.id);
+                        const buttonLabel = isInvited
+                          ? (isOrgMate ? "Joined ✓" : "Sent ✓")
+                          : isInviting
+                          ? "..."
+                          : (isOrgMate ? "+ Join" : "+ Invite");
+                        return (
+                          <div key={f.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-zinc-800/30">
+                            <div className="relative">
+                              {f.avatar_url ? (
+                                <img src={f.avatar_url} alt="" className="w-7 h-7 rounded-full" />
+                              ) : (
+                                <div className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center text-xs">👤</div>
+                              )}
+                              <div
+                                className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-zinc-900 ${
+                                  f.is_online ? "bg-emerald-500" : "bg-zinc-600"
+                                }`}
+                              />
+                            </div>
+                            <span className="text-sm text-zinc-300 flex-1 truncate">
+                              {f.display_name ?? f.username}
+                            </span>
+                            {isOrgMate && (
+                              <span className="text-[9px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                Auto
+                              </span>
                             )}
-                            <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border border-zinc-900" />
+                            <button
+                              onClick={() => inviteToParty(f.id)}
+                              disabled={isInviting || isInvited}
+                              className={`px-2.5 py-1 text-xs rounded transition-all duration-200 ${
+                                isInvited
+                                  ? (isOrgMate
+                                      ? "bg-amber-800/40 text-amber-400 border border-amber-600/30 cursor-default"
+                                      : "bg-emerald-800/40 text-emerald-400 border border-emerald-600/30 cursor-default")
+                                  : isInviting
+                                  ? "bg-zinc-700 text-zinc-400 cursor-wait"
+                                  : (isOrgMate
+                                      ? "bg-amber-600/80 hover:bg-amber-600 active:scale-95 text-zinc-950"
+                                      : "bg-emerald-600/80 hover:bg-emerald-600 active:scale-95 text-zinc-950")
+                              }`}
+                            >
+                              {buttonLabel}
+                            </button>
                           </div>
-                          <span className="text-sm text-zinc-300 flex-1">{f.display_name ?? f.username}</span>
-                          <button
-                            onClick={() => inviteToParty(f.id)}
-                            disabled={invitingIds.has(f.id) || invitedIds.has(f.id)}
-                            className={`px-2.5 py-1 text-xs rounded transition-all duration-200 ${
-                              invitedIds.has(f.id)
-                                ? "bg-emerald-800/40 text-emerald-400 border border-emerald-600/30 cursor-default"
-                                : invitingIds.has(f.id)
-                                ? "bg-zinc-700 text-zinc-400 cursor-wait"
-                                : "bg-emerald-600/80 hover:bg-emerald-600 active:scale-95 text-zinc-950"
-                            }`}
-                          >
-                            {invitedIds.has(f.id) ? "Sent ✓" : invitingIds.has(f.id) ? "Sending..." : "+ Invite"}
-                          </button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
 
                 {invitableFriends.length === 0 && partyMembers.length < myParty.max_members && (
                   <div className="text-xs text-zinc-600 text-center py-2">
-                    No online friends to invite
+                    No tenés amigos para invitar
                   </div>
                 )}
               </div>

@@ -18,7 +18,12 @@ export type NotificationType =
   // 2026-05-07 — cuando un user escanea el QR del evento y queda inscripto
   // (o se actualiza su attended=true), le confirmamos por el bell para que
   // tenga registro de su inscripcion sin depender de la pantalla post-QR.
-  | "raffle_joined";
+  | "raffle_joined"
+  // 2026-05-16 — cuando un leader de party invita a un usuario que comparte
+  // organización, el endpoint /api/party/invite hace auto-join silencioso y
+  // manda este tipo de notif INFORMATIVA (vs `party_invite` que es actionable).
+  // El receptor ya está adentro de la party — la notif sólo le avisa.
+  | "party_joined";
 
 interface SendNotificationParams {
   supabase: SupabaseClient;

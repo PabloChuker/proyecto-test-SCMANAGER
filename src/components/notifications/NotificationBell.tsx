@@ -28,6 +28,9 @@ export interface Notification {
 const TYPE_ICONS: Record<string, string> = {
   friend_request: "👥",
   party_invite: "🎮",
+  // 2026-05-16: auto-join silencioso por org (mismo icono que party_invite
+  // pero el message ya aclara "te uniste automáticamente").
+  party_joined: "🎮",
   org_invite: "🏛",
   // Fase E.3/E.4 — distribución de ganancias de una ruta de venta
   payout_transferred: "💰",
@@ -37,6 +40,7 @@ const TYPE_ICONS: Record<string, string> = {
 const TYPE_COLORS: Record<string, string> = {
   friend_request: "text-blue-400",
   party_invite: "text-amber-400",
+  party_joined: "text-emerald-400",
   org_invite: "text-emerald-400",
   payout_transferred: "text-emerald-300",
   payout_pending: "text-amber-300",
