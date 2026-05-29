@@ -25,6 +25,55 @@ import { sql } from "@/lib/db";
 
 const CACHE_TTL_MS = 30_000; // 30s — suficiente para evitar martilleo, rápido para reflejar toggles
 
+// =============================================================================
+// Comparador de versiones (semver + build numérico)
+// -----------------------------------------------------------------------------
+// Los strings de versión del juego tienen forma "MAJOR.MINOR[.PATCH][-BRANCH.BUILD]"
+//   ej: "4.8.0-live.11875683", "4.7.3-PTU.123", "4.7.2"
+// El orden lexicográfico (`version DESC` en SQL) es INCORRECTO para esto:
+//   - "4.10.0" < "4.8.0" lexicográficamente (pero 4.10 es mayor)
+//   - "...live.9000000" > "...live.11000000" lexicográficamente (build 9M parece
+//     mayor que 11M porque '9' > '1') — al revés de lo correcto.
+// Por eso comparamos numéricamente cada segmento + el build.
+// =============================================================================
+
+export interface ParsedGameVersion {
+  major: number;
+  minor: number;
+  patch: number;
+  branch: "LIVE" | "PTU";
+  build: number; // 0 si no hay sufijo de build
+  raw: string;
+}
+
+export function parseGameVersion(v: string | null | undefined): ParsedGameVersion {
+  const raw = String(v ?? "").trim();
+  const m = raw.match(/^(\d+)\.(\d+)(?:\.(\d+))?/);
+  const major = m ? Number(m[1]) : -1;
+  const minor = m ? Number(m[2]) : -1;
+  const patch = m && m[3] != null ? Number(m[3]) : 0;
+  const branch: "LIVE" | "PTU" = /ptu/i.test(raw) ? "PTU" : "LIVE";
+  // Build = último grupo numérico del sufijo (después de "-rama.").
+  const buildMatch = raw.match(/[-.]([0-9]{3,})\b(?!.*[0-9]{3,})/);
+  const build = buildMatch ? Number(buildMatch[1]) : 0;
+  return { major, minor, patch, branch, build, raw };
+}
+
+/**
+ * Compara dos versiones. Devuelve >0 si `a` es MÁS NUEVA que `b`, <0 si más
+ * vieja, 0 si equivalentes. Pensado para `arr.sort((a,b)=>compareGameVersions(b,a))`
+ * (descendente = más nueva primero).
+ */
+export function compareGameVersions(a: string, b: string): number {
+  const pa = parseGameVersion(a);
+  const pb = parseGameVersion(b);
+  if (pa.major !== pb.major) return pa.major - pb.major;
+  if (pa.minor !== pb.minor) return pa.minor - pb.minor;
+  if (pa.patch !== pb.patch) return pa.patch - pb.patch;
+  if (pa.build !== pb.build) return pa.build - pb.build;
+  return 0;
+}
+
 interface CacheEntry {
   versions: Set<string>;
   array: string[];
@@ -42,19 +91,24 @@ async function loadOnlineVersions(): Promise<CacheEntry> {
     const rows: any[] = await sql.unsafe(
       `SELECT version, "processedAt"
        FROM game_versions
-       WHERE COALESCE(online, true) = true
-       ORDER BY "processedAt" DESC NULLS LAST, version DESC`,
+       WHERE COALESCE(online, true) = true`,
       [],
     );
+    // Ordenamos en JS: primario processedAt DESC (señal de import más confiable),
+    // desempate por comparador semver+build (NO lexicográfico). Esto deja el
+    // array "más nuevo primero", así `array_position()` en SQL sirve de ranking.
+    const sorted = rows
+      .map((r) => ({ v: String(r.version || "").trim(), t: r.processedAt ? new Date(r.processedAt).getTime() : 0 }))
+      .filter((r) => r.v)
+      .sort((a, b) => (b.t - a.t) || compareGameVersions(b.v, a.v));
+
     const versions = new Set<string>();
     const array: string[] = [];
     let defaultGv: string | null = null;
-    for (const r of rows) {
-      const v = String(r.version || "").trim();
-      if (!v) continue;
+    for (const { v } of sorted) {
       versions.add(v);
       array.push(v);
-      // Default = primer match semver-ish no-PTU (filas ya ordenadas processedAt DESC)
+      // Default = primera versión semver-ish no-PTU según el orden canónico.
       if (defaultGv === null && /^\d+\.\d+/.test(v) && !/PTU/i.test(v)) {
         defaultGv = v;
       }

@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
     if (error) throw error;
     return NextResponse.json({ data: orders });
   } catch (e: any) {
+    console.error("[api/mining/work-orders]", e?.message ?? e);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
@@ -108,6 +109,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ data: order }, { status: 201 });
   } catch (e: any) {
+    console.error("[api/mining/work-orders]", e?.message ?? e);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
@@ -200,6 +202,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ data });
   } catch (e: any) {
+    console.error("[api/mining/work-orders]", e?.message ?? e);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
@@ -221,6 +224,7 @@ export async function DELETE(request: NextRequest) {
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (e: any) {
+    console.error("[api/mining/work-orders]", e?.message ?? e);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

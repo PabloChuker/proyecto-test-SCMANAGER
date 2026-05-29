@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
     const result = simplifyDebts(input);
     return NextResponse.json({ data: rows, simplified: result });
   } catch (e: any) {
+    console.error("[api/mining/settlements]", e?.message ?? e);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
@@ -187,6 +188,7 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ data });
   } catch (e: any) {
+    console.error("[api/mining/settlements]", e?.message ?? e);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

@@ -54,30 +54,46 @@ async function compareShips(ids: string[]) {
     // ── 2. Fetch satellite data for all ships ──
     const shipIds = ships.map((s) => String(s.id));
     const shipRefs = ships.map((s) => String(s.reference));
+    // Fix dup (2026-05-28): cuando una nave tiene mismo ship_id en múltiples
+    // gvs (caso típico Avenger Titan: 0079c5d5 en 4.7.2 + 4.8.0-fix1 +
+    // 4.8.0-fix2), el SELECT WHERE ship_id IN multiplica filas → cada nave
+    // aparece N veces. Igual con ship_hardpoints por ship_reference.
+    // Filtrar por (ship_id, game_version) en pareja para cada ship pedido.
+    const shipGvPairs = ships.map((s) => ({ id: String(s.id), gv: String(s.game_version ?? '') }));
+    const refGvPairs = ships.map((s) => ({ ref: String(s.reference ?? ''), gv: String(s.game_version ?? '') }));
 
-    const flightPlaceholders = shipIds.map((_, i) => `$${i + 1}`).join(", ");
+    // Construir WHERE con OR de pares (id, gv) — postgres no soporta IN (tuples)
+    // como ANY de array compuesto fácilmente, vamos por OR explícito.
+    const buildIdPairsWhere = (alias: string) =>
+      shipGvPairs.map((_, i) => `(${alias}.ship_id::text = $${i*2+1} AND ${alias}.game_version = $${i*2+2})`).join(' OR ');
+    const idPairsFlatten = shipGvPairs.flatMap(p => [p.id, p.gv]);
+
     let flightRows: any[] = [];
     try {
       flightRows = await sql.unsafe(
-        `SELECT * FROM ship_flight_stats WHERE ship_id::text IN (${flightPlaceholders})`,
-        shipIds,
+        `SELECT * FROM ship_flight_stats WHERE ${buildIdPairsWhere('ship_flight_stats')}`,
+        idPairsFlatten,
       ) as any[];
     } catch {}
 
     let fuelRows: any[] = [];
     try {
       fuelRows = await sql.unsafe(
-        `SELECT * FROM ship_fuel WHERE ship_id::text IN (${flightPlaceholders})`,
-        shipIds,
+        `SELECT * FROM ship_fuel WHERE ${buildIdPairsWhere('ship_fuel')}`,
+        idPairsFlatten,
       ) as any[];
     } catch {}
 
     // ── 3. Fetch hardpoints for all ships ──
-    const refPlaceholders = shipRefs.map((_, i) => `$${i + 1}`).join(", ");
+    // Igual: filtrar por (ship_reference, game_version) por par para no
+    // mezclar hardpoints de versiones distintas.
+    const refPairsWhere = refGvPairs.map((_, i) =>
+      `(ship_reference = $${i*2+1} AND game_version = $${i*2+2})`).join(' OR ');
+    const refPairsFlatten = refGvPairs.flatMap(p => [p.ref, p.gv]);
     const allHardpoints: any[] = await sql.unsafe(
-      `SELECT * FROM ship_hardpoints WHERE ship_reference IN (${refPlaceholders})
+      `SELECT * FROM ship_hardpoints WHERE ${refPairsWhere}
        ORDER BY ship_reference, hardpoint_type, max_size DESC`,
-      shipRefs,
+      refPairsFlatten,
     );
 
     // ── 4. Batch-load all component data ──

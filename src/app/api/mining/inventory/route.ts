@@ -40,6 +40,7 @@ export async function GET(request: NextRequest) {
       movements: movementsRes.data,
     });
   } catch (e: any) {
+    console.error("[api/mining/inventory]", e?.message ?? e);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
@@ -133,6 +134,7 @@ export async function POST(request: NextRequest) {
     if (movError) throw movError;
     return NextResponse.json({ data: movement }, { status: 201 });
   } catch (e: any) {
+    console.error("[api/mining/inventory]", e?.message ?? e);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }
@@ -161,6 +163,7 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (e: any) {
+    console.error("[api/mining/inventory]", e?.message ?? e);
     return NextResponse.json({ error: "Error interno del servidor" }, { status: 500 });
   }
 }

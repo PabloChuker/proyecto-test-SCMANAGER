@@ -1,42 +1,37 @@
 // =============================================================================
 // SC Labs — GET /api/game-versions
 //
-// Devuelve qué versiones del juego están cargadas en BD, separadas por branch
-// LIVE / PTU. El header del frontend usa esto para poblar el toggle.
+// Devuelve qué versiones del juego están DISPONIBLES (online) en BD, separadas
+// por branch LIVE / PTU. El header del frontend usa esto para poblar el toggle.
 //
-// DETECCIÓN DE BRANCH (basado en datos reales 2026-04-28):
-//   - "4.7.0-LIVE.11518367"     → LIVE
-//   - "4.7.3-PTU.123"           → PTU
-//   - "4.7.2"                   → LIVE (default si no hay sufijo)
+// FUENTE DE VERDAD ÚNICA (fix 2026-05-29):
+//   Antes este endpoint consultaba la tabla con columnas `is_current` y
+//   `applied_at` que NO EXISTEN en `game_versions` (solo hay: version, source,
+//   processedAt, notes, online). Esa query fallaba SIEMPRE y caía a un fallback
+//   con `ORDER BY version DESC` lexicográfico — incorrecto para semver/build y
+//   desincronizado con el resto de la app. Resultado: el header podía marcar
+//   como "actual" una versión distinta de la que servían los endpoints de datos.
 //
-// El "current" para cada branch es el más reciente. Criterios de prioridad:
-//   1. is_current = true (si la columna existe)
-//   2. applied_at más nuevo (si existe)
-//   3. version string lexicográficamente mayor
+//   Ahora reusamos `getOnlineVersionsCache()` (mismo cache que usan todos los
+//   endpoints) que ya devuelve las versions online ordenadas de MÁS NUEVA a más
+//   vieja con un comparador semver+build correcto. Así header y datos comparten
+//   exactamente la misma noción de "versión actual".
+//
+// DETECCIÓN DE BRANCH:
+//   - "4.7.0-LIVE.11518367" / "4.7.2"  → LIVE
+//   - "4.7.3-PTU.123"                  → PTU
 //
 // NUNCA devuelve 500 para no romper el header del frontend.
 // =============================================================================
 
 import { NextResponse } from "next/server";
-import { sql } from "@/lib/db";
+import { getOnlineVersionsCache, parseGameVersion } from "@/lib/onlineVersions";
 
 export const revalidate = 60;
 
-interface GameVersionRow {
-  version: string;
-  is_current?: boolean | null;
-  applied_at?: string | null;
-}
-
-function detectBranch(version: string): "LIVE" | "PTU" {
-  const v = version.toUpperCase();
-  if (v.includes("PTU")) return "PTU";
-  return "LIVE";
-}
-
 /**
  * Solo aceptamos versions con formato "X.Y[.Z]..." — descartamos strings
- * raros tipo "concept" o "test" que pueden vivir en la tabla por otros usos.
+ * raros tipo "CONCEPT" o "test" que pueden vivir en la tabla por otros usos.
  */
 function isValidVersionString(s: unknown): boolean {
   if (typeof s !== "string") return false;
@@ -45,60 +40,28 @@ function isValidVersionString(s: unknown): boolean {
 
 export async function GET() {
   try {
-    let rows: GameVersionRow[] = [];
+    // `array` viene ordenado de MÁS NUEVA a más vieja (processedAt DESC, con
+    // desempate por comparador semver+build). Solo contiene versions online.
+    const { array } = await getOnlineVersionsCache();
 
-    // Fase GV-Online (2026-05-15): respetar el flag `online`. Si está marcada
-    // offline (kill-switch del admin), NO la incluimos en el toggle del header.
-    // COALESCE(online, true) = true es defensivo para filas sin la columna.
-    try {
-      rows = await sql.unsafe(`
-        SELECT version, is_current, applied_at
-        FROM game_versions
-        WHERE COALESCE(online, true) = true
-        ORDER BY applied_at DESC NULLS LAST, version DESC
-      `, []) as any;
-    } catch {
-      try {
-        rows = await sql.unsafe(`
-          SELECT version FROM game_versions
-          WHERE COALESCE(online, true) = true
-          ORDER BY version DESC
-        `, []) as any;
-      } catch (e) {
-        console.warn("[game-versions] query failed:", (e as any)?.message);
-        rows = [];
-      }
-    }
+    const valid = array.filter((v) => isValidVersionString(v));
 
-    // Filtrar entries que no son versions reales del juego
-    const valid = rows.filter((r) => r?.version && isValidVersionString(r.version));
+    const live = valid.filter((v) => parseGameVersion(v).branch === "LIVE");
+    const ptu = valid.filter((v) => parseGameVersion(v).branch === "PTU");
 
-    // Separar por branch
-    const live = valid.filter((r) => detectBranch(r.version) === "LIVE");
-    const ptu = valid.filter((r) => detectBranch(r.version) === "PTU");
-
-    const pickCurrent = (arr: GameVersionRow[]): GameVersionRow | null => {
-      if (arr.length === 0) return null;
-      const explicit = arr.find((r) => r.is_current === true);
-      return explicit ?? arr[0]; // ya viene ordenado por applied_at desc
-    };
-
-    const liveCurrent = pickCurrent(live);
-    const ptuCurrent = pickCurrent(ptu);
+    // "current" = el primero de cada branch (ya están ordenados newest-first).
+    const liveCurrent = live[0] ?? null;
+    const ptuCurrent = ptu[0] ?? null;
 
     return NextResponse.json(
       {
-        live: liveCurrent ? {
-          version: liveCurrent.version,
-          branch: "LIVE",
-          label: liveCurrent.version,
-        } : null,
-        ptu: ptuCurrent ? {
-          version: ptuCurrent.version,
-          branch: "PTU",
-          label: ptuCurrent.version,
-        } : null,
-        all: { live: live.map((r) => r.version), ptu: ptu.map((r) => r.version) },
+        live: liveCurrent
+          ? { version: liveCurrent, branch: "LIVE", label: liveCurrent }
+          : null,
+        ptu: ptuCurrent
+          ? { version: ptuCurrent, branch: "PTU", label: ptuCurrent }
+          : null,
+        all: { live, ptu },
       },
       {
         headers: {
@@ -110,7 +73,7 @@ export async function GET() {
     // NUNCA 500 — el header no debe romperse por esto.
     console.error("[API /game-versions] Error:", err?.message || err);
     return NextResponse.json(
-      { live: null, ptu: null, error: err?.message ?? "Unknown" },
+      { live: null, ptu: null, all: { live: [], ptu: [] }, error: err?.message ?? "Unknown" },
       { status: 200 },
     );
   }

@@ -160,13 +160,24 @@ async function handleShipsQuery(params: ShipsQueryParams) {
     // nave entera desaparece. Resultado del bug: 938 ships totales colapsadas
     // a 87 únicos en el endpoint. Fix: pasar onlineList al CTE como pre-filtro.
     const onlineList = await getOnlineVersionsArray();
+    let onlineParamIdx = -1;
     const onlineGvFilterCTE = (onlineList && onlineList.length > 0)
       ? `WHERE game_version = ANY($${paramIdx}::text[])`
       : "";
     if (onlineList && onlineList.length > 0) {
+      onlineParamIdx = paramIdx;
       queryParams.push(onlineList);
       paramIdx++;
     }
+    // Ranking de versión: `onlineList` viene ordenado de MÁS NUEVA a más vieja,
+    // así que `array_position()` da 1 a la más reciente. Lo usamos como PRIMER
+    // criterio del dedup para que, cuando una nave existe en varias versions
+    // online, gane la más nueva (no la que casualmente tenga más campos sueltos
+    // de una versión vieja). Si no hay onlineList, queda vacío y el dedup usa
+    // solo field-population como antes.
+    const onlineRankExpr = onlineParamIdx > 0
+      ? `array_position($${onlineParamIdx}::text[], game_version) ASC NULLS LAST,`
+      : "";
 
     const whereClause = "WHERE " + conditions.join(" AND ");
 
@@ -179,6 +190,7 @@ async function handleShipsQuery(params: ShipsQueryParams) {
           ROW_NUMBER() OVER (
             PARTITION BY LOWER(COALESCE(name, '')), COALESCE(manufacturer_id::text, '')
             ORDER BY
+              ${onlineRankExpr}
               ( (CASE WHEN crew           IS NOT NULL THEN 1 ELSE 0 END)
               + (CASE WHEN cargo_capacity IS NOT NULL THEN 1 ELSE 0 END)
               + (CASE WHEN mass_total_kg   IS NOT NULL THEN 1 ELSE 0 END)
@@ -208,7 +220,13 @@ async function handleShipsQuery(params: ShipsQueryParams) {
     // traer avg_purchase_auec (precio in-game) y avg_daily_rental_auec. La
     // tabla cubre 167/246 ships linked. Naves Wikelo / Reward / Limited
     // suelen no tener precio in-game → quedan en NULL y la UI no muestra chip.
-    const joinClause = `LEFT JOIN ship_flight_stats fs ON fs.ship_id = s.id
+    // Fix dup (2026-05-28): los LEFT JOIN ship_flight_stats / ship_price /
+    // ship_prices_canonical tienen que matchear por (ship_id, game_version)
+    // si NO, la misma nave aparece N veces porque su ship_id se repite en
+    // múltiples gvs en las tablas satellite. Síntoma: Xolii reportaba que
+    // /ships devolvía Avenger Titan x3 todas con gv 4.8.0-live.11875683.
+    // La cuenta venía dedupeada (CTE) pero la SELECT multiplicaba al JOIN.
+    const joinClause = `LEFT JOIN ship_flight_stats fs ON fs.ship_id = s.id AND fs.game_version = s.game_version
        LEFT JOIN ship_price sp ON sp.id = s.id
        LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
        LEFT JOIN ship_prices_canonical spc ON spc.ship_id = s.id`;
