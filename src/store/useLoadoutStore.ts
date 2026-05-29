@@ -1159,6 +1159,10 @@ function scheduleAutoAlloc(get: () => LoadoutState) {
 // Prevents duplicate in-flight fetches when the same ship is loaded twice
 // (e.g. hot-reload, StrictMode double-invoke, or rapid navigation).
 const _loadingShips = new Map<string, Promise<void>>();
+// Guarda anti-carrera: ultima nave/version pedida. Si una request en vuelo
+// termina y ya NO es la ultima pedida, NO pisamos el estado (evita ver la
+// nave anterior tras cambios rapidos).
+let _latestLoadKey = "";
 
 interface LoadoutState {
   shipId: string | null; shipInfo: ShipInfo | null;
@@ -1315,6 +1319,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
     const gvQuery = activeVersion ? `?gv=${encodeURIComponent(activeVersion)}` : "";
 
     const dedupKey = id + "|" + (buildParam ?? "") + "|" + (activeVersion ?? "");
+    _latestLoadKey = dedupKey;
     const inflight = _loadingShips.get(dedupKey);
     if (inflight) return inflight;
     const p = (async () => {
@@ -1474,6 +1479,8 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
         }
       }
 
+      // Anti-carrera: si ya se pidio otra nave/version, descartamos este result.
+      if (_latestLoadKey !== dedupKey) return;
       set({
         shipId: id, shipInfo, hardpoints: resolved, overrides: restored,
         // El flag viene en el root del response (json), no en data (que es solo ship.*).
@@ -1487,6 +1494,7 @@ export const useLoadoutStore = create<LoadoutState>((set, get) => ({
       });
       scheduleAutoAlloc(get);
     } catch (err) {
+      if (_latestLoadKey !== dedupKey) return;
       set({ isLoading: false, error: err instanceof Error ? err.message : "Unknown error" });
     }
     })().finally(() => _loadingShips.delete(dedupKey));

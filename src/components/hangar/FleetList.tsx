@@ -52,7 +52,7 @@ export function FleetList({ ships }: FleetListProps) {
         case "type": av = a.itemCategory ?? "other"; bv = b.itemCategory ?? "other"; break;
         case "insurance": av = a.insuranceType ?? "unknown"; bv = b.insuranceType ?? "unknown"; break;
         case "location": av = a.location ?? ""; bv = b.location ?? ""; break;
-        case "pledge": av = a.price ?? 0; bv = b.price ?? 0; break;
+        case "pledge": av = a.pledgePrice ?? 0; bv = b.pledgePrice ?? 0; break;
         case "date": av = a.purchasedDate ?? ""; bv = b.purchasedDate ?? ""; break;
       }
       return compareValues(av, bv, sortDir);

@@ -1399,7 +1399,7 @@ export async function GET(
                 `SELECT * FROM ${table}
                  WHERE ship_id::text = $1
                    AND game_version = ANY($3::text[])
-                 ORDER BY (game_version = $2) DESC, game_version DESC`,
+                 ORDER BY (game_version = $2) DESC, array_position($3::text[], game_version) ASC`,
                 [String(ship.id), String(currentGv), onlineList as string[]],
               )
             : await sql.unsafe(
@@ -1569,7 +1569,7 @@ export async function GET(
                FROM ship_hardpoints
                WHERE ship_reference = $1 AND game_version = ANY($2::text[])
                GROUP BY game_version
-               ORDER BY game_version DESC NULLS LAST`,
+               ORDER BY array_position($2::text[], game_version) ASC NULLS LAST`,
               [String(ship.reference), onlineList as string[]],
             )
           : await sql.unsafe(
@@ -1663,7 +1663,7 @@ export async function GET(
                  AND game_version <> $2
                  AND game_version = ANY($4::text[])
                  AND hardpoint_name = ANY($3::text[])
-               ORDER BY game_version DESC`,
+               ORDER BY array_position($4::text[], game_version) ASC`,
               [String(ship.reference), String(shipGV ?? ""), hpNames, onlineList as string[]],
             )
           : await sql.unsafe(
