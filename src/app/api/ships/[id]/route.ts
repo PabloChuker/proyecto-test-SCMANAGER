@@ -1981,6 +1981,51 @@ export async function GET(
       return null;
     };
 
+    const _WEAPON_TABLES = new Set(["weapon_guns", "missiles", "missile_launchers"]);
+    const _isWeaponChild = (cr: any): boolean => {
+      const cls = cr.default_item_class;
+      const tab = cls ? componentMap.get(cls)?.table : null;
+      if (tab && _WEAPON_TABLES.has(tab)) return true;
+      const ht = (cr.hardpoint_type || "").toLowerCase();
+      const hn = (cr.hardpoint_name || "").toLowerCase();
+      return /weapon|missile|gun/.test(ht) || /weapon|missile|\bgun\b|class_\d/.test(hn);
+    };
+    const _isMount = (cr: any): boolean => {
+      const cls = String(cr.default_item_class || "");
+      if (cls.startsWith("Mount_") || /Gimbal/i.test(cls)) return true;
+      // Turret intermedio con hijos propios (ej. turret -> gimbal -> arma).
+      return cr.hardpoint_type === "Turret" && (childrenByParent.get(String(cr.id))?.length ?? 0) > 0;
+    };
+    // Recolecta las armas/misiles REALES bajo un hardpoint, bajando por las
+    // monturas intermedias (gimbals) y descartando pantallas/asientos/displays.
+    const collectWeaponChildren = (parentId: string, depth = 0): any[] => {
+      if (depth > 5) return [];
+      const rows = childrenByParent.get(String(parentId)) ?? [];
+      const acc: any[] = [];
+      for (const cr of rows) {
+        const kids = childrenByParent.get(String(cr.id)) ?? [];
+        if (kids.length > 0 && _isMount(cr)) {
+          acc.push(...collectWeaponChildren(String(cr.id), depth + 1));
+        } else if (_isWeaponChild(cr)) {
+          const ccls = cr.default_item_class;
+          const ctab = ccls ? componentMap.get(ccls)?.table : null;
+          const ccat = (ctab === "missiles" || ctab === "missile_launchers" ||
+            (cr.hardpoint_name || "").toLowerCase().includes("missile")) ? "MISSILE" : "WEAPON";
+          acc.push({
+            id: cr.id,
+            hardpointName: cr.hardpoint_name,
+            category: ccat,
+            minSize: cr.min_size ?? 0,
+            maxSize: cr.max_size ?? 0,
+            isFixed: !cr.editable,
+            equippedItem: buildChildEquipped(ccls) ?? buildGenericItem(cr),
+          });
+        }
+        // else: Screen / Seat / Display -> se ignora (no es arma)
+      }
+      return acc;
+    };
+
     const flatHardpointsFromDb = hardpointRows
       .map((hp) => {
         // Las filas hijas (parent_hp_id) se anidan bajo su padre; no van al top-level.
@@ -2052,24 +2097,9 @@ export async function GET(
         // un arma S4 se aplicaba al gimbal S3 que tenía el mismo child.id.
         // Hijos: si hay filas hijas (parent_hp_id) las usamos (arma dentro del
         // gimbal, misil dentro del rack); sino caemos al loadout_json (legacy).
-        const _childRows = childrenByParent.get(String(hp.id)) ?? [];
-        const children = _childRows.length > 0
-          ? _childRows.map((cr: any) => {
-              const ccls = cr.default_item_class;
-              const ctab = ccls ? componentMap.get(ccls)?.table : null;
-              const ccat = (ctab === "missiles" || ctab === "missile_launchers" ||
-                (cr.hardpoint_name || "").toLowerCase().includes("missile"))
-                ? "MISSILE" : "WEAPON";
-              return {
-                id: cr.id,
-                hardpointName: cr.hardpoint_name,
-                category: ccat,
-                minSize: cr.min_size ?? 0,
-                maxSize: cr.max_size ?? 0,
-                isFixed: !cr.editable,
-                equippedItem: buildChildEquipped(ccls) ?? buildGenericItem(cr),
-              };
-            })
+        const _rowKids = collectWeaponChildren(String(hp.id));
+        const children = _rowKids.length > 0
+          ? _rowKids
           : buildChildren(hp.loadout_json, weaponMap, missileMap, String(hp.id));
 
         // Detect turrets: by children, by item name, or by hardpoint name
