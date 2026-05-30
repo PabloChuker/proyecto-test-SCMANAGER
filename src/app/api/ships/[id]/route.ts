@@ -1934,15 +1934,21 @@ export async function GET(
             if (cn) missileKeys.add(String(cn));
           }
         }
+        // Fase AA (2026-05-30): el datadumper nuevo modela los misiles como
+        // FILAS hijas (hardpoint_type='Missile') con default_item_class = la
+        // ClassName del misil. Recolectamos esas clases para hidratar damage.
+        const ht = String(hp.hardpoint_type ?? "");
+        if (ht === "Missile" && hp.default_item_class) {
+          missileKeys.add(String(hp.default_item_class));
+        }
       }
       if (missileKeys.size > 0) {
         const arr = [...missileKeys];
-        const placeholders = arr.map((_, i) => `$${i + 1}`).join(",");
-        // Match por name (forma canónica). Si la BD agrega class_name en el
-        // futuro se puede hacer OR aquí.
+        // Match por name (display) O por raw_data.ClassName (las filas hijas
+        // del loadout traen la ClassName, no el display name).
         const rows: any[] = await sql.unsafe(
-          `SELECT * FROM missiles WHERE name IN (${placeholders})`,
-          arr,
+          `SELECT * FROM missiles WHERE name = ANY($1) OR raw_data->>'ClassName' = ANY($1)`,
+          [arr],
         );
         for (const r of rows) {
           // Indexamos doblemente: por name y por raw_data.ClassName si existe.
@@ -1978,6 +1984,10 @@ export async function GET(
         if (table === "weapon_guns") return buildWeaponItem(row);
         if (table === "missiles" || table === "missile_launchers") return buildMissileItem(row);
       }
+      // Fase AA: la tabla `missiles` no entra en componentMap (no tiene
+      // class_name); se resuelve por missileMap (indexado por name y por
+      // raw_data.ClassName). Asi el misil hijo trae su damage_total real.
+      if (cls && missileMap.has(cls)) return buildMissileItem(missileMap.get(cls));
       return null;
     };
 
