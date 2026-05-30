@@ -214,6 +214,7 @@ const MOCK_BLUEPRINTS: Blueprint[] = [
       visibility_range: { atMinQuality: -0.12, atMaxQuality: 0.0 },
     },
     rewardPools: [],
+    baseStats: null,
   },
   {
     uuid: "mock-2", key: "BP_Armor_Torso_Medium_S01", kind: "armor",
@@ -256,6 +257,7 @@ const MOCK_BLUEPRINTS: Blueprint[] = [
       temperature_resistance: { atMinQuality: -0.20, atMaxQuality: -0.04 },
     },
     rewardPools: [{ poolUuid: "rp-1", poolKey: "BP_MISSIONREWARD_CrimeStatClear_Tier3" }],
+    baseStats: null,
   },
   {
     uuid: "mock-3", key: "BP_Weapon_SMG_S01", kind: "weapon",
@@ -299,6 +301,7 @@ const MOCK_BLUEPRINTS: Blueprint[] = [
       weapon_range: { atMinQuality: -0.10, atMaxQuality: 0.08 },
     },
     rewardPools: [],
+    baseStats: null,
   },
   {
     uuid: "mock-4", key: "BP_Armor_Legs_Light_S01", kind: "armor",
@@ -330,6 +333,7 @@ const MOCK_BLUEPRINTS: Blueprint[] = [
       movement_speed: { atMinQuality: -0.05, atMaxQuality: -0.01 },
     },
     rewardPools: [],
+    baseStats: null,
   },
 ];
 

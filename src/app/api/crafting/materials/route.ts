@@ -19,11 +19,16 @@
 
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { getDefaultOnlineVersion } from "@/lib/onlineVersions";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
+    // SOLO la game_version online (ver onlineVersions.ts). Sin esto, los uuid
+    // de resources se repiten por version y el endpoint mezcla/triplica.
+    const gv = await getDefaultOnlineVersion();
+    const gvArgs: any[] = gv ? [gv] : [];
     const rows: any[] = await sql.unsafe(
       `
       SELECT
@@ -43,16 +48,19 @@ export async function GET() {
           COUNT(DISTINCT blueprint_uuid)::int          AS blueprint_count,
           COALESCE(SUM(quantity_scu), 0)::numeric      AS total_scu_used
         FROM blueprint_materials
+        ${gv ? "WHERE game_version = $1" : ""}
         GROUP BY resource_uuid
       ) usage ON usage.resource_uuid = r.uuid
       LEFT JOIN LATERAL (
         SELECT array_agg(box_size ORDER BY box_size)::numeric[] AS sizes
         FROM resources_box_sizes
         WHERE resource_uuid = r.uuid
+          ${gv ? "AND game_version = $1" : ""}
       ) bs ON TRUE
+      ${gv ? "WHERE r.game_version = $1" : ""}
       ORDER BY r.name
       `,
-      [],
+      gvArgs,
     );
 
     const materials = rows.map((r) => ({

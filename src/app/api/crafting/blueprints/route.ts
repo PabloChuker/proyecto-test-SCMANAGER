@@ -10,7 +10,7 @@
 
 import { NextResponse } from "next/server";
 import { sql } from "@/lib/db";
-import { getOnlineVersionsArray } from "@/lib/onlineVersions";
+import { getDefaultOnlineVersion } from "@/lib/onlineVersions";
 
 export const dynamic = "force-dynamic";
 
@@ -94,14 +94,23 @@ interface Category {
 
 export async function GET() {
   try {
-    // ── 1. Load all blueprints ──
+    // ── 0. Resolver la game_version ONLINE (kill-switch del admin).
+    // SOLO se sirve data de esa version: nada de duplicar blueprints/materials
+    // a traves de versiones viejas. Si no hay online resuelta (fallo de BD),
+    // gv = null y caemos a sin-filtro (degradado, evita romper el endpoint).
+    const gv = await getDefaultOnlineVersion();
+    const gvArgs: any[] = gv ? [gv] : [];
+    const bpWhere = gv ? "WHERE game_version = $1" : "";
+
+    // ── 1. Load blueprints (online version only) ──
     const bpRows: any[] = await sql.unsafe(`
       SELECT uuid, key, kind, category_uuid, output_uuid,
              output_class, output_type, output_subtype, output_grade,
              output_name, tier_index, craft_time_seconds, "default"
       FROM blueprints
+      ${bpWhere}
       ORDER BY output_type, output_subtype, output_name
-    `, []);
+    `, gvArgs);
 
     // ── 2. Load all materials (grouped), enriched with resource metadata
     //       (description, key, refining chain) and container box sizes. ──
@@ -119,27 +128,29 @@ export async function GET() {
         COALESCE(bs.sizes, '{}'::numeric[]) AS box_sizes
       FROM blueprint_materials bm
       LEFT JOIN resources r ON r.uuid = bm.resource_uuid
+        ${gv ? "AND r.game_version = $1" : ""}
       LEFT JOIN LATERAL (
         SELECT array_agg(box_size ORDER BY box_size)::numeric[] AS sizes
         FROM resources_box_sizes
         WHERE resource_uuid = bm.resource_uuid
+          ${gv ? "AND game_version = $1" : ""}
       ) bs ON TRUE
+      ${gv ? "WHERE bm.game_version = $1" : ""}
       ORDER BY bm.blueprint_uuid, bm.group_key, bm.resource_name
-    `, []);
+    `, gvArgs);
 
     // ── 3. Load reward pools ──
     const poolRows: any[] = await sql.unsafe(`
       SELECT id, blueprint_uuid, pool_uuid, pool_key
       FROM blueprint_rewardpool
+      ${gv ? "WHERE game_version = $1" : ""}
       ORDER BY blueprint_uuid
-    `, []);
+    `, gvArgs);
 
-    // Fase GV-Online: limitar armor/weapon item lookups a versions online,
-    // así offline flags se respetan también en crafting.
-    const onlineList = await getOnlineVersionsArray();
-    const armorWhere = onlineList && onlineList.length > 0 ? `WHERE game_version = ANY($1::text[])` : "";
-    const weaponWhere = onlineList && onlineList.length > 0 ? `WHERE game_version = ANY($1::text[])` : "";
-    const armorArgs: any[] = onlineList && onlineList.length > 0 ? [onlineList] : [];
+    // Armor/weapon base stats: misma version online que el resto.
+    const armorWhere = gv ? "WHERE game_version = $1" : "";
+    const weaponWhere = gv ? "WHERE game_version = $1" : "";
+    const armorArgs: any[] = gvArgs;
 
     // ── 3b. Load armor base stats indexed by class_name.
     const armorRows: any[] = await sql.unsafe(`
