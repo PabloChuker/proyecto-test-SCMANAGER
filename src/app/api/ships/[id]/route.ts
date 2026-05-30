@@ -1960,8 +1960,31 @@ export async function GET(
     }
 
     // ── 6. Build flatHardpoints ──
+    // Agrupar hardpoints HIJOS (parent_hp_id) para anidarlos bajo su padre:
+    // el arma va montada dentro del gimbal, el misil dentro del rack. Sin esto
+    // el gimbal salía "empty" y el arma/misil aparecía como hardpoint suelto.
+    const childrenByParent = new Map<string, any[]>();
+    for (const r of hardpointRows as any[]) {
+      if (r.parent_hp_id != null) {
+        const k = String(r.parent_hp_id);
+        const arr = childrenByParent.get(k);
+        if (arr) arr.push(r);
+        else childrenByParent.set(k, [r]);
+      }
+    }
+    const buildChildEquipped = (cls: string | null | undefined): any => {
+      if (cls && componentMap.has(cls)) {
+        const { table, row } = componentMap.get(cls)!;
+        if (table === "weapon_guns") return buildWeaponItem(row);
+        if (table === "missiles" || table === "missile_launchers") return buildMissileItem(row);
+      }
+      return null;
+    };
+
     const flatHardpointsFromDb = hardpointRows
       .map((hp) => {
+        // Las filas hijas (parent_hp_id) se anidan bajo su padre; no van al top-level.
+        if (hp.parent_hp_id != null) return null;
         const category = hpCategory(hp.hardpoint_type, hp.hardpoint_name);
 
         // Skip non-useful hardpoints (thrusters, armor, fuel, etc. - info only)
@@ -2027,7 +2050,27 @@ export async function GET(
         // child.id sean únicos entre hardpoints. Sin esto dos gimbals con la
         // misma shape de loadout_json generaban ids colisionantes → cambiar
         // un arma S4 se aplicaba al gimbal S3 que tenía el mismo child.id.
-        const children = buildChildren(hp.loadout_json, weaponMap, missileMap, String(hp.id));
+        // Hijos: si hay filas hijas (parent_hp_id) las usamos (arma dentro del
+        // gimbal, misil dentro del rack); sino caemos al loadout_json (legacy).
+        const _childRows = childrenByParent.get(String(hp.id)) ?? [];
+        const children = _childRows.length > 0
+          ? _childRows.map((cr: any) => {
+              const ccls = cr.default_item_class;
+              const ctab = ccls ? componentMap.get(ccls)?.table : null;
+              const ccat = (ctab === "missiles" || ctab === "missile_launchers" ||
+                (cr.hardpoint_name || "").toLowerCase().includes("missile"))
+                ? "MISSILE" : "WEAPON";
+              return {
+                id: cr.id,
+                hardpointName: cr.hardpoint_name,
+                category: ccat,
+                minSize: cr.min_size ?? 0,
+                maxSize: cr.max_size ?? 0,
+                isFixed: !cr.editable,
+                equippedItem: buildChildEquipped(ccls) ?? buildGenericItem(cr),
+              };
+            })
+          : buildChildren(hp.loadout_json, weaponMap, missileMap, String(hp.id));
 
         // Detect turrets: by children, by item name, or by hardpoint name
         let finalCategory = category;
