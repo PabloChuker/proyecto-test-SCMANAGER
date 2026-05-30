@@ -204,7 +204,8 @@ export function PowerManagementPanel({
                   // El click asigna/quita energia del escudo (no togglea
                   // hardpoints individuales -> ya no "apaga el de arriba").
                   const isShield = inst.category === "shields";
-                  if (isShield && row === 0 && minPips > 0 && !locked) {
+                  const isBlockCat = isShield || inst.category === "coolers";
+                  if (isBlockCat && row === 0 && minPips > 0 && !locked) {
                     const subs = (inst.subShields && inst.subShields.length > 1)
                       ? inst.subShields
                       : [{
@@ -222,6 +223,13 @@ export function PowerManagementPanel({
                       const subPips = Math.max(1, Math.min(remaining, sub.pipsForMin || 1));
                       const subHeight = subPips * 14 + (subPips - 1) * 2;
                       const subAllocated = inst.isOn && inst.allocatedPips > subStart;
+                      // Escudos: el click ASIGNA energia hasta el tope de este
+                      // bloque (no apaga el vecino). Coolers (consumo fijo):
+                      // toggle on/off.
+                      const blockTop = subStart + subPips - 1;
+                      const onBlockClick = isShield
+                        ? () => handleCellClick(inst, blockTop)
+                        : () => handleMinCellClick(inst, minPips);
 
                       let bg: string;
                       let borderC: string;
@@ -237,7 +245,7 @@ export function PowerManagementPanel({
                       cells.push(
                         <div
                           key={`min-${subIdx}`}
-                          onClick={() => handleMinCellClick(inst, minPips)}
+                          onClick={onBlockClick}
                           style={{
                             width: 24,
                             height: subHeight,
