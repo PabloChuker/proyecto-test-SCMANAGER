@@ -197,60 +197,77 @@ export function PowerManagementPanel({
                   const locked = row >= inst.totalPips;
                   const allocated = !locked && row < inst.allocatedPips && inst.isOn;
 
-                  // Fase Z (2026-05-30): se quito SOLO la subdivision por
-                  // sub-shields (togglear hardpoints individuales apagaba el
-                  // generador de arriba). El bloque minimo general SI se
-                  // conserva: los componentes con powerMin (escudos, radares)
-                  // muestran sus pips minimos como un unico bloque. Las armas
-                  // no tienen minimo (minPips = 0) => pips individuales.
-                  if (row === 0 && minPips > 1 && !locked) {
-                    const allMinAllocated = inst.isOn && inst.allocatedPips >= minPips;
-                    const someMinAllocated = inst.isOn && inst.allocatedPips > 0 && inst.allocatedPips < minPips;
-                    const mergedHeight = minPips * 14 + (minPips - 1) * 2; // cells + gaps
+                  // Fase Z2 (2026-05-30): el bloque minimo es SOLO para escudos.
+                  // Armas y radar van pip a pip aunque tengan minimo. Escudos:
+                  // si hay >1 generador fisico se subdivide en N bloques (uno
+                  // por generador, pipsForMin c/u); lo que sobra va pip a pip.
+                  // El click asigna/quita energia del escudo (no togglea
+                  // hardpoints individuales -> ya no "apaga el de arriba").
+                  const isShield = inst.category === "shields";
+                  if (isShield && row === 0 && minPips > 0 && !locked) {
+                    const subs = (inst.subShields && inst.subShields.length > 1)
+                      ? inst.subShields
+                      : [{
+                          hardpointName: inst.hardpointName,
+                          componentName: inst.componentName,
+                          pipsForMin: minPips,
+                          regenFull: 0,
+                          isOn: inst.isOn,
+                        }];
 
-                    let bg: string;
-                    let borderC: string;
-                    let opacity = 1;
-                    if (!inst.isOn) {
-                      bg = "#1f1f23"; borderC = "#2a2a2e"; opacity = 0.35;
-                    } else if (allMinAllocated || someMinAllocated) {
-                      bg = color; borderC = color;
-                    } else {
-                      bg = AVAILABLE_BG; borderC = AVAILABLE_BORDER;
-                    }
+                    let subStart = 0;
+                    subs.forEach((sub, subIdx) => {
+                      const remaining = minPips - subStart;
+                      if (remaining <= 0) return;
+                      const subPips = Math.max(1, Math.min(remaining, sub.pipsForMin || 1));
+                      const subHeight = subPips * 14 + (subPips - 1) * 2;
+                      const subAllocated = inst.isOn && inst.allocatedPips > subStart;
 
-                    cells.push(
-                      <div
-                        key="min-merged"
-                        onClick={() => handleMinCellClick(inst, minPips)}
-                        style={{
-                          width: 24,
-                          height: mergedHeight,
-                          backgroundColor: bg,
-                          border: `1px solid ${borderC}`,
-                          borderRadius: 2,
-                          cursor: !inst.isOn ? "default" : "pointer",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          opacity,
-                          transition: "all 100ms",
-                        }}
-                        title={`${inst.componentName} — min ${minPips} pips`}
-                      >
-                        {(allMinAllocated || someMinAllocated) && (
-                          <span style={{
-                            fontSize: 8,
-                            fontWeight: 800,
-                            fontFamily: "monospace",
-                            color: "#000",
-                            lineHeight: 1,
-                          }}>
-                            {minPips}
-                          </span>
-                        )}
-                      </div>
-                    );
+                      let bg: string;
+                      let borderC: string;
+                      let opacity = 1;
+                      if (!inst.isOn) {
+                        bg = "#1f1f23"; borderC = "#2a2a2e"; opacity = 0.35;
+                      } else if (subAllocated) {
+                        bg = color; borderC = color;
+                      } else {
+                        bg = AVAILABLE_BG; borderC = AVAILABLE_BORDER;
+                      }
+
+                      cells.push(
+                        <div
+                          key={`min-${subIdx}`}
+                          onClick={() => handleMinCellClick(inst, minPips)}
+                          style={{
+                            width: 24,
+                            height: subHeight,
+                            backgroundColor: bg,
+                            border: `1px solid ${borderC}`,
+                            borderRadius: 2,
+                            cursor: !inst.isOn ? "default" : "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            opacity,
+                            transition: "all 100ms",
+                          }}
+                          title={`${sub.componentName} \u2014 min ${subPips} pips`}
+                        >
+                          {subAllocated && (
+                            <span style={{
+                              fontSize: 8,
+                              fontWeight: 800,
+                              fontFamily: "monospace",
+                              color: "#000",
+                              lineHeight: 1,
+                            }}>
+                              {subPips}
+                            </span>
+                          )}
+                        </div>
+                      );
+                      subStart += subPips;
+                    });
                     row = minPips;
                     continue;
                   }
