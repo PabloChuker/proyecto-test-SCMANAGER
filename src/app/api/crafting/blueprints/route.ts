@@ -122,6 +122,7 @@ export async function GET() {
         bm.modifier_quality_min, bm.modifier_quality_max,
         bm.modifier_at_min_quality, bm.modifier_at_max_quality,
         r.key         AS resource_key,
+        r.name        AS real_resource_name,
         r.description AS resource_description,
         r.refined_uuid,
         r.refined_name,
@@ -239,9 +240,14 @@ export async function GET() {
       for (const m of rawMats) {
         const gk = m.group_key || "UNKNOWN";
         if (!partMap.has(gk)) {
+          // group_name suele venir como clave de localizacion sin traducir
+          // ("@crafting_ui_slotname_shell"). En ese caso usamos el group_key
+          // legible (debugName, ej "SHELL") como label del slot.
+          const _gn = (typeof m.group_name === "string" && m.group_name && !m.group_name.startsWith("@"))
+            ? m.group_name : (gk || m.group_name);
           partMap.set(gk, {
             groupKey: gk,
-            groupName: m.group_name || gk,
+            groupName: _gn || gk,
             requiredCount: Number(m.required_count) || 1,
             materials: [],
             modifiers: [],
@@ -260,7 +266,9 @@ export async function GET() {
             .filter((n: number) => !Number.isNaN(n));
           part.materials.push({
             resourceUuid: String(m.resource_uuid),
-            resourceName: m.resource_name || "",
+            // Material real (resources.name). Para kind=item (componentes
+            // crafteados que no estan en resources) cae al nombre del slot.
+            resourceName: m.real_resource_name || m.resource_name || "",
             resourceKey: m.resource_key || "",
             description: m.resource_description || "",
             refinedName: m.refined_name || null,
