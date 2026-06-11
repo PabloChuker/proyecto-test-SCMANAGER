@@ -132,9 +132,30 @@ h1{font-size:2rem;color:#3B82F6}p{color:#94A3B8}</style></head>
     }
   }
 
+  // ── Rutas embebibles (plugins de Umbra) ────────────────────────────────
+  // /embed/* son versiones sin chrome de las herramientas, pensadas para
+  // correr dentro del iframe sandboxed de un plugin de Umbra. Para ellas NO
+  // se manda X-Frame-Options: DENY; en su lugar, frame-ancestors con la
+  // allowlist de hosts que pueden embebernos (Umbra web/desktop + dev local).
+  // /umbra-plugin.json es el manifest del plugin: el cliente de Umbra lo
+  // fetchea cross-origin, así que necesita CORS de solo-lectura.
+  const isEmbeddable =
+    pathname.startsWith("/embed/") || pathname === "/umbra-plugin.json";
+
+  if (isEmbeddable) {
+    response.headers.set(
+      "Content-Security-Policy",
+      "frame-ancestors 'self' http://localhost:* http://127.0.0.1:* https://*.umbra-cfx.tech https://umbra.mobile tauri:",
+    );
+    response.headers.set("Access-Control-Allow-Origin", "*");
+    response.headers.set("Access-Control-Allow-Methods", "GET");
+  }
+
   // Security headers
   response.headers.set("X-Content-Type-Options", "nosniff");
-  response.headers.set("X-Frame-Options", "DENY");
+  if (!isEmbeddable) {
+    response.headers.set("X-Frame-Options", "DENY");
+  }
   response.headers.set("X-XSS-Protection", "1; mode=block");
   response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
   response.headers.set(

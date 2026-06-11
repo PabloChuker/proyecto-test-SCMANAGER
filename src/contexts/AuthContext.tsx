@@ -48,7 +48,42 @@ const AuthContext = createContext<AuthState>({
   refreshProfile: async () => {},
 });
 
+// En un iframe sandboxed con origen opaco (p. ej. cuando una página /embed/*
+// corre como plugin de Umbra), document.cookie y localStorage lanzan
+// SecurityError — y @supabase/ssr necesita cookies. En ese contexto el
+// provider sirve estado anónimo sin instanciar Supabase.
+function canUseAuthStorage(): boolean {
+  if (typeof window === "undefined") return true; // SSR: se decide en cliente
+  try {
+    void window.document.cookie;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const ANON_AUTH_STATE: AuthState = {
+  user: null,
+  session: null,
+  profile: null,
+  loading: false,
+  signInWithDiscord: async () => undefined as unknown as void,
+  signOut: async () => {},
+  refreshProfile: async () => {},
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
+  if (!canUseAuthStorage()) {
+    return (
+      <AuthContext.Provider value={ANON_AUTH_STATE}>
+        {children}
+      </AuthContext.Provider>
+    );
+  }
+  return <SupabaseAuthProvider>{children}</SupabaseAuthProvider>;
+}
+
+function SupabaseAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
