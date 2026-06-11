@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { storageGet, storageSet, storageRemove } from "@/lib/safe-storage";
 
 const REFERENCE_TIMESTAMP = 1760636604402;
 const CYCLE_MS = 185 * 60 * 1000;
@@ -40,7 +41,7 @@ export function useExecTimer() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const stored = parseInt(localStorage.getItem(STORAGE_KEY) ?? "0", 10);
+    const stored = parseInt(storageGet(STORAGE_KEY) ?? "0", 10);
     setOffsetMs(isNaN(stored) ? 0 : stored);
     setMounted(true);
   }, []);
@@ -55,14 +56,14 @@ export function useExecTimer() {
   const adjustOffset = useCallback((deltaMs: number) => {
     setOffsetMs((prev) => {
       const next = prev + deltaMs;
-      localStorage.setItem(STORAGE_KEY, String(next));
+      storageSet(STORAGE_KEY, String(next));
       return next;
     });
   }, []);
 
   const resetOffset = useCallback(() => {
     setOffsetMs(0);
-    localStorage.removeItem(STORAGE_KEY);
+    storageRemove(STORAGE_KEY);
   }, []);
 
   return { ...state, mounted, adjustOffset, resetOffset };

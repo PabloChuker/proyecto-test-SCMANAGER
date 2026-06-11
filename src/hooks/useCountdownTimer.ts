@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { storageGet, storageSet, storageRemove } from "@/lib/safe-storage";
 
 const KEY_PREFIX = "sc-cz-timer-";
 
@@ -10,7 +11,7 @@ export function useCountdownTimer(timerId: string, durationMs: number) {
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem(storageKey);
+    const stored = storageGet(storageKey);
     if (stored) setStartedAt(parseInt(stored, 10));
   }, [storageKey]);
 
@@ -41,12 +42,12 @@ export function useCountdownTimer(timerId: string, durationMs: number) {
   const start = useCallback(() => {
     const now = Date.now();
     setStartedAt(now);
-    localStorage.setItem(storageKey, String(now));
+    storageSet(storageKey, String(now));
   }, [storageKey]);
 
   const reset = useCallback(() => {
     setStartedAt(null);
-    localStorage.removeItem(storageKey);
+    storageRemove(storageKey);
   }, [storageKey]);
 
   return { remaining, isRunning, isReady, start, reset };

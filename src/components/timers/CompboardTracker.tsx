@@ -1,35 +1,9 @@
 "use client";
 import { useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
+import { storageGet, storageSet, storageRemove } from "@/lib/safe-storage";
 
 const STORAGE_KEY = "sc-compboard";
-
-// En iframes sandboxed de origen opaco (p. ej. el embed como plugin de
-// Umbra) localStorage lanza SecurityError — ahí el tracker funciona en
-// memoria, sin persistencia.
-function storageGet(key: string): string | null {
-  try {
-    return window.localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function storageSet(key: string, value: string): void {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // sin storage disponible
-  }
-}
-
-function storageRemove(key: string): void {
-  try {
-    window.localStorage.removeItem(key);
-  } catch {
-    // sin storage disponible
-  }
-}
 
 const ITEMS = [
   { id: "chk1", station: "checkmate" },
