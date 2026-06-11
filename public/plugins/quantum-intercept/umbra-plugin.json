@@ -5,8 +5,10 @@
   "apiVersion": 1,
   "author": "SC LABS",
   "description": "Planificador de intercepción cuántica del sistema Stanton, servido directo desde sclabs.space. Herramienta de consulta: no requiere ningún permiso del Bridge.",
-  "entry": "embed/quantum-intercept",
+  "entry": "index.html",
+  "icon": "icon.png",
   "surfaces": ["canvas"],
   "permissions": [],
-  "netAllowlist": []
+  "netAllowlist": [],
+  "defaultSize": { "width": 1100, "height": 700 }
 }

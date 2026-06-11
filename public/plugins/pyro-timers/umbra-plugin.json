@@ -1,0 +1,13 @@
+{
+  "id": "space.sclabs.pyro-timers",
+  "name": "Pyro Timers",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "SC LABS",
+  "description": "Timers de Pyro: Executive Hangar, Contested Zones y tracker de compboard.",
+  "entry": "index.html",
+  "surfaces": ["canvas"],
+  "permissions": [],
+  "netAllowlist": [],
+  "defaultSize": { "width": 680, "height": 720 }
+}

@@ -4,6 +4,33 @@ import { useTranslations } from "next-intl";
 
 const STORAGE_KEY = "sc-compboard";
 
+// En iframes sandboxed de origen opaco (p. ej. el embed como plugin de
+// Umbra) localStorage lanza SecurityError — ahí el tracker funciona en
+// memoria, sin persistencia.
+function storageGet(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function storageSet(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // sin storage disponible
+  }
+}
+
+function storageRemove(key: string): void {
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // sin storage disponible
+  }
+}
+
 const ITEMS = [
   { id: "chk1", station: "checkmate" },
   { id: "chk2", station: "checkmate" },
@@ -27,7 +54,7 @@ export default function CompboardTracker() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = storageGet(STORAGE_KEY);
     if (stored) {
       try {
         setCollected(JSON.parse(stored));
@@ -41,14 +68,14 @@ export default function CompboardTracker() {
   function toggle(id: string) {
     setCollected((prev) => {
       const next = { ...prev, [id]: !prev[id] };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      storageSet(STORAGE_KEY, JSON.stringify(next));
       return next;
     });
   }
 
   function resetAll() {
     setCollected({});
-    localStorage.removeItem(STORAGE_KEY);
+    storageRemove(STORAGE_KEY);
   }
 
   const total = ITEMS.length;

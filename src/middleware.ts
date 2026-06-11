@@ -137,10 +137,11 @@ h1{font-size:2rem;color:#3B82F6}p{color:#94A3B8}</style></head>
   // correr dentro del iframe sandboxed de un plugin de Umbra. Para ellas NO
   // se manda X-Frame-Options: DENY; en su lugar, frame-ancestors con la
   // allowlist de hosts que pueden embebernos (Umbra web/desktop + dev local).
-  // /umbra-plugin.json es el manifest del plugin: el cliente de Umbra lo
-  // fetchea cross-origin, así que necesita CORS de solo-lectura.
+  // /plugins/<nombre>/ es la base de cada plugin: contiene su manifest
+  // (umbra-plugin.json, fetcheado cross-origin por Umbra ⇒ CORS de
+  // solo-lectura), su icono, y el index.html que reescribe a /embed/*.
   const isEmbeddable =
-    pathname.startsWith("/embed/") || pathname === "/umbra-plugin.json";
+    pathname.startsWith("/embed/") || pathname.startsWith("/plugins/");
 
   if (isEmbeddable) {
     response.headers.set(
