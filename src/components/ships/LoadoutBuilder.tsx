@@ -1344,10 +1344,24 @@ function HpGroup({ hps, onClickHp, weaponAllocatedPips, weaponMaxPips }: { hps: 
   const resolveChildSlots = useCallback(
     (hp: ResolvedHardpoint): ResolvedChild[] => {
       if (hp.resolvedCategory === "MINING") {
-        const laser = getEffectiveItem(hp.id);
+        // Loadout.18 (2026-06-12): dos shapes posibles.
+        //  a) Brazo sintético (Prospector/Golem): el item top-level ES el láser
+        //     (trae moduleSlots) → solo slots de módulos, como siempre.
+        //  b) Torreta minera real (MOLE): el item top-level es la TORRETA y el
+        //     láser viene como child del API. Antes se leía moduleSlots de la
+        //     torreta (0) y se devolvía [] — la cabeza minera y sus accesorios
+        //     quedaban escondidos. Ahora: [cabeza minera, ...sus módulos].
+        const topItem = getEffectiveItem(hp.id);
+        const laserChild = hp.children.find(
+          (c) => c.category === "MINING" || c.equippedItem?.componentStats?.moduleSlots != null,
+        );
+        const laser = laserChild
+          ? (getEffectiveItem(laserChild.id) ?? laserChild.equippedItem)
+          : topItem;
         const n = Number(laser?.componentStats?.moduleSlots ?? 0);
-        if (!n || n <= 0) return [];
         const slots: ResolvedChild[] = [];
+        if (laserChild) slots.push(laserChild);
+        if (!n || n <= 0) return slots;
         for (let i = 1; i <= n; i++) {
           slots.push({
             id: `${hp.id}:module:${i}`,

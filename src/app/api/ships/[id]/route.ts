@@ -192,6 +192,11 @@ function hpCategory(hpType: string | null | undefined, hpName: string | null | u
   // Scorpius, Starlancer TAC) no son torretas de armas — fuera de los widgets.
   if (n.includes("camera") || n.includes("target_selector")) return "OTHER";
 
+  // Loadout.18 (2026-06-12): los sacos de mineral NO son equipamiento minero —
+  // "Argo Ore Pod" (hardpoint_mining_pod_1..8 del MOLE, saddlebags del
+  // Prospector) aparecía en el widget MINING LASERS por la regla de nombre.
+  if (n.includes("pod") || n.includes("saddlebag")) return "OTHER";
+
   // 2026-04-17: industrial name detection gana SIEMPRE sobre HP_TYPE_TO_CATEGORY.
   // Razón: en el Reclaimer los salvage arms vienen como hpType="Turret", así que
   // el mapa genérico los mandaba a "TURRET" y nunca aparecían en el widget de
@@ -2202,6 +2207,11 @@ export async function GET(
           let ccat: string;
           if (crBaseType === "WeaponDefensive") ccat = "COUNTERMEASURE";
           else if (crBaseType === "EMP") ccat = "UTILITY";
+          // Loadout.18: la cabeza minera/salvage dentro de una torreta (MOLE,
+          // Reclaimer) es MINING/SALVAGE, no WEAPON — así el picker del child
+          // ofrece láseres mineros y la UI puede colgar sus módulos.
+          else if (ctab === "weapon_mining") ccat = "MINING";
+          else if (ctab === "weapon_salvage") ccat = "SALVAGE";
           else if (ctab === "missiles" || ctab === "missile_launchers" ||
             (cr.hardpoint_name || "").toLowerCase().includes("missile")) ccat = "MISSILE";
           else ccat = "WEAPON";
