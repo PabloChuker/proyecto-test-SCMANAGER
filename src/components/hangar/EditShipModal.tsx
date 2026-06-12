@@ -147,7 +147,7 @@ export function EditShipModal({ ship, onClose }: EditShipModalProps) {
               >
                 <option value="hangar">Hangar</option>
                 <option value="buyback">Buyback</option>
-                <option value="ccu_chain">CCU Chain</option>
+                {/* Sitio.9: opcion CCU Chain eliminada — ninguna vista renderiza location=ccu_chain desde que el tab se movio a /hangar/chain-board; elegirla hacia desaparecer el item */}
               </select>
             </div>
           </div>

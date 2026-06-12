@@ -161,8 +161,12 @@ async function handleShipsQuery(params: ShipsQueryParams) {
     // a 87 únicos en el endpoint. Fix: pasar onlineList al CTE como pre-filtro.
     const onlineList = await getOnlineVersionsArray();
     let onlineParamIdx = -1;
+    // Sitio.8 (2026-06-12): incluir la pseudo-versión CONCEPT — las 29 naves
+    // concept (Galaxy, Ironclad, Hull D, Odyssey…) desaparecieron del catálogo
+    // cuando este pre-filtro se agregó, y el badge CONCEPT de ShipCard quedó
+    // muerto. El LoadoutBuilder las excluye igual vía flightReadyOnly.
     const onlineGvFilterCTE = (onlineList && onlineList.length > 0)
-      ? `WHERE game_version = ANY($${paramIdx}::text[])`
+      ? `WHERE (game_version = ANY($${paramIdx}::text[]) OR game_version = 'CONCEPT')`
       : "";
     if (onlineList && onlineList.length > 0) {
       onlineParamIdx = paramIdx;

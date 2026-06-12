@@ -18,6 +18,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { getOnlineVersionsArray } from "@/lib/onlineVersions";
 import {
   sanitizeString,
   validateInt,
@@ -54,6 +55,9 @@ export interface ColumnDef {
 }
 
 const TABLE_COLUMNS: Record<string, ColumnDef[]> = {
+  // Sitio.7 (2026-06-12): ships no tiene columnas scm_speed/afterburner_speed
+  // (viven en ship_flight_stats) — ordenarlas tiraba 500. manufacturer ahora
+  // sale del JOIN a manufacturers (antes era manufacturer_id y mostraba "—").
   ships: [
     { key: "name", label: "Name", type: "text", width: 3 },
     { key: "manufacturer", label: "Manufacturer", type: "text", width: 2 },
@@ -61,8 +65,6 @@ const TABLE_COLUMNS: Record<string, ColumnDef[]> = {
     { key: "size", label: "Size", type: "number" },
     { key: "crew", label: "Crew", type: "number" },
     { key: "cargo_capacity", label: "Cargo", type: "number" },
-    { key: "scm_speed", label: "SCM Speed", type: "number" },
-    { key: "afterburner_speed", label: "NAV Speed", type: "number" },
   ],
   weapon_guns: [
     { key: "name", label: "Name", type: "text", width: 2 },
@@ -191,13 +193,21 @@ async function browseComponents(
   const safeSortCol = validateSortColumn(sort, columnWhitelist, config.defaultSort);
   const safeSortDir = validateSortDir(dir);
 
-  // Build WHERE conditions
+  // Sitio.7: missiles no tiene class_name — el search genérico con
+  // COALESCE(class_name,'') rompía en esa tabla.
+  const hasClassName = validTable !== "missiles";
+
+  // Build WHERE conditions (alias t — necesario para el JOIN de ships)
   const conditions: string[] = [];
   const params: any[] = [];
   let idx = 1;
 
   if (safeSearch) {
-    conditions.push(`(name ILIKE $${idx} OR COALESCE(class_name,'') ILIKE $${idx})`);
+    conditions.push(
+      hasClassName
+        ? `(t.name ILIKE $${idx} OR COALESCE(t.class_name,'') ILIKE $${idx})`
+        : `(t.name ILIKE $${idx})`,
+    );
     params.push(`%${safeSearch}%`);
     idx++;
   }
@@ -205,20 +215,53 @@ async function browseComponents(
   if (size !== null && size !== undefined) {
     const safeSize = validateInt(size, -1, 0, 500);
     if (safeSize >= 0) {
-      conditions.push(`size = $${idx}`);
+      conditions.push(`t.size = $${idx}`);
       params.push(safeSize);
       idx++;
     }
   }
 
+  // Sitio.7 (CRÍTICO): todas las tablas versionadas tienen 4-5 game_versions
+  // cargadas y este browse no filtraba ninguna → cada item aparecía 3-4 veces
+  // con stats mezclados. Servimos solo la GV online (+ CONCEPT para ships,
+  // que son las naves concept legítimas del catálogo).
+  const onlineList = await getOnlineVersionsArray();
+  if (onlineList && onlineList.length > 0) {
+    const gvList = validTable === "ships" ? [...onlineList, "CONCEPT"] : onlineList;
+    conditions.push(`t.game_version = ANY($${idx}::text[])`);
+    params.push(gvList);
+    idx++;
+  }
+
+  // Junk filter (Templates/Test/placeholders) — mismo criterio que /api/catalog.
+  if (hasClassName) {
+    conditions.push(
+      `t.class_name NOT ILIKE '%_Template%' AND t.class_name NOT ILIKE '%_Test%' AND (t.name IS NULL OR t.name NOT ILIKE '%PLACEHOLDER%')`,
+    );
+  } else {
+    conditions.push(`(t.name IS NULL OR t.name NOT ILIKE '%PLACEHOLDER%')`);
+  }
+
   const where = conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";
 
+  // FROM con alias; ships joinea manufacturers para mostrar el nombre real.
+  const fromClause =
+    validTable === "ships"
+      ? `ships t LEFT JOIN manufacturers mf ON mf.id = t.manufacturer_id`
+      : `${validTable} t`;
+
   // For weapon_guns DPS: compute dps_total as a computed column
-  let selectClause = "*";
-  let orderClause = `"${safeSortCol}" ${safeSortDir} NULLS LAST`;
+  let selectClause = "t.*";
+  if (validTable === "ships") {
+    selectClause = `t.*, t.class_name AS reference, mf.name AS manufacturer`;
+  }
+  let orderClause = `t."${safeSortCol}" ${safeSortDir} NULLS LAST`;
+  if (validTable === "ships" && safeSortCol === "manufacturer") {
+    orderClause = `mf.name ${safeSortDir} NULLS LAST`;
+  }
 
   if (validTable === "weapon_guns") {
-    selectClause = `*,
+    selectClause = `t.*,
       COALESCE(dps_physical,0) + COALESCE(dps_energy,0) + COALESCE(dps_distortion,0) + COALESCE(dps_thermal,0) + COALESCE(dps_biochemical,0) + COALESCE(dps_stun,0) as dps_total,
       COALESCE(alpha_physical,0) + COALESCE(alpha_energy,0) + COALESCE(alpha_distortion,0) + COALESCE(alpha_thermal,0) + COALESCE(alpha_biochemical,0) + COALESCE(alpha_stun,0) as alpha_total`;
     if (safeSortCol === "dps_total") {
@@ -231,14 +274,14 @@ async function browseComponents(
 
   // Count total
   const countResult: any[] = await sql.unsafe(
-    `SELECT COUNT(*)::int as total FROM ${validTable} ${where}`,
+    `SELECT COUNT(*)::int as total FROM ${fromClause} ${where}`,
     params,
   );
   const total = countResult[0]?.total ?? 0;
 
   // Fetch rows
   const rows: any[] = await sql.unsafe(
-    `SELECT ${selectClause} FROM ${validTable} ${where} ORDER BY ${orderClause} LIMIT $${idx} OFFSET $${idx + 1}`,
+    `SELECT ${selectClause} FROM ${fromClause} ${where} ORDER BY ${orderClause} LIMIT $${idx} OFFSET $${idx + 1}`,
     [...params, safeLimit, safeOffset],
   );
 
