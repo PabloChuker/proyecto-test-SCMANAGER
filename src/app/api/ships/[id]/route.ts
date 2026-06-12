@@ -2041,6 +2041,34 @@ export async function GET(
       batchFetch("weapon_salvage", "class_name", uniqueClasses),
     ]);
 
+    // Loadout.19: module_slots de los láseres solo está poblado en la GV
+    // 4.7.0 (ingest scunpacked) — el datadumper nuevo aún no extrae
+    // ModuleSlots (pendiente en la task del datadumper). Los slots de
+    // accesorios casi nunca cambian entre parches, así que completamos los
+    // NULL desde la última GV que tenga el dato. Sin esto el LoadoutBuilder
+    // no renderiza los accesorios (Arbor MH2 = 2, Helix II = 3, Klein-S1 = 0).
+    try {
+      const _hasMiningRows = [...componentMap.values()].some(
+        (e) => e.table === "weapon_mining" && e.row.module_slots == null,
+      );
+      if (_hasMiningRows) {
+        const msRows: any[] = await sql.unsafe(
+          `SELECT DISTINCT ON (class_name) class_name, module_slots
+             FROM weapon_mining
+            WHERE module_slots IS NOT NULL
+            ORDER BY class_name, game_version DESC`,
+        );
+        const msMap = new Map(msRows.map((r) => [String(r.class_name), r.module_slots]));
+        for (const [cls, entry] of componentMap) {
+          if (entry.table === "weapon_mining" && entry.row.module_slots == null && msMap.has(cls)) {
+            entry.row.module_slots = msMap.get(cls);
+          }
+        }
+      }
+    } catch (e: any) {
+      console.warn("[ships/[id]] module_slots fallback failed:", e?.message);
+    }
+
     // Build weapon map for child resolution
     const weaponMap = new Map<string, any>();
     for (const [cls, { table, row }] of componentMap) {
@@ -2215,13 +2243,20 @@ export async function GET(
           else if (ctab === "missiles" || ctab === "missile_launchers" ||
             (cr.hardpoint_name || "").toLowerCase().includes("missile")) ccat = "MISSILE";
           else ccat = "WEAPON";
+          // Loadout.19: el p4k marca editable=false en TODOS los láseres
+          // mineros, pero en el juego se cambian (MOLE, Prospector) — la
+          // excepción real es el láser integrado del Golem (clase bespoke
+          // Mining_Laser_DRAK_Golem_*). Los módulos/accesorios siempre van
+          // como slots sintéticos editables aparte.
+          const _isFixedChild =
+            ccat === "MINING" ? /_DRAK_Golem/i.test(String(ccls || "")) : !cr.editable;
           acc.push({
             id: cr.id,
             hardpointName: cr.hardpoint_name,
             category: ccat,
             minSize: cr.min_size ?? 0,
             maxSize: cr.max_size ?? 0,
-            isFixed: !cr.editable,
+            isFixed: _isFixedChild,
             equippedItem: equipped ?? buildGenericItem(cr),
           });
         }
