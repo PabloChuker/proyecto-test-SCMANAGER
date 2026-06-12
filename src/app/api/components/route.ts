@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { getOnlineVersionsArray } from "@/lib/onlineVersions";
 import {
   sanitizeString,
   validateInt,
@@ -104,6 +105,19 @@ async function searchComponents(
     conditions.push(`(${nameCol} ILIKE $${idx} OR ${classCol} ILIKE $${idx})`);
     params.push(`%${safeSearch}%`);
     idx++;
+  }
+
+  // Sitio.11: igual que /api/catalog — sin filtro de GV cada item aparecía
+  // 4 veces (una por game_version) y se colaban placeholders/templates.
+  const onlineList = await getOnlineVersionsArray();
+  if (onlineList && onlineList.length > 0) {
+    conditions.push(`game_version = ANY($${idx}::text[])`);
+    params.push(onlineList);
+    idx++;
+  }
+  conditions.push(`(${nameCol} IS NULL OR ${nameCol} NOT ILIKE '%PLACEHOLDER%')`);
+  if (classCol !== "name") {
+    conditions.push(`${classCol} NOT ILIKE '%_Template%' AND ${classCol} NOT ILIKE '%Test%'`);
   }
 
   const whereClause = conditions.length > 0 ? "WHERE " + conditions.join(" AND ") : "";

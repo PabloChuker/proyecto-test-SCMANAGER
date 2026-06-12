@@ -50,8 +50,12 @@ export default function ComponentSearch({ onSelect, disabled, buttonLabel, place
       const res = await fetch(`/api/components?${params}`);
       const data = await res.json();
 
-      if (Array.isArray(data)) {
-        setResults(data.map((c: any) => ({
+      // Sitio.11 (2026-06-12, CRÍTICO): /api/components devuelve un envelope
+      // {data: [...], meta} — el if (Array.isArray(data)) nunca entraba y la
+      // búsqueda de inventario SIEMPRE quedaba vacía con el spinner girando.
+      const list = Array.isArray(data) ? data : (data?.data ?? data?.items ?? []);
+      if (Array.isArray(list)) {
+        setResults(list.map((c: any) => ({
           reference: c.reference || c.className || c.id,
           name: c.name || c.localizedName || c.reference,
           type: c.type || category || "UNKNOWN",
