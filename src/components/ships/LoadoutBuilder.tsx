@@ -940,7 +940,11 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     // sintético como los real children del rack — sin importar portCount.
     if (idMatch) {
       const rackHpId = idMatch[1];
-      const ports = Math.max(1, portCount);
+      // Loadout.16: los racks custom por nave pueden tener más ports reales
+      // que lo que dice el name-parse (MRCK_S04_AEGS_Redeemer = 8, no 4).
+      // Cubrimos el máximo entre ambos para no dejar slots sin sincronizar.
+      const rack = hardpoints.find((h) => h.id === rackHpId);
+      const ports = Math.max(1, portCount, rack?.children?.length ?? 0);
       // 1) Slots sintéticos (lo que el LoadoutBuilder renderiza visualmente)
       for (let i = 1; i <= ports; i++) {
         equipItem(`${rackHpId}:missile:${i}`, item);
@@ -948,7 +952,6 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
       // 2) Children del API del rack (lo que computeStats agrega para
       //    sumar damage de misiles al panel LOADOUT DETAIL). Sin esto, el
       //    daño de misiles quedaba en 0 después de cambiar de misil.
-      const rack = hardpoints.find((h) => h.id === rackHpId);
       if (rack) {
         for (const ch of rack.children) equipItem(ch.id, item);
       }
@@ -969,11 +972,12 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
     // computeStats no quede leyendo el misil viejo.
     if (idMatch) {
       const rackHpId = idMatch[1];
-      const ports = Math.max(1, portCount);
+      // Loadout.16: idem handleSelect — cubrir también los ports reales.
+      const rack = hardpoints.find((h) => h.id === rackHpId);
+      const ports = Math.max(1, portCount, rack?.children?.length ?? 0);
       for (let i = 1; i <= ports; i++) {
         clearSlot(`${rackHpId}:missile:${i}`);
       }
-      const rack = hardpoints.find((h) => h.id === rackHpId);
       if (rack) {
         for (const ch of rack.children) clearSlot(ch.id);
       }
@@ -1361,6 +1365,25 @@ function HpGroup({ hps, onClickHp, weaponAllocatedPips, weaponMaxPips }: { hps: 
         const rack = getEffectiveItem(hp.id);
         if (!rack) return hp.children;
 
+        // Loadout.16 (2026-06-12): si el rack equipado es el DEFAULT del barco
+        // y el API trae children reales (p4k → ship_hardpoints parent_hp_id),
+        // esos children son la fuente canónica de cantidad y misil default.
+        // Cubre racks custom por nave que rompen la convención del nombre:
+        // MRCK_S04_AEGS_Redeemer se llama "MSD-442" (=4xS2) pero tiene 8 ports
+        // reales — el name-parse devolvía 4, `children.length === n` fallaba y
+        // los 8 misiles default se descartaban (misiles "vacíos" en la web).
+        if (!overrides.has(hp.id) && hp.children.length > 0) {
+          return hp.children.map((ch, i) => ({
+            id: `${hp.id}:missile:${i + 1}`,
+            hardpointName: `${hp.hardpointName}_missile_${i + 1}`,
+            category: "MISSILE",
+            minSize: ch.maxSize || hp.maxSize || 1,
+            maxSize: ch.maxSize || hp.maxSize || 1,
+            isFixed: false,
+            equippedItem: ch.equippedItem ?? null,
+          }));
+        }
+
         // parseMissileRackSpec usa name-parse de la convención MSD-XYZ del juego
         // como fuente canónica (ver definición arriba). Para los racks chicos
         // (MSD-212, MSD-313) la BD reporta missilePorts=2 incorrectamente —
@@ -1391,7 +1414,7 @@ function HpGroup({ hps, onClickHp, weaponAllocatedPips, weaponMaxPips }: { hps: 
       }
       return hp.children;
     },
-    [getEffectiveItem],
+    [getEffectiveItem, overrides],
   );
 
   return (
