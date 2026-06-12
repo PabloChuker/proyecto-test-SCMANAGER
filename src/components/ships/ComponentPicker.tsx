@@ -281,7 +281,16 @@ export function ComponentPicker({ hardpoint, parentItem, currentItemId, onSelect
         // dejamos el default `apiTypes = "WEAPON"` — sino el picker pedía
         // types=MISSILE para un slot WEAPON y devolvía vacío ("No compatible
         // components found" reportado por Pablo en 2026-05-04).
-        if (parentClassName && hardpoint.resolvedCategory !== "WEAPON") {
+        // Loadout.19 (2026-06-12, BUGFIX): el override por parent aplicaba a
+        // TODO child ≠ WEAPON y defaulteaba a MISSILE — el láser minero de la
+        // MOLE (category MINING, parent = torreta) abría un picker de misiles.
+        // Ahora el override solo aplica a children de ordenanza o cuando el
+        // parent es un salvage head; MINING/SALVAGE/UTILITY usan su mapping.
+        const ORDNANCE_CHILD_CATS = new Set(["MISSILE", "BOMB", "MISSILE_RACK"]);
+        if (
+          parentClassName &&
+          (ORDNANCE_CHILD_CATS.has(hardpoint.resolvedCategory) || isSalvageHeadClass(parentClassName))
+        ) {
           if (isSalvageHeadClass(parentClassName)) apiTypes = "SALVAGE_MODIFIER";
           else if (isBombRackClass(parentClassName)) apiTypes = "BOMB";
           else apiTypes = "MISSILE";
