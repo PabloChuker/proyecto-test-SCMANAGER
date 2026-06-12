@@ -17,6 +17,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { getOnlineVersionsArray } from "@/lib/onlineVersions";
 import {
   findCheapestChain,
   findCheapestChainWithWaypoints,
@@ -80,6 +81,23 @@ export async function POST(request: NextRequest) {
     // las actualizaciones de precio (Drake Ironclad subió $400→$450 en RSI,
     // el wiki se actualizó pero ship_price quedó viejo → el solver y el
     // dropdown mostraban $400).
+    // Sitio.12 (2026-06-12): este endpoint ignoraba el kill-switch
+    // game_versions.online y mezclaba naves 4.7.0 offline con 4.8.0 (doble
+    // espacio de ids para la misma nave). Filtramos a versiones online;
+    // CONCEPT sigue pasando (comportamiento deliberado de CCU.16) salvo que
+    // la nave ya exista en una versión online (ej. Ironclad: el nodo CONCEPT
+    // duplicado sobra y reintroduciría el doble id). Además los precios se
+    // resuelven por class_name vía LATERAL (mismo patrón que /api/ccu/ships):
+    // ship_price/ship_prices_canonical referencian ids de imports viejos, así
+    // que el join directo por id dejaba a casi todas las naves online sin MSRP.
+    const onlineGvList = await getOnlineVersionsArray();
+    const gvFilter = onlineGvList
+      ? `AND (s.game_version = ANY($1::text[])
+              OR (s.game_version = 'CONCEPT' AND NOT EXISTS (
+                    SELECT 1 FROM ships so
+                    WHERE so.class_name = s.class_name
+                      AND so.game_version = ANY($1::text[]))))`
+      : "";
     const shipRows: any[] = await sql.unsafe(`
       SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer,
              COALESCE(spc.pledge_usd, spc_name.pledge_usd, sp.msrp_usd) AS msrp_usd,
@@ -90,20 +108,28 @@ export async function POST(request: NextRequest) {
              COALESCE(sp.is_limited, false) AS is_limited,
              COALESCE(s.flight_status, 'flight_ready') AS flight_status
       FROM ships s
-      LEFT JOIN ship_price sp ON sp.id = s.id
+      LEFT JOIN LATERAL (
+        SELECT sp2.* FROM ship_price sp2
+        JOIN ships sx ON sx.id = sp2.id AND sx.class_name = s.class_name
+        ORDER BY sx.game_version DESC LIMIT 1
+      ) sp ON true
+      LEFT JOIN LATERAL (
+        SELECT spc2.* FROM ship_prices_canonical spc2
+        JOIN ships sx2 ON sx2.id = spc2.ship_id AND sx2.class_name = s.class_name
+        ORDER BY sx2.game_version DESC LIMIT 1
+      ) spc ON true
       LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
-      LEFT JOIN ship_prices_canonical spc ON spc.ship_id = s.id
       LEFT JOIN ship_prices_canonical spc_name
         ON spc.ship_id IS NULL
-       AND spc_name.ship_id IS NULL
        AND LOWER(spc_name.ship_name) = LOWER(REGEXP_REPLACE(
              s.name,
              '^(Aegis|Anvil|Drake|RSI|Origin|MISC|Crusader|Esperia|Banu|Tumbril|Argo|Greycat|Kruger|Mirai|Vanduul|Aopoa|Consolidated Outland|Gatac|CNOU)\\s+',
              '', 'i'))
       WHERE COALESCE(spc.pledge_usd, spc_name.pledge_usd, sp.msrp_usd) IS NOT NULL
         AND COALESCE(spc.pledge_usd, spc_name.pledge_usd, sp.msrp_usd) > 0
+        ${gvFilter}
       ORDER BY COALESCE(spc.pledge_usd, spc_name.pledge_usd, sp.msrp_usd) ASC
-    `, []);
+    `, onlineGvList ? [onlineGvList] : []);
 
     const ships = new Map<string, ShipNode>();
     // Map auxiliar: shipId → warbond REAL del Wiki (si existe). Lo usamos en
@@ -140,6 +166,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Sitio.12 (2026-06-12): las 31.715 filas de ccu_prices referencian ship ids
+    // del import 4.7.0-LIVE.11518367 (offline) mientras el catálogo y la UI mandan
+    // ids 4.8.0 → sin re-resolución, "Armarla Ya" no encontraba NINGUNA edge para
+    // el ship de partida y devolvía chain:null siempre. Resolvemos cada id canónico
+    // (online) a TODOS sus ids homólogos por class_name y remapeamos las edges de
+    // ccu_prices al espacio canónico. La respuesta siempre usa ids canónicos 4.8.
+    const classToCanonical = new Map<string, string>();
+    for (const ship of ships.values()) {
+      if (ship.reference) classToCanonical.set(ship.reference, ship.id);
+    }
+    const aliasToCanonical = new Map<string, string>();
+    const aliasesByCanonical = new Map<string, string[]>();
+    if (classToCanonical.size > 0) {
+      const aliasRows: any[] = await sql.unsafe(
+        `SELECT DISTINCT id, class_name FROM ships WHERE class_name = ANY($1::text[])`,
+        [[...classToCanonical.keys()]],
+      );
+      for (const row of aliasRows) {
+        const canonId = classToCanonical.get(String(row.class_name));
+        if (!canonId) continue;
+        aliasToCanonical.set(String(row.id), canonId);
+        const list = aliasesByCanonical.get(canonId);
+        if (list) list.push(String(row.id));
+        else aliasesByCanonical.set(canonId, [String(row.id)]);
+      }
+    }
+
     let edges: CCUEdge[];
 
     if (onlyAvailable) {
@@ -167,6 +220,10 @@ export async function POST(request: NextRequest) {
       // Esto es defensa en profundidad: el solver también tiene
       // isShipAvailableNow() como backup, pero filtrar en SQL es más
       // determinista y reduce el grafo a explorar.
+      // Sitio.12 (2026-06-12): la excepción start/target debe matchear también
+      // los ids homólogos 4.7.0 (ccu_prices vive en ese espacio de ids).
+      const fromIdAliases = aliasesByCanonical.get(String(fromShipId)) ?? [String(fromShipId)];
+      const toIdAliases = aliasesByCanonical.get(String(toShipId)) ?? [String(toShipId)];
       const ccuRows: any[] = await sql.unsafe(
         `SELECT cp.from_ship_id, cp.to_ship_id, cp.standard_price, cp.warbond_price,
                 cp.is_available, cp.is_warbond_available, cp.is_limited
@@ -175,29 +232,44 @@ export async function POST(request: NextRequest) {
          LEFT JOIN ship_prices_canonical to_av   ON to_av.ship_id   = cp.to_ship_id
          WHERE cp.is_available = true
            AND (
-             cp.from_ship_id::text = $1
+             cp.from_ship_id::text = ANY($1::text[])
              OR from_av.pledge_availability IS NULL
              OR LOWER(from_av.pledge_availability) LIKE '%always available%'
            )
            AND (
-             cp.to_ship_id::text = $2
+             cp.to_ship_id::text = ANY($2::text[])
              OR to_av.pledge_availability IS NULL
              OR LOWER(to_av.pledge_availability) LIKE '%always available%'
            )`,
-        [String(fromShipId), String(toShipId)],
+        [fromIdAliases, toIdAliases],
       );
 
-      edges = ccuRows.map((row) => ({
-        fromShipId: String(row.from_ship_id),
-        toShipId: String(row.to_ship_id),
-        standardPrice: Number(row.standard_price) || 0,
-        warbondPrice: row.warbond_price ? Number(row.warbond_price) : null,
-        isWarbondAvailable: row.is_warbond_available === true,
-        isOwned: false,
-        ownedLocation: null,
-        ownedPricePaid: 0,
-        isLimited: row.is_limited === true,
-      }));
+      edges = [];
+      for (const row of ccuRows) {
+        // Sitio.12 (2026-06-12): remapear ids 4.7.0 de ccu_prices al id canónico
+        // online; edges hacia naves sin homólogo en el grafo online se descartan.
+        const edgeFromId = aliasToCanonical.get(String(row.from_ship_id));
+        const edgeToId = aliasToCanonical.get(String(row.to_ship_id));
+        if (!edgeFromId || !edgeToId) continue;
+        const fromShip = ships.get(edgeFromId);
+        const toShip = ships.get(edgeToId);
+        if (!fromShip || !toShip) continue;
+        // Sitio.12 (2026-06-12): delta del canónico FRESCO primero — el
+        // standard_price de ccu_prices quedó stale (calculado 2026-04 con MSRPs
+        // viejos; 9.892/31.715 filas difieren >$1 del delta real).
+        const canonicalDelta = toShip.msrpUsd - fromShip.msrpUsd;
+        edges.push({
+          fromShipId: edgeFromId,
+          toShipId: edgeToId,
+          standardPrice: canonicalDelta > 0 ? canonicalDelta : (Number(row.standard_price) || 0),
+          warbondPrice: row.warbond_price ? Number(row.warbond_price) : null,
+          isWarbondAvailable: row.is_warbond_available === true,
+          isOwned: false,
+          ownedLocation: null,
+          ownedPricePaid: 0,
+          isLimited: row.is_limited === true,
+        });
+      }
     } else {
       // ═══════════════════════════════════════════════════════════════════
       // MODE: "Esperar y Ahorrar" — generate ALL possible CCU edges from
@@ -235,7 +307,11 @@ export async function POST(request: NextRequest) {
       `, []);
       const existingPrices = new Map<string, { standard: number; warbond: number | null; wbAvail: boolean }>();
       for (const row of existingCcuRows) {
-        const key = `${String(row.from_ship_id)}->${String(row.to_ship_id)}`;
+        // Sitio.12 (2026-06-12): remapear los ids 4.7.0 de ccu_prices al espacio
+        // canónico online — sin esto el lookup `4.8->4.8` de abajo jamás matcheaba.
+        const fromKey = aliasToCanonical.get(String(row.from_ship_id)) ?? String(row.from_ship_id);
+        const toKey = aliasToCanonical.get(String(row.to_ship_id)) ?? String(row.to_ship_id);
+        const key = `${fromKey}->${toKey}`;
         existingPrices.set(key, {
           standard: Number(row.standard_price) || 0,
           warbond: row.warbond_price ? Number(row.warbond_price) : null,
@@ -281,7 +357,11 @@ export async function POST(request: NextRequest) {
           const existing = existingPrices.get(key);
 
           // Standard price = target MSRP - source MSRP
-          const standardPrice = existing?.standard || (to.msrpUsd - from.msrpUsd);
+          // Sitio.12 (2026-06-12): invertida la prioridad — el delta canónico
+          // FRESCO gana sobre existing.standard (stale de 2026-04, subestimaba
+          // el costo: ej. Pulse→350r mostraba $5 con delta real $95).
+          const canonicalDelta = to.msrpUsd - from.msrpUsd;
+          const standardPrice = canonicalDelta > 0 ? canonicalDelta : (existing?.standard || 0);
 
           // Warbond price calculation with realistic caps.
           //

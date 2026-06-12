@@ -45,6 +45,17 @@ export function ImportModal({ onClose }: ImportModalProps) {
     }
     setParseError(null);
 
+    // Sitio.12 (2026-06-12): el import hacía un clearAll() implícito sin aviso — confirmar antes de borrar los datos existentes
+    const { ships, ccus, chains, wishlist } = useHangarStore.getState();
+    if (
+      (ships.length > 0 || ccus.length > 0 || chains.length > 0 || wishlist.length > 0) &&
+      !window.confirm(
+        "Importing will replace ALL your current hangar data (ships, CCUs, chains, wishlist). Continue?"
+      )
+    ) {
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
@@ -61,10 +72,15 @@ export function ImportModal({ onClose }: ImportModalProps) {
           return;
         }
 
-        // SC Labs backup format: { version, ships, ccus, chains }
+        // SC Labs backup format: { version, ships, ccus, chains, wishlist }
         if (data && !Array.isArray(data) && data.ships && Array.isArray(data.ships)) {
           const combined = [...data.ships, ...(data.ccus || [])];
           const result = importFromJSON(combined);
+          // Sitio.12 (2026-06-12): exportToJSON incluye chains y wishlist pero el roundtrip las descartaba — restaurarlas al store (ids de chains intactos para que reservedForChainId siga matcheando)
+          useHangarStore.setState({
+            chains: Array.isArray(data.chains) ? data.chains : [],
+            wishlist: Array.isArray(data.wishlist) ? data.wishlist : [],
+          });
           setImportResult(result);
           return;
         }

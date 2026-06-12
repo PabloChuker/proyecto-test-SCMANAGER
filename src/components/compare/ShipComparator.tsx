@@ -217,6 +217,54 @@ export function ShipComparator() {
   const [slots, setSlots] = useState<(SelectedShip | null)[]>([null, null, null]);
   const [shipData, setShipData] = useState<(ShipData | null)[]>([null, null, null]);
   const [loading, setLoading] = useState(false);
+  // Sitio.12 (2026-06-12): el deep-link ?ids= era write-only (se escribía la URL
+  // pero nunca se leía al montar) → los links compartidos abrían vacíos. Este
+  // flag evita que el sync de URL pise ?ids= antes de terminar la hidratación.
+  const [hydrated, setHydrated] = useState(false);
+
+  // Sitio.12 (2026-06-12): hidratar slots desde ?ids= en el mount (máx. 3).
+  useEffect(() => {
+    const ids = (new URLSearchParams(window.location.search).get("ids") ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 3);
+    if (ids.length === 0) {
+      setHydrated(true);
+      return;
+    }
+    (async () => {
+      try {
+        const res = await fetch("/api/ships/compare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids }),
+        });
+        if (!res.ok) throw new Error("Failed to hydrate from URL");
+        const json = await res.json();
+        const data: ShipData[] = json.data || [];
+        const next: (SelectedShip | null)[] = [null, null, null];
+        ids.forEach((id, i) => {
+          const d = data.find((x) => x.id === id);
+          if (d) {
+            next[i] = {
+              id: d.id,
+              name: d.name,
+              manufacturer: d.manufacturer,
+              ship: d.ship
+                ? { role: d.ship.role, cargo: d.ship.cargo, scmSpeed: d.ship.scmSpeed }
+                : null,
+            };
+          }
+        });
+        setSlots(next); // dispara fetchComparison vía el effect existente
+      } catch (err) {
+        console.error("Compare hydrate error:", err);
+      } finally {
+        setHydrated(true);
+      }
+    })();
+  }, []);
 
   const selectedIds = slots.filter(Boolean).map((s) => s!.id);
 
@@ -252,6 +300,7 @@ export function ShipComparator() {
 
   // Sync URL with selected ids for sharing
   useEffect(() => {
+    if (!hydrated) return; // Sitio.12 (2026-06-12): no borrar ?ids= antes de leerlo
     const ids = slots.filter(Boolean).map((s) => s!.id);
     const url = new URL(window.location.href);
     if (ids.length > 0) {
@@ -260,7 +309,7 @@ export function ShipComparator() {
       url.searchParams.delete("ids");
     }
     window.history.replaceState({}, "", url.toString());
-  }, [slots]);
+  }, [slots, hydrated]);
 
   function setSlot(index: number, ship: SelectedShip | null) {
     setSlots((prev) => {

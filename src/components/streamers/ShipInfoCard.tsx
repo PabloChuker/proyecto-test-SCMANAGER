@@ -39,11 +39,19 @@ function fmtMult(v: number | null | undefined): string {
   return `${pct > 0 ? "+" : ""}${pct} %`;
 }
 
-/** Seconds → "Xm XXs" */
-function fmtTime(s: number | null | undefined): string {
-  if (s == null) return MISSING;
-  const m = Math.floor(s / 60);
-  const sec = Math.round(s % 60);
+/** Minutes → "Xh XXm" (≥1h) o "Xm XXs" */
+// Sitio.12 (2026-06-12): ship_insurance.*_claim_time guarda MINUTOS (BD: 0–253), no segundos —
+// se interpretaba como segundos y las cards mostraban tiempos 60× menores (Avenger "0m 05s" en vez de ~4m52s).
+function fmtTime(min: number | null | undefined): string {
+  if (min == null) return MISSING;
+  if (min >= 60) {
+    const total = Math.round(min);
+    const h = Math.floor(total / 60);
+    const m = total % 60;
+    return `${h}h ${m.toString().padStart(2, "0")}m`;
+  }
+  const m = Math.floor(min);
+  const sec = Math.round((min - m) * 60);
   return `${m}m ${sec.toString().padStart(2, "0")}s`;
 }
 

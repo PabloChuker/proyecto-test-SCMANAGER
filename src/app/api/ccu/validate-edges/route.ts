@@ -20,6 +20,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/lib/db";
+import { getOnlineVersionsArray } from "@/lib/onlineVersions";
 
 interface PairRequest {
   fromShipId: string;
@@ -73,6 +74,38 @@ export async function POST(request: NextRequest) {
     // Cargar todos los pares de ccu_prices que aplican (1 query batch)
     const fromIds = [...new Set(pairs.map((p) => String(p.fromShipId)))];
     const toIds = [...new Set(pairs.map((p) => String(p.toShipId)))];
+    const allShipIds = [...new Set([...fromIds, ...toIds])];
+
+    // Sitio.12 (2026-06-12): las 31.715 filas de ccu_prices referencian ship ids
+    // del import 4.7.0 (offline) mientras la pizarra manda ids 4.8.0 → el edgeMap
+    // por `from->to` jamás matcheaba y TODA flecha salía roja "Sin CCU directo".
+    // Re-resolvemos cada id pedido a TODOS sus ids homólogos por class_name y
+    // remapeamos las filas al id canónico pedido; la respuesta sigue keyeada por
+    // los ids que mandó la UI (los canónicos 4.8 del catálogo).
+    const requestedSet = new Set(allShipIds);
+    const classToCanonical = new Map<string, string>();
+    const aliasToCanonical = new Map<string, string>();
+    const aliasesByCanonical = new Map<string, string[]>();
+    const aliasRows: any[] = await sql.unsafe(
+      `SELECT DISTINCT id, class_name FROM ships
+        WHERE class_name IN (SELECT class_name FROM ships WHERE id::text = ANY($1::text[]))`,
+      [allShipIds],
+    );
+    for (const row of aliasRows) {
+      if (requestedSet.has(String(row.id))) {
+        classToCanonical.set(String(row.class_name), String(row.id));
+      }
+    }
+    for (const row of aliasRows) {
+      const canonId = classToCanonical.get(String(row.class_name));
+      if (!canonId) continue;
+      aliasToCanonical.set(String(row.id), canonId);
+      const list = aliasesByCanonical.get(canonId);
+      if (list) list.push(String(row.id));
+      else aliasesByCanonical.set(canonId, [String(row.id)]);
+    }
+    const expandIds = (ids: string[]) =>
+      [...new Set(ids.flatMap((id) => aliasesByCanonical.get(id) ?? [id]))];
 
     const ccuRows: any[] = await sql.unsafe(
       `SELECT from_ship_id, to_ship_id, standard_price, warbond_price,
@@ -80,14 +113,17 @@ export async function POST(request: NextRequest) {
          FROM ccu_prices
         WHERE from_ship_id::text = ANY($1::text[])
           AND to_ship_id::text = ANY($2::text[])`,
-      [fromIds, toIds],
+      [expandIds(fromIds), expandIds(toIds)],
     );
     const edgeMap = new Map<
       string,
       { standard: number; warbond: number | null; isAvailable: boolean; warbondAvailable: boolean }
     >();
     for (const row of ccuRows) {
-      const key = `${String(row.from_ship_id)}->${String(row.to_ship_id)}`;
+      // Sitio.12 (2026-06-12): key por ids canónicos (los pedidos por la UI).
+      const fromKey = aliasToCanonical.get(String(row.from_ship_id)) ?? String(row.from_ship_id);
+      const toKey = aliasToCanonical.get(String(row.to_ship_id)) ?? String(row.to_ship_id);
+      const key = `${fromKey}->${toKey}`;
       edgeMap.set(key, {
         standard: Number(row.standard_price) || 0,
         warbond: row.warbond_price != null ? Number(row.warbond_price) : null,
@@ -107,9 +143,16 @@ export async function POST(request: NextRequest) {
     // ship_id en ship_prices_canonical quedó NULL (ej. Anvil Spartan).
     // 2026-05-13 (CCU.25): wiki canonical primero (más actualizado), ship_price
     // como fallback histórico (ver comentario detallado en /api/ccu/ships).
-    const allShipIds = [...new Set([...fromIds, ...toIds])];
+    // Sitio.12 (2026-06-12): aplicar el kill-switch game_versions.online — antes
+    // este lookup servía filas de CUALQUIER game_version (la misma id existe en
+    // 4.7.2 y 4.8.0 con datos distintos → info no determinista). CONCEPT sigue
+    // pasando (las naves concept son targets válidos del planner, como antes).
+    const onlineGvList = await getOnlineVersionsArray();
+    const gvFilter = onlineGvList
+      ? ` AND (s.game_version = ANY($2::text[]) OR s.game_version = 'CONCEPT')`
+      : "";
     const shipRows: any[] = await sql.unsafe(
-      `SELECT s.id, s.name,
+      `SELECT DISTINCT ON (s.id) s.id, s.name,
               COALESCE(spc.pledge_usd, spc_name.pledge_usd, sp.msrp_usd) AS msrp_usd,
               COALESCE(sp.is_ccu_eligible, true) AS is_ccu_eligible
          FROM ships s
@@ -122,8 +165,8 @@ export async function POST(request: NextRequest) {
                 s.name,
                 '^(Aegis|Anvil|Drake|RSI|Origin|MISC|Crusader|Esperia|Banu|Tumbril|Argo|Greycat|Kruger|Mirai|Vanduul|Aopoa|Consolidated Outland|Gatac|CNOU)\\s+',
                 '', 'i'))
-        WHERE s.id::text = ANY($1::text[])`,
-      [allShipIds],
+        WHERE s.id::text = ANY($1::text[])${gvFilter}`,
+      onlineGvList ? [allShipIds, onlineGvList] : [allShipIds],
     );
     const shipInfoMap = new Map<string, { name: string; msrp: number; eligible: boolean }>();
     for (const row of shipRows) {
