@@ -85,12 +85,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Si el code ya existe pero NO es de este usuario, conflicto
+    // Si el code ya existe pero NO es de este usuario, conflicto.
+    // Sitio.13 (2026-06-12, SEGURIDAD): el check anterior exigía
+    // `existing[0].user_id &&` — los códigos seed de los devs (user_id NULL,
+    // ej. STAR-ZJVS-3FK4 de xolii) podían ser secuestrados por cualquier
+    // usuario logueado. Ahora cualquier code pre-existente ajeno = 409.
     const existing: any[] = await sql.unsafe(
       `SELECT id, user_id FROM referral_codes WHERE code = $1 LIMIT 1`,
       [codeRaw],
     );
-    if (existing.length > 0 && existing[0].user_id && existing[0].user_id !== u) {
+    if (existing.length > 0 && existing[0].user_id !== u) {
       return NextResponse.json(
         { error: "This referral code is already registered by another user." },
         { status: 409 },
