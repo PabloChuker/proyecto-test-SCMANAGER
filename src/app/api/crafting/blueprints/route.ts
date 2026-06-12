@@ -255,11 +255,21 @@ export async function GET() {
         }
         const part = partMap.get(gk)!;
 
-        // Add material (deduplicate by resource_uuid within same group)
-        const alreadyHasMat = part.materials.some(
+        // Add material (deduplicate by resource_uuid within same group).
+        // Sitio.10 (2026-06-12, CRÍTICO): el import 4.8 escribe UNA fila por
+        // MODIFICADOR y solo una del grupo lleva quantity_scu (las demás 0).
+        // Quedarse con "la primera" tomaba la de 0 en 379 materiales (ej.
+        // Aslarite de ADP Arms mostraba 0.0000 SCU debiendo ser 0.02). Si el
+        // material ya existe, conservamos el MAX de quantity/minQuality.
+        const existingMat = part.materials.find(
           (mat) => mat.resourceUuid === String(m.resource_uuid)
         );
-        if (!alreadyHasMat) {
+        const qtyScu = (Number(m.quantity_scu) || 0) / 100;
+        const minQ = Number(m.min_quality) || 0;
+        if (existingMat) {
+          if (qtyScu > existingMat.quantityScu) existingMat.quantityScu = qtyScu;
+          if (minQ > existingMat.minQuality) existingMat.minQuality = minQ;
+        } else {
           const rawSizes = Array.isArray(m.box_sizes) ? m.box_sizes : [];
           const boxSizes = rawSizes
             .map((s: any) => Number(s))
@@ -273,8 +283,8 @@ export async function GET() {
             description: m.resource_description || "",
             refinedName: m.refined_name || null,
             boxSizes,
-            quantityScu: (Number(m.quantity_scu) || 0) / 100,
-            minQuality: Number(m.min_quality) || 0,
+            quantityScu: qtyScu,
+            minQuality: minQ,
           });
         }
 
@@ -345,6 +355,15 @@ export async function GET() {
         rewardPools: poolByBp.get(bpId) || [],
         baseStats: baseStatsByClass.get(bp.output_class) || null,
       });
+    }
+
+    // Sitio.10: regresión del datadumper en 4.8 — blueprints."default" vino
+    // true para el 100% de las filas (en 4.7.0 eran 8/1044), así que el flag
+    // perdió toda señal y el workbench mostraba "lo conocés por defecto" hasta
+    // en los drops de misión. Si TODOS son default, lo neutralizamos: mejor
+    // no afirmar nada que afirmar data falsa. (Fix real: parser del dumper.)
+    if (blueprints.length > 0 && blueprints.every((b) => b.isDefault)) {
+      for (const b of blueprints) b.isDefault = false;
     }
 
     // ── 7. Build category tree ──

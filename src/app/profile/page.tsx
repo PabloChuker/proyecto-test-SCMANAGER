@@ -601,11 +601,21 @@ export default function ProfilePage() {
   async function handleSave() {
     if (!user) return;
     setSaving(true);
-    await supabase.from("profiles").update({
+    // Sitio.11 (2026-06-12, CRÍTICO): la tabla profiles NO tiene columna
+    // `country` — PostgREST rechazaba el PATCH completo (42703) y el error se
+    // ignoraba: "Guardar" no guardaba NADA y volvía a modo lectura como si
+    // hubiera funcionado. Hasta que exista la columna (migración 063 la
+    // contempla), solo persistimos display_name y mostramos el error si falla.
+    const { error } = await supabase.from("profiles").update({
       display_name: displayName || null,
-      country:      country || null,
       updated_at:   new Date().toISOString(),
     }).eq("id", user.id);
+    if (error) {
+      console.error("[profile] save failed:", error.message);
+      alert(`No se pudo guardar el perfil: ${error.message}`);
+      setSaving(false);
+      return;
+    }
     await refreshProfile();
     setSaving(false);
     setEditMode(false);
