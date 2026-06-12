@@ -406,10 +406,13 @@ export default function ActivityManager() {
     async function loadParty() {
       if (!user) { setLoadingParty(false); return; }
 
+      // Sitio.12 (2026-06-12): users con 2 memberships veían acá una party distinta a la de /party;
+      // mismo orden que loadMyParty (joined_at desc) para que ambas páginas muestren la más reciente.
       const { data: membership } = await supabase
         .from("party_members")
         .select("party_id")
         .eq("user_id", user.id)
+        .order("joined_at", { ascending: false })
         .limit(1);
 
       if (!membership || membership.length === 0) {

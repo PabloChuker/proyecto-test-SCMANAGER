@@ -108,19 +108,32 @@ export async function GET() {
   try {
     // Filtramos solo type=WeaponPersonal para mantener el dataset acotado a
     // las armas reales (no attachments, no ammo containers).
+    //
+    // Sitio.12 (2026-06-12): la tabla tiene 3 game_versions (4.7.2 + 2 builds
+    // 4.8.0 cuyo import vino con TODAS las stats null — gap del datadumper
+    // pendiente), así que sin dedupe cada arma salía 3 veces (1215 filas, 901
+    // vacías). Fix interino: DISTINCT ON (name) prefiriendo la fila CON stats
+    // (damage/dps no null) de la game_version más alta. Cuando se re-importe
+    // 4.8.0 con stats, este dedupe sirve solo la versión online automáticamente.
     const rows: any[] = await sql.unsafe(`
-      SELECT
-        name,
-        damage_class,
-        item_type,
-        magazine_size       AS magazine,
-        ammo_speed          AS bullet_speed,
-        damage_alpha_total  AS alpha_damage,
-        rate_of_fire_rpm    AS max_firerate,
-        dps_total           AS max_dps,
-        raw_data
-      FROM fps_weapon_items
-      WHERE type = 'WeaponPersonal'
+      SELECT * FROM (
+        SELECT DISTINCT ON (name)
+          name,
+          damage_class,
+          item_type,
+          magazine_size       AS magazine,
+          ammo_speed          AS bullet_speed,
+          damage_alpha_total  AS alpha_damage,
+          rate_of_fire_rpm    AS max_firerate,
+          dps_total           AS max_dps,
+          raw_data
+        FROM fps_weapon_items
+        WHERE type = 'WeaponPersonal'
+        ORDER BY
+          name,
+          (damage_alpha_total IS NOT NULL OR dps_total IS NOT NULL) DESC,
+          game_version DESC
+      ) w
       ORDER BY name ASC
     `, []);
 

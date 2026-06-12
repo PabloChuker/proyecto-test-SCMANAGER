@@ -119,10 +119,13 @@ export default function PartyPage() {
 
   const loadMyParty = useCallback(async () => {
     if (!user) return;
+    // Sitio.12 (2026-06-12): hay users con 2 memberships (aceptar invite no saca de la party previa);
+    // sin order el limit(1) devolvía una fila arbitraria — ordenamos por joined_at para que gane la más reciente.
     const { data: membership } = await supabase
       .from("party_members")
       .select("party_id")
       .eq("user_id", user.id)
+      .order("joined_at", { ascending: false })
       .limit(1);
 
     if (!membership || membership.length === 0) {

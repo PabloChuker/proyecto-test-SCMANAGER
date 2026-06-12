@@ -929,14 +929,22 @@ export const useHangarStore = create<HangarStoreState>()(
         const { ships: parsedShips, ccus: parsedCCUs, summary, errors } =
           detectAndParseFormat(data);
 
+        // Sitio.12 (2026-06-12): al regenerar UUIDs, loanerOf quedaba apuntando al id VIEJO del parent (re-import de backup) → loaners duplicados en el backfill y cascade-remove roto; remapear old→new
+        const idMap = new Map<string, string>();
+        const shipsWithNewIds = parsedShips.map((ship) => {
+          const newId = generateUUID();
+          const oldId = (ship as Partial<HangarShip>).id;
+          if (oldId) idMap.set(oldId, newId);
+          return { ...ship, id: newId };
+        });
+        const remappedShips = shipsWithNewIds.map((ship) =>
+          ship.loanerOf && idMap.has(ship.loanerOf)
+            ? { ...ship, loanerOf: idMap.get(ship.loanerOf)! }
+            : ship
+        );
+
         set((state) => ({
-          ships: [
-            ...state.ships,
-            ...parsedShips.map((ship) => ({
-              ...ship,
-              id: generateUUID(),
-            })),
-          ],
+          ships: [...state.ships, ...remappedShips],
           ccus: [
             ...state.ccus,
             ...parsedCCUs.map((ccu) => ({
