@@ -286,7 +286,7 @@ function parseSCLabsItems(items: any[], location: ItemLocation): {
               location,
               itemCategory: itemCat,
               isGiftable: item.isGiftable || false,
-              isMeltable: item.isExchangeable || true,
+              isMeltable: item.isExchangeable ?? true, // Sitio.9: || true era SIEMPRE true — badge Melt en items no fundibles
               purchasedDate: item.lastModification ? parseDateString(item.lastModification) : null,
               imageUrl,
               notes: shipList.length > 1 ? `Part of package: ${name}` : "",
@@ -306,7 +306,7 @@ function parseSCLabsItems(items: any[], location: ItemLocation): {
             location,
             itemCategory: itemCat,
             isGiftable: item.isGiftable || false,
-            isMeltable: item.isExchangeable || true,
+            isMeltable: item.isExchangeable ?? true, // Sitio.9: || true era SIEMPRE true — badge Melt en items no fundibles
             purchasedDate: item.lastModification ? parseDateString(item.lastModification) : null,
             imageUrl,
             notes: "",

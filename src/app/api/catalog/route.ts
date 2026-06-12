@@ -65,11 +65,23 @@ interface TableDef {
   hasGameVersion?: boolean;
 }
 
+// Sitio.6 (2026-06-12, CRÍTICO): TODAS las tablas del catálogo tienen hoy
+// game_version con PK compuesta (validado contra information_schema), pero
+// solo 4/14 types tenían hasGameVersion → el DISTINCT ON elegía una fila
+// ARBITRARIA entre 4 versiones (mayormente 4.7.0 con stats null): 127/189
+// weapons y 48/73 shields del picker salían de una GV offline. Además el
+// filtro anti-junk (Template/Test/PLACEHOLDER) solo existía en 4 types.
+const JUNK_FILTER =
+  "t.class_name NOT ILIKE '%_Template%' AND t.class_name NOT ILIKE '%Test%' " +
+  "AND t.class_name NOT ILIKE '%_Dummy%' AND t.class_name NOT ILIKE '%LowPoly%' " +
+  "AND (t.name IS NULL OR t.name NOT ILIKE '%PLACEHOLDER%')";
+
 const TYPE_TABLE: Record<string, TableDef> = {
   WEAPON: {
     table: "weapon_guns", type: "WEAPON",
     idCol: "id", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
+    extraWhere: JUNK_FILTER, hasGameVersion: true,
   },
   // TURRET apunta a la tabla `turrets` real (migracion 029) — son los gimbal
   // mounts / turret mounts que equipan armas adentro (con sub_type GunTurret,
@@ -80,11 +92,15 @@ const TYPE_TABLE: Record<string, TableDef> = {
     table: "turrets", type: "TURRET",
     idCol: "id", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
+    extraWhere: JUNK_FILTER, hasGameVersion: true,
   },
   MISSILE: {
+    // Sitio.6: missiles no tiene class_name — filtro junk solo por name.
     table: "missiles", type: "MISSILE",
     idCol: "uuid", nameCol: "name", classCol: "name",
     sizeCol: "size", gradeCol: null, mfrCol: null,
+    extraWhere: "(t.name IS NULL OR t.name NOT ILIKE '%PLACEHOLDER%')",
+    hasGameVersion: true,
   },
   // BOMB (migracion 053 / import-bombs.mjs) — bombas de gravity-drop como
   // el Colossus S10, Stormburst S5, Thunderball S3. Viven en su propia tabla
@@ -96,6 +112,7 @@ const TYPE_TABLE: Record<string, TableDef> = {
     table: "bombs", type: "BOMB",
     idCol: "id", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
+    extraWhere: JUNK_FILTER, hasGameVersion: true,
   },
   // MISSILE_RACK apunta a tabla `missile_launchers` (migracion 018) — son los
   // racks/lanzadores que contienen los misiles adentro. Cuando el usuario
@@ -105,26 +122,31 @@ const TYPE_TABLE: Record<string, TableDef> = {
     table: "missile_launchers", type: "MISSILE_RACK",
     idCol: "id", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
+    extraWhere: JUNK_FILTER, hasGameVersion: true,
   },
   SHIELD: {
     table: "shields", type: "SHIELD",
     idCol: "id", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
+    extraWhere: JUNK_FILTER, hasGameVersion: true,
   },
   POWER_PLANT: {
     table: "power_plants", type: "POWER_PLANT",
     idCol: "uuid", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
+    extraWhere: JUNK_FILTER, hasGameVersion: true,
   },
   COOLER: {
     table: "coolers", type: "COOLER",
     idCol: "id", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
+    extraWhere: JUNK_FILTER, hasGameVersion: true,
   },
   QUANTUM_DRIVE: {
     table: "quantum_drives", type: "QUANTUM_DRIVE",
     idCol: "uuid", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
+    extraWhere: JUNK_FILTER, hasGameVersion: true,
   },
   // Jump Drive (Fase P.1, migración 058) — módulo independiente del QT drive,
   // habilita saltos inter-sistema. Mayoritariamente equipado en capital ships
@@ -151,6 +173,7 @@ const TYPE_TABLE: Record<string, TableDef> = {
     table: "weapon_mining", type: "MINING_LASER",
     idCol: "id", nameCol: "name", classCol: "class_name",
     sizeCol: "size", gradeCol: "grade", mfrCol: "manufacturer_id",
+    extraWhere: JUNK_FILTER, hasGameVersion: true,
   },
   // Salvage (Fase M — migración 056): la tabla weapon_salvage alberga tanto
   // cabezas de salvage (Baler, Salvation, y los tractor beams que CIG tipifica

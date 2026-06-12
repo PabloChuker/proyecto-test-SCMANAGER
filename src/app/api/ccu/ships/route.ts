@@ -57,11 +57,18 @@ export async function GET(request: NextRequest) {
              COALESCE(s.flight_status, 'flight_ready') AS flight_status,
              s.size, s.role
       FROM ships s
-      LEFT JOIN ship_price sp ON sp.id = s.id
-      LEFT JOIN ship_prices_canonical spc ON spc.ship_id = s.id
+      LEFT JOIN LATERAL (
+        SELECT sp2.* FROM ship_price sp2
+        JOIN ships sx ON sx.id = sp2.id AND sx.class_name = s.class_name
+        ORDER BY sx.game_version DESC LIMIT 1
+      ) sp ON true
+      LEFT JOIN LATERAL (
+        SELECT spc2.* FROM ship_prices_canonical spc2
+        JOIN ships sx2 ON sx2.id = spc2.ship_id AND sx2.class_name = s.class_name
+        ORDER BY sx2.game_version DESC LIMIT 1
+      ) spc ON true
       LEFT JOIN ship_prices_canonical spc_name
         ON spc.ship_id IS NULL
-       AND spc_name.ship_id IS NULL
        AND LOWER(spc_name.ship_name) = LOWER(REGEXP_REPLACE(
              s.name,
              '^(Aegis|Anvil|Drake|RSI|Origin|MISC|Crusader|Esperia|Banu|Tumbril|Argo|Greycat|Kruger|Mirai|Vanduul|Aopoa|Consolidated Outland|Gatac|CNOU)\\s+',
