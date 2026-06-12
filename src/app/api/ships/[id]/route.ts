@@ -130,7 +130,46 @@ const HP_TYPE_TO_CATEGORY: Record<string, string> = {
   // "QuantumInterdictionGenerator"; mapeamos a QIG para que el widget
   // dedicado del LoadoutBuilder lo muestre.
   QuantumInterdictionGenerator: "QIG",
+  // Loadout.17 (2026-06-12): sin esta key, los racks cuyo hardpoint_name no
+  // contiene "missile" caían a OTHER y se filtraban — el Talon Shrike ocultaba
+  // sus 2x MSD-683 con 24 Arrester III (hardpoint_leg_blankingplate_*).
+  MissileLauncher: "MISSILE_RACK",
+  GroundVehicleMissileLauncher: "MISSILE_RACK",
+  BombLauncher: "MISSILE_RACK",
+  // Scanner: slot de escáner (ROC-DS), no torreta — sin la key, el fallback
+  // por nombre ("hardpoint_scanner_turret") lo mandaba a TURRET.
+  Scanner: "OTHER",
 };
+
+// Loadout.16 (2026-06-12): tipos de hardpoint que NUNCA son equipamiento
+// visible en los widgets. Sin esta lista, el fallback por nombre los promovía:
+// `hardpoint_turret_manned_front_seat_access` (SeatAccess) matcheaba "turret"
+// → TURRET y la Redeemer mostraba 4 "Seat" S4 como armas; `hardpoint_weaponlocker`
+// (Door) matcheaba "weapon" → WEAPON y salía "Weapon Rack" con "Door Control".
+// El hardpoint_type viene del Type real del item en el p4k — señal estable
+// entre parches, al revés que los nombres de hardpoint que CIG renombra.
+const NON_EQUIPMENT_HP_TYPES = new Set([
+  "Seat", "SeatAccess", "SeatDashboard", "Display", "Door", "ControlPanel",
+  "Room", "Usable", "Useable", "Misc", "MISC", "Relay", "Ping",
+  "LandingSystem", "DockingCollar", "DockingAnimator",
+  "AIModule", "AttachedPart", "Avionics", "Battery", "Computer", "Interior",
+  "Light", "MultiLight", "NOITEM_Vehicle", "UNDEFINED", "GravityGenerator",
+  // CargoGrid: bodegas internas, no equipamiento — sin esto los
+  // hardpoint_cargogrid_salvage_*_TEMP del Reclaimer caían al widget SALVAGE.
+  "CargoGrid",
+  "Flair_Cockpit", "Flair_Floor", "Flair_Surface", "Flair_Wall",
+  "WeaponRegenPool", "LifeSupportSystem",
+]);
+
+function isNonEquipmentHpType(hpType: string | null | undefined): boolean {
+  const baseType = (hpType ?? "").toString().split(".")[0];
+  if (!baseType) return false;
+  if (NON_EQUIPMENT_HP_TYPES.has(baseType)) return true;
+  // Los *Controller son computadoras internas del barco (los paneles WEAPONS/
+  // MISSILES/POWER/SHIELDS de los MFD), no equipamiento. La única excepción
+  // es FlightController, que sí se equipa (tabla flight_controllers).
+  return baseType.endsWith("Controller") && baseType !== "FlightController";
+}
 
 function hpCategory(hpType: string | null | undefined, hpName: string | null | undefined): string {
   // FIX 2026-04-28: defensive contra hardpoint_type/name null en BD. Causa
@@ -139,6 +178,19 @@ function hpCategory(hpType: string | null | undefined, hpName: string | null | u
   // toda la nave devolvía 500 — afectaba TODAS las naves no solo Hull B.
   const safeType = (hpType ?? "").toString();
   const n = (hpName ?? "").toLowerCase();
+
+  // Loadout.16: el tipo real del hardpoint gana sobre cualquier heurística de
+  // nombre — un asiento llamado "turret_seat" sigue siendo un asiento.
+  if (isNonEquipmentHpType(safeType)) return "OTHER";
+
+  // Loadout.16: tanques de quantum fuel (QTNK_*) NO son quantum drives — sin
+  // esto el name-fallback "quantum" los mandaba al widget QT DRIVES (Cutter,
+  // Golem, Salvation: hardpoint_quantum_tank).
+  if (safeType.split(".")[0] === "QuantumFuelTank" || n.includes("quantum_tank")) return "OTHER";
+
+  // Loadout.16: torretas de cámara y selectores de target (Idris, Retaliator,
+  // Scorpius, Starlancer TAC) no son torretas de armas — fuera de los widgets.
+  if (n.includes("camera") || n.includes("target_selector")) return "OTHER";
 
   // 2026-04-17: industrial name detection gana SIEMPRE sobre HP_TYPE_TO_CATEGORY.
   // Razón: en el Reclaimer los salvage arms vienen como hpType="Turret", así que
@@ -539,13 +591,75 @@ function buildRadarItem(row: any): any {
   };
 }
 
+// Loadout.16: CIG deja "<= PLACEHOLDER =>" como Name localizado de muchos items
+// reales (coolers del Javelin, countermeasures, mounted guns del Cutlass Steel).
+// Nunca lo mostramos: derivamos un nombre legible del class_name.
+// "JOKR_Defcon_CML_Flare" → "JOKR Defcon CML Flare".
+function displayNameFor(rawName: string | null | undefined, className: string | null | undefined): string {
+  const name = (rawName ?? "").trim();
+  if (name && !name.includes("PLACEHOLDER") && !name.includes("<=")) return name;
+  const cls = (className ?? "").trim();
+  if (!cls) return name;
+  return cls.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+}
+
+// Loadout.16: items de mining/salvage desde sus tablas de catálogo — mismo
+// shape de componentStats que la ruta sintética industrial para que los
+// widgets MINING/SALVAGE rendericen igual venga de donde venga el hardpoint.
+function buildMiningItemFromRow(row: any): any {
+  return {
+    id: row.id || row.class_name,
+    reference: row.class_name || "",
+    name: displayNameFor(row.name, row.class_name),
+    localizedName: null,
+    className: row.class_name,
+    type: "MINING",
+    size: numOrNull(row.size),
+    grade: null,
+    manufacturer: null,
+    componentStats: {
+      miningPower: numOrNull(row.mining_laser_power),
+      resistance: numOrNull(row.resistance),
+      instability: numOrNull(row.instability),
+      optimalRange: numOrNull(row.optimal_range),
+      maxRange: numOrNull(row.maximum_range),
+      throttleRate: numOrNull(row.throttle_rate),
+      throttleMin: numOrNull(row.throttle_min),
+      heatOutput: numOrNull(row.heat_output),
+      shatterDamage: numOrNull(row.shatter_damage),
+      moduleSlots: numOrNull(row.module_slots),
+    },
+  };
+}
+
+function buildSalvageItemFromRow(row: any): any {
+  return {
+    id: row.id || row.class_name,
+    reference: row.class_name || "",
+    name: displayNameFor(row.name, row.class_name),
+    localizedName: null,
+    className: row.class_name,
+    type: "SALVAGE",
+    size: numOrNull(row.size),
+    grade: gradeToLetter(row.grade),
+    manufacturer: null,
+    componentStats: {
+      subType: row.sub_type ?? null,
+      modifierKind: row.modifier_kind ?? null,
+      salvageSpeedMultiplier: numOrNull(row.salvage_speed_multiplier),
+      radiusMultiplier: numOrNull(row.radius_multiplier),
+      extractionEfficiency: numOrNull(row.extraction_efficiency),
+    },
+  };
+}
+
 // Build a generic item from ship_hardpoints data (no component table match)
 function buildGenericItem(hp: any): any {
   if (!hp.default_item_name || hp.default_item_name === "") return null;
   return {
     id: hp.default_item_uuid || hp.id,
     reference: hp.default_item_class || "",
-    name: hp.default_item_name || "",
+    name: displayNameFor(hp.default_item_name, hp.default_item_class),
     localizedName: null,
     className: hp.default_item_class,
     type: hp.hardpoint_type || "OTHER",
@@ -844,6 +958,7 @@ function buildChildren(
         manufacturer: null,
         componentStats: null,
       };
+      equippedItem.name = displayNameFor(equippedItem.name, className);
     }
 
     // Missile (individual ordnance dentro de un rack). Antes el type quedaba
@@ -851,7 +966,10 @@ function buildChildren(
     // del store. Lo corregimos a "MISSILE" — el rack en sí es el padre, el
     // misil de adentro es un MISSILE puro. Si tenemos hit en missileMap
     // (nombre), hidratamos con stats reales (damage_total, lock ranges, etc).
-    if (!equippedItem && entry.Type?.includes("Missile")) {
+    // Loadout.17: exigir Type "Missile" exacto (o "Missile.X") — el viejo
+    // includes("Missile") matcheaba "MissileLauncher" y re-emitía el propio
+    // rack/cap del hardpoint como un misil fantasma sin stats (Reliant caps).
+    if (!equippedItem && /^Missile(\.|$)/.test(String(entry.Type ?? ""))) {
       const mrow = missileMap.get(entry.Name) ?? missileMap.get(className);
       if (mrow) {
         equippedItem = buildMissileItem(mrow);
@@ -863,7 +981,7 @@ function buildChildren(
         equippedItem = {
           id: ns + (entry.UUID || `child-${idx}`),
           reference: className,
-          name: entry.Name || className,
+          name: displayNameFor(entry.Name, className),
           localizedName: null,
           className,
           type: "MISSILE",
@@ -1798,7 +1916,14 @@ export async function GET(
       }
     }
 
-    const uniqueClasses = [...new Set([...allClasses, ...childClasses])];
+    // Loadout.17: monturas bespoke (Mount_Gimbal_<arma>_Bespoke) — el arma
+    // interna se deriva del nombre de la clase; hay que incluirla en el batch
+    // para que el unwrap de collectWeaponChildren la encuentre en weapon_guns.
+    const bespokeInner = [...allClasses, ...childClasses]
+      .filter((c) => /^Mount_Gimbal_/i.test(String(c)))
+      .map((c) => String(c).replace(/^Mount_Gimbal_/i, ""));
+
+    const uniqueClasses = [...new Set([...allClasses, ...childClasses, ...bespokeInner])];
 
     // ── 5. Batch-fetch components from all tables ──
     const componentMap = new Map<string, { table: string; row: any }>();
@@ -1904,6 +2029,11 @@ export async function GET(
       // Fase W.13 (2026-05-02): hidratamos radar stats (range_min/max + sub_type)
       // para que el StatsPanel pueda mostrar el lock range dinámico por pips.
       batchFetch("radars", "class_name", uniqueClasses),
+      // Loadout.16: mining lasers y salvage heads con hardpoints REALES en BD
+      // (Reclaimer, MOLE, ATLS) caían a buildGenericItem sin stats porque solo
+      // la ruta sintética consultaba estas tablas.
+      batchFetch("weapon_mining", "class_name", uniqueClasses),
+      batchFetch("weapon_salvage", "class_name", uniqueClasses),
     ]);
 
     // Build weapon map for child resolution
@@ -1978,11 +2108,34 @@ export async function GET(
         else childrenByParent.set(k, [r]);
       }
     }
+
+    // Loadout.16: el dump 4.8 trae para algunas naves DOS filas top-level del
+    // mismo hardpoint que difieren solo en capitalización: el puerto del XML
+    // del vehículo (`turret_rear`, vacío) y la instancia poblada
+    // (`Turret_Rear`, con item + children). Sin esto el Hammerhead muestra sus
+    // 6 torretas reales + 6 fantasmas vacías. Si existe versión poblada del
+    // mismo nombre (case-insensitive), las vacías se descartan.
+    {
+      const _isPopulated = (r: any): boolean =>
+        !!r.default_item_class || (childrenByParent.get(String(r.id))?.length ?? 0) > 0;
+      const populatedNames = new Set<string>();
+      for (const r of hardpointRows as any[]) {
+        if (r.parent_hp_id == null && _isPopulated(r)) {
+          populatedNames.add(String(r.hardpoint_name || "").toLowerCase());
+        }
+      }
+      hardpointRows = (hardpointRows as any[]).filter((r: any) => {
+        if (r.parent_hp_id != null || _isPopulated(r)) return true;
+        return !populatedNames.has(String(r.hardpoint_name || "").toLowerCase());
+      });
+    }
     const buildChildEquipped = (cls: string | null | undefined): any => {
       if (cls && componentMap.has(cls)) {
         const { table, row } = componentMap.get(cls)!;
         if (table === "weapon_guns") return buildWeaponItem(row);
         if (table === "missiles" || table === "missile_launchers") return buildMissileItem(row);
+        if (table === "weapon_mining") return buildMiningItemFromRow(row);
+        if (table === "weapon_salvage") return buildSalvageItemFromRow(row);
       }
       // Fase AA: la tabla `missiles` no entra en componentMap (no tiene
       // class_name); se resuelve por missileMap (indexado por name y por
@@ -1991,8 +2144,12 @@ export async function GET(
       return null;
     };
 
-    const _WEAPON_TABLES = new Set(["weapon_guns", "missiles", "missile_launchers"]);
+    const _WEAPON_TABLES = new Set(["weapon_guns", "missiles", "missile_launchers", "weapon_mining", "weapon_salvage"]);
     const _isWeaponChild = (cr: any): boolean => {
+      // Loadout.16: pantallas, asientos, paneles y controllers nunca son armas,
+      // aunque su nombre contenga "weapon"/"gun"/"missile" (ej. el ControlPanel
+      // "Door Control" hijo de hardpoint_weaponlocker.IP_Button).
+      if (isNonEquipmentHpType(cr.hardpoint_type)) return false;
       const cls = cr.default_item_class;
       const tab = cls ? componentMap.get(cls)?.table : null;
       if (tab && _WEAPON_TABLES.has(tab)) return true;
@@ -2003,8 +2160,17 @@ export async function GET(
     const _isMount = (cr: any): boolean => {
       const cls = String(cr.default_item_class || "");
       if (cls.startsWith("Mount_") || /Gimbal/i.test(cls)) return true;
+      const hasKids = (childrenByParent.get(String(cr.id))?.length ?? 0) > 0;
+      // Loadout.16: racks de misiles montados DENTRO de torretas (Polaris,
+      // 890 Jump, Ballista, Starlancer TAC) — el rack es montura intermedia:
+      // descendemos a sus misiles reales en vez de tratarlo como misil-hoja
+      // sin damage.
+      const baseType = String(cr.hardpoint_type || "").split(".")[0];
+      if ((baseType === "MissileLauncher" || baseType === "GroundVehicleMissileLauncher" || /^G?MRCK_/i.test(cls)) && hasKids) {
+        return true;
+      }
       // Turret intermedio con hijos propios (ej. turret -> gimbal -> arma).
-      return cr.hardpoint_type === "Turret" && (childrenByParent.get(String(cr.id))?.length ?? 0) > 0;
+      return cr.hardpoint_type === "Turret" && hasKids;
     };
     // Recolecta las armas/misiles REALES bajo un hardpoint, bajando por las
     // monturas intermedias (gimbals) y descartando pantallas/asientos/displays.
@@ -2014,13 +2180,31 @@ export async function GET(
       const acc: any[] = [];
       for (const cr of rows) {
         const kids = childrenByParent.get(String(cr.id)) ?? [];
+        const crBaseType = String(cr.hardpoint_type || "").split(".")[0];
         if (kids.length > 0 && _isMount(cr)) {
           acc.push(...collectWeaponChildren(String(cr.id), depth + 1));
         } else if (_isWeaponChild(cr)) {
-          const ccls = cr.default_item_class;
+          let ccls = cr.default_item_class;
+          let equipped = buildChildEquipped(ccls);
+          // Loadout.17: montura bespoke HOJA (sin nietas en BD) — el arma vive
+          // en el nombre de la clase: Mount_Gimbal_BEHR_BallisticGatling_
+          // Hornet_Bespoke → BEHR_BallisticGatling_Hornet_Bespoke (sí está en
+          // weapon_guns). Nunca emitir el mount como si fuera el arma.
+          if (!equipped && ccls && /^Mount_Gimbal_/i.test(ccls)) {
+            const inner = ccls.replace(/^Mount_Gimbal_/i, "");
+            equipped = buildChildEquipped(inner);
+            if (equipped) ccls = inner;
+          }
           const ctab = ccls ? componentMap.get(ccls)?.table : null;
-          const ccat = (ctab === "missiles" || ctab === "missile_launchers" ||
-            (cr.hardpoint_name || "").toLowerCase().includes("missile")) ? "MISSILE" : "WEAPON";
+          // Loadout.17: el tipo real del hardpoint decide la categoría del
+          // child — countermeasures y EMPs colgados de módulos (Cyclone AA/MT,
+          // Nova) no son armas WEAPON.
+          let ccat: string;
+          if (crBaseType === "WeaponDefensive") ccat = "COUNTERMEASURE";
+          else if (crBaseType === "EMP") ccat = "UTILITY";
+          else if (ctab === "missiles" || ctab === "missile_launchers" ||
+            (cr.hardpoint_name || "").toLowerCase().includes("missile")) ccat = "MISSILE";
+          else ccat = "WEAPON";
           acc.push({
             id: cr.id,
             hardpointName: cr.hardpoint_name,
@@ -2028,7 +2212,7 @@ export async function GET(
             minSize: cr.min_size ?? 0,
             maxSize: cr.max_size ?? 0,
             isFixed: !cr.editable,
-            equippedItem: buildChildEquipped(ccls) ?? buildGenericItem(cr),
+            equippedItem: equipped ?? buildGenericItem(cr),
           });
         }
         // else: Screen / Seat / Display -> se ignora (no es arma)
@@ -2091,6 +2275,13 @@ export async function GET(
             case "radars":
               equippedItem = buildRadarItem(row);
               break;
+            // Loadout.16: brazos reales de mining/salvage (Reclaimer, MOLE)
+            case "weapon_mining":
+              equippedItem = buildMiningItemFromRow(row);
+              break;
+            case "weapon_salvage":
+              equippedItem = buildSalvageItemFromRow(row);
+              break;
           }
         }
 
@@ -2112,10 +2303,22 @@ export async function GET(
           ? _rowKids
           : buildChildren(hp.loadout_json, weaponMap, missileMap, String(hp.id));
 
+        // Loadout.17: torretas-cámara detectables solo por el ITEM equipado
+        // (RSI_Polaris_SCItem_Remote_Turret_HangarCam — el hardpoint_name
+        // "hardpoint_copilot_turret_hangar" no contiene "camera").
+        if (/hangarcam|camera/i.test(String(hp.default_item_class || ""))) return null;
+
         // Detect turrets: by children, by item name, or by hardpoint name
         let finalCategory = category;
         const itemName = (equippedItem?.name || "").toLowerCase();
-        const isMissileRack = itemName.includes("missile") || hpNameLower.includes("missile");
+        // Loadout.17: el tipo real gana — un EMP en un puerto llamado
+        // "hardpoint_weapon_missilerack_left" (Sabre Raven) o
+        // "hardpoint_missile_emp" (Hawk) NO es un rack de misiles: su puerto
+        // solo acepta EMP (ItemTypes=["EMP"]) y debe quedar en UTILITY.
+        const hpBaseType = String(hp.hardpoint_type || "").split(".")[0];
+        const isMissileRack =
+          hpBaseType !== "EMP" &&
+          (itemName.includes("missile") || hpNameLower.includes("missile"));
         if (category === "WEAPON" && children.length > 0 && !isMissileRack) {
           finalCategory = "TURRET";
         } else if (
@@ -2353,6 +2556,20 @@ export async function GET(
       });
     }
     const flatHardpoints = [...allHpsSoFar, ...syntheticJump];
+
+    // Loadout.16: saneo final de nombres — ningún "<= PLACEHOLDER =>" sale al
+    // cliente, venga de donde venga (ship_hardpoints, loadout_json o filas de
+    // catálogo viejas con Name placeholder, ej. coolers/shields del Javelin).
+    for (const hp of flatHardpoints) {
+      if (hp?.equippedItem?.name != null) {
+        hp.equippedItem.name = displayNameFor(hp.equippedItem.name, hp.equippedItem.className ?? hp.equippedItem.reference);
+      }
+      for (const ch of hp?.childWeapons ?? []) {
+        if (ch?.equippedItem?.name != null) {
+          ch.equippedItem.name = displayNameFor(ch.equippedItem.name, ch.equippedItem.className ?? ch.equippedItem.reference);
+        }
+      }
+    }
 
     // ── 7. Build response ──
     const scmSpeed =
