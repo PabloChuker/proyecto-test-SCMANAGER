@@ -300,14 +300,17 @@ export default function CommodityBrowser() {
                                 <td className="py-1 text-zinc-500">
                                   {sp.system}
                                 </td>
+                                {/* Sitio.4: columnas en orden directo — header
+                                    "Buy" = priceBuy (jugador compra), "Sell" =
+                                    priceSell. Antes estaban cruzadas. */}
                                 <td className="py-1 text-right font-mono text-cyan-400/80">
-                                  {sp.priceSell > 0
-                                    ? sp.priceSell.toLocaleString()
+                                  {sp.priceBuy > 0
+                                    ? sp.priceBuy.toLocaleString()
                                     : "—"}
                                 </td>
                                 <td className="py-1 text-right font-mono text-amber-400/80">
-                                  {sp.priceBuy > 0
-                                    ? sp.priceBuy.toLocaleString()
+                                  {sp.priceSell > 0
+                                    ? sp.priceSell.toLocaleString()
                                     : "—"}
                                 </td>
                               </tr>

@@ -14,9 +14,11 @@ export async function GET(request: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    // Sitio.3: mining_member_ledger no tiene session_id (la tabla agrega
+    // cross-session por user_id, migración 037) — el select daba 500 siempre.
     const { data, error } = await supabase
       .from("mining_member_ledger")
-      .select("id, session_id, display_name, balance, total_earned, total_paid, updated_at")
+      .select("id, display_name, balance, total_earned, total_paid, updated_at")
       .eq("user_id", user.id)
       .order("balance", { ascending: false });
 

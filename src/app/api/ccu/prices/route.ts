@@ -93,6 +93,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Sitio.5 (2026-06-12, SEGURIDAD): este endpoint hacía UPDATE masivo de
+    // ccu_prices SIN autenticación — cualquier visitante anónimo podía pisar
+    // los precios warbond. Mismo esquema que /api/cron/*: Bearer CRON_SECRET.
+    const auth = request.headers.get("authorization") ?? "";
+    const secret = process.env.CRON_SECRET;
+    if (!secret || auth !== `Bearer ${secret}`) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const { updates } = body;
 

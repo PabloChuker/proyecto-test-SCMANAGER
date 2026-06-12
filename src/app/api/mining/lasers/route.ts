@@ -23,26 +23,41 @@ export const revalidate = 300;
 
 export async function GET(request: NextRequest) {
   try {
+    // Sitio.3 (2026-06-12): el DISTINCT ON sin filtro de game_version elegía
+    // la fila por orden alfabético de class_name — mezclaba stats de 4.7.0 con
+    // 4.8.0 según el láser. Priorizamos la GV online y, como module_slots solo
+    // está poblado en GVs viejas (gap del datadumper), lo completamos con
+    // COALESCE sobre la última fila que lo tenga. manufacturer ahora es el
+    // NOMBRE real (join a manufacturers), no un uuid crudo.
     const rows: any[] = await sql.unsafe(`
-      SELECT DISTINCT ON (name)
-        id,
-        name,
-        manufacturer_id AS manufacturer,
-        size,
-        mining_laser_power AS "miningPower",
-        resistance,
-        instability,
-        optimal_range  AS "optimalRange",
-        maximum_range  AS "maxRange",
-        throttle_rate  AS "throttleRate",
-        throttle_min   AS "throttleMin",
-        heat_output    AS "heatOutput",
-        shatter_damage AS "shatterDamage",
-        module_slots   AS "moduleSlots"
-      FROM weapon_mining
-      WHERE class_name NOT ILIKE '%_Template%'
-        AND class_name NOT ILIKE '%_Test%'
-      ORDER BY name ASC, class_name ASC
+      WITH online AS (SELECT version FROM game_versions WHERE online = true LIMIT 1)
+      SELECT DISTINCT ON (wm.name)
+        wm.id,
+        wm.name,
+        COALESCE(mf.name, wm.manufacturer_id::text) AS manufacturer,
+        wm.size,
+        wm.mining_laser_power AS "miningPower",
+        wm.resistance,
+        wm.instability,
+        wm.optimal_range  AS "optimalRange",
+        wm.maximum_range  AS "maxRange",
+        wm.throttle_rate  AS "throttleRate",
+        wm.throttle_min   AS "throttleMin",
+        wm.heat_output    AS "heatOutput",
+        wm.shatter_damage AS "shatterDamage",
+        COALESCE(wm.module_slots, (
+          SELECT wm2.module_slots FROM weapon_mining wm2
+          WHERE wm2.class_name = wm.class_name AND wm2.module_slots IS NOT NULL
+          ORDER BY wm2.game_version DESC LIMIT 1
+        )) AS "moduleSlots"
+      FROM weapon_mining wm
+      LEFT JOIN manufacturers mf ON mf.id = wm.manufacturer_id
+      WHERE wm.class_name NOT ILIKE '%_Template%'
+        AND wm.class_name NOT ILIKE '%_Test%'
+      ORDER BY wm.name ASC,
+        (wm.game_version = (SELECT version FROM online)) DESC,
+        wm.game_version DESC,
+        wm.class_name ASC
     `, []);
 
     // Convert BigInt/Decimal to number for JSON serialization
