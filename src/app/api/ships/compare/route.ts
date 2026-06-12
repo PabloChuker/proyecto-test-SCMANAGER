@@ -38,10 +38,17 @@ async function compareShips(ids: string[]) {
       : "";
     const shipParams: any[] = [...ids];
     if (onlineList && onlineList.length > 0) shipParams.push(onlineList);
+    // Sitio.1 (2026-06-12): puente de precios por class_name — ship_price
+    // guarda UUIDs de la GV donde se importó (4.7.0); el join directo por id
+    // daba msrp null para casi todas las naves de la GV online.
     const ships: any[] = await sql.unsafe(
       `SELECT s.*, s.class_name AS reference, sp.msrp_usd, sp.warbond_usd, m.name AS manufacturer
        FROM ships s
-       LEFT JOIN ship_price sp ON sp.id = s.id
+       LEFT JOIN LATERAL (
+         SELECT sp2.* FROM ship_price sp2
+         JOIN ships sx ON sx.id = sp2.id AND sx.class_name = s.class_name
+         ORDER BY sx.game_version DESC LIMIT 1
+       ) sp ON true
        LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
        WHERE s.id::text IN (${placeholders})${onlineClause}`,
       shipParams,
@@ -84,6 +91,24 @@ async function compareShips(ids: string[]) {
       ) as any[];
     } catch {}
 
+    // Sitio.2 (2026-06-12): hull/shield/QT-range/signatures viven en
+    // ship_power_reference y ship_resistances, no en ship_fuel/ships — el
+    // comparador mostraba "—" en esos bloques para TODAS las naves.
+    let powerRefRows: any[] = [];
+    try {
+      powerRefRows = await sql.unsafe(
+        `SELECT * FROM ship_power_reference WHERE ${buildIdPairsWhere('ship_power_reference')}`,
+        idPairsFlatten,
+      ) as any[];
+    } catch {}
+    let resistRows: any[] = [];
+    try {
+      resistRows = await sql.unsafe(
+        `SELECT * FROM ship_resistances WHERE ${buildIdPairsWhere('ship_resistances')}`,
+        idPairsFlatten,
+      ) as any[];
+    } catch {}
+
     // ── 3. Fetch hardpoints for all ships ──
     // Igual: filtrar por (ship_reference, game_version) por par para no
     // mezclar hardpoints de versiones distintas.
@@ -95,6 +120,28 @@ async function compareShips(ids: string[]) {
        ORDER BY ship_reference, hardpoint_type, max_size DESC`,
       refPairsFlatten,
     );
+
+    // Sitio.2: totalMissileDmg era 0 para todas las naves — sumaba
+    // entry.DamageTotal de loadout_json, que en la GV online viene siempre
+    // vacío (los misiles son filas hijas). Sumamos desde ship_hardpoints
+    // tipo Missile × missiles.damage_total (match por raw_data ClassName).
+    const missileAgg = new Map<string, { count: number; dmg: number }>();
+    try {
+      const missileRows: any[] = await sql.unsafe(
+        `SELECT sh.ship_reference, COUNT(*)::int AS n, COALESCE(SUM(m.damage_total), 0) AS dmg
+           FROM ship_hardpoints sh
+           LEFT JOIN missiles m
+             ON m.raw_data->>'ClassName' = sh.default_item_class
+            AND m.game_version = sh.game_version
+          WHERE (${refPairsWhere.replace(/ship_reference/g, 'sh.ship_reference').replace(/game_version/g, 'sh.game_version')})
+            AND split_part(sh.hardpoint_type, '.', 1) = 'Missile'
+          GROUP BY sh.ship_reference`,
+        refPairsFlatten,
+      );
+      for (const r of missileRows) {
+        missileAgg.set(String(r.ship_reference), { count: r.n, dmg: Number(r.dmg) || 0 });
+      }
+    } catch {}
 
     // ── 4. Batch-load all component data ──
     const allClasses = allHardpoints
@@ -144,6 +191,8 @@ async function compareShips(ids: string[]) {
     const result = ships.map((ship) => {
       const fs = flightRows.find((f: any) => String(f.ship_id) === String(ship.id));
       const fuel = fuelRows.find((f: any) => String(f.ship_id) === String(ship.id));
+      const powerRef = powerRefRows.find((f: any) => String(f.ship_id) === String(ship.id));
+      const resist = resistRows.find((f: any) => String(f.ship_id) === String(ship.id));
       const hps = allHardpoints.filter((hp: any) => hp.ship_reference === ship.reference);
 
       // Aggregate stats from hardpoints + component data
@@ -298,18 +347,21 @@ async function compareShips(ids: string[]) {
           boostedRoll: numOrNull(fs?.roll_boosted ?? fs?.boosted_roll),
           hydrogenFuelCap: numOrNull(fuel?.hydrogen_capacity),
           quantumFuelCap: numOrNull(fuel?.quantum_fuel_capacity ?? fuel?.quantum_capacity),
-          quantumRange: numOrNull(fuel?.quantum_range),
-          shieldHpTotal: numOrNull(fuel?.shield_hp_total),
-          hullHp: numOrNull(fuel?.hull_hp),
-          lengthMeters: numOrNull(ship.length_meters ?? ship.length),
-          beamMeters: numOrNull(ship.beam_meters ?? ship.beam),
-          heightMeters: numOrNull(ship.height_meters ?? ship.height),
+          // Sitio.2: estos campos leían columnas inexistentes (ship_fuel no
+          // tiene quantum_range/shield_hp_total/hull_hp; ships no tiene
+          // length_meters ni base_*_signature) → "—" para todas las naves.
+          quantumRange: numOrNull(powerRef?.qt_range_km),
+          shieldHpTotal: numOrNull(powerRef?.total_shield_hp),
+          hullHp: numOrNull(resist?.armor_hp),
+          lengthMeters: numOrNull(ship.length_m),
+          beamMeters: numOrNull(ship.width_m),
+          heightMeters: numOrNull(ship.height_m),
           role: ship.role || null,
-          focus: ship.focus || null,
+          focus: ship.career || null,
           career: ship.career || null,
-          baseEmSignature: numOrNull(ship.base_em_signature),
-          baseIrSignature: numOrNull(ship.base_ir_signature),
-          baseCsSignature: numOrNull(ship.base_cs_signature),
+          baseEmSignature: numOrNull(resist?.base_em_signature),
+          baseIrSignature: numOrNull(resist?.base_ir_signature),
+          baseCsSignature: numOrNull(resist?.base_cs_signature),
         },
         computed: {
           totalDps: Math.round(totalDps * 100) / 100,
@@ -318,9 +370,11 @@ async function compareShips(ids: string[]) {
           totalShieldRegen: Math.round(totalShieldRegen * 100) / 100,
           totalPowerOutput: Math.round(totalPowerOutput * 100) / 100,
           totalCooling: Math.round(totalCooling * 100) / 100,
-          totalMissileDmg: Math.round(totalMissileDmg),
+          // Sitio.2: desde la agregación BD (filas hijas tipo Missile), no
+          // desde loadout_json (siempre vacío en la GV online).
+          totalMissileDmg: Math.round(missileAgg.get(String(ship.reference))?.dmg ?? totalMissileDmg),
           weaponCount,
-          missileCount,
+          missileCount: missileAgg.get(String(ship.reference))?.count ?? missileCount,
           shieldCount,
           quantumSpeed,
           quantumRange,

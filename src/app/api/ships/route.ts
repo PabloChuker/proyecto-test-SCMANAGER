@@ -226,10 +226,24 @@ async function handleShipsQuery(params: ShipsQueryParams) {
     // múltiples gvs en las tablas satellite. Síntoma: Xolii reportaba que
     // /ships devolvía Avenger Titan x3 todas con gv 4.8.0-live.11875683.
     // La cuenta venía dedupeada (CTE) pero la SELECT multiplicaba al JOIN.
+    // Sitio.1 (2026-06-12, CRÍTICO): ship_price/ship_prices_canonical guardan
+    // ship_id/id con los UUIDs de la GV en que se importaron (mayoría 4.7.0).
+    // Al servir solo naves de la GV online, el join directo por UUID matcheaba
+    // 1/322 → msrp/warbond/aUEC null en todo el catálogo, hangar y chain board.
+    // Puente por class_name vía LATERAL (LIMIT 1 = no multiplica filas, toma
+    // la fila de la nave más reciente que tenga precio).
     const joinClause = `LEFT JOIN ship_flight_stats fs ON fs.ship_id = s.id AND fs.game_version = s.game_version
-       LEFT JOIN ship_price sp ON sp.id = s.id
+       LEFT JOIN LATERAL (
+         SELECT sp2.* FROM ship_price sp2
+         JOIN ships sx ON sx.id = sp2.id AND sx.class_name = s.class_name
+         ORDER BY sx.game_version DESC LIMIT 1
+       ) sp ON true
        LEFT JOIN manufacturers m ON m.id = s.manufacturer_id
-       LEFT JOIN ship_prices_canonical spc ON spc.ship_id = s.id`;
+       LEFT JOIN LATERAL (
+         SELECT spc2.* FROM ship_prices_canonical spc2
+         JOIN ships sx2 ON sx2.id = spc2.ship_id AND sx2.class_name = s.class_name
+         ORDER BY sx2.game_version DESC LIMIT 1
+       ) spc ON true`;
     const ships: any[] = await sql.unsafe(
       `${dedupCTE}
        SELECT s.id, s.class_name AS reference, s.name, m.name AS manufacturer, s.role, s.size,

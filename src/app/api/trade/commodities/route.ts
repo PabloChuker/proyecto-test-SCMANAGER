@@ -52,18 +52,21 @@ async function handleDetail(code: string) {
     if (!stationMap[key]) {
       stationMap[key] = { station: r.station, system: r.system, priceBuy: 0, priceSell: 0 };
     }
+    // Sitio.4 (2026-06-12, CRÍTICO): la semántica REAL de commodity_prices es
+    // player-céntrica (verificada contra UEX live): direction='buy' = el
+    // JUGADOR compra acá, direction='sell' = el jugador vende acá. El código
+    // estaba al revés (siguiendo un comentario erróneo de la migración 039) →
+    // toda la sección Commodities mostraba Buy > Sell y márgenes negativos.
     if (r.direction === "buy") {
-      // Station buys from player → player sells here
       stationMap[key].priceBuy = Number(r.price);
     } else {
-      // Station sells to player → player buys here
       stationMap[key].priceSell = Number(r.price);
     }
   }
 
   const stations = Object.values(stationMap).sort((a, b) => {
-    // Sort by highest buy price first (best selling locations)
-    return (b.priceBuy || 0) - (a.priceBuy || 0);
+    // Mejores lugares para VENDER primero (precio de venta del jugador).
+    return (b.priceSell || 0) - (a.priceSell || 0);
   });
 
   return NextResponse.json({ stations }, { headers: secureHeaders() });
@@ -101,8 +104,9 @@ async function handleListNew(params: {
        COALESCE(tc.is_harvestable, 0) as is_harvestable,
        COALESCE(tc.is_buyable, 0) as is_buyable,
        COALESCE(tc.is_sellable, 0) as is_sellable,
-       ROUND(AVG(CASE WHEN cp.direction = 'sell' THEN cp.price END))::int as price_buy,
-       ROUND(AVG(CASE WHEN cp.direction = 'buy'  THEN cp.price END))::int as price_sell
+       -- Sitio.4: direction='buy' = el jugador COMPRA (ese es price_buy).
+       ROUND(AVG(CASE WHEN cp.direction = 'buy'  THEN cp.price END))::int as price_buy,
+       ROUND(AVG(CASE WHEN cp.direction = 'sell' THEN cp.price END))::int as price_sell
      FROM commodity_prices cp
      LEFT JOIN trade_commodities tc ON tc.code = cp.commodity_abbr
      GROUP BY cp.commodity_abbr, tc.name, tc.kind, tc.is_raw, tc.is_refined,

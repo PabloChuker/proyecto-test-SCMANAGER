@@ -14,9 +14,12 @@ export async function GET() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    // Sitio.3 (2026-06-12, CRÍTICO): mining_sessions NO tiene columna
+    // updated_at — el select fallaba con 42703 → 500 en CADA visita a
+    // /mining, y el store, viendo lista vacía, creaba sesiones duplicadas.
     const { data, error } = await supabase
       .from("mining_sessions")
-      .select("id, name, status, party_id, notes, created_at, updated_at")
+      .select("id, name, status, party_id, notes, created_at")
       .eq("owner_id", user.id)
       .order("created_at", { ascending: false });
 
