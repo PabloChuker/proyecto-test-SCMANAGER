@@ -97,6 +97,26 @@ const VARIANT_STRIP_REGEXES: RegExp[] = [
   /_Tier_\d+$/i,
   /_BIS\d*$/i,
   /_Collector(_[A-Za-z0-9]+)*$/i,
+  // Variantes que comparten geometria con la nave base: ediciones de tienda,
+  // pinturas de evento, versiones de mision y de prueba. Auditado contra R2 en
+  // 2026-10-17: 37 naves quedaban sin ningun modelo solo por el sufijo.
+  //   AEGS_Hammerhead_GS            -> AEGS_Hammerhead
+  //   RSI_Constellation_Taurus_GS   -> RSI_Constellation_Taurus
+  //   ANVL_Ballista_Snowblind       -> ANVL_Ballista
+  /_GS(_[A-Za-z0-9]+)*$/i,
+  /_Showdown$/i,
+  /_Fleetweek(_[A-Za-z0-9]+)*$/i,
+  /_EA_[A-Za-z0-9]+$/i,
+  /_FW_\d+$/i,
+  /_PU(_[A-Za-z0-9]+)*$/i,
+  /_(Advocacy|Indestructible|Invictus|TSG)$/i,
+  /_(Boarded|Boarding|Prison|Stealth|Piano)$/i,
+  /_(Dunestalker|Snowblind|BALLISTIC|Swarm)$/i,
+  /_(Bomb_Test|S3Bombs|Bombless|NoInterior|NoCrimesAgainst)$/i,
+  /_Drug_\d+$/i,
+  /_BTALA$/i,
+  /_EX$/i,
+  /_AI$/i,
 ];
 
 function stripVariantSuffix(reference: string): string {
