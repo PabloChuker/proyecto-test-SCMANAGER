@@ -110,7 +110,10 @@ const VARIANT_STRIP_REGEXES: RegExp[] = [
   /_FW_\d+$/i,
   /_PU(_[A-Za-z0-9]+)*$/i,
   /_(Advocacy|Indestructible|Invictus|TSG)$/i,
-  /_(Boarded|Boarding|Prison|Stealth|Piano)$/i,
+  /_(Boarded|Boarding|Prison|Stealth|Piano)(_[A-Za-z0-9]+)*$/i,
+  // Skins IKTI/ARGOS/NTLS de los ARGO ATLS y pinturas sueltas (auditado 2026-11-14)
+  /_IKTI(_[A-Za-z0-9]+)*$/i,
+  /_(ARGOS|NTLS|ShatteredBlade)$/i,
   /_(Dunestalker|Snowblind|BALLISTIC|Swarm)$/i,
   /_(Bomb_Test|S3Bombs|Bombless|NoInterior|NoCrimesAgainst)$/i,
   /_Drug_\d+$/i,
