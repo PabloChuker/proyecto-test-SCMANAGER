@@ -1315,8 +1315,8 @@
   "PerformanceToggle": {
     "labelFull": "Complet",
     "labelLight": "Léger",
-    "titleFull": "Mode performance : Complet (animations et 3D activés). Cliquez pour passer en Léger.",
-    "titleLight": "Mode performance : Léger (optimisé pour les équipements modestes). Cliquez pour passer en Complet.",
+    "titleFull": "Arrière-plan : Complet (vidéo d'arrière-plan animée). Cliquez pour passer en Léger.",
+    "titleLight": "Arrière-plan : Léger (sans vidéo d'arrière-plan, chargement plus rapide). Cliquez pour passer en Complet.",
     "aria": "Basculer mode léger"
   }
 }

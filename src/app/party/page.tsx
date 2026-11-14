@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client";
 import activityTypesFallback from "@/data/activities/activity-types.json";
 import { sendNotification } from "@/lib/notifications";
 import { useTranslations } from "next-intl";
+import { BgVideo } from "@/components/shared/BgVideo";
 
 interface Party {
   id: string;
@@ -373,9 +374,7 @@ export default function PartyPage() {
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
-      <video autoPlay loop muted playsInline className="fixed inset-0 w-full h-full object-cover opacity-15 pointer-events-none z-0">
-        <source src="/videos/mineria.mp4" type="video/mp4" />
-      </video>
+      <BgVideo src="/videos/mineria.mp4" className="fixed inset-0 w-full h-full object-cover opacity-15 pointer-events-none z-0" />
       <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/60 via-zinc-950/80 to-zinc-950/95 pointer-events-none z-0" />
       <Header subtitle={t("party")} />
 

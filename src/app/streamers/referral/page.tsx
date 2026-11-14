@@ -11,6 +11,7 @@
 import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import Header from "@/app/assets/header/Header";
+import { BgVideo } from "@/components/shared/BgVideo";
 
 export default function StreamersReferralPage() {
   const [code, setCode] = useState("");
@@ -45,15 +46,7 @@ export default function StreamersReferralPage() {
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="fixed inset-0 w-full h-full object-cover opacity-10 pointer-events-none z-0"
-      >
-        <source src="/media/videos/bg.mp4" type="video/mp4" />
-      </video>
+      <BgVideo src="/media/videos/bg.mp4" className="fixed inset-0 w-full h-full object-cover opacity-10 pointer-events-none z-0" />
       <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/70 via-zinc-950/85 to-zinc-950/95 pointer-events-none z-0" />
 
       <Header subtitle="Streamers · Referral" />

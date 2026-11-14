@@ -8,6 +8,7 @@ import { SIDEBAR_ITEMS } from "@/app/assets/header/navigation";
 import BlueprintWorkbench from "./BlueprintWorkbench";
 import MaterialBrowser from "./MaterialBrowser";
 import { useTranslations } from "next-intl";
+import { BgVideo } from "@/components/shared/BgVideo";
 
 export default function CraftingPage() {
   const [activeTab, setActiveTab] = useState("workbench");
@@ -20,12 +21,7 @@ export default function CraftingPage() {
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
-      <video
-        autoPlay loop muted playsInline
-        className="fixed inset-0 w-full h-full object-cover opacity-15 pointer-events-none z-0"
-      >
-        <source src="/videos/crafting.mp4" type="video/mp4" />
-      </video>
+      <BgVideo src="/videos/crafting.mp4" className="fixed inset-0 w-full h-full object-cover opacity-15 pointer-events-none z-0" />
       <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/60 via-zinc-950/80 to-zinc-950/95 pointer-events-none z-0" />
 
       <Header subtitle={t("crafting")} />

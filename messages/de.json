@@ -1315,8 +1315,8 @@
   "PerformanceToggle": {
     "labelFull": "Voll",
     "labelLight": "Licht",
-    "titleFull": "Leistungsmodus: Voll (Animationen und 3D aktiviert). Klicken für Licht-Modus.",
-    "titleLight": "Leistungsmodus: Licht (optimiert für bescheidene Hardware). Klicken für Voll-Modus.",
+    "titleFull": "Hintergrund: Voll (animiertes Hintergrundvideo). Klicken für Leicht-Modus.",
+    "titleLight": "Hintergrund: Leicht (kein Hintergrundvideo, lädt schneller). Klicken für Voll-Modus.",
     "aria": "Licht-Modus umschalten"
   }
 }

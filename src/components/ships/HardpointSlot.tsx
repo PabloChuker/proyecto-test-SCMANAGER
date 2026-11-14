@@ -41,7 +41,7 @@ interface HardpointSlotProps {
 }
 
 /** Check if an item is a turret/gimbal (has children) vs a direct weapon */
-function isTurretOrRack(item: EquippedItem | null): boolean {
+export function isTurretOrRack(item: EquippedItem | null): boolean {
   if (!item) return false;
   const n = (item.name ?? "") + " " + (item.type ?? "");
   return /turret|gimbal|varipuck|rack/i.test(n);
@@ -50,7 +50,7 @@ function isTurretOrRack(item: EquippedItem | null): boolean {
 /** Check if an item can host industrial children (mining laser + module slots,
  *  salvage head + tractor/scraper). Usado para que, aunque el user cambie el
  *  laser, los slots de módulos sigan ahí mientras sea un mining laser válido. */
-function isIndustrialArm(item: EquippedItem | null): boolean {
+export function isIndustrialArm(item: EquippedItem | null): boolean {
   if (!item) return false;
   const n = (item.name ?? "") + " " + (item.type ?? "");
   return /mining|salvage|scraper|tractor/i.test(n);
@@ -69,7 +69,7 @@ function isIndustrialArm(item: EquippedItem | null): boolean {
  *  (auto-alloc corre al montar), así que NO hace falta el fallback "asumir
  *  full power" — ese fallback era el que hacía que al vaciar los pips la
  *  UI siguiera mostrando munición completa. */
-function getAmmoInfo(
+export function getAmmoInfo(
   cs: Record<string, any> | undefined,
   allocPips: number,
   maxPips: number,
@@ -102,7 +102,7 @@ function getAmmoInfo(
 }
 
 /** Format large round counts: 1234 → "1.2k" */
-function fmtAmmo(n: number): string {
+export function fmtAmmo(n: number): string {
   if (n >= 10000) return (n / 1000).toFixed(1) + "k";
   if (n >= 1000) return (n / 1000).toFixed(1) + "k";
   return String(n);

@@ -12,6 +12,7 @@ import Link from "next/link";
 import Image from "next/image";
 import Header from "@/app/assets/header/Header";
 import { useTranslations } from "next-intl";
+import { BgVideo } from "@/components/shared/BgVideo";
 
 interface ToolCard {
   href: string;
@@ -85,15 +86,7 @@ export default function StreamersHubPage() {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       {/* Background */}
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="fixed inset-0 w-full h-full object-cover opacity-10 pointer-events-none z-0"
-      >
-        <source src="/media/videos/bg.mp4" type="video/mp4" />
-      </video>
+      <BgVideo src="/media/videos/bg.mp4" className="fixed inset-0 w-full h-full object-cover opacity-10 pointer-events-none z-0" />
       <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/70 via-zinc-950/85 to-zinc-950/95 pointer-events-none z-0" />
 
       <Header subtitle={t("streamers")} />

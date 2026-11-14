@@ -18,6 +18,7 @@ import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Header from "@/app/assets/header/Header";
 import { useAuth } from "@/contexts/AuthContext";
+import { BgVideo } from "@/components/shared/BgVideo";
 
 export default function EventJoinPage({
   params,
@@ -110,15 +111,7 @@ export default function EventJoinPage({
 
   return (
     <main className="min-h-screen bg-zinc-950 text-amber-50 relative">
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="fixed inset-0 w-full h-full object-cover opacity-30 pointer-events-none z-0"
-      >
-        <source src="/videos/bg.mp4" type="video/mp4" />
-      </video>
+      <BgVideo src="/videos/bg.mp4" className="fixed inset-0 w-full h-full object-cover opacity-30 pointer-events-none z-0" />
       <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/50 via-zinc-950/65 to-zinc-950/80 pointer-events-none z-0" />
       <Header subtitle="Bar Citizen" />
 

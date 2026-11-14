@@ -1,43 +1,43 @@
 // =============================================================================
-// AL FILO — LoadoutBuilder v19 (Free-form Absolute Layout)
+// SC LABS — LoadoutBuilder v20 (formato denso en columnas fijas)
 //
-// Widgets se renderizan como divs absolutos con posición en píxeles. El
-// usuario puede arrastrarlos libremente desde el header (drag custom,
-// sin snap a celdas): el widget sigue al mouse y se queda donde se suelta.
-// Default: 5 columnas que cubren el ancho completo del contenedor.
-// Persistido en localStorage `al-filo-layout-v4` (coordenadas en px).
+// Loadout.20 (2026-11-14, pedido de Pablo): se reemplaza el lienzo de widgets
+// arrastrables (v19) por un tablero denso de columnas fijas, con toda la
+// información a la vista y sin tarjetas que se pisen:
 //
-// Panels: weapons, missiles, shields, power-plants, coolers, quantum, radar,
-//   utility, combat-summary, power-grid, signatures, balance, ship-selector,
-//   ship-card, loadout-detail, flight-dynamics (unified 3D/Radar/Bars),
-//   flight-dynamics-3d.
+//   ┌─ PRINCIPAL (2 fr) ─────────────┬─ SISTEMAS (1 fr) ─┬─ CONTROL (1 fr) ─┐
+//   │ buscador + naves fijadas       │ casco             │ acciones         │
+//   │ nave con MODELO 3D             │ escudos           │ energía          │
+//   │ daño          │ defensa        │ plantas           │ vuelo            │
+//   │ armamento (montaje → armas)    │ enfriadores       │  (queda fijo al  │
+//   │ misiles y bombas               │ radar             │   hacer scroll)  │
+//   │ quantum       │ utilidad       │ TTK / blindaje    │                  │
+//   │ dinámica de vuelo 3D + gráficos│                   │                  │
+//   └────────────────────────────────┴───────────────────┴──────────────────┘
+//
+//   ≥1536px (2xl): 3 pistas · 1280–1535px: principal + una columna lateral ·
+//   <1280px: todo apilado (móvil incluido). Es CSS puro: no hay cálculo de
+//   posiciones ni drag & drop, así que nada depende del ancho medido en JS.
+//
+// Toda la lógica (store, picker, compartir, guardar, wishlist, racks de
+// misiles) es la misma de v19. Las tarjetas viven en ./deck/*.
 // =============================================================================
 
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo, memo } from "react";
-import Image from "next/image";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useSearchParams } from "next/navigation";
+import { Check, Heart, RotateCcw, Save, Share2 } from "lucide-react";
 import { useLoadoutStore } from "@/store/useLoadoutStore";
 import { useShallow } from "zustand/react/shallow";
-import type { ResolvedHardpoint, ResolvedChild, EquippedItem } from "@/store/useLoadoutStore";
+import type { ResolvedHardpoint, EquippedItem } from "@/store/useLoadoutStore";
 import { useAuth } from "@/contexts/AuthContext";
 import { createClient } from "@/lib/supabase/client";
-import { HardpointSlot, isUsefulSlot } from "./HardpointSlot";
+import { isUsefulSlot } from "./HardpointSlot";
 import { ComponentPicker } from "./ComponentPicker";
 import { PowerManagementPanel } from "./PowerManagementPanel";
 import { ShipSelector } from "./ShipSelector";
 import { LoadoutQuickSlots } from "./LoadoutQuickSlots";
-import { fmtStat, fmtDps } from "./loadout-utils";
-// ── Widget modules (each subscribes directly to the store) ───────────────────
-// Strafe / Turning / G-Forces se unificaron en `FlightDynamicsWidget` (Fase G.1):
-// una sola tarjeta 2-col con toggle 3D/Radar/Bars. Las importaciones viejas
-// quedan como refs muertas — los archivos se conservan por si alguien quiere
-// revivir el widget individual.
-// FlightDynamicsWidget: Fase G.2 separó toolbar (va en el header del shell) de
-// body (los 3 sub-paneles). El componente `FlightDynamicsCard` (abajo) compone
-// ambos. `FlightDynamicsContent` sigue exportado en el widget para contextos
-// legacy pero ya no se consume acá.
 import {
   FlightDynamicsBody,
   FlightDynamicsToolbar,
@@ -48,13 +48,18 @@ import {
   FlightDynamics3dHeaderActions,
   useFlightDynamics3dBoost,
 } from "./widgets/FlightDynamics3dWidget";
-import { ShipCardContent }        from "./widgets/ShipCardWidget";
-import { LoadoutDetailContent }   from "./widgets/LoadoutDetailWidget";
 import { TTKCalculatorContent }   from "./widgets/TTKCalculatorWidget";
 import { ArmorCheckContent }      from "./widgets/ArmorCheckWidget";
-// Three.js (ShipFlightDynamicsSingle + shipGlbCandidates) moved to FlightDynamics3dWidget.tsx
-import { useDpsGridLayout } from "@/lib/loadout-grid/useLoadoutGridLayout";
-import { DpsGridCanvas } from "@/components/domain/loadout/LoadoutGridCanvas";
+import { DeckCard, LazyMount } from "./deck/DeckCard";
+import { DeckHpGroup, parseMissileRackSpec } from "./deck/DeckSlot";
+import { ShipHeroCard } from "./deck/ShipHeroCard";
+import {
+  DamageContent,
+  DefenseContent,
+  FlightContent,
+  HullContent,
+  ThermalStrip,
+} from "./deck/StatCards";
 
 const WEAPON_GROUPS = new Set(["WEAPON", "TURRET"]);
 const MISSILE_GROUPS = new Set(["MISSILE_RACK"]);
@@ -75,40 +80,14 @@ const WISH_TYPE_ICONS: Record<string, string> = {
   QUANTUM_DRIVE: "🌀", RADAR: "📡", UTILITY: "🔧", MINING: "⛏",
 };
 
-
-const CAT_CONFIG: Record<string, { label: string; icon: string; accent: string }> = {
-  SHIELD: { label: "SHIELDS", icon: "/icons/shilds.png", accent: "#3b82f6" },
-  POWER_PLANT: { label: "POWER PLANTS", icon: "/icons/power_plants.png", accent: "#22c55e" },
-  COOLER: { label: "COOLERS", icon: "/icons/coolers.png", accent: "#06b6d4" },
-  QUANTUM_DRIVE: { label: "QUANTUM DRIVES", icon: "/icons/Quantum_drives.png", accent: "#a855f7" },
-  RADAR: { label: "RADAR", icon: "/icons/DPS_calculator.png", accent: "#22c55e" },
-  MINING: { label: "MINING", icon: "/icons/mining_lasers.png", accent: "#f472b6" },
-  UTILITY: { label: "UTILITY", icon: "/icons/tractor_beam.png", accent: "#94a3b8" },
-  QIG: { label: "QUANTUM INTERDICTION", icon: "/icons/interdict.png", accent: "#7c3aed" },
-};
-
-// ── Widget System (free absolute positioning) ──────────────────────────────
-// "flight-dynamics" (2-col, Fase G.1) reemplaza a strafe-profile / turning-profile
-// / maneuver-radar — las 3 visualizaciones viven dentro con un toggle compartido.
-type WidgetId =
-  | "weapons" | "missiles"
-  | "shields" | "powerplants" | "coolers"
-  | "quantum" | "radar" | "utility"
-  | "mining" | "salvage" | "qig"
-  | "power-grid"
-  | "ship-selector" | "ship-card" | "loadout-detail"
-  | "flight-dynamics" | "flight-dynamics-3d"
-  | "ttk-calculator"
-  | "armor-check"; // Loadout.3 (2026-05-04): split from loadout-detail
-
 // ── Industrial ship detection (Pablo, 2026-04-17) ────────────────────────────
-// Solo estas naves muestran los widgets MINING / SALVAGE para no sobrecargar
+// Solo estas naves muestran las tarjetas MINING / SALVAGE para no sobrecargar
 // la UI en naves puramente combate. Si a futuro CIG saca más naves industriales
 // se amplían los regex acá.
 const MINING_SHIP_RX  = /mole|moth|prospector|golem/i;
 const SALVAGE_SHIP_RX = /reclaimer|fortune|salvation|vulture/i;
 // Fase N (2026-04-24): naves con QIG/QED/QDMP fijo — Mantis (Reynie), Cutlass
-// Blue (Burke), Guardian QI (Captor). Mostramos el widget "qig" sólo en ellas.
+// Blue (Burke), Guardian QI (Captor). Mostramos la tarjeta "qig" sólo en ellas.
 const QIG_SHIP_RX = /mantis|cutlass[_\s-]*blue|guardian[_\s-]*qi/i;
 function isMiningShip(name: string | null | undefined): boolean {
   return !!name && MINING_SHIP_RX.test(name);
@@ -120,526 +99,70 @@ function isQigShip(name: string | null | undefined): boolean {
   return !!name && QIG_SHIP_RX.test(name);
 }
 
-// ─── Geometric grid: UNIT-based positioning (v7) ────────────────────────────
-// Spec (Pablo, 2026-04-11):
-//   Todas las dimensiones derivan de `UNIT` — el ancho de 1 columna en px.
-//
-//   Grid:  GRID_COLUMNS × GRID_ROWS  (5 × ~100)
-//     col width   = 1                    * UNIT
-//     row height  = ROW_HEIGHT_RATIO     * UNIT  (0.25)
-//     anchor      = ANCHOR_OFFSET_RATIO  * UNIT  (0.05) desde top-left de cada celda
-//
-//   Margen implícito por tarjeta = MARGIN_RATIO/2 * UNIT  en cada lado.
-//   → Spacing TOTAL entre dos tarjetas adyacentes = MARGIN_RATIO * UNIT  (0.1).
-//   → NO se usa flex/grid `gap` — el espacio es consecuencia de la geometría.
-//
-//   Cards:
-//     CARD_WIDTH(n)  = (n - MARGIN_RATIO) * UNIT            (n = 1 o 2)
-//     cardHeight(X)  = (ROW_HEIGHT_RATIO * X - MARGIN_RATIO) * UNIT
-//
-//   La altura de una card es FIJA por la cantidad de bloques que ocupa:
-//   nunca se ajusta al contenido. Puede quedar espacio vacío dentro; OK.
-const GRID_COLUMNS        = 5;
-const GRID_ROWS           = 100;
-const ROW_HEIGHT_RATIO    = 0.25;
-const ANCHOR_OFFSET_RATIO = 0.05;
-const MARGIN_RATIO        = 0.1;        // gap total entre cards = 0.1 * UNIT
-const MIN_UNIT_PX         = 240;        // clamp inferior del UNIT (+50% desde 160)
-const MAX_UNIT_PX         = 390;        // clamp superior del UNIT (+50% desde 260)
-
-// Ancho de card en columnas: 1 o 2. (Max permitido por la spec = 2.)
-// v9: search (ship-selector), ship-card y flight-dynamics-3d vuelven a 2-col
-// porque son widgets "hero" que necesitan ancho para respirar. El resto se
-// queda en 1-col. loadout-detail sigue 1-col para dejarlo compacto junto a las
-// stats derivadas.
-type CardWidth = 1 | 2;
-const WIDGET_WIDTH: Record<WidgetId, CardWidth> = {
-  weapons: 1, missiles: 1,
-  shields: 1, powerplants: 1, coolers: 1,
-  quantum: 1, radar: 1, utility: 1,
-  mining: 1, salvage: 1, qig: 1,
-  "power-grid": 1,
-  "ship-selector": 2,           // search → 2-col
-  "ship-card": 2,               // ship card → 2-col
-  "loadout-detail": 1,          // stays 1-col
-  "flight-dynamics": 2,         // unified 3-en-1 card (Fase G.1) → 2-col
-  "flight-dynamics-3d": 2,      // 3D viewer → 2-col
-  "ttk-calculator": 1,          // W.16 — Time To Kill calc compacto (1 col)
-  "armor-check": 1,             // Loadout.3 — armor check separado (1 col)
-};
-
-const WIDGET_LABELS: Record<WidgetId, string> = {
-  weapons: "WEAPONS", missiles: "MISSILES & BOMBS",
-  shields: "SHIELDS", powerplants: "POWER PLANTS", coolers: "COOLERS",
-  quantum: "QT DRIVES", radar: "RADAR", utility: "UTILITY",
-  mining: "MINING LASERS", salvage: "SALVAGE & TRACTOR",
-  qig: "QUANTUM INTERDICTION",
-  "power-grid": "POWER GRID",
-  "ship-selector": "SEARCH", "ship-card": "SHIP CARD", "loadout-detail": "LOADOUT DETAIL",
-  "flight-dynamics": "FLIGHT DYNAMICS",
-  "flight-dynamics-3d": "FLIGHT DYNAMICS 3D",
-  "ttk-calculator": "TTK CALCULATOR",
-  "armor-check": "ARMOR DEFLECTION CHECK",
-};
-
-const ALL_WIDGET_IDS: WidgetId[] = [
-  "weapons", "missiles",
-  "shields", "powerplants", "coolers",
-  "quantum", "radar", "utility",
-  "mining", "salvage", "qig",
-  "power-grid",
-  "ship-selector", "ship-card", "loadout-detail",
-  "flight-dynamics", "flight-dynamics-3d",
-  "ttk-calculator",
-  "armor-check",
-];
-
-// ── Mobile fallback (Fase R.4, 2026-05-02) ───────────────────────────────────
-// En `< md` (window < 768px) NO se monta react-grid-layout/dnd-kit: los widgets
-// se apilan verticalmente en este orden (los más útiles primero). El layout
-// desktop sigue idéntico — este array sólo se consume en móvil.
-const MOBILE_WIDGET_ORDER: WidgetId[] = [
-  "ship-card",
-  "loadout-detail",
-  "ttk-calculator",
-  "armor-check",                // Loadout.3 — junto con TTK en la zona analytics
-  "weapons",
-  "missiles",
-  "shields",
-  "powerplants",
-  "coolers",
-  "power-grid",
-  "quantum",
-  "flight-dynamics",
-  "flight-dynamics-3d",
-  "radar",
-  "utility",
-  "mining",
-  "salvage",
-  "qig",
-  "ship-selector",
-];
-
-// ─── Missile rack helpers (Loadout.2, 2026-05-03) ──────────────────────────
-// Parser canónico del nombre del rack: MSD-XYZ / CST-XYZ / similar.
-//   X = tamaño del rack (anclaje)
-//   Y = cantidad de misiles/bombas (# slots)
-//   Z = tamaño de cada misil/bomba
-// Ej: MSD-322 → S3, 2 misiles S2. CST-313 → S3, 1 bomba S3. MSD-441 → 4 misiles S1.
-//
-// PRIORIDAD: name-parse PRIMERO, componentStats fallback.
-// Motivo: la BD (missile_launchers.missile_count + ports.length) viene del
-// extractor scunpacked y para algunos racks chicos cuenta puertos físicos del
-// modelo 3D en lugar de slots lógicos del juego — ej. MSD-212 / MSD-313
-// salen como `missilePorts=2` cuando deberían ser 1. El nombre del rack es
-// la fuente más confiable porque CIG lo define con la convención XYZ.
-function parseMissileRackSpec(rack: any | null | undefined): { slots: number; portSize: number } {
-  if (!rack) return { slots: 0, portSize: 0 };
-  const nameForParse = rack.localizedName || rack.name || "";
-  const match = String(nameForParse).match(/-(\d)(\d)(\d)(?:\b|[^0-9])/);
-  if (match) {
-    return {
-      slots: Number(match[2]),
-      portSize: Number(match[3]),
-    };
-  }
-  // Fallback: para racks con naming no-estándar (raros).
-  return {
-    slots: Number(rack.componentStats?.missilePorts ?? 0),
-    portSize: Number(
-      rack.componentStats?.maxMissileSize
-        ?? rack.componentStats?.minMissileSize
-        ?? 0
-    ),
-  };
-}
-
-// ─── Geometric helpers ──────────────────────────────────────────────────────
-// getUnit: calcula el ancho de 1 columna en px a partir del contenedor.
-function getUnit(containerWidth: number): number {
-  const raw = containerWidth / GRID_COLUMNS;
-  return Math.max(MIN_UNIT_PX, Math.min(MAX_UNIT_PX, raw));
-}
-
-// Anchor X de la celda (col, row) en px. col ∈ [0, GRID_COLUMNS)
-function getAnchorX(col: number, unit: number): number {
-  return col * unit + ANCHOR_OFFSET_RATIO * unit;
-}
-
-// Anchor Y de la celda (col, row) en px. row ∈ [0, GRID_ROWS)
-function getAnchorY(row: number, unit: number): number {
-  return row * ROW_HEIGHT_RATIO * unit + ANCHOR_OFFSET_RATIO * unit;
-}
-
-// Ancho de card según tipo (1 o 2 cols) — en px.
-// CARD_WIDTH_n = (n - MARGIN_RATIO) * UNIT  →  deja MARGIN_RATIO*UNIT de gap
-// con la próxima celda; respetando el margen 0.05*UNIT de cada lado.
-function getCardWidth(widthType: CardWidth, unit: number): number {
-  return (widthType - MARGIN_RATIO) * unit;
-}
-
-// Alto de card en px dado un número de bloques verticales (X ∈ ℤ+).
-// cardHeight(X) = (0.25 * X - MARGIN_RATIO) * UNIT  →  deja MARGIN_RATIO*UNIT
-// de gap con la card de abajo. El mínimo útil es X=1 (0.15*UNIT ≈ pocos px).
-function getCardHeight(blocks: number, unit: number): number {
-  return (ROW_HEIGHT_RATIO * blocks - MARGIN_RATIO) * unit;
-}
-
-// Valida y clamp de (col, row) para que la card quepa en la grilla.
-function clampGridPos(col: number, row: number, widthType: CardWidth): { col: number; row: number } {
-  const maxCol = GRID_COLUMNS - widthType;
-  return {
-    col: Math.max(0, Math.min(maxCol, Math.round(col))),
-    row: Math.max(0, Math.min(GRID_ROWS - 1, Math.round(row))),
-  };
-}
-
-// ─── Widget block heights ───────────────────────────────────────────────────
-// Cada widget declara cuántos bloques verticales (filas de 0.25 * UNIT) ocupa.
-// La altura resultante es FIJA: la card nunca se ajusta al contenido. Si sobra
-// espacio, queda vacío; si falta, el contenido interno hace scroll o clip.
-// Widgets con listas variables (weapons, shields, etc.) derivan el número de
-// bloques del número de slots de la nave.
-function getWidgetBlocks(
-  wId: WidgetId,
-  counts: {
-    weapons: number; missiles: number;
-    shields: number; powerplants: number; coolers: number;
-    quantum: number; radar: number; utility: number;
-    mining: number; salvage: number; qig: number;
-  },
-): number {
-  // Grupo HP: 1 bloque base (header compacto) + 1 bloque por slot.
-  // Mínimo 2 bloques para legibilidad. Compacto — v8.
-  const hpBlocks = (n: number) => Math.max(2, 1 + Math.max(1, n));
-
-  switch (wId) {
-    case "weapons":            return hpBlocks(counts.weapons);
-    case "missiles":           return hpBlocks(counts.missiles);
-    case "shields":            return hpBlocks(counts.shields);
-    case "powerplants":        return hpBlocks(counts.powerplants);
-    case "coolers":            return hpBlocks(counts.coolers);
-    case "quantum":            return hpBlocks(counts.quantum);
-    case "radar":              return hpBlocks(counts.radar);
-    case "utility":            return hpBlocks(counts.utility);
-    case "mining":             return hpBlocks(counts.mining);
-    case "salvage":            return hpBlocks(counts.salvage);
-    case "qig":                return hpBlocks(counts.qig);
-    case "power-grid":         return 4;
-    case "ship-selector":      return 2;
-    case "ship-card":          return 3;
-    case "loadout-detail":         return 7;
-    // flight-dynamics (Fase G.1): 3 sub-paneles lado a lado + header/toggle.
-    // Necesita alto suficiente para el radar 6-ejes y los labels perimetrales.
-    case "flight-dynamics":    return 6;
-    case "flight-dynamics-3d": return 5;
-    // ttk-calculator (W.16): dropdown + 3 stat cards + lista weapons.
-    // Altura razonable para fighters con ~6 weapons; en capitales puede
-    // necesitar scroll, pero el bloque de 6 cubre el caso default.
-    case "ttk-calculator":     return 6;
-    // armor-check (Loadout.3): ~6 weapons evaluadas en cada columna
-    // (PHYSICAL/ENERGY) + header. Bloque de 5 cubre el caso típico fighter
-    // (3-4 weapons por columna). Con ~6+ weapons hace scroll interno.
-    case "armor-check":        return 5;
-  }
-}
-
-// ─── Category-based layout (v9) ─────────────────────────────────────────────
-// Zone A — 1-col widgets apilados en cols 0..2 (3 columnas, categorizado).
-// Zone B — 2-col widgets "hero" apilados en cols 3..4 (sidebar de ship info).
-// Cada zona ordena sus widgets en la lista del plan; widgets ocultos se
-// saltan sin rebalanceo para conservar la identidad visual de cada columna.
-// v14 (Fase G.3 — layout validado por Pablo en captura 2026-04-21):
-// ship-card se mueve al TOPE de col0 (w=2 → hace hero arriba-izquierda cubriendo
-// cols 0-1). quantum + radar bajan de col2 → col1 (nav+sensors al lado de
-// defense/power). col2 queda liviana: power-grid arriba, loadout-detail debajo.
-// Resultado: sidebar = solo search + flight-dynamics (3D + unified), todo el
-// ship info vive arriba-izquierda, analíticas del lado derecho.
-const COLUMN_PLAN_1COL: WidgetId[][] = [
-  // Col 0 — SHIP HERO + OFFENSE + INDUSTRY. ship-card (w=2) ocupa cols 0-1 en
-  // la primera fila; las siguientes tarjetas (weapons, mining, salvage, missiles)
-  // caen abajo en col 0 (w=1). mining/salvage reemplazan visualmente a weapons
-  // cuando la nave es industrial.
-  ["ship-card", "weapons", "mining", "salvage", "qig", "missiles"],
-  // Col 1 — DEFENSE + POWER + NAV/SENSORS
-  ["shields", "powerplants", "coolers", "quantum", "radar"],
-  // Col 2 — ANALYTICS: power grid + combat summary + ttk + armor check + utility
-  // (Loadout.3 2026-05-04: armor-check movido a col propia debajo del TTK)
-  ["power-grid", "loadout-detail", "ttk-calculator", "armor-check", "utility"],
-];
-
-// Sidebar 2-col (cols 3-4). Widgets hero apilados vertical.
-// ship-card ya NO vive acá (se mudó a col0 en v14).
-const COLUMN_PLAN_2COL_START = 3;
-const COLUMN_PLAN_2COL: WidgetId[] = [
-  "ship-selector",     // search
-  "flight-dynamics-3d",
-  "flight-dynamics",
-];
-
-// Posiciones default en coordenadas (col, row). Pass 1: Zone A (1-col, cols
-// 0-2). Pass 2: Zone B (2-col, cols 3-4). Los widgets ocultos NO ocupan
-// espacio. Determinístico — sin bin-packing.
-function buildDefaultPositions(
-  visible: Set<WidgetId>,
-  blocks: Record<WidgetId, number>,
-): Map<WidgetId, { col: number; row: number }> {
-  const result = new Map<WidgetId, { col: number; row: number }>();
-
-  // Zone A — 1-col en cols 0..2
-  for (let col = 0; col < COLUMN_PLAN_1COL.length; col++) {
-    let row = 0;
-    for (const wId of COLUMN_PLAN_1COL[col]) {
-      if (!visible.has(wId)) continue;
-      result.set(wId, { col, row });
-      row += blocks[wId];
-    }
-  }
-
-  // Zone B — 2-col en cols 3-4 (siempre arrancan en col=3)
-  {
-    let row = 0;
-    for (const wId of COLUMN_PLAN_2COL) {
-      if (!visible.has(wId)) continue;
-      result.set(wId, { col: COLUMN_PLAN_2COL_START, row });
-      row += blocks[wId];
-    }
-  }
-
-  return result;
-}
-
-// ─── localStorage (v13: unify Strafe/Turning/G-Forces en flight-dynamics) ──
-// Fase G.1 — pedido de Pablo (profesional 20k+ horas): las 3 tarjetas pequeñas
-// de flight dynamics se fusionaron en una 2-col con toggle 3D/Radar/Bars. Los
-// IDs `strafe-profile` / `turning-profile` / `maneuver-radar` desaparecieron
-// del plan por defecto y posiciones guardadas en v12 que los referenciaban
-// dejarían huecos en el layout → bump a v13 para forzar reset del default.
-const LAYOUT_STORAGE_KEY = "al-filo-layout-v13";
-
-type SavedPos = { i: string; col: number; row: number };
-
-function loadSavedPositions(): SavedPos[] | null {
-  try {
-    const raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return null;
-    return parsed
-      .filter((p) => p && typeof p.i === "string" && typeof p.col === "number" && typeof p.row === "number")
-      .map((p) => ({ i: p.i, col: p.col, row: p.row }));
-  } catch {
-    return null;
-  }
-}
-
-function savePositions(positions: SavedPos[]) {
-  try {
-    localStorage.setItem(LAYOUT_STORAGE_KEY, JSON.stringify(positions));
-  } catch {}
-}
-
-
-// ─── Widget visual wrapper (header + content) ────────────────────────────────
-// El header tiene la clase ".rgl-drag-handle" para que el drag custom lo
-// detecte. `overflow="visible"` se usa en widgets que abren popups (ship-
-// selector) para que el dropdown pueda invadir los vecinos sin clippear.
-// Las alturas son 100% estáticas (derivadas de getWidgetBlocks × UNIT) — no
-// medimos el contenido en runtime porque eso crea loops con ResizeObserver.
-// WidgetShell — content-sized card (v10). La card crece con su contenido: el
-// outer contenedor NO tiene altura fija. El header se mantiene compacto y el
-// children renderiza en su tamaño natural. `overflow="visible"` sólo aplica a
-// widgets que abren popups (ship-selector) para que los dropdowns invadan
-// vecinos sin clip.
-const collapsedSet = new Set<WidgetId>();
-
-function WidgetShell({ id, label, icon, badge, headerActions, children, overflow = "hidden" }: {
-  id: WidgetId;
-  label: string;
-  icon?: string;
-  badge?: string | number;
-  /** Fase G.2: slot para controles custom en el header (ej. toggle 3D/Radar/Bars). */
-  headerActions?: React.ReactNode;
-  children: React.ReactNode;
-  overflow?: "hidden" | "visible";
-}) {
-  const [collapsed, setCollapsed] = useState(() => collapsedSet.has(id));
-  const toggle = useCallback(() => {
-    setCollapsed(prev => {
-      const next = !prev;
-      if (next) collapsedSet.add(id); else collapsedSet.delete(id);
-      return next;
-    });
-  }, [id]);
-  const outerOverflow = overflow === "visible" ? "overflow-visible" : "overflow-hidden";
-  return (
-    <div className={`flex flex-col ${outerOverflow} rounded-sm`} data-widget-id={id}>
-      <div className="rgl-drag-handle flex items-center gap-2 px-2.5 py-2 bg-zinc-950/60 border border-zinc-800/30 border-b-0 select-none group rounded-t-sm shrink-0 cursor-grab active:cursor-grabbing">
-        {icon && <Image src={icon} alt="" width={16} height={16} className="brightness-125" />}
-        <span className="text-[11px] font-mono font-bold text-zinc-300 tracking-[0.12em] group-hover:text-zinc-100 transition-colors uppercase">{label}</span>
-        <span className="flex-1" />
-        {headerActions && (
-          <div
-            className="rgl-no-drag flex items-center"
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            {headerActions}
-          </div>
-        )}
-        {badge != null && <span className="text-[10px] font-mono font-semibold text-zinc-500">{badge}</span>}
-        <button
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => { e.stopPropagation(); toggle(); }}
-          className="rgl-no-drag ml-1 w-5 h-5 flex items-center justify-center rounded hover:bg-zinc-700/40 transition-colors cursor-pointer"
-        >
-          <svg width="10" height="10" viewBox="0 0 10 10" className={"text-zinc-400 transition-transform duration-200 " + (collapsed ? "-rotate-90" : "")}>
-            <path d="M2 3.5 L5 6.5 L8 3.5" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </button>
-      </div>
-      {!collapsed && (
-        <div className="min-h-0">
-          {children}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── FlightDynamicsCard (Fase G.2) ───────────────────────────────────────────
-// Component dedicado: maneja el estado `view` compartido entre el toolbar
-// (en el header del shell) y el body (los 3 sub-paneles). Viene acá (fuera
-// de renderWidget) porque necesita usar hooks.
-function FlightDynamicsCard() {
-  const [view, setView] = useFlightDynamicsView();
-  return (
-    <WidgetShell
-      id="flight-dynamics"
-      label={WIDGET_LABELS["flight-dynamics"]}
-      headerActions={<FlightDynamicsToolbar view={view} setView={setView} />}
-    >
-      <FlightDynamicsBody view={view} />
-    </WidgetShell>
-  );
-}
-
-// ── FlightDynamics3dCard (Fase U.6b) ────────────────────────────────────────
-// Misma idea que FlightDynamicsCard: el card maneja el estado boost para
-// poder inyectar el toggle "Boost" en el header del shell sin sacrificar
-// espacio del contenido. El body recibe el `boost` y elige qué rates pasar.
-function FlightDynamics3dCard({ wId }: { wId: WidgetId }) {
+// ── Tarjetas de dinámica de vuelo ───────────────────────────────────────────
+// Componentes aparte porque el toggle del header y el cuerpo comparten estado
+// (hooks): BOOST en la de 3D, 3D/Radar/Bars en la de gráficos.
+function Flight3dDeckCard() {
   const { boost, setBoost, hasBoost } = useFlightDynamics3dBoost();
   return (
-    <WidgetShell
-      id={wId}
-      label={WIDGET_LABELS[wId]}
-      headerActions={
-        <FlightDynamics3dHeaderActions boost={boost} setBoost={setBoost} hasBoost={hasBoost} />
-      }
+    <DeckCard
+      id="flight-dynamics-3d"
+      title="Flight dynamics 3D"
+      bodyClassName="p-0"
+      actions={<FlightDynamics3dHeaderActions boost={boost} setBoost={setBoost} hasBoost={hasBoost} />}
     >
-      <FlightDynamics3dContent boost={boost} />
-    </WidgetShell>
+      {/* Los tres visores se montan recién al acercarse con el scroll: al
+          abrir la página solo trabaja el modelo 3D de la cabecera. */}
+      <LazyMount minHeight={300}>
+        <FlightDynamics3dContent boost={boost} />
+      </LazyMount>
+    </DeckCard>
   );
 }
 
-// ── Widget renderer — maps a WidgetId to its JSX content ──────────────────
-// Stateful widgets (charts, ship-card, stats panels) are now imported from
-// ./widgets/* and read the store themselves — they receive NO props from ctx,
-// so React.memo() prevents their re-render when unrelated store state changes.
-function renderWidget(
-  wId: WidgetId,
-  ctx: any,
-): React.ReactNode {
-  const { weaponHps, missileHps, useful, setPickerHp, handleClickHp, stats, flightMode, setFlightMode, weaponAllocatedPips, weaponMaxPips } = ctx;
-  const W = (children: React.ReactNode, opts?: { icon?: string; badge?: string | number }) => (
-    <WidgetShell id={wId} label={WIDGET_LABELS[wId]} icon={opts?.icon} badge={opts?.badge}>{children}</WidgetShell>
+function FlightChartsDeckCard() {
+  const [view, setView] = useFlightDynamicsView();
+  return (
+    <DeckCard
+      id="flight-dynamics"
+      title="Flight dynamics"
+      bodyClassName="p-0"
+      actions={<FlightDynamicsToolbar view={view} setView={setView} />}
+    >
+      <FlightDynamicsBody view={view} />
+    </DeckCard>
   );
+}
 
-  switch (wId) {
-    case "weapons":
-      return weaponHps.length > 0 ? W(<HpGroup hps={weaponHps} onClickHp={handleClickHp} weaponAllocatedPips={weaponAllocatedPips} weaponMaxPips={weaponMaxPips} />, { icon: "/icons/weapons.png", badge: weaponHps.length }) : null;
-    case "missiles":
-      return missileHps.length > 0 ? W(<HpGroup hps={missileHps} onClickHp={handleClickHp} />, { icon: "/icons/missile.png", badge: missileHps.length }) : null;
-    case "shields": {
-      const hps = useful.filter((hp: any) => hp.resolvedCategory === "SHIELD");
-      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: CAT_CONFIG.SHIELD.icon, badge: hps.length }) : null;
-    }
-    case "powerplants": {
-      const hps = useful.filter((hp: any) => hp.resolvedCategory === "POWER_PLANT");
-      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: CAT_CONFIG.POWER_PLANT.icon, badge: hps.length }) : null;
-    }
-    case "coolers": {
-      const hps = useful.filter((hp: any) => hp.resolvedCategory === "COOLER");
-      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: CAT_CONFIG.COOLER.icon, badge: hps.length }) : null;
-    }
-    case "flight-dynamics":
-      // Fase G.2: FlightDynamicsCard maneja su propio WidgetShell con el
-      // toggle (3D/Radar/Bars) inyectado en el header. No pasamos por W()
-      // porque necesitamos `headerActions` + estado compartido.
-      return <FlightDynamicsCard />;
-    case "flight-dynamics-3d":
-      // Fase U.6b: Card dedicada (igual patrón que FlightDynamicsCard) para
-      // poder inyectar el toggle BOOST en el header del shell. El estado se
-      // comparte vía useFlightDynamics3dBoost.
-      return <FlightDynamics3dCard wId={wId} />;
-    case "quantum": {
-      // Fase P.1 (2026-04-25): el widget QT DRIVES ahora muestra TANTO
-      // QUANTUM_DRIVE (motor de salto local) COMO JUMP_DRIVE (módulo
-      // inter-sistema). El JD viene como slot sintético inyectado en
-      // ships/[id] cuando la nave tiene QT drive.
-      const hps = useful.filter((hp: any) =>
-        hp.resolvedCategory === "QUANTUM_DRIVE" || hp.resolvedCategory === "JUMP_DRIVE"
-      );
-      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: CAT_CONFIG.QUANTUM_DRIVE.icon, badge: hps.length }) : null;
-    }
-    case "radar": {
-      const hps = useful.filter((hp: any) => hp.resolvedCategory === "RADAR");
-      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: CAT_CONFIG.RADAR.icon, badge: hps.length }) : null;
-    }
-    case "utility": {
-      // Puramente UTILITY (tractor beam, EMP, etc). MINING y SALVAGE tienen
-      // widgets propios que aparecen solo en naves industriales.
-      const hps = useful.filter((hp: any) => hp.resolvedCategory === "UTILITY");
-      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: "/icons/tractor_beam.png", badge: hps.length }) : null;
-    }
-    case "mining": {
-      // Solo naves mineras: ARGO Mole/Moth, MISC Prospector, Drake Golem.
-      // Muestra láser minero + accesorios (módulos minería).
-      const hps = useful.filter((hp: any) => hp.resolvedCategory === "MINING");
-      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: "/icons/mining_lasers.png", badge: hps.length }) : null;
-    }
-    case "salvage": {
-      // Solo naves salvage: Aegis Reclaimer, MISC Fortune, RSI Salvation.
-      // Incluye láser de salvage + tractor beam + cargo accessories asociados.
-      const hps = useful.filter((hp: any) => hp.resolvedCategory === "SALVAGE");
-      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: "/icons/tractor_beam.png", badge: hps.length }) : null;
-    }
-    case "qig": {
-      // Fase N: solo naves con QIG fijo — Mantis (Reynie QED, corta saltos),
-      // Cutlass Blue (Burke QD) y Guardian QI (Captor QD). Los dos QDMP solo
-      // jammean spooling (interdict ~1m). El slot es fixed=true, así que el
-      // picker queda bloqueado.
-      const hps = useful.filter((hp: any) => hp.resolvedCategory === "QIG");
-      return hps.length > 0 ? W(<HpGroup hps={hps} onClickHp={handleClickHp} />, { icon: CAT_CONFIG.QIG.icon, badge: hps.length }) : null;
-    }
-    case "power-grid":
-      return W(<PowerManagementPanel stats={stats} flightMode={flightMode} onModeChange={setFlightMode} />);
-    case "ship-selector":
-      return (
-        <WidgetShell id={wId} label={WIDGET_LABELS[wId]} overflow="visible">
-          <ShipSelector />
-        </WidgetShell>
-      );
-    case "ship-card":
-      return W(<ShipCardContent />);
-    case "loadout-detail":
-      return W(<LoadoutDetailContent />);
-    case "ttk-calculator":
-      return W(<TTKCalculatorContent />);
-    case "armor-check":
-      return W(<ArmorCheckContent />);
-    default: return null;
-  }
+// ── Botón de la tarjeta de acciones ─────────────────────────────────────────
+function ActionButton({
+  onClick, icon, label, title, tone = "neutral", done = false,
+}: {
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  title: string;
+  tone?: "primary" | "neutral" | "danger";
+  done?: boolean;
+}) {
+  const toneClass = done
+    ? "border-emerald-600/50 bg-emerald-500/10 text-emerald-300"
+    : tone === "primary"
+      ? "border-amber-500/50 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+      : tone === "danger"
+        ? "border-zinc-800 text-zinc-400 hover:border-orange-600/50 hover:text-orange-300 hover:bg-orange-500/10"
+        : "border-zinc-800 text-zinc-300 hover:border-zinc-600 hover:bg-zinc-800/50";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={`flex items-center justify-center gap-1.5 h-8 px-2 rounded-md border text-[11px] font-semibold transition-colors min-w-0 ${toneClass}`}
+    >
+      <span className="shrink-0" aria-hidden>{done ? <Check size={13} /> : icon}</span>
+      <span className="truncate">{label}</span>
+    </button>
+  );
 }
 
 export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }) {
@@ -681,8 +204,6 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const clearSlot     = useLoadoutStore(s => s.clearSlot);
   const resetAll      = useLoadoutStore(s => s.resetAll);
   const encodeBuild   = useLoadoutStore(s => s.encodeBuild);
-  const toggleComponent = useLoadoutStore(s => s.toggleComponent);
-  const isComponentOn = useLoadoutStore(s => s.isComponentOn);
   const setFlightMode = useLoadoutStore(s => s.setFlightMode);
 
   const [pickerHp, setPickerHp] = useState<ResolvedHardpoint | null>(null);
@@ -740,8 +261,6 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const [saved, setSaved] = useState(false);
   const [saveModal, setSaveModal] = useState(false);
   const [saveName, setSaveName] = useState("");
-  // Save Layout flash feedback
-  const [layoutSaved, setLayoutSaved] = useState(false);
   // Send to Wishlist modal
   const [wishlistModal, setWishlistModal] = useState(false);
   const [wishlistItems, setWishlistItems] = useState<WishlistEntry[]>([]);
@@ -760,10 +279,6 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   // y el primer efecto lo ignora cuando matchea.
   const ownedBuildRef = useRef<string | null>(null);
 
-  // ─── Geometric grid layout (v11 — useDpsGridLayout + DpsGridCanvas) ────────
-  // El estado de posiciones, drag y persistencia vive en useDpsGridLayout.
-  // DpsGridCanvas renderiza el canvas con posicionamiento absoluto y dnd-kit.
-  // Este componente sólo necesita exponer: visibleIds, widgetBlocks, widgetWidth.
 
   // Reactivo a cambios de searchParams para soportar quick-slots tipo "tabs":
   // cuando el usuario clickea otro slot, la URL cambia y este efecto recarga
@@ -825,94 +340,22 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   const missileHps = useful.filter(hp => MISSILE_GROUPS.has(hp.resolvedCategory));
 
 
-  // ─── Visibilidad por widget (ocultamos los que no tienen contenido) ──────
-  // IMPORTANTE: estos hooks deben ir ANTES de los early returns para no
-  // violar las Rules of Hooks de React (si no, cuando `isLoading`/`!shipInfo`
-  // pasa de true→false el número de hooks cambia y React crashea).
-  const shieldCount = useful.filter((hp) => hp.resolvedCategory === "SHIELD").length;
-  const powerPlantCount = useful.filter((hp) => hp.resolvedCategory === "POWER_PLANT").length;
-  const coolerCount = useful.filter((hp) => hp.resolvedCategory === "COOLER").length;
-  // QT DRIVES widget agrupa QUANTUM_DRIVE (motor local) + JUMP_DRIVE (módulo
-  // inter-sistema, mig 058). Ambos se contabilizan en el mismo bucket para
-  // que el alto del widget escale con el total de slots.
-  const quantumCount = useful.filter((hp) =>
-    hp.resolvedCategory === "QUANTUM_DRIVE" || hp.resolvedCategory === "JUMP_DRIVE"
-  ).length;
-  const radarCount = useful.filter((hp) => hp.resolvedCategory === "RADAR").length;
-  // UTILITY puro (tractor beam, EMP, etc) — MINING y SALVAGE tienen widgets propios.
-  const utilityCount = useful.filter((hp) => hp.resolvedCategory === "UTILITY").length;
-  const miningCount  = useful.filter((hp) => hp.resolvedCategory === "MINING").length;
-  const salvageCount = useful.filter((hp) => hp.resolvedCategory === "SALVAGE").length;
-  const qigCount     = useful.filter((hp) => hp.resolvedCategory === "QIG").length;
-
-  // Detección de rol industrial (gate para mostrar los widgets mining/salvage).
-  const miningShip  = isMiningShip(shipInfo?.name);
-  const salvageShip = isSalvageShip(shipInfo?.name);
-  const qigShip     = isQigShip(shipInfo?.name);
-
-  const visibleIds = useMemo<Set<WidgetId>>(() => {
-    const s = new Set<WidgetId>();
-    for (const id of ALL_WIDGET_IDS) {
-      if (id === "weapons"      && weaponHps.length === 0) continue;
-      if (id === "missiles"     && missileHps.length === 0) continue;
-      if (id === "shields"      && shieldCount === 0) continue;
-      if (id === "powerplants"  && powerPlantCount === 0) continue;
-      if (id === "coolers"      && coolerCount === 0) continue;
-      if (id === "quantum"      && quantumCount === 0) continue;
-      if (id === "radar"        && radarCount === 0) continue;
-      if (id === "utility"      && utilityCount === 0) continue;
-      // Mining/Salvage/QIG: solo en naves del rol Y solo si hay hardpoints.
-      if (id === "mining"       && (!miningShip  || miningCount === 0)) continue;
-      if (id === "salvage"      && (!salvageShip || salvageCount === 0)) continue;
-      if (id === "qig"          && (!qigShip     || qigCount === 0)) continue;
-      s.add(id);
-    }
-    return s;
-  }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount, miningCount, salvageCount, qigCount, miningShip, salvageShip, qigShip]);
-
-  // ─── Bloques verticales por widget (altura fija, deriva de UNIT) ─────────
-  const widgetBlocks = useMemo<Record<WidgetId, number>>(() => {
-    const counts = {
-      weapons: weaponHps.length,
-      missiles: missileHps.length,
-      shields: shieldCount,
-      powerplants: powerPlantCount,
-      coolers: coolerCount,
-      quantum: quantumCount,
-      radar: radarCount,
-      utility: utilityCount,
-      mining: miningCount,
-      salvage: salvageCount,
-      qig: qigCount,
-    };
-    const out = {} as Record<WidgetId, number>;
-    for (const id of ALL_WIDGET_IDS) {
-      out[id] = getWidgetBlocks(id, counts);
-    }
-    return out;
-  }, [weaponHps.length, missileHps.length, shieldCount, powerPlantCount, coolerCount, quantumCount, radarCount, utilityCount, miningCount, salvageCount, qigCount]);
-
-  // ─── Mobile detection (Fase R.4) ──────────────────────────────────────────
-  // Arranca en `false` (desktop) para evitar SSR mismatch — al hidratar en
-  // cliente se actualiza al estado real del viewport. En móvil saltamos el
-  // grid absolute-positioned y renderizamos un stack vertical más abajo.
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const mq = window.matchMedia("(max-width: 767px)");
-    const update = () => setIsMobile(mq.matches);
-    update();
-    mq.addEventListener("change", update);
-    return () => mq.removeEventListener("change", update);
-  }, []);
-
-  // ─── Layout v12 — useDpsGridLayout + DpsGridCanvas ──────────────────────
-  const gridLayout = useDpsGridLayout({
-    visibleIds,
-    widgetWidth: WIDGET_WIDTH,
-    columnPlan1Col: COLUMN_PLAN_1COL,
-    columnPlan2Col: COLUMN_PLAN_2COL,
-  });
+  // ─── Slots por categoría ──────────────────────────────────────────────────
+  // (No son hooks: se recalculan en cada render, igual que `useful`.)
+  const byCat = (...cats: string[]) => useful.filter((hp) => cats.includes(hp.resolvedCategory));
+  const shieldHps     = byCat("SHIELD");
+  const powerPlantHps = byCat("POWER_PLANT");
+  const coolerHps     = byCat("COOLER");
+  // QT DRIVES agrupa QUANTUM_DRIVE (motor local) + JUMP_DRIVE (módulo
+  // inter-sistema, mig 058): el JD viene como slot sintético del API.
+  const quantumHps    = byCat("QUANTUM_DRIVE", "JUMP_DRIVE");
+  const radarHps      = byCat("RADAR");
+  // UTILITY puro (tractor beam, EMP, etc) — MINING y SALVAGE tienen tarjeta propia.
+  const utilityHps    = byCat("UTILITY");
+  // Mining / Salvage / QIG: solo en naves del rol (ver regex arriba).
+  const miningHps  = isMiningShip(shipInfo?.name)  ? byCat("MINING")  : [];
+  const salvageHps = isSalvageShip(shipInfo?.name) ? byCat("SALVAGE") : [];
+  const qigHps     = isQigShip(shipInfo?.name)     ? byCat("QIG")     : [];
 
   const { user } = useAuth();
   const supabaseClient = createClient();
@@ -999,13 +442,6 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
       setTimeout(() => setCopied(false), 2000);
     });
   }, [shipInfo, encodeBuild]);
-
-  // ── SAVE LAYOUT: snapshot the current card positions ──────────────────────
-  const handleSaveLayout = useCallback(() => {
-    gridLayout.saveLayout();
-    setLayoutSaved(true);
-    setTimeout(() => setLayoutSaved(false), 2000);
-  }, [gridLayout]);
 
   // ── SEND TO WISHLIST: open modal with all equipped items ──────────────────
   const SKIP_WISH_TYPES = new Set(["FLIGHT_CONTROLLER", "SELF_DESTRUCT", "AVIONICS_MANAGER"]);
@@ -1104,30 +540,32 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
   if (error) return <div className="border border-red-900/50 bg-red-950/30 px-3 py-2 text-xs text-red-400 font-mono">{error}</div>;
   if (!shipInfo) return null;
 
-  // Contexto compartido para renderWidget.
-  // Los widgets de charts/stats/ship-card leen del store directamente
-  // (ver widgets/*) — ctx sólo se usa para los HP-groups y power-grid.
-  // Extract weapon allocated pips from the power network instances
+  // Pips asignados a armas: los usa cada tarjeta de arma para calcular la
+  // munición sostenible del capacitor.
   const weaponInstance = stats.powerNetwork.instances.find(
-    (inst: any) => inst.hardpointName === "__weapons_combined__"
+    (inst) => inst.hardpointName === "__weapons_combined__"
   );
   const weaponAllocatedPips = weaponInstance?.allocatedPips ?? 0;
   const weaponMaxPips = stats.weaponMaxPips ?? 0;
 
-  const ctx = {
-    weaponHps, missileHps, useful, setPickerHp, handleClickHp,
-    stats, flightMode, setFlightMode,
-    weaponAllocatedPips, weaponMaxPips,
-  };
+  const group = (hps: ResolvedHardpoint[], wide = false) => (
+    <DeckHpGroup
+      hps={hps}
+      onClickHp={handleClickHp}
+      weaponAllocatedPips={weaponAllocatedPips}
+      weaponMaxPips={weaponMaxPips}
+      wide={wide}
+    />
+  );
 
   return (
-    <div className="space-y-2">
+    <div className="mx-auto w-full max-w-[2100px] space-y-3">
       {/* Banner cuando los hardpoints vienen de otra game_version porque la
-          actual no tiene data importada todavía. Caso típico: 4.8 PTU recién
-          importado con sólo 13 ships con hardpoints. Asi Pablo (y los users)
-          ven que las stats que aparecen son de la version previa, no del PTU. */}
+          actual no tiene data importada todavía. Caso típico: PTU recién
+          importado con sólo algunas naves con hardpoints. Así se ve que las
+          stats que aparecen son de la versión previa, no del PTU. */}
       {hardpointsFallbackFrom && (
-        <div className="border border-amber-700/50 bg-amber-950/30 px-3 py-1.5 text-[11px] text-amber-300 flex items-center gap-2 flex-wrap">
+        <div className="rounded-lg border border-amber-700/50 bg-amber-950/30 px-3 py-1.5 text-[11px] text-amber-300 flex items-center gap-2 flex-wrap">
           <span className="text-base leading-none">⚠</span>
           <span className="font-mono">
             Mostrando hardpoints de <strong className="text-amber-200">{hardpointsFallbackFrom}</strong>
@@ -1135,67 +573,158 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
           </span>
         </div>
       )}
-      {/* ── Top Bar ── */}
-      <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 bg-zinc-900/80 border border-zinc-800/60 flex-wrap">
-        {/* Quick slots — pin de hasta 6 ship+build configs para alternar
-            rápido entre naves manteniendo sus configuraciones. */}
-        <LoadoutQuickSlots
-          currentShipReference={shipInfo?.reference ?? null}
-          currentShipName={shipInfo?.name ?? null}
-        />
-        {/* Móvil: los 5 botones se envuelven a 2 filas si no caben.
-            Desktop (md+): se mantienen en una sola fila como siempre. */}
-        <div className="flex flex-wrap md:flex-nowrap items-center gap-1.5">
-          {/* SHARE — copies a URL with ship + build code */}
-          <button onClick={handleShare} className={copied ? "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border bg-green-950/30 text-green-500 border-green-800/50" : "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-yellow-500 hover:border-yellow-800/50 transition-colors"} title="Copy shareable link with this loadout">
-            {copied ? "✓ COPIED" : "SHARE"}
-          </button>
-          {/* SEND TO WISHLIST — opens item-selection modal */}
-          <button onClick={handleWishlistOpen} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-purple-400 hover:border-purple-800/50 transition-colors" title="Add loadout items to your wishlist">
-            SEND TO WISHLIST
-          </button>
-          {/* SAVE LAYOUT — snapshots current panel positions */}
-          <button onClick={handleSaveLayout} className={layoutSaved ? "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border bg-cyan-950/30 text-cyan-400 border-cyan-800/50" : "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-cyan-400 hover:border-cyan-800/50 transition-colors"} title="Save current panel arrangement as default">
-            {layoutSaved ? "✓ SAVED" : "SAVE LAYOUT"}
-          </button>
-          {/* SAVE LOADOUT — saves build to my-account loadouts */}
-          <button onClick={() => { setSaveName(shipInfo?.name ? `${shipInfo.name} Build` : "My Build"); setSaveModal(true); }} className={saved ? "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border bg-emerald-950/30 text-emerald-400 border-emerald-800/50" : "text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-emerald-500 hover:border-emerald-800/50 transition-colors"} title="Save this loadout to your account">
-            {saved ? "✓ SAVED" : "SAVE LOADOUT"}
-          </button>
-          {/* RESET LOADOUT — reverts all component changes to ship defaults */}
-          <button onClick={resetAll} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-500 border-zinc-800 hover:text-orange-500 hover:border-orange-800/50 transition-colors" title="Revert all component changes to ship defaults">
-            RESET LOADOUT
-          </button>
-          {/* RESET LAYOUT — restores saved panel layout (or default if none saved) */}
-          <button onClick={gridLayout.resetLayout} className="text-[9px] font-mono uppercase tracking-wider px-2 py-1 border text-zinc-600 border-zinc-800 hover:text-zinc-400 hover:border-zinc-600/50 transition-colors" title="Restore to saved layout (or default)">
-            RESET LAYOUT
-          </button>
+
+      <div className="grid gap-3 items-start grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+        {/* ══════════════ PRINCIPAL ══════════════ */}
+        <div className="flex flex-col gap-3 min-w-0">
+          {/* Buscador de nave + naves fijadas (hasta 6 configs para alternar
+              rápido manteniendo cada build). z-30: el desplegable del
+              buscador tiene que quedar por encima de las tarjetas de abajo. */}
+          <div className="relative z-30 rounded-lg border border-zinc-800/80 bg-zinc-950/75 backdrop-blur-sm p-2 flex flex-col gap-2">
+            <ShipSelector />
+            <LoadoutQuickSlots
+              currentShipReference={shipInfo?.reference ?? null}
+              currentShipName={shipInfo?.name ?? null}
+            />
+          </div>
+
+          <ShipHeroCard />
+
+          <div className="grid gap-3 items-start grid-cols-1 md:grid-cols-2">
+            <DeckCard id="damage" title="Damage" icon="/icons/weapons.png">
+              <DamageContent />
+            </DeckCard>
+            <DeckCard id="defense" title="Defense" icon="/icons/shilds.png">
+              <DefenseContent />
+            </DeckCard>
+          </div>
+
+          {weaponHps.length > 0 && (
+            <DeckCard id="weapons" title="Armament" icon="/icons/weapons.png" count={weaponHps.length}>
+              {group(weaponHps, true)}
+            </DeckCard>
+          )}
+          {miningHps.length > 0 && (
+            <DeckCard id="mining" title="Mining lasers" icon="/icons/mining_lasers.png" count={miningHps.length}>
+              {group(miningHps, true)}
+            </DeckCard>
+          )}
+          {salvageHps.length > 0 && (
+            <DeckCard id="salvage" title="Salvage & tractor" icon="/icons/tractor_beam.png" count={salvageHps.length}>
+              {group(salvageHps, true)}
+            </DeckCard>
+          )}
+          {missileHps.length > 0 && (
+            <DeckCard id="missiles" title="Ordnance" icon="/icons/missile.png" count={missileHps.length}>
+              {group(missileHps, true)}
+            </DeckCard>
+          )}
+
+          {(quantumHps.length > 0 || utilityHps.length > 0 || qigHps.length > 0) && (
+            <div className="grid gap-3 items-start grid-cols-1 md:grid-cols-2">
+              {quantumHps.length > 0 && (
+                <DeckCard id="quantum" title="Quantum drive" icon="/icons/Quantum_drives.png" count={quantumHps.length}>
+                  {group(quantumHps)}
+                </DeckCard>
+              )}
+              {qigHps.length > 0 && (
+                <DeckCard id="qig" title="Quantum interdiction" icon="/icons/interdict.png" count={qigHps.length}>
+                  {group(qigHps)}
+                </DeckCard>
+              )}
+              {utilityHps.length > 0 && (
+                <DeckCard id="utility" title="Utility" icon="/icons/tractor_beam.png" count={utilityHps.length}>
+                  {group(utilityHps)}
+                </DeckCard>
+              )}
+            </div>
+          )}
+
+          <Flight3dDeckCard />
+          <FlightChartsDeckCard />
+        </div>
+
+        {/* ══════════════ LATERAL ══════════════
+            1280–1535px: una sola columna (control arriba, sistemas abajo).
+            ≥1536px: `contents` la desarma y cada mitad ocupa su propia pista. */}
+        <div className="flex flex-col gap-3 min-w-0 2xl:contents">
+          {/* ── SISTEMAS ── */}
+          <div className="flex flex-col gap-3 min-w-0 order-2 2xl:order-none">
+            <DeckCard id="hull" title="Hull" icon="/icons/Ships.png">
+              <HullContent />
+            </DeckCard>
+            {shieldHps.length > 0 && (
+              <DeckCard id="shields" title="Shields" icon="/icons/shilds.png" count={shieldHps.length}>
+                {group(shieldHps)}
+              </DeckCard>
+            )}
+            {powerPlantHps.length > 0 && (
+              <DeckCard id="powerplants" title="Power plants" icon="/icons/power_plants.png" count={powerPlantHps.length}>
+                {group(powerPlantHps)}
+              </DeckCard>
+            )}
+            {coolerHps.length > 0 && (
+              <DeckCard id="coolers" title="Coolers" icon="/icons/coolers.png" count={coolerHps.length}>
+                {group(coolerHps)}
+              </DeckCard>
+            )}
+            {radarHps.length > 0 && (
+              <DeckCard id="radar" title="Radar" icon="/icons/DPS_calculator.png" count={radarHps.length}>
+                {group(radarHps)}
+              </DeckCard>
+            )}
+            <DeckCard id="ttk-calculator" title="Time to kill" bodyClassName="p-0">
+              <TTKCalculatorContent />
+            </DeckCard>
+            <DeckCard id="armor-check" title="Armor deflection check" bodyClassName="p-0">
+              <ArmorCheckContent />
+            </DeckCard>
+          </div>
+
+          {/* ── CONTROL (queda fijo al hacer scroll en pantallas anchas) ── */}
+          <div className="flex flex-col gap-3 min-w-0 order-1 2xl:order-none 2xl:sticky 2xl:top-14 2xl:max-h-[calc(100vh-4rem)] 2xl:overflow-y-auto 2xl:[scrollbar-width:thin]">
+            <DeckCard id="actions" title="Actions" collapsible={false}>
+              <div className="grid grid-cols-2 gap-1.5">
+                <ActionButton
+                  onClick={handleShare}
+                  icon={<Share2 size={13} />}
+                  label={copied ? "Link copied" : "Share"}
+                  title="Copy shareable link with this loadout"
+                  tone="primary"
+                  done={copied}
+                />
+                <ActionButton
+                  onClick={() => { setSaveName(shipInfo?.name ? `${shipInfo.name} Build` : "My Build"); setSaveModal(true); }}
+                  icon={<Save size={13} />}
+                  label={saved ? "Saved" : "Save loadout"}
+                  title="Save this loadout to your account"
+                  done={saved}
+                />
+                <ActionButton
+                  onClick={handleWishlistOpen}
+                  icon={<Heart size={13} />}
+                  label="To wishlist"
+                  title="Add loadout items to your wishlist"
+                />
+                <ActionButton
+                  onClick={resetAll}
+                  icon={<RotateCcw size={13} />}
+                  label="Reset loadout"
+                  title="Revert all component changes to ship defaults"
+                  tone="danger"
+                />
+              </div>
+            </DeckCard>
+            <DeckCard id="power-grid" title="Power management" icon="/icons/power_plants.png">
+              <PowerManagementPanel stats={stats} flightMode={flightMode} onModeChange={setFlightMode} />
+              <ThermalStrip />
+            </DeckCard>
+            <DeckCard id="flight" title="Flight">
+              <FlightContent />
+            </DeckCard>
+          </div>
         </div>
       </div>
-
-      {/* ── Main Grid ── */}
-      {/* En móvil (<md): stack vertical con WidgetShells full-width, sin
-          react-grid-layout/dnd-kit. El orden viene de MOBILE_WIDGET_ORDER y
-          se filtra contra `visibleIds` para respetar la lógica condicional
-          de combat/industrial.
-          En desktop (>=md): DpsGridCanvas v11 — absolute positioning + dnd-kit
-          + localStorage al-filo-layout-v3. Idéntico al render anterior. */}
-      {isMobile ? (
-        <div className="space-y-3 px-1">
-          {MOBILE_WIDGET_ORDER.filter((id) => visibleIds.has(id)).map((id) => (
-            <div key={id} className="w-full">
-              {renderWidget(id, ctx)}
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="w-full mx-auto" style={{ maxWidth: 1900 }}>
-          <DpsGridCanvas
-            layout={gridLayout}
-            renderWidget={(id) => renderWidget(id, ctx)}
-          />
-        </div>
-      )}
 
       {pickerHp && <ComponentPicker hardpoint={pickerHp} parentItem={pickerParentItem} currentItemId={getRealItem(pickerHp.id)?.id ?? null} onSelect={handleSelect} onClear={handleClear} onClose={() => { setPickerHp(null); setPickerAnchorRect(null); }} anchorRect={pickerAnchorRect} />}
 
@@ -1284,158 +813,6 @@ export default function LoadoutBuilder({ shipId = "titan" }: { shipId?: string }
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// =============================================================================
-// Sub-components
-// =============================================================================
-
-function HpGroup({ hps, onClickHp, weaponAllocatedPips, weaponMaxPips }: { hps: ResolvedHardpoint[]; onClickHp: (hp: ResolvedHardpoint, parentItem?: EquippedItem | null) => void; weaponAllocatedPips?: number; weaponMaxPips?: number }) {
-  if (hps.length === 0) return null;
-  const { getEffectiveItem, hasOverride, overrides, isComponentOn, toggleComponent } = useLoadoutStore(
-    useShallow(s => ({
-      getEffectiveItem: s.getEffectiveItem,
-      hasOverride: s.hasOverride,
-      overrides: s.overrides,
-      isComponentOn: s.isComponentOn,
-      toggleComponent: s.toggleComponent,
-    }))
-  );
-  // Convert a ResolvedChild into a synthetic ResolvedHardpoint so the picker can open for it.
-  // parentItem se usa para que el picker sepa qué tipo de ordenanza acepta el
-  // rack contenedor (ej: CST-313 Castillo → solo bombas, no misiles).
-  const handleClickChild = useCallback((child: ResolvedChild, parentItem: EquippedItem | null) => {
-    const synthetic: ResolvedHardpoint = {
-      id: child.id,
-      hardpointName: child.hardpointName,
-      originalCategory: child.category,
-      resolvedCategory: child.category || "WEAPON",
-      minSize: child.minSize,
-      maxSize: child.maxSize,
-      isFixed: child.isFixed,
-      defaultItem: child.equippedItem,
-      children: [],
-    };
-    onClickHp(synthetic, parentItem);
-  }, [onClickHp]);
-  // Resuelve los slots hijos de un hardpoint padre según el ITEM EQUIPADO,
-  // no según la data del ship loadout original. Esto es clave para dos casos:
-  //
-  //   a) MINING: los brazos mineros aceptan N módulos según el `moduleSlots`
-  //      del láser equipado (Helix I=2, Arbor MH1=1, Klein-S1=0, Impact II=3).
-  //
-  //   b) MISSILE_RACK: los racks tienen N ports de tamaño fijo según el
-  //      nombre. Ej:
-  //        MSD-313 = rack S3, 1 misil S3  → 1 slot
-  //        MSD-322 = rack S3, 2 misiles S2 → 2 slots
-  //        MSD-441 = rack S4, 4 misiles S1 → 4 slots
-  //        MSD-414 = rack S4, 1 misil S4  → 1 slot
-  //        MSD-423 = rack S4, 2 misiles S3 → 2 slots
-  //      Si cambiás el rack (ej. 322 → 441), el N y el tamaño de cada slot
-  //      se actualizan automáticamente. `missilePorts` + `maxMissileSize` del
-  //      componentStats del rack equipado dan la info (ya calculados en
-  //      /api/catalog buildStats MISSILE_RACK).
-  //
-  // IDs estables (parentId:missile:i) → preserva el ítem equipado cuando el
-  // nuevo rack tiene el mismo nº de slots. Si baja el count, los overrides
-  // sobrantes quedan huérfanos en el store (no molestan, no se renderizan).
-  const resolveChildSlots = useCallback(
-    (hp: ResolvedHardpoint): ResolvedChild[] => {
-      if (hp.resolvedCategory === "MINING") {
-        // Loadout.18 (2026-06-12): dos shapes posibles.
-        //  a) Brazo sintético (Prospector/Golem): el item top-level ES el láser
-        //     (trae moduleSlots) → solo slots de módulos, como siempre.
-        //  b) Torreta minera real (MOLE): el item top-level es la TORRETA y el
-        //     láser viene como child del API. Antes se leía moduleSlots de la
-        //     torreta (0) y se devolvía [] — la cabeza minera y sus accesorios
-        //     quedaban escondidos. Ahora: [cabeza minera, ...sus módulos].
-        const topItem = getEffectiveItem(hp.id);
-        const laserChild = hp.children.find(
-          (c) => c.category === "MINING" || c.equippedItem?.componentStats?.moduleSlots != null,
-        );
-        const laser = laserChild
-          ? (getEffectiveItem(laserChild.id) ?? laserChild.equippedItem)
-          : topItem;
-        const n = Number(laser?.componentStats?.moduleSlots ?? 0);
-        const slots: ResolvedChild[] = [];
-        if (laserChild) slots.push(laserChild);
-        if (!n || n <= 0) return slots;
-        for (let i = 1; i <= n; i++) {
-          slots.push({
-            id: `${hp.id}:module:${i}`,
-            hardpointName: `${hp.hardpointName}_module_${i}`,
-            category: "MINING_MODULE",
-            minSize: 0,
-            maxSize: 0,
-            isFixed: false,
-            equippedItem: null,
-          });
-        }
-        return slots;
-      }
-      if (hp.resolvedCategory === "MISSILE_RACK") {
-        const rack = getEffectiveItem(hp.id);
-        if (!rack) return hp.children;
-
-        // Loadout.16 (2026-06-12): si el rack equipado es el DEFAULT del barco
-        // y el API trae children reales (p4k → ship_hardpoints parent_hp_id),
-        // esos children son la fuente canónica de cantidad y misil default.
-        // Cubre racks custom por nave que rompen la convención del nombre:
-        // MRCK_S04_AEGS_Redeemer se llama "MSD-442" (=4xS2) pero tiene 8 ports
-        // reales — el name-parse devolvía 4, `children.length === n` fallaba y
-        // los 8 misiles default se descartaban (misiles "vacíos" en la web).
-        if (!overrides.has(hp.id) && hp.children.length > 0) {
-          return hp.children.map((ch, i) => ({
-            id: `${hp.id}:missile:${i + 1}`,
-            hardpointName: `${hp.hardpointName}_missile_${i + 1}`,
-            category: "MISSILE",
-            minSize: ch.maxSize || hp.maxSize || 1,
-            maxSize: ch.maxSize || hp.maxSize || 1,
-            isFixed: false,
-            equippedItem: ch.equippedItem ?? null,
-          }));
-        }
-
-        // parseMissileRackSpec usa name-parse de la convención MSD-XYZ del juego
-        // como fuente canónica (ver definición arriba). Para los racks chicos
-        // (MSD-212, MSD-313) la BD reporta missilePorts=2 incorrectamente —
-        // confiar en el nombre evita el bug de los slots fantasmas.
-        let { slots: n, portSize } = parseMissileRackSpec(rack);
-
-        // Fallback final: si ni el nombre ni componentStats dieron datos,
-        // caer al ship loadout original (no romper la UI).
-        if (!n || n <= 0) return hp.children;
-        if (!portSize) portSize = hp.maxSize || 1;
-
-        const slots: ResolvedChild[] = [];
-        for (let i = 1; i <= n; i++) {
-          slots.push({
-            id: `${hp.id}:missile:${i}`,
-            hardpointName: `${hp.hardpointName}_missile_${i}`,
-            category: "MISSILE",
-            minSize: portSize,
-            maxSize: portSize,
-            isFixed: false,
-            // Heredar el default del ship loadout solo si el nº de slots
-            // coincide (mismo rack equipado = preservar orden). Si cambió,
-            // slots arrancan vacíos.
-            equippedItem: hp.children.length === n ? hp.children[i - 1]?.equippedItem ?? null : null,
-          });
-        }
-        return slots;
-      }
-      return hp.children;
-    },
-    [getEffectiveItem, overrides],
-  );
-
-  return (
-    <div className="bg-zinc-900/80 border border-zinc-800/60">
-      {hps.map(hp => (
-        <HardpointSlot key={hp.id} hp={hp} item={getEffectiveItem(hp.id)} isOverridden={overrides.has(hp.id)} isOn={isComponentOn(hp.hardpointName)} onClick={() => onClickHp(hp)} onTogglePower={() => toggleComponent(hp.hardpointName)} childSlots={resolveChildSlots(hp)} isComponentOn={isComponentOn} toggleComponent={toggleComponent} onClickChild={handleClickChild} getEffectiveItem={getEffectiveItem} hasOverride={hasOverride} weaponAllocatedPips={weaponAllocatedPips} weaponMaxPips={weaponMaxPips} />
-      ))}
     </div>
   );
 }

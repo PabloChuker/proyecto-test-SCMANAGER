@@ -16,6 +16,7 @@ import Link from "next/link";
 import Header from "@/app/assets/header/Header";
 import { useAuth } from "@/contexts/AuthContext";
 import { RaffleStage, type RaffleSession } from "@/components/events/RaffleStage";
+import { BgVideo } from "@/components/shared/BgVideo";
 
 interface CommunityEvent {
   id: string;
@@ -171,9 +172,7 @@ export default function EventPage({ params }: { params: Promise<{ slug: string }
   return (
     <main className="min-h-screen bg-zinc-950 text-amber-50 medieval-theme relative">
       {/* Fondo de video habitual del sitio + overlay sutil */}
-      <video autoPlay loop muted playsInline className="fixed inset-0 w-full h-full object-cover opacity-35 pointer-events-none z-0">
-        <source src="/videos/bg.mp4" type="video/mp4" />
-      </video>
+      <BgVideo src="/videos/bg.mp4" className="fixed inset-0 w-full h-full object-cover opacity-35 pointer-events-none z-0" />
       <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/40 via-zinc-950/55 to-zinc-950/70 pointer-events-none z-0" />
 
       {/* Estilos medieval — paleta espacial+pergamino claro tomada del mapa */}

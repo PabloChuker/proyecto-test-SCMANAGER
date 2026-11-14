@@ -1315,8 +1315,8 @@
   "PerformanceToggle": {
     "labelFull": "Full",
     "labelLight": "Light",
-    "titleFull": "Performance mode: Full (animations and 3D enabled). Click to switch to Light.",
-    "titleLight": "Performance mode: Light (optimized for modest hardware). Click to switch to Full.",
+    "titleFull": "Background: Full (animated background video). Click to switch to Light.",
+    "titleLight": "Background: Light (no background video, loads faster). Click to switch to Full.",
     "aria": "Toggle Light Mode"
   }
 }

@@ -15,6 +15,7 @@ import {
   type CardVariant,
 } from "@/components/streamers/ship-card-themes";
 import type { ShipDetailResponseV2 } from "@/types/ships";
+import { BgVideo } from "@/components/shared/BgVideo";
 
 // ── Tipos de la lista de naves ──
 interface ShipListItem {
@@ -168,15 +169,7 @@ export default function StreamerCardsPage() {
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        className="fixed inset-0 w-full h-full object-cover opacity-10 pointer-events-none z-0"
-      >
-        <source src="/media/videos/bg.mp4" type="video/mp4" />
-      </video>
+      <BgVideo src="/media/videos/bg.mp4" className="fixed inset-0 w-full h-full object-cover opacity-10 pointer-events-none z-0" />
       <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/70 via-zinc-950/85 to-zinc-950/95 pointer-events-none z-0" />
 
       <Header subtitle="Streamers · Ship Cards" />

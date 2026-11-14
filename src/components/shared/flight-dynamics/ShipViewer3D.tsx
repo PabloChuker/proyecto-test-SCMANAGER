@@ -49,6 +49,12 @@ export interface ShipViewer3DProps {
    * PNG con html-to-image). Tiene coste de memoria/perf mínimo. Default false.
    */
   preserveDrawingBuffer?: boolean;
+  /**
+   * Acerca la cámara cuando carga el modelo GLB: 1 = encuadre de siempre,
+   * 1.5 = la nave se ve ~50% más grande. Para visores anchos y bajos (cabecera del loadout) donde el
+   * encuadre default deja la nave chica. Default 1.
+   */
+  zoom?: number;
 }
 
 // Color de cada línea de eje según la convención de la nave:
@@ -158,6 +164,7 @@ export function ShipViewer3D({
   autoRotate = false,
   autoRotateSpeed = 1.0,
   preserveDrawingBuffer = false,
+  zoom = 1,
 }: ShipViewer3DProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -223,6 +230,9 @@ export function ShipViewer3D({
             shipGroup = cloneGlbForScene(source);
             shipIsGlb = true;
             scene.add(shipGroup);
+            // El acercamiento se aplica recién con el modelo real: la silueta
+            // de respaldo es más grande y con zoom quedaría recortada.
+            if (zoom > 0 && zoom !== 1) camera.position.multiplyScalar(1 / zoom);
             return;
           } catch (err) {
             if (cancelled) return;
@@ -367,7 +377,7 @@ export function ShipViewer3D({
       renderer.dispose();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rotationAxis, animate, animationSpeed, shipColor, JSON.stringify(glbUrl), autoRotate, autoRotateSpeed, preserveDrawingBuffer]);
+  }, [rotationAxis, animate, animationSpeed, shipColor, JSON.stringify(glbUrl), autoRotate, autoRotateSpeed, preserveDrawingBuffer, zoom]);
 
   return (
     <div className={`relative w-full h-full${className ? ` ${className}` : ""}`}>

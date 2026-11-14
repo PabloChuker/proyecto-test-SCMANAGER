@@ -1315,8 +1315,8 @@
   "PerformanceToggle": {
     "labelFull": "Completo",
     "labelLight": "Ligero",
-    "titleFull": "Modo rendimiento: Completo (animaciones y 3D activos). Clic para pasar a Ligero.",
-    "titleLight": "Modo rendimiento: Ligero (optimizado para equipos modestos). Clic para pasar a Completo.",
+    "titleFull": "Fondo: Completo (video de fondo animado). Clic para pasar a Ligero.",
+    "titleLight": "Fondo: Ligero (sin video de fondo, carga más rápido). Clic para pasar a Completo.",
     "aria": "Alternar modo ligero"
   }
 }

@@ -1315,8 +1315,8 @@
   "PerformanceToggle": {
     "labelFull": "完整",
     "labelLight": "轻量",
-    "titleFull": "性能模式：完整（启用动画和 3D）。点击切换为轻量。",
-    "titleLight": "性能模式：轻量（针对低配置优化）。点击切换为完整。",
+    "titleFull": "背景：完整（播放动态背景视频）。点击切换为轻量。",
+    "titleLight": "背景：轻量（无背景视频，加载更快）。点击切换为完整。",
     "aria": "切换轻量模式"
   }
 }

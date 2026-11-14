@@ -19,6 +19,7 @@ import {
   ComponentContextMenu,
   type ComponentContextMenuTarget,
 } from "@/components/components/ComponentContextMenu";
+import { BgVideo } from "@/components/shared/BgVideo";
 
 // Mapeo de nombres de tabla a item_type usado en user_inventory / user_wishlist
 const TABLE_TO_ITEM_TYPE: Record<string, string> = {
@@ -209,12 +210,7 @@ function ComponentsPageInner() {
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
       {/* ── Background video ── */}
-      <video
-        autoPlay loop muted playsInline
-        className="fixed inset-0 w-full h-full object-cover opacity-10 pointer-events-none z-0"
-      >
-        <source src="/media/videos/bg.mp4" type="video/mp4" />
-      </video>
+      <BgVideo src="/media/videos/bg.mp4" className="fixed inset-0 w-full h-full object-cover opacity-10 pointer-events-none z-0" />
       <div className="fixed inset-0 bg-gradient-to-b from-zinc-950/70 via-zinc-950/85 to-zinc-950/95 pointer-events-none z-0" />
 
       {/* ═══ Header (full width) ═══ */}

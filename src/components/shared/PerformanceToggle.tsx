@@ -2,8 +2,8 @@
 // =============================================================================
 // SC LABS — PerformanceToggle (Fase I.2)
 //
-// Botón en el header global que alterna entre modo "full" (animaciones,
-// videos de fondo, 3D) y "light" (assets estáticos, menos GPU idle).
+// Botón en el header global que alterna entre modo "light" (default: sin
+// video de fondo) y "full" (video de fondo animado).
 // Persistido por dispositivo en localStorage (ver usePerformanceStore).
 //
 // Estado visual:
@@ -24,12 +24,12 @@ export default function PerformanceToggle() {
   const isLight = useIsLight();
 
   // Evita hydration mismatch: el estado persistido sólo está disponible
-  // en el cliente. Antes del mount renderizamos el estado default ("full")
+  // en el cliente. Antes del mount renderizamos el estado default ("light")
   // para que coincida con el HTML generado por el servidor.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const effectiveLight = mounted && isLight;
+  const effectiveLight = !mounted || isLight;
   const Icon = effectiveLight ? Leaf : Zap;
   const label = effectiveLight ? t("labelLight") : t("labelFull");
   const title = effectiveLight ? t("titleLight") : t("titleFull");
